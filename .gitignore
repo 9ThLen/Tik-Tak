@@ -1,0 +1,38 @@
+# Build output
+build/
+build-*/
+cmake-build-*/
+*.o
+*.a
+*.dylib
+*.so
+
+# Xcode
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+
+# Android
+android/.gradle/
+android/local.properties
+android/**/build/
+*.iml
+
+# Python research environment
+research/.venv/
+research/**/__pycache__/
+research/**/*.pyc
+.ipynb_checkpoints/
+
+# Datasets and analysis artefacts are large and often licence-restricted —
+# never commit them. See docs/PLAN.md section 10.
+research/data/
+research/eval/results/
+models/*.onnx
+models/*.mlpackage
+models/*.tflite
+
+# OS noise
+.DS_Store
+Thumbs.db
