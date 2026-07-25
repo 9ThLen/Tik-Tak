@@ -23,7 +23,7 @@ jobs:
           - name: linux · build and render
             os: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # Decode is ON so the `track` command exists: the Phase 4 smoke test
       # below imports a real MP3, and the cache round-trip needs the whole
