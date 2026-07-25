@@ -217,4 +217,194 @@ TEST(LiveConfig, RejectsTheImpossible) {
     LiveConfig no_level = liveConfig();
     no_level.onset_peak_tau_sec = 0.0;
     EXPECT_FALSE(no_level.valid());
+
+    LiveConfig loose = liveConfig();
+    loose.sync.max_drift = 0.9;  // "nudge" has to mean something
+    EXPECT_FALSE(loose.valid());
+}
+
+// --------------------------------------------------------------- manual mode
+
+namespace {
+
+// Feeds audio and collects every beat handed out, the way a duplex shell would.
+std::vector<double> collect(LiveTracker& tracker, const std::vector<float>& audio,
+                            double from_sec = 0.0) {
+    constexpr double kLookahead = 0.05;
+    std::vector<double> beats;
+    double time = from_sec;
+    for (std::size_t i = 0; i < audio.size(); i += kBlock) {
+        const std::size_t n = std::min(kBlock, audio.size() - i);
+        tracker.process(time, audio.data() + i, n);
+        time += static_cast<double>(n) / kRate;
+
+        double beat = 0.0;
+        while (tracker.takeBeat(time, kLookahead, &beat)) beats.push_back(beat);
+    }
+    return beats;
+}
+
+}  // namespace
+
+TEST(LiveTracker, ManualModeWaitsForSomethingToFallInWith) {
+    LiveTracker tracker{liveConfig()};
+    tracker.setManualTempo(120.0);
+    EXPECT_TRUE(tracker.waiting());
+    EXPECT_EQ(tracker.manualTempo(), 120.0);
+
+    // Eight seconds of an empty room. The tempo is known and it would be easy
+    // to just start clicking — but the point of the mode is to come in *with*
+    // the music, and there is none yet.
+    const std::vector<float> quiet(static_cast<std::size_t>(8.0 * kRate), 0.0f);
+    EXPECT_TRUE(collect(tracker, quiet).empty());
+    EXPECT_TRUE(tracker.waiting());
+    EXPECT_EQ(tracker.syncStrength(), 0.0);
+}
+
+TEST(LiveTracker, ManualModeFallsInOnThePhaseItHears) {
+    LiveTracker tracker{liveConfig()};
+    tracker.setManualTempo(120.0);
+
+    // The room starts a second in, off any round number of beats.
+    const auto audio = tiktak::test::clickTrack(120.0, 14.0, kRate, 1.23);
+    const std::vector<double> beats = collect(tracker, audio);
+
+    EXPECT_FALSE(tracker.waiting());
+    ASSERT_GT(beats.size(), 12u);
+    for (std::size_t i = 0; i < beats.size(); ++i) {
+        EXPECT_LT(offGrid(beats[i], 120.0, 1.23), 0.04) << "beat " << i << " at " << beats[i];
+    }
+}
+
+TEST(LiveTracker, ManualModeKeepsTheUsersTempoAndNotTheRooms) {
+    LiveTracker tracker{liveConfig()};
+    tracker.setManualTempo(120.0);
+
+    // A half-time groove: the room puts a hit down every second, and the user
+    // has asked to be counted in eighths of it. In auto mode the tracker's job
+    // would be to find 60; here its job is to say where the beat falls and let
+    // the user's number decide how often to click.
+    const auto audio = tiktak::test::clickTrack(60.0, 16.0, kRate, 1.0);
+    const std::vector<double> beats = collect(tracker, audio);
+
+    EXPECT_NEAR(tracker.estimate(16.0).bpm, 120.0, 1e-9);
+    ASSERT_GT(beats.size(), 12u);
+    for (std::size_t i = 1; i < beats.size(); ++i) {
+        EXPECT_NEAR(beats[i] - beats[i - 1], 0.5, 0.02) << "beat " << i;
+    }
+    for (std::size_t i = 0; i < beats.size(); ++i) {
+        EXPECT_LT(offGrid(beats[i], 120.0, 1.0), 0.05) << "beat " << i << " at " << beats[i];
+    }
+}
+
+TEST(LiveTracker, ManualModeWillNotFallInWithARoomThatHasNoSuchBeat) {
+    LiveTracker tracker{liveConfig()};
+    tracker.setManualTempo(120.0);
+
+    // The room is at 150 and the dial says 120. There is no 120 phase in that
+    // room to find — the two grids slide past each other twice a second — and
+    // saying so is better than clicking somewhere and calling it synchronised.
+    // A shell shows this as "listening...", which is exactly what it is doing.
+    const auto audio = tiktak::test::clickTrack(150.0, 16.0, kRate, 1.0);
+    EXPECT_TRUE(collect(tracker, audio).empty());
+    EXPECT_TRUE(tracker.waiting());
+}
+
+TEST(LiveTracker, ManualModeDoesNotStopWhenTheRoomDoes) {
+    LiveTracker tracker{liveConfig()};
+    tracker.setManualTempo(120.0);
+
+    const auto audio = tiktak::test::clickTrack(120.0, 8.0, kRate, 1.0);
+    const std::vector<double> heard = collect(tracker, audio);
+    ASSERT_GT(heard.size(), 6u);
+    ASSERT_FALSE(tracker.waiting());
+
+    // Now the band stops for eight seconds. The tempo was never theirs to take
+    // away, so the click carries on — and it carries on *on the same grid*,
+    // because with the period pinned and the observation zero-mean, silence
+    // moves no weights at all.
+    const std::vector<float> quiet(static_cast<std::size_t>(8.0 * kRate), 0.0f);
+    const std::vector<double> alone = collect(tracker, quiet, 8.0);
+
+    ASSERT_GT(alone.size(), 12u);
+    for (std::size_t i = 0; i < alone.size(); ++i) {
+        EXPECT_LT(offGrid(alone[i], 120.0, 1.0), 0.05) << "beat " << i << " at " << alone[i];
+    }
+}
+
+TEST(LiveTracker, MovingTheSliderDoesNotSilenceTheClick) {
+    LiveTracker tracker{liveConfig()};
+    tracker.setManualTempo(120.0);
+
+    const auto audio = tiktak::test::clickTrack(120.0, 8.0, kRate, 1.0);
+    ASSERT_GT(collect(tracker, audio).size(), 6u);
+    ASSERT_FALSE(tracker.waiting());
+
+    // A different spacing between clicks is what was asked for, not a fresh
+    // start: the click keeps playing and simply changes rate.
+    tracker.setManualTempo(90.0);
+    EXPECT_FALSE(tracker.waiting());
+
+    const std::vector<float> quiet(static_cast<std::size_t>(6.0 * kRate), 0.0f);
+    const std::vector<double> after = collect(tracker, quiet, 8.0);
+    ASSERT_GT(after.size(), 6u);
+    for (std::size_t i = 1; i < after.size(); ++i) {
+        EXPECT_NEAR(after[i] - after[i - 1], 60.0 / 90.0, 0.02) << "beat " << i;
+    }
+}
+
+TEST(LiveTracker, ATempoOutsideTheRangeIsStillTheUsersTempo) {
+    LiveConfig config = liveConfig();
+    config.filter.max_bpm = 220.0;
+    LiveTracker tracker{config};
+
+    tracker.setManualTempo(240.0);
+    const auto audio = tiktak::test::clickTrack(240.0, 10.0, kRate, 1.0);
+    ASSERT_GT(collect(tracker, audio).size(), 20u);
+    EXPECT_NEAR(tracker.estimate(10.0).bpm, 240.0, 1e-9);
+}
+
+TEST(LiveTracker, GoingBackToAutoLooksForTheTempoAgain) {
+    LiveTracker tracker{liveConfig()};
+    tracker.setManualTempo(120.0);
+    const auto wrong = tiktak::test::clickTrack(100.0, 6.0, kRate, 1.0);
+    collect(tracker, wrong);
+    ASSERT_NEAR(tracker.estimate(6.0).bpm, 120.0, 1e-9);
+
+    tracker.setManualTempo(0.0);
+    EXPECT_EQ(tracker.manualTempo(), 0.0);
+    EXPECT_FALSE(tracker.waiting());
+
+    const auto audio = tiktak::test::clickTrack(100.0, 16.0, kRate, 1.0);
+    const double now = feed(tracker, audio, 6.0);
+    EXPECT_NEAR(tracker.estimate(now).bpm, 100.0, 4.0);
+}
+
+TEST(LiveTracker, ResettingManualModeGoesBackToWaiting) {
+    LiveTracker tracker{liveConfig()};
+    tracker.setManualTempo(120.0);
+    const auto audio = tiktak::test::clickTrack(120.0, 8.0, kRate, 1.0);
+    ASSERT_GT(collect(tracker, audio).size(), 6u);
+
+    tracker.reset();
+    // The audio is forgotten; the number the user typed is not.
+    EXPECT_EQ(tracker.manualTempo(), 120.0);
+    EXPECT_TRUE(tracker.waiting());
+    EXPECT_EQ(tracker.syncStrength(), 0.0);
+}
+
+TEST(LiveTracker, ManualModeFollowsAPlayerDriftingInsideItsPullIn) {
+    LiveTracker tracker{liveConfig()};
+    tracker.setManualTempo(120.0);
+
+    // The band is at 121 — well inside the ±2% the click is allowed to be
+    // nudged by, so it should stay with them rather than sliding a sixth of a
+    // second away over the twenty seconds this lasts.
+    const auto audio = tiktak::test::clickTrack(121.0, 20.0, kRate, 1.0);
+    const std::vector<double> beats = collect(tracker, audio);
+
+    ASSERT_GT(beats.size(), 30u);
+    for (std::size_t i = beats.size() / 2; i < beats.size(); ++i) {
+        EXPECT_LT(offGrid(beats[i], 121.0, 1.0), 0.06) << "beat " << i << " at " << beats[i];
+    }
 }

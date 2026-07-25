@@ -790,6 +790,18 @@ void tt_live_seed_tempo(tt_live* live, double bpm, double spread_octaves) {
     if (live) live->impl.seedTempo(bpm, spread_octaves > 0.0 ? spread_octaves : 0.05);
 }
 
+void tt_live_set_manual_tempo(tt_live* live, double bpm) {
+    if (live) live->impl.setManualTempo(bpm);
+}
+
+double tt_live_manual_tempo(const tt_live* live) { return live ? live->impl.manualTempo() : 0.0; }
+
+int tt_live_waiting(const tt_live* live) { return live && live->impl.waiting() ? 1 : 0; }
+
+double tt_live_sync_strength(const tt_live* live) {
+    return live ? live->impl.syncStrength() : 0.0;
+}
+
 void tt_live_reset(tt_live* live) {
     if (live) live->impl.reset();
 }

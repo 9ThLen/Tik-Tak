@@ -272,3 +272,90 @@ TEST(ParticleFilterConfig, RejectsTheImpossible) {
     wide_window.beat_window = 0.9;  // wider than half a period means no window
     EXPECT_FALSE(wide_window.valid());
 }
+
+TEST(ParticleFilter, PinningHoldsTheTempoAgainstTheAudio) {
+    ParticleFilterConfig config;
+    BeatParticleFilter filter{config};
+    filter.pinPeriod(0.5);
+    EXPECT_TRUE(filter.pinned());
+
+    // Ten seconds of insisting on 160. The whole promise of manual mode is that
+    // it does not matter.
+    const double now = feedSteady(filter, 160.0, 10.0);
+
+    const BeatEstimate estimate = filter.estimate(now);
+    EXPECT_NEAR(estimate.bpm, 120.0, 1e-9);
+    // Not exactly zero: the spread is a difference of two sums of squares, and
+    // on a cloud that is all one number that subtraction cancels down to the
+    // rounding. A ten-millionth of an octave is the arithmetic, not a doubt.
+    EXPECT_NEAR(estimate.tempo_spread_octaves, 0.0, 1e-6);
+}
+
+TEST(ParticleFilter, PinnedItStillHasThePhaseToFind) {
+    ParticleFilterConfig config;
+    BeatParticleFilter filter{config};
+    filter.pinPeriod(0.5);
+
+    // No phase was handed over — the cloud starts spread over the period and
+    // has to work it out from the audio alone, which with the tempo already
+    // known it can.
+    const double now = feedSteady(filter, 120.0, 10.0, 0.0, 1.0, 0.2);
+
+    const BeatEstimate estimate = filter.estimate(now);
+    EXPECT_LT(offGrid(estimate.next_beat_sec, 120.0, 0.2), 0.03);
+    EXPECT_GT(estimate.confidence, 0.4);
+}
+
+TEST(ParticleFilter, SeedingThePhasePutsTheGridWhereItIsTold) {
+    ParticleFilterConfig config;
+    BeatParticleFilter filter{config};
+    filter.pinPeriod(0.5);
+
+    // Two seconds of audio only to give the filter a clock, then the grid is
+    // dictated: this is the correlation handing its answer over.
+    const double now = feedSteady(filter, 120.0, 2.0, 0.0, 1.0, 0.2);
+    filter.seedPhase(now + 0.37);
+
+    const BeatEstimate estimate = filter.estimate(now);
+    EXPECT_NEAR(estimate.next_beat_sec, now + 0.37, 1e-9);
+    EXPECT_NEAR(estimate.bpm, 120.0, 1e-9);
+}
+
+TEST(ParticleFilter, ATempoOutsideTheRangeIsStillTheUsersTempo) {
+    ParticleFilterConfig config;
+    config.max_bpm = 220.0;
+    BeatParticleFilter filter{config};
+
+    // 300 is outside anything the tracker would ever guess at. The range is a
+    // belief about what music is likely to be, and it has no business
+    // overruling a number somebody typed.
+    filter.pinPeriod(60.0 / 300.0);
+    const double now = feedSteady(filter, 300.0, 8.0);
+    EXPECT_NEAR(filter.estimate(now).bpm, 300.0, 1e-9);
+}
+
+TEST(ParticleFilter, AResetKeepsThePin) {
+    ParticleFilterConfig config;
+    BeatParticleFilter filter{config};
+    filter.pinPeriod(0.4);
+    feedSteady(filter, 150.0, 4.0);
+
+    // A reset forgets what was heard. The tempo the user typed was never heard.
+    filter.reset();
+    EXPECT_TRUE(filter.pinned());
+    const double now = feedSteady(filter, 150.0, 6.0);
+    EXPECT_NEAR(filter.estimate(now).bpm, 150.0, 1e-9);
+}
+
+TEST(ParticleFilter, UnpinningLetsItLookAgain) {
+    ParticleFilterConfig config;
+    BeatParticleFilter filter{config};
+    filter.pinPeriod(0.5);
+    feedSteady(filter, 100.0, 4.0);
+    ASSERT_NEAR(filter.estimate(4.0).bpm, 120.0, 1e-9);
+
+    filter.unpinPeriod();
+    EXPECT_FALSE(filter.pinned());
+    const double now = feedSteady(filter, 100.0, 14.0, 4.0);
+    EXPECT_NEAR(filter.estimate(now).bpm, 100.0, 3.0);
+}

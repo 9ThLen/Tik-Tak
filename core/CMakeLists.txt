@@ -28,6 +28,7 @@ add_library(tiktak_core STATIC
     src/analysis/grid_cache.cpp
     src/tracking/particle.cpp
     src/tracking/live.cpp
+    src/tracking/sync.cpp
     src/render/click.cpp
     src/render/metronome.cpp
     src/render/player.cpp

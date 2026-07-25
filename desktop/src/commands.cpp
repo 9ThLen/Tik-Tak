@@ -130,8 +130,17 @@ void reportListen(const tiktak::render::LiveMetronome& metronome, double now_sec
     const tiktak::tracking::BeatEstimate estimate = metronome.estimate(now_sec);
     const tiktak::render::LiveMetronome::Stats stats = metronome.stats();
 
-    std::printf("live tracker: %.1f BPM (confidence %.2f, tempo spread %.3f octaves)\n",
-                estimate.bpm, estimate.confidence, estimate.tempo_spread_octaves);
+    if (metronome.manualTempo() > 0.0) {
+        // In manual mode the tempo is not a finding, so reporting it as one
+        // would be reporting the dial back to whoever set it. What was actually
+        // worked out is the phase, and whether it was found at all.
+        std::printf("live tracker: manual %.1f BPM, %s\n", metronome.manualTempo(),
+                    metronome.waiting() ? "still listening for a beat to fall in with"
+                                        : "synchronised to the room");
+    } else {
+        std::printf("live tracker: %.1f BPM (confidence %.2f, tempo spread %.3f octaves)\n",
+                    estimate.bpm, estimate.confidence, estimate.tempo_spread_octaves);
+    }
     std::printf("  beats played        %zu\n", stats.beats);
     std::printf("  frames gated as ours %zu\n", stats.gated);
     if (stats.clean()) {
@@ -297,6 +306,9 @@ bool parseOptions(const std::vector<std::string>& args, Options& options, std::s
         } else if (arg == "--hint") {
             if (!need(value)) return false;
             options.hint_bpm = value;
+        } else if (arg == "--manual") {
+            if (!need(value)) return false;
+            options.manual_bpm = value;
         } else if (arg == "--no-click") {
             options.no_click = true;
         } else if (arg == "--no-cache") {
@@ -366,11 +378,21 @@ void printUsage() {
         "Listen options:\n"
         "  FILE               drive the tracker from a file instead of a microphone\n"
         "  --hint N           tempo to start from, in BPM; 0 searches (0)\n"
+        "  --manual N         manual + sync: hold N BPM, take only the phase from\n"
+        "                     the room; plays nothing until it finds one (0)\n"
         "  --no-click         listen and report, play nothing\n"
         "\n"
         "`listen` follows the room: the tracker predicts each beat and the click\n"
         "goes out early by the round trip, so it is heard on the beat. Pass the\n"
         "figure `measure` reports as --latency-ms, or the click is late by it.\n"
+        "\n"
+        "With --manual the tempo stops being a question: the click holds the BPM\n"
+        "given, waits for the room to start, falls in on its phase, and then keeps\n"
+        "going whether the room does or not. Finding a phase at a known tempo is a\n"
+        "far smaller problem than finding a tempo, so this works on material the\n"
+        "automatic mode cannot follow — but it refuses to fall in with a room whose\n"
+        "beat is not the one asked for, rather than clicking somewhere and calling\n"
+        "it synchronised.\n"
         "\n"
         "`track` analyses the file once and caches the beat grid next to it\n"
         "(.tiktak/<content-hash>.grid), so the second start is instant. With -o\n"
@@ -665,7 +687,13 @@ int cmdListen(const Options& options) {
     }
 
     LiveMetronome metronome(cfg);
-    if (options.hint_bpm > 0.0) {
+    if (options.manual_bpm > 0.0) {
+        // Manual + sync: the tempo is not up for discussion, and the room is
+        // asked only where the beat falls. Nothing plays until it answers.
+        metronome.setManualTempo(options.manual_bpm);
+        std::printf("manual %.1f BPM — listening for a beat to fall in with\n",
+                    options.manual_bpm);
+    } else if (options.hint_bpm > 0.0) {
         metronome.seedTempo(options.hint_bpm);
         std::printf("starting from %.1f BPM\n", options.hint_bpm);
     }
@@ -736,8 +764,14 @@ int cmdListen(const Options& options) {
         // The tracker's clock is the stream's, and the harness only knows wall
         // time, so this line is a progress report and not a measurement.
         const auto estimate = metronome.estimate(elapsed);
-        std::printf("  %5.1f s   %6.1f BPM   confidence %.2f\n", elapsed, estimate.bpm,
-                    estimate.confidence);
+        if (options.manual_bpm > 0.0) {
+            std::printf("  %5.1f s   %6.1f BPM   %s   phase %.2f\n", elapsed, estimate.bpm,
+                        metronome.waiting() ? "listening" : "in sync  ",
+                        metronome.syncStrength());
+        } else {
+            std::printf("  %5.1f s   %6.1f BPM   confidence %.2f\n", elapsed, estimate.bpm,
+                        estimate.confidence);
+        }
         std::fflush(stdout);
     }
 

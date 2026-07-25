@@ -50,6 +50,7 @@ all.
 | `src/render/metronome` | grid + click wired together — one audio callback for every shell |
 | `src/render/player` | track playback riding the analysed grid: count-in, bar loops, cues |
 | `src/tracking/particle` | online beat tracking: a particle filter over (period, phase) |
+| `src/tracking/sync` | manual mode: where the beat sits, when the tempo is known |
 | `src/tracking/live` | the microphone path: audio in, beat predictions out |
 | `src/render/live_metronome` | tracker + click, and the round-trip arithmetic between them |
 | `src/api.cpp` | C API |
@@ -123,6 +124,39 @@ Known and accepted: on material well outside 100-140 BPM the tracker sometimes
 settles an octave away — a slow piece tracked on its eighth-notes, a fast one
 in half time. That is the tempo prior doing its job, it is the most common
 failure of every beat tracker, and it is why the UI has x2 and /2 buttons.
+
+Manual mode (`LiveTracker::setManualTempo`) removes the question the tracker is
+worst at. The user's tempo pins the period, and `tracking::PhaseSync` answers
+the only thing left.
+
+*The comb correlation is one complex number.* Correlating the onset function
+against a comb of impulses at a known period is asking how its energy is
+distributed *modulo* that period, and the first Fourier coefficient at that
+period is that distribution's centre of mass on the circle. Two decayed
+accumulators, no buffer to keep, no grid to search, and a phase that is not
+quantised to the frame rate.
+
+*Concentration alone cannot say whether it means anything.* Onsets at random
+phases still add up to a resultant of about one over the square root of their
+count, so what counts as convincing depends on how many there have been. The
+acquire test is therefore the Rayleigh statistic — resultant squared times the
+effective number of onsets — and it is what lets manual mode refuse a room whose
+beat is not the one asked for, instead of clicking somewhere and calling it
+synchronised. A synchroniser that always synchronises has said nothing.
+
+*Correlate to acquire, filter to hold.* The correlation is a mean, so a
+syncopated bar drags it; the filter's window is local, so a stray hit merely
+lowers the particles that missed it. The phase is handed over once and the
+pinned cloud carries it, nudged by at most 2% of a beat at a time — fast enough
+for a player drifting, far too slow to chase a tempo that is not the one that
+was asked for.
+
+Two of the mode's properties fall out of the filter rather than being written:
+with the period pinned, the tempo prior and the per-beat charge can no longer
+separate any two hypotheses, so both are dropped; and because the observation is
+zero-mean, a room that falls silent moves no weights and the grid simply
+continues — which is exactly what a metronome holding the user's tempo should
+do.
 
 The grid cache serialises to bytes and leaves storage to the shell, for the
 same reason decoding accepts bytes rather than a path — every shell can persist

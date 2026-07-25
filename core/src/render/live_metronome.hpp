@@ -77,6 +77,19 @@ public:
         tracker_.seedTempo(bpm, spread_octaves);
     }
 
+    // Manual mode: the tempo is the user's and the room is asked only where the
+    // beat falls. Nothing is played until it has answered; after that the click
+    // holds the tempo whatever the room does. Zero goes back to tracking the
+    // tempo too. See tracking::LiveTracker::setManualTempo.
+    void setManualTempo(double bpm) { tracker_.setManualTempo(bpm); }
+    double manualTempo() const { return tracker_.manualTempo(); }
+
+    // Manual mode, still listening for something to fall in with, and how
+    // concentrated the room's onsets are at one phase so far — the meter a UI
+    // shows behind that.
+    bool waiting() const { return tracker_.waiting(); }
+    double syncStrength() const { return tracker_.syncStrength(); }
+
     struct Stats {
         std::size_t beats = 0;              // clicks scheduled on tracked beats
         std::size_t beats_late = 0;         // beats predicted too late to play

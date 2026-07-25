@@ -701,7 +701,45 @@ TT_API int tt_live_take_beat(tt_live* live, double now_sec, double lookahead_sec
  */
 TT_API void tt_live_seed_tempo(tt_live* live, double bpm, double spread_octaves);
 
-/* Forgets the audio, the tempo and the clock — a new session. */
+/*
+ * Manual mode: the tempo is the user's and the room is asked only where the
+ * beat falls. 0 goes back to tracking the tempo too.
+ *
+ * A different promise from auto mode, in two ways that a shell has to show:
+ *
+ * - Nothing comes out until the room has been heard. The user sets a tempo and
+ *   starts; the click waits, catches the first phrase and falls in on it, which
+ *   is what makes a count-in of its own unnecessary. tt_live_waiting is that
+ *   state, and what a UI shows as "listening...".
+ *
+ * - Once it has fallen in, it does not stop. In auto mode a room that goes
+ *   quiet has taken the tempo with it; here the tempo was never the room's, so
+ *   the click holds it through a silent bar, a solo or a cough, indefinitely.
+ *
+ * The room may nudge the click by up to 2% of a beat at a time, so it follows a
+ * player drifting within about 2% of the tempo set and free-runs against
+ * anything further off. Finding the phase is a far smaller problem than finding
+ * a tempo, which is why this mode works on material the auto tracker cannot
+ * follow at all.
+ *
+ * The tempo is taken as given, including outside min_bpm..max_bpm: that range
+ * is a belief about what music is likely to be, and it does not overrule a
+ * number somebody typed.
+ */
+TT_API void tt_live_set_manual_tempo(tt_live* live, double bpm);
+TT_API double tt_live_manual_tempo(const tt_live* live);
+
+/* Manual mode, still listening for something to fall in with. 0 otherwise. */
+TT_API int tt_live_waiting(const tt_live* live);
+
+/*
+ * How concentrated the room's onsets are at one phase, 0..1 — the meter behind
+ * that "listening...". Manual mode only; 0 in auto mode.
+ */
+TT_API double tt_live_sync_strength(const tt_live* live);
+
+/* Forgets the audio and the clock — a new session. The manual tempo survives:
+   it was typed, not heard. */
 TT_API void tt_live_reset(tt_live* live);
 
 typedef struct tt_live_stats {

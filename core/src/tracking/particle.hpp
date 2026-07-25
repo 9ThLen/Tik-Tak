@@ -201,6 +201,29 @@ public:
     // manual mode fixes the period and asks only for the phase.
     void seedTempo(double bpm, double spread_octaves = 0.05);
 
+    // Fixes the period and stops the filter arguing about it — manual mode,
+    // where the tempo is the user's and the only question left is the phase.
+    // The given period is taken as it stands, outside the configured range if
+    // that is what was asked for: the range is a belief about what tempo music
+    // is likely to be at, and it has no business overruling a number somebody
+    // typed.
+    //
+    // Several of the filter's terms fall away here, and that is the point
+    // rather than an oversight. The tempo prior is a claim about which period
+    // is more musical, and with one period left it makes no claim. The per-beat
+    // charge exists to stop the cloud running to double tempo, and every
+    // particle now predicts beats at the same rate, so it can separate nothing
+    // — it would only add noise to the phase, which is the one quantity still
+    // being estimated. Both are dropped while pinned; the period itself is held
+    // by the clamp, which has nowhere left to clamp to.
+    void pinPeriod(double period_sec);
+    void unpinPeriod();
+    bool pinned() const { return pinned_; }
+
+    // Puts the cloud's next beat on a known grid, periods untouched: this is
+    // tracking::PhaseSync handing over the offset it correlated out.
+    void seedPhase(double next_beat_sec);
+
     // One ODF frame: `onset` is expected already normalised for level (see
     // tracking::LiveTracker), non-negative, order of magnitude 1.
     void observe(double time_sec, double onset);
@@ -232,6 +255,12 @@ private:
     double min_period_ = 0.0;
     double max_period_ = 0.0;
     double window_mean_ = 0.0;  // mean of the beat window over uniform phase
+
+    // Manual mode. While pinned the two bounds above are the same number, and
+    // these hold the range to go back to.
+    bool pinned_ = false;
+    double free_min_period_ = 0.0;
+    double free_max_period_ = 0.0;
 
     double last_time_sec_ = 0.0;
     bool started_ = false;

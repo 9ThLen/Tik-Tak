@@ -1101,8 +1101,12 @@ TEST(LiveApi, NullHandleIsHarmless) {
     tt_live_process(nullptr, 0.0, nullptr, 0);
     tt_live_gate_click(nullptr, 1.0);
     tt_live_seed_tempo(nullptr, 120.0, 0.05);
+    tt_live_set_manual_tempo(nullptr, 120.0);
     tt_live_reset(nullptr);
     EXPECT_EQ(tt_live_take_beat(nullptr, 0.0, 0.1, &beat), 0);
+    EXPECT_EQ(tt_live_manual_tempo(nullptr), 0.0);
+    EXPECT_EQ(tt_live_waiting(nullptr), 0);
+    EXPECT_EQ(tt_live_sync_strength(nullptr), 0.0);
 
     tt_live_estimate estimate;
     tt_live_estimate_get(nullptr, 0.0, &estimate);
@@ -1116,4 +1120,62 @@ TEST(LiveApi, NullHandleIsHarmless) {
     tt_live_estimate_get(nullptr, 0.0, nullptr);
     tt_live_stats_get(nullptr, nullptr);
     tt_live_destroy(nullptr);
+}
+
+TEST(LiveApi, ManualModeWaitsForTheRoomAndThenKeepsTheUsersTempo) {
+    tt_live_config cfg;
+    tt_live_config_defaults(&cfg, 48000.0);
+    Live live{cfg};
+    ASSERT_NE(live.handle, nullptr) << tt_status_string(live.status);
+
+    tt_live_set_manual_tempo(live.handle, 120.0);
+    EXPECT_EQ(tt_live_manual_tempo(live.handle), 120.0);
+    EXPECT_EQ(tt_live_waiting(live.handle), 1);
+
+    constexpr std::size_t kBlock = 512;
+    constexpr double kRate = 48000.0;
+
+    // Four seconds of an empty room: the tempo is known and the metronome is
+    // still deliberately silent, because the phase is not.
+    const std::vector<float> quiet(static_cast<std::size_t>(4.0 * kRate), 0.0f);
+    double time = 0.0;
+    double beat = 0.0;
+    for (std::size_t i = 0; i + kBlock <= quiet.size(); i += kBlock) {
+        tt_live_process(live.handle, time, quiet.data() + i, kBlock);
+        time += static_cast<double>(kBlock) / kRate;
+        EXPECT_EQ(tt_live_take_beat(live.handle, time, 0.05, &beat), 0);
+    }
+    EXPECT_EQ(tt_live_waiting(live.handle), 1);
+    EXPECT_EQ(tt_live_sync_strength(live.handle), 0.0);
+
+    // Then a band, coming in off any round number of beats. The click falls in
+    // on their phase and clicks at the tempo it was given.
+    const auto room = tiktak::test::clickTrack(120.0, 16.0, kRate, 1.17);
+    std::vector<double> beats;
+    for (std::size_t i = 0; i + kBlock <= room.size(); i += kBlock) {
+        tt_live_process(live.handle, time, room.data() + i, kBlock);
+        time += static_cast<double>(kBlock) / kRate;
+        while (tt_live_take_beat(live.handle, time, 0.05, &beat)) beats.push_back(beat);
+    }
+
+    EXPECT_EQ(tt_live_waiting(live.handle), 0);
+    EXPECT_GT(tt_live_sync_strength(live.handle), 0.5);
+
+    tt_live_estimate estimate;
+    tt_live_estimate_get(live.handle, time, &estimate);
+    EXPECT_NEAR(estimate.bpm, 120.0, 1e-9);
+
+    ASSERT_GT(beats.size(), 20u);
+    for (std::size_t i = 1; i < beats.size(); ++i) {
+        EXPECT_NEAR(beats[i] - beats[i - 1], 0.5, 0.03) << "beat " << i;
+    }
+    for (std::size_t i = beats.size() / 2; i < beats.size(); ++i) {
+        const double since = beats[i] - 1.17;
+        EXPECT_LT(std::fabs(since - std::round(since / 0.5) * 0.5), 0.05) << "beat " << i;
+    }
+
+    // A reset forgets the room. It does not forget the number that was typed.
+    tt_live_reset(live.handle);
+    EXPECT_EQ(tt_live_manual_tempo(live.handle), 120.0);
+    EXPECT_EQ(tt_live_waiting(live.handle), 1);
 }

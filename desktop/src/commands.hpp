@@ -26,6 +26,10 @@ struct Options {
     long long loop_from = -1;        // --loop A:B, bars; -1 = no loop
     long long loop_to = -1;
     double hint_bpm = 0.0;           // manual-mode tempo hint; 0 = estimate
+
+    // `listen` (Phase 6): the user's own tempo. The tracker then only looks for
+    // the phase, and plays nothing until it has found one. 0 = track the tempo.
+    double manual_bpm = 0.0;
     bool no_click = false;           // the track alone, cache still exercised
     bool no_cache = false;           // force a fresh analysis
 };

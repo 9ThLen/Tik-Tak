@@ -105,6 +105,7 @@ sound in a real room, a hundred attempts an hour instead of a dozen a day.
 ```sh
 tiktak listen --seconds 30 --latency-ms 24     # follow the room
 tiktak listen --hint 96                        # start from a tempo instead of searching
+tiktak listen --manual 96                      # hold 96, take only the phase from the room
 tiktak listen song.mp3 -o heard.wav            # no microphone: drive it from a file
 ```
 
@@ -126,6 +127,33 @@ itself and how much of the room's onset energy keeps landing where it predicted,
 so silence, noise and a change of song all pull it down — and below the lock
 threshold the metronome coasts at the last tempo it was sure of rather than
 lunging at whatever it hears next.
+
+#### `--manual N` — the tempo is yours, the phase is the room's
+
+With `--manual` the tempo stops being a question. The click holds the BPM given,
+waits for the room to start, falls in on its phase, and then keeps going whether
+the room does or not — because the tempo was never the room's to take away. It
+follows a player drifting within about 2% of the number set and free-runs
+against anything further off.
+
+Finding a phase at a known tempo is a far smaller problem than finding a tempo,
+so this mode works on material the automatic one cannot follow at all. The other
+half of that bargain is that it **refuses**: asked for a beat the room does not
+contain, it plays nothing and says so, rather than clicking somewhere and calling
+it synchronised.
+
+```
+$ tiktak listen click_120.mp3 --manual 120 --seconds 10
+live tracker: manual 120.0 BPM, synchronised to the room
+
+$ tiktak listen click_120.mp3 --manual 137 --seconds 10
+live tracker: manual 137.0 BPM, still listening for a beat to fall in with
+  beats played        0
+```
+
+Live, the progress line shows `listening` or `in sync` and a phase figure — how
+concentrated the room's onsets are at one point in the bar, which is the meter a
+UI would put behind "listening…".
 
 ## What the run reports
 
