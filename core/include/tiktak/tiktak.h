@@ -133,6 +133,113 @@ TT_API void tt_odf_reset(tt_odf* odf);
 /* Latency between a sample arriving and the frame covering it being emitted. */
 TT_API double tt_odf_latency_sec(const tt_odf* odf);
 
+/* -------------------------------------------------------------- scheduler -- */
+
+/*
+ * Turns a tempo into precisely timed events, ahead of time.
+ *
+ * Nothing is ever played on demand. Calling the audio device at the moment of
+ * the beat inherits every scheduling delay between the decision and the
+ * speaker — tens of milliseconds, different every time. Instead the grid is
+ * computed in advance and each event carries the timestamp the device should
+ * place it at.
+ *
+ * One clock domain throughout: the host's monotonic clock, in seconds. The core
+ * never reads a clock itself; `now_sec` is always supplied by the caller.
+ */
+
+typedef struct tt_scheduler tt_scheduler;
+
+typedef enum tt_channel {
+    TT_CHANNEL_AUDIO = 0,
+    TT_CHANNEL_HAPTIC = 1,
+    TT_CHANNEL_VISUAL = 2,
+    TT_CHANNEL_COUNT = 3
+} tt_channel;
+
+typedef enum tt_beat_kind {
+    TT_BEAT_DOWNBEAT = 0,     /* first beat of the bar */
+    TT_BEAT_BEAT = 1,         /* any other beat        */
+    TT_BEAT_SUBDIVISION = 2   /* between beats         */
+} tt_beat_kind;
+
+typedef struct tt_scheduler_config {
+    double bpm;               /* Must be > 0. 0 -> 120.                        */
+    int    beats_per_bar;     /* 0 -> 4.                                       */
+    int    subdivisions;      /* 1 = beats only, 2 = eighths. 0 -> 1.          */
+    /* How far ahead events are handed out. Must comfortably exceed the host's
+       polling interval, or beats fall through the gap between polls.
+       0 -> 0.25. */
+    double lookahead_sec;
+    /* Per-channel output latency. They differ — the audio device buffer, the
+       taptic engine and the next display frame are not the same delay — and
+       compensating them with one number makes the vibration drift audibly
+       against the click. Indexed by tt_channel. */
+    double latency_sec[TT_CHANNEL_COUNT];
+    int    channel_enabled[TT_CHANNEL_COUNT];
+} tt_scheduler_config;
+
+typedef struct tt_event {
+    /* When to hand this to its device: the musical instant minus that
+       channel's latency. Schedule against this, never against "now". */
+    double time_sec;
+    /* The musical instant itself, shared by every channel of the same step. */
+    double beat_time_sec;
+    long long step;           /* grid position, counting subdivisions */
+    long long bar;
+    int channel;              /* tt_channel   */
+    int kind;                 /* tt_beat_kind */
+    int beat_in_bar;          /* 0-based */
+    int subdivision;          /* 0 on the beat itself */
+} tt_event;
+
+TT_API void tt_scheduler_config_defaults(tt_scheduler_config* cfg);
+
+TT_API tt_scheduler* tt_scheduler_create(const tt_scheduler_config* cfg, tt_status* status);
+TT_API void tt_scheduler_destroy(tt_scheduler* scheduler);
+
+/* Starts the grid with step 0 at `now_sec`. Resets the late counter. */
+TT_API void tt_scheduler_start(tt_scheduler* scheduler, double now_sec);
+TT_API void tt_scheduler_stop(tt_scheduler* scheduler);
+TT_API int  tt_scheduler_running(const tt_scheduler* scheduler);
+
+/*
+ * Changes tempo without moving anything already handed out. The grid is
+ * re-anchored on the last emitted event, so a beat the device is already
+ * holding keeps its time — re-anchoring on "now" is heard as a stumble.
+ */
+TT_API void tt_scheduler_set_tempo(tt_scheduler* scheduler, double bpm);
+
+/*
+ * Shifts the grid's phase so a beat lands on `beat_time_sec`, for the manual
+ * mode where the tempo is fixed and only the offset must be found. Events
+ * already handed out are untouched; a shift that would put the next event in
+ * the past makes the grid skip forward instead.
+ */
+TT_API void tt_scheduler_align_to(tt_scheduler* scheduler, double beat_time_sec,
+                                  double now_sec);
+
+/*
+ * Writes every event due between `now_sec` and the lookahead horizon, and
+ * advances past them. Returns how many were written.
+ *
+ * Real-time safe. An event whose compensated time has already passed is not
+ * emitted — a late click actively misleads the player, so a gap is the lesser
+ * evil — and `dropped_late` (when non-NULL) counts those, so the host can widen
+ * its lookahead or report the overload rather than silently limping.
+ *
+ * A step's enabled channels are emitted together or not at all, so a caller
+ * with a small buffer never receives half a beat.
+ */
+TT_API size_t tt_scheduler_pull(tt_scheduler* scheduler, double now_sec,
+                                tt_event* out, size_t capacity, size_t* dropped_late);
+
+/* Host time of a grid step — for drawing the grid ahead of the events. */
+TT_API double tt_scheduler_step_time(const tt_scheduler* scheduler, long long step);
+
+/* Events dropped for lateness since the last start(). */
+TT_API size_t tt_scheduler_late_count(const tt_scheduler* scheduler);
+
 #ifdef __cplusplus
 }  /* extern "C" */
 #endif

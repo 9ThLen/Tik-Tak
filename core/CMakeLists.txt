@@ -20,6 +20,7 @@ add_library(tiktak_core STATIC
     src/dsp/window.cpp
     src/dsp/mel.cpp
     src/dsp/stft.cpp
+    src/schedule/scheduler.cpp
     src/dsp/odf.cpp
 )
 

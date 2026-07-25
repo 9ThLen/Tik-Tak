@@ -27,6 +27,7 @@ googletest is fetched at configure time; nothing else is downloaded.
 | `src/dsp/mel` | triangular mel filterbank, sparse |
 | `src/dsp/stft` | streaming STFT, allocation-free, block-size agnostic |
 | `src/dsp/odf` | onset detection function — full / low / high bands |
+| `src/schedule/scheduler` | beat grid: schedules events ahead, per-channel latency |
 | `src/api.cpp` | C API |
 
 ## Real-time rules
@@ -41,9 +42,13 @@ Everything downstream of `tt_odf_create` runs in an audio callback, so:
 
 ## Status
 
-Phase 0 of [`docs/PLAN.md`](../docs/PLAN.md): the ODF front-end, shared by every
-analysis mode. Tempo estimation, beat tracking and downbeat detection land in
-Phases 2–7.
+The ODF front-end shared by every analysis mode, plus the beat scheduler.
+Tempo estimation and beat tracking exist in `research/` as a Python reference
+and are ported here in Phase 3; downbeat detection lands in Phase 7.
+
+The scheduler never reads a clock itself — `now_sec` is always passed in. That
+is what lets the whole grid, including tempo changes and phase alignment, be
+tested exhaustively without waiting in real time.
 
 Note on `whiteningStrength`: it trades the balance between the low/high bands
 against invariance to input level, and the two cannot both be maximised — see

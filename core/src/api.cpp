@@ -4,6 +4,7 @@
 #include <new>
 
 #include "dsp/odf.hpp"
+#include "schedule/scheduler.hpp"
 
 namespace {
 
@@ -130,4 +131,132 @@ void tt_odf_reset(tt_odf* odf) {
 double tt_odf_latency_sec(const tt_odf* odf) {
     if (!odf) return 0.0;
     return odf->impl.latencySec();
+}
+
+/* -------------------------------------------------------------- scheduler -- */
+
+namespace {
+
+tiktak::schedule::SchedulerConfig resolve(const tt_scheduler_config& in) {
+    tiktak::schedule::SchedulerConfig out;
+    out.bpm = in.bpm > 0.0 ? in.bpm : 120.0;
+    out.beats_per_bar = in.beats_per_bar > 0 ? in.beats_per_bar : 4;
+    out.subdivisions = in.subdivisions > 0 ? in.subdivisions : 1;
+    out.lookahead_sec = in.lookahead_sec > 0.0 ? in.lookahead_sec : 0.25;
+
+    for (int i = 0; i < TT_CHANNEL_COUNT; ++i) {
+        out.latency_sec[static_cast<std::size_t>(i)] =
+            in.latency_sec[i] > 0.0 ? in.latency_sec[i] : 0.0;
+        out.channel_enabled[static_cast<std::size_t>(i)] = in.channel_enabled[i] != 0;
+    }
+    return out;
+}
+
+tt_event to_c(const tiktak::schedule::Event& event) {
+    tt_event out;
+    out.time_sec = event.time_sec;
+    out.beat_time_sec = event.beat_time_sec;
+    out.step = static_cast<long long>(event.step);
+    out.bar = static_cast<long long>(event.bar);
+    out.channel = static_cast<int>(event.channel);
+    out.kind = static_cast<int>(event.kind);
+    out.beat_in_bar = event.beat_in_bar;
+    out.subdivision = event.subdivision;
+    return out;
+}
+
+}  // namespace
+
+struct tt_scheduler {
+    explicit tt_scheduler(const tiktak::schedule::SchedulerConfig& cfg) : impl(cfg) {}
+    tiktak::schedule::Scheduler impl;
+};
+
+void tt_scheduler_config_defaults(tt_scheduler_config* cfg) {
+    if (!cfg) return;
+    cfg->bpm = 120.0;
+    cfg->beats_per_bar = 4;
+    cfg->subdivisions = 1;
+    cfg->lookahead_sec = 0.25;
+    for (int i = 0; i < TT_CHANNEL_COUNT; ++i) {
+        cfg->latency_sec[i] = 0.0;
+        cfg->channel_enabled[i] = 1;
+    }
+}
+
+tt_scheduler* tt_scheduler_create(const tt_scheduler_config* cfg, tt_status* status) {
+    const auto fail = [status](tt_status code) -> tt_scheduler* {
+        if (status) *status = code;
+        return nullptr;
+    };
+
+    if (!cfg) return fail(TT_ERR_INVALID_ARG);
+
+    const tiktak::schedule::SchedulerConfig resolved = resolve(*cfg);
+    if (!resolved.valid()) return fail(TT_ERR_INVALID_ARG);
+
+    tt_scheduler* handle = new (std::nothrow) tt_scheduler(resolved);
+    if (!handle) return fail(TT_ERR_OUT_OF_MEMORY);
+
+    if (status) *status = TT_OK;
+    return handle;
+}
+
+void tt_scheduler_destroy(tt_scheduler* scheduler) { delete scheduler; }
+
+void tt_scheduler_start(tt_scheduler* scheduler, double now_sec) {
+    if (scheduler) scheduler->impl.start(now_sec);
+}
+
+void tt_scheduler_stop(tt_scheduler* scheduler) {
+    if (scheduler) scheduler->impl.stop();
+}
+
+int tt_scheduler_running(const tt_scheduler* scheduler) {
+    return scheduler && scheduler->impl.running() ? 1 : 0;
+}
+
+void tt_scheduler_set_tempo(tt_scheduler* scheduler, double bpm) {
+    if (scheduler) scheduler->impl.set_tempo(bpm);
+}
+
+void tt_scheduler_align_to(tt_scheduler* scheduler, double beat_time_sec, double now_sec) {
+    if (scheduler) scheduler->impl.align_to(beat_time_sec, now_sec);
+}
+
+size_t tt_scheduler_pull(tt_scheduler* scheduler, double now_sec,
+                         tt_event* out, size_t capacity, size_t* dropped_late) {
+    if (dropped_late) *dropped_late = 0;
+    if (!scheduler || !out || capacity == 0) return 0;
+
+    // Bounded stack staging: the C++ side writes its own Event type, and this
+    // converts in place without allocating, so the call stays real-time safe.
+    constexpr std::size_t kBatch = 32;
+    tiktak::schedule::Event staging[kBatch];
+
+    std::size_t written = 0;
+    std::size_t late_total = 0;
+
+    while (written < capacity) {
+        const std::size_t want = std::min(kBatch, capacity - written);
+        std::size_t late = 0;
+        const std::size_t got = scheduler->impl.pull(now_sec, staging, want, &late);
+
+        late_total += late;
+        for (std::size_t i = 0; i < got; ++i) out[written + i] = to_c(staging[i]);
+        written += got;
+
+        if (got < want) break;
+    }
+
+    if (dropped_late) *dropped_late = late_total;
+    return written;
+}
+
+double tt_scheduler_step_time(const tt_scheduler* scheduler, long long step) {
+    return scheduler ? scheduler->impl.step_time(step) : 0.0;
+}
+
+size_t tt_scheduler_late_count(const tt_scheduler* scheduler) {
+    return scheduler ? scheduler->impl.late_count() : 0;
 }

@@ -16,6 +16,7 @@ add_executable(tiktak_core_tests
     test_mel.cpp
     test_stft.cpp
     test_odf.cpp
+    test_scheduler.cpp
     test_api.cpp
 )
 

@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -210,4 +211,204 @@ TEST(Api, ResetRestartsTheStreamClock) {
         tt_odf_process(odf.ptr, input.data(), input.size(), frames.data(), frames.size(), nullptr);
     EXPECT_EQ(second, first);
     EXPECT_LT(frames[0].time_sec, 0.05);
+}
+
+/* -------------------------------------------------------------- scheduler -- */
+
+namespace {
+
+struct SchedulerHandle {
+    tt_scheduler* ptr = nullptr;
+    ~SchedulerHandle() { tt_scheduler_destroy(ptr); }
+};
+
+tt_scheduler_config beatsOnly(double bpm = 120.0) {
+    tt_scheduler_config cfg;
+    tt_scheduler_config_defaults(&cfg);
+    cfg.bpm = bpm;
+    cfg.channel_enabled[TT_CHANNEL_HAPTIC] = 0;
+    cfg.channel_enabled[TT_CHANNEL_VISUAL] = 0;
+    return cfg;
+}
+
+}  // namespace
+
+TEST(SchedulerApi, DefaultsAreUsable) {
+    tt_scheduler_config cfg;
+    tt_scheduler_config_defaults(&cfg);
+    EXPECT_DOUBLE_EQ(cfg.bpm, 120.0);
+    EXPECT_EQ(cfg.beats_per_bar, 4);
+    EXPECT_EQ(cfg.subdivisions, 1);
+
+    tt_status status = TT_ERR_UNSUPPORTED;
+    SchedulerHandle scheduler{tt_scheduler_create(&cfg, &status)};
+    EXPECT_EQ(status, TT_OK);
+    ASSERT_NE(scheduler.ptr, nullptr);
+    EXPECT_EQ(tt_scheduler_running(scheduler.ptr), 0);
+}
+
+TEST(SchedulerApi, ZeroedConfigFallsBackToDefaults) {
+    tt_scheduler_config cfg;
+    std::memset(&cfg, 0, sizeof(cfg));
+    cfg.channel_enabled[TT_CHANNEL_AUDIO] = 1;
+
+    SchedulerHandle scheduler{tt_scheduler_create(&cfg, nullptr)};
+    ASSERT_NE(scheduler.ptr, nullptr);
+
+    tt_scheduler_start(scheduler.ptr, 0.0);
+    EXPECT_NEAR(tt_scheduler_step_time(scheduler.ptr, 2), 1.0, 1e-12);  // 120 BPM
+}
+
+TEST(SchedulerApi, NullHandleIsHarmless) {
+    tt_scheduler_destroy(nullptr);
+    tt_scheduler_start(nullptr, 0.0);
+    tt_scheduler_stop(nullptr);
+    tt_scheduler_set_tempo(nullptr, 120.0);
+    tt_scheduler_align_to(nullptr, 1.0, 1.0);
+
+    EXPECT_EQ(tt_scheduler_running(nullptr), 0);
+    EXPECT_EQ(tt_scheduler_late_count(nullptr), 0u);
+    EXPECT_DOUBLE_EQ(tt_scheduler_step_time(nullptr, 3), 0.0);
+
+    tt_event event;
+    size_t dropped = 99;
+    EXPECT_EQ(tt_scheduler_pull(nullptr, 0.0, &event, 1, &dropped), 0u);
+    EXPECT_EQ(dropped, 0u);
+}
+
+TEST(SchedulerApi, RejectsBadConfig) {
+    tt_status status = TT_OK;
+    EXPECT_EQ(tt_scheduler_create(nullptr, &status), nullptr);
+    EXPECT_EQ(status, TT_ERR_INVALID_ARG);
+
+    tt_scheduler_config cfg = beatsOnly();
+    cfg.latency_sec[TT_CHANNEL_AUDIO] = 100.0;  // absurd
+    status = TT_OK;
+    EXPECT_EQ(tt_scheduler_create(&cfg, &status), nullptr);
+    EXPECT_EQ(status, TT_ERR_INVALID_ARG);
+}
+
+TEST(SchedulerApi, DeliversBeatsOnTheGrid) {
+    tt_scheduler_config cfg = beatsOnly(120.0);
+    SchedulerHandle scheduler{tt_scheduler_create(&cfg, nullptr)};
+    ASSERT_NE(scheduler.ptr, nullptr);
+
+    tt_scheduler_start(scheduler.ptr, 5.0);
+    EXPECT_EQ(tt_scheduler_running(scheduler.ptr), 1);
+
+    std::vector<tt_event> collected;
+    tt_event buffer[64];
+    for (double now = 5.0; now < 9.0; now += 0.01) {
+        const size_t count = tt_scheduler_pull(scheduler.ptr, now, buffer, 64, nullptr);
+        collected.insert(collected.end(), buffer, buffer + count);
+    }
+
+    ASSERT_GE(collected.size(), 8u);
+    for (size_t i = 0; i < collected.size(); ++i) {
+        EXPECT_NEAR(collected[i].beat_time_sec, 5.0 + 0.5 * static_cast<double>(i), 1e-12);
+        EXPECT_EQ(collected[i].channel, TT_CHANNEL_AUDIO);
+        EXPECT_EQ(collected[i].kind, i % 4 == 0 ? TT_BEAT_DOWNBEAT : TT_BEAT_BEAT);
+        EXPECT_EQ(collected[i].beat_in_bar, static_cast<int>(i % 4));
+    }
+}
+
+TEST(SchedulerApi, PullBeyondTheStagingBatchIsContiguous) {
+    // The C shim stages through a fixed stack buffer; a request larger than one
+    // batch must still come back as one unbroken run of events.
+    tt_scheduler_config cfg = beatsOnly(600.0);  // fast, so many fit in the horizon
+    cfg.lookahead_sec = 8.0;
+
+    SchedulerHandle scheduler{tt_scheduler_create(&cfg, nullptr)};
+    ASSERT_NE(scheduler.ptr, nullptr);
+    tt_scheduler_start(scheduler.ptr, 0.0);
+
+    std::vector<tt_event> buffer(100);
+    const size_t count = tt_scheduler_pull(scheduler.ptr, 0.0, buffer.data(), buffer.size(),
+                                           nullptr);
+
+    ASSERT_GT(count, 40u) << "expected more events than one staging batch";
+    for (size_t i = 1; i < count; ++i) {
+        EXPECT_EQ(buffer[i].step, buffer[i - 1].step + 1) << "gap at index " << i;
+        EXPECT_GT(buffer[i].beat_time_sec, buffer[i - 1].beat_time_sec);
+    }
+}
+
+TEST(SchedulerApi, LatencyIsCompensatedPerChannel) {
+    tt_scheduler_config cfg;
+    tt_scheduler_config_defaults(&cfg);
+    cfg.lookahead_sec = 0.5;
+    cfg.latency_sec[TT_CHANNEL_AUDIO] = 0.030;
+    cfg.latency_sec[TT_CHANNEL_HAPTIC] = 0.015;
+    cfg.latency_sec[TT_CHANNEL_VISUAL] = 0.008;
+
+    SchedulerHandle scheduler{tt_scheduler_create(&cfg, nullptr)};
+    ASSERT_NE(scheduler.ptr, nullptr);
+    tt_scheduler_start(scheduler.ptr, 0.0);
+
+    tt_event buffer[64];
+    const size_t count = tt_scheduler_pull(scheduler.ptr, 0.0, buffer, 64, nullptr);
+    ASSERT_GE(count, 3u);
+
+    const double expected[TT_CHANNEL_COUNT] = {0.030, 0.015, 0.008};
+    for (size_t i = 0; i < count; ++i) {
+        EXPECT_NEAR(buffer[i].time_sec,
+                    buffer[i].beat_time_sec - expected[buffer[i].channel], 1e-12);
+    }
+}
+
+TEST(SchedulerApi, ReportsLateDrops) {
+    tt_scheduler_config cfg = beatsOnly(120.0);
+    SchedulerHandle scheduler{tt_scheduler_create(&cfg, nullptr)};
+    ASSERT_NE(scheduler.ptr, nullptr);
+
+    tt_scheduler_start(scheduler.ptr, 0.0);
+
+    tt_event buffer[64];
+    size_t dropped = 0;
+    tt_scheduler_pull(scheduler.ptr, 30.0, buffer, 64, &dropped);
+
+    EXPECT_GT(dropped, 0u);
+    EXPECT_EQ(tt_scheduler_late_count(scheduler.ptr), dropped);
+}
+
+TEST(SchedulerApi, TempoChangeKeepsTheGridMonotonic) {
+    tt_scheduler_config cfg = beatsOnly(100.0);
+    SchedulerHandle scheduler{tt_scheduler_create(&cfg, nullptr)};
+    ASSERT_NE(scheduler.ptr, nullptr);
+    tt_scheduler_start(scheduler.ptr, 0.0);
+
+    std::vector<tt_event> collected;
+    tt_event buffer[64];
+    for (double now = 0.0; now < 8.0; now += 0.01) {
+        const size_t count = tt_scheduler_pull(scheduler.ptr, now, buffer, 64, nullptr);
+        collected.insert(collected.end(), buffer, buffer + count);
+        if (now > 3.0 && now < 3.011) tt_scheduler_set_tempo(scheduler.ptr, 165.0);
+    }
+
+    ASSERT_GT(collected.size(), 10u);
+    for (size_t i = 1; i < collected.size(); ++i) {
+        EXPECT_GT(collected[i].beat_time_sec, collected[i - 1].beat_time_sec);
+    }
+}
+
+TEST(SchedulerApi, AlignToSnapsThePhase) {
+    tt_scheduler_config cfg = beatsOnly(120.0);
+    SchedulerHandle scheduler{tt_scheduler_create(&cfg, nullptr)};
+    ASSERT_NE(scheduler.ptr, nullptr);
+
+    tt_scheduler_start(scheduler.ptr, 0.0);
+    tt_scheduler_align_to(scheduler.ptr, 4.37, 4.0);
+
+    tt_event buffer[64];
+    std::vector<tt_event> collected;
+    for (double now = 4.0; now < 7.0; now += 0.01) {
+        const size_t count = tt_scheduler_pull(scheduler.ptr, now, buffer, 64, nullptr);
+        collected.insert(collected.end(), buffer, buffer + count);
+    }
+
+    ASSERT_GE(collected.size(), 4u);
+    for (const auto& event : collected) {
+        const double beats = (event.beat_time_sec - 4.37) / 0.5;
+        EXPECT_NEAR(beats, std::round(beats), 1e-9);
+    }
 }
