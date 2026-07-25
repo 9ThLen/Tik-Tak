@@ -10,6 +10,7 @@
 #include "analysis/grid_cache.hpp"
 #include "analysis/offline.hpp"
 #include "render/click.hpp"
+#include "render/player.hpp"
 #include "dsp/odf.hpp"
 #include "schedule/scheduler.hpp"
 
@@ -551,4 +552,147 @@ size_t tt_click_stolen(const tt_click* click) {
 
 size_t tt_click_discontinuities(const tt_click* click) {
     return click ? click->impl.discontinuities() : 0;
+}
+
+/* ----------------------------------------------------------------- player -- */
+
+namespace {
+
+tiktak::render::PlayerConfig resolve(const tt_player_config& in) {
+    tiktak::render::PlayerConfig out;
+    out.sample_rate = in.sample_rate;
+
+    tt_click_config click = in.click;
+    if (click.sample_rate <= 0.0) click.sample_rate = in.sample_rate;
+    out.click = resolve(click);
+
+    out.beats_per_bar = in.beats_per_bar > 0 ? in.beats_per_bar : 4;
+    out.downbeat_offset = in.downbeat_offset;
+    out.count_in_beats = in.count_in_beats;
+    out.cue_lookahead_sec =
+        in.cue_lookahead_sec > 0.0 ? in.cue_lookahead_sec : 0.25;
+    for (int i = 0; i < TT_CHANNEL_COUNT; ++i) {
+        out.latency_sec[static_cast<std::size_t>(i)] =
+            in.latency_sec[i] > 0.0 ? in.latency_sec[i] : 0.0;
+        out.channel_enabled[static_cast<std::size_t>(i)] = in.channel_enabled[i] != 0;
+    }
+    return out;
+}
+
+}  // namespace
+
+struct tt_player {
+    explicit tt_player(const tiktak::render::PlayerConfig& cfg) : impl(cfg) {}
+    tiktak::render::TrackPlayer impl;
+};
+
+void tt_player_config_defaults(tt_player_config* cfg, double sample_rate) {
+    if (!cfg) return;
+    cfg->sample_rate = sample_rate;
+    tt_click_config_defaults(&cfg->click, sample_rate);
+    cfg->beats_per_bar = 4;
+    cfg->downbeat_offset = 0;
+    cfg->count_in_beats = 0;
+    cfg->cue_lookahead_sec = 0.25;
+    for (int i = 0; i < TT_CHANNEL_COUNT; ++i) {
+        cfg->latency_sec[i] = 0.0;
+        cfg->channel_enabled[i] = i == TT_CHANNEL_AUDIO ? 1 : 0;
+    }
+}
+
+tt_player* tt_player_create(const tt_player_config* cfg, tt_status* status) {
+    const auto fail = [status](tt_status code) -> tt_player* {
+        if (status) *status = code;
+        return nullptr;
+    };
+
+    if (!cfg) return fail(TT_ERR_INVALID_ARG);
+
+    const tiktak::render::PlayerConfig resolved = resolve(*cfg);
+    if (!resolved.valid()) return fail(TT_ERR_INVALID_ARG);
+
+    tt_player* handle = new (std::nothrow) tt_player(resolved);
+    if (!handle) return fail(TT_ERR_OUT_OF_MEMORY);
+
+    if (status) *status = TT_OK;
+    return handle;
+}
+
+void tt_player_destroy(tt_player* player) { delete player; }
+
+tt_status tt_player_set_track(tt_player* player, const float* samples, size_t frames) {
+    if (!player || (frames > 0 && !samples)) return TT_ERR_INVALID_ARG;
+    player->impl.setTrack(samples, frames);
+    return TT_OK;
+}
+
+tt_status tt_player_set_grid(tt_player* player, const double* beat_times, size_t count) {
+    if (!player || (count > 0 && !beat_times)) return TT_ERR_INVALID_ARG;
+    player->impl.setGrid(beat_times, count);
+    return TT_OK;
+}
+
+tt_status tt_player_set_loop(tt_player* player, long long start_bar, long long end_bar) {
+    if (!player) return TT_ERR_INVALID_ARG;
+    return player->impl.setLoop(start_bar, end_bar) ? TT_OK : TT_ERR_INVALID_ARG;
+}
+
+void tt_player_clear_loop(tt_player* player) {
+    if (player) player->impl.clearLoop();
+}
+
+tt_status tt_player_start(tt_player* player, double stream_time_sec,
+                          long long from_bar) {
+    if (!player) return TT_ERR_INVALID_ARG;
+    return player->impl.start(stream_time_sec, from_bar) ? TT_OK : TT_ERR_INVALID_ARG;
+}
+
+void tt_player_stop(tt_player* player) {
+    if (player) player->impl.stop();
+}
+
+void tt_player_silence(tt_player* player) {
+    if (player) player->impl.silence();
+}
+
+int tt_player_running(const tt_player* player) {
+    return player && player->impl.running() ? 1 : 0;
+}
+
+double tt_player_position_sec(const tt_player* player) {
+    return player ? player->impl.positionSec() : 0.0;
+}
+
+void tt_player_process(tt_player* player, double stream_time_sec, float* out,
+                       size_t frames, tt_event* cues, size_t cue_capacity,
+                       size_t* cue_count) {
+    if (cue_count) *cue_count = 0;
+    if (!player || !out) return;
+
+    // Staged through the C++ type for the same reason the scheduler is: the
+    // two event structs matching today is not a contract.
+    tiktak::schedule::Event staging[64];
+    const std::size_t capacity =
+        cues ? std::min(cue_capacity, static_cast<size_t>(64)) : 0;
+    std::size_t written = 0;
+    player->impl.process(stream_time_sec, out, frames, cues ? staging : nullptr,
+                         capacity, &written);
+    for (std::size_t i = 0; i < written; ++i) cues[i] = to_c(staging[i]);
+    if (cue_count) *cue_count = written;
+}
+
+void tt_player_stats_get(const tt_player* player, tt_player_stats* out) {
+    if (!out) return;
+    *out = tt_player_stats{};
+    if (!player) return;
+
+    const tiktak::render::TrackPlayer::Stats s = player->impl.stats();
+    out->beats = s.beats;
+    out->loops = s.loops;
+    out->clicks_late = s.clicks_late;
+    out->clicks_overflowed = s.clicks_overflowed;
+    out->voices_stolen = s.voices_stolen;
+    out->discontinuities = s.discontinuities;
+    out->cues_dropped = s.cues_dropped;
+    out->clean = s.clean() ? 1 : 0;
 }

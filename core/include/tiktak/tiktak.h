@@ -481,6 +481,127 @@ TT_API size_t tt_click_stolen(const tt_click* click);
    so this is counted rather than hidden. */
 TT_API size_t tt_click_discontinuities(const tt_click* click);
 
+/* ----------------------------------------------------------------- player -- */
+
+/*
+ * Playback of an analysed track with the metronome riding its beat grid — the
+ * app's main scenario: the backing track with the click exactly on the beats
+ * the offline analysis found.
+ *
+ * A separate object rather than a mode of the metronome because the time source
+ * is inverted: a metronome generates its grid from a tempo, the player follows
+ * a grid the analysis already fixed. The track, not the clock, says where the
+ * beats are.
+ *
+ * The click needs no latency compensation against the track: both leave
+ * through the same device buffer, so a click written on the beat's sample
+ * arrives with it whatever the output latency is. Only haptic and visual cues
+ * carry latency arithmetic — see tt_player_config.latency_sec.
+ *
+ * tt_player_process is real-time safe. Everything else allocates or takes
+ * setup decisions; call it before starting, from a normal thread.
+ */
+
+typedef struct tt_player tt_player;
+
+typedef struct tt_player_config {
+    double sample_rate;         /* Must be > 0, and the track's rate.          */
+    tt_click_config click;      /* click.sample_rate 0 -> sample_rate.         */
+
+    /* Bars are bookkeeping until Phase 7 detects real downbeats: grid beat
+       `downbeat_offset` is a bar's first beat, and every beats_per_bar-th
+       after it. The offset lets the user shift which beat is "the one". */
+    int beats_per_bar;          /* 0 -> 4                                      */
+    int downbeat_offset;        /* 0-based grid index; negative rejected       */
+
+    /* Count-in clicks before the music, at the local beat interval read off
+       the grid at the entry point, with the track silent underneath. */
+    int count_in_beats;         /* 0 -> none                                   */
+
+    /* How far ahead haptic/visual cues are handed out. The click needs none —
+       it renders in the same callback. 0 -> 0.25.                             */
+    double cue_lookahead_sec;
+
+    /* latency_sec[TT_CHANNEL_AUDIO] is the device's output latency, used only
+       to know when a beat is *heard*; haptic and visual entries are those
+       channels' own delays, compensated against that moment.                  */
+    double latency_sec[TT_CHANNEL_COUNT];
+    /* Read literally (no zero-means-default): audio on and cues off is what
+       tt_player_config_defaults fills in.                                     */
+    int    channel_enabled[TT_CHANNEL_COUNT];
+} tt_player_config;
+
+TT_API void tt_player_config_defaults(tt_player_config* cfg, double sample_rate);
+
+TT_API tt_player* tt_player_create(const tt_player_config* cfg, tt_status* status);
+TT_API void tt_player_destroy(tt_player* player);
+
+/*
+ * The decoded track, mono at the configured rate. NOT copied — the caller
+ * already holds it for the analysis, and five minutes of audio is tens of
+ * megabytes. The buffer must stay alive and unmoved until playback is done.
+ */
+TT_API tt_status tt_player_set_track(tt_player* player, const float* samples,
+                                     size_t frames);
+
+/* The analysed beat grid, seconds from the track's start, ascending. Copied —
+   the caller may free its analysis once the player is loaded. */
+TT_API tt_status tt_player_set_grid(tt_player* player, const double* beat_times,
+                                    size_t count);
+
+/*
+ * Loops bars [start_bar, end_bar): the track jumps from the end bar's first
+ * beat back to the start bar's, sample-exactly. Set before starting.
+ * TT_ERR_INVALID_ARG when the bars are not in the grid or the range is empty.
+ */
+TT_API tt_status tt_player_set_loop(tt_player* player, long long start_bar,
+                                    long long end_bar);
+TT_API void tt_player_clear_loop(tt_player* player);
+
+/*
+ * Starts at `from_bar`'s first beat, count-in first if configured;
+ * `stream_time_sec` is when the first sample leaves. TT_ERR_INVALID_ARG when
+ * there is no track, the bar is not in the grid, or a count-in is asked of a
+ * grid too short to define a beat interval.
+ */
+TT_API tt_status tt_player_start(tt_player* player, double stream_time_sec,
+                                 long long from_bar);
+
+/* Stops advancing; sounding clicks ring out. Silence also cuts them. */
+TT_API void tt_player_stop(tt_player* player);
+TT_API void tt_player_silence(tt_player* player);
+
+TT_API int tt_player_running(const tt_player* player);
+
+/* Current position, seconds into the track. */
+TT_API double tt_player_position_sec(const tt_player* player);
+
+/*
+ * The audio callback. Mixes into `out` — does not clear it. `stream_time_sec`
+ * is the time of out[0], in the same clock tt_player_start was given. Haptic
+ * and visual cues are written to `cues` (pass NULL to discard); events beyond
+ * `cue_capacity` are counted in stats rather than silently lost.
+ */
+TT_API void tt_player_process(tt_player* player, double stream_time_sec,
+                              float* out, size_t frames,
+                              tt_event* cues, size_t cue_capacity,
+                              size_t* cue_count);
+
+/* Counters that should stay zero on a healthy run (beats and loops count the
+   run itself). Mirrors the metronome's stats discipline. */
+typedef struct tt_player_stats {
+    size_t beats;              /* clicks scheduled since start                 */
+    size_t loops;              /* times the loop wrapped                       */
+    size_t clicks_late;        /* clicks that arrived past their buffer        */
+    size_t clicks_overflowed;  /* clicks refused, queue full                   */
+    size_t voices_stolen;      /* clicks cut short, all voices busy            */
+    size_t discontinuities;    /* buffers that did not follow the previous one */
+    size_t cues_dropped;       /* cue events the caller had no room for        */
+    int    clean;              /* 1 when nothing above went wrong              */
+} tt_player_stats;
+
+TT_API void tt_player_stats_get(const tt_player* player, tt_player_stats* out);
+
 #ifdef __cplusplus
 }  /* extern "C" */
 #endif

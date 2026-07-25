@@ -32,6 +32,7 @@ tiktak devices                        # what the machine has
 tiktak play --bpm 120 --seconds 30    # a metronome, on a real device
 tiktak render --bpm 137 -o out.wav    # the same thing, to a file, no device
 tiktak measure --seconds 30           # round trip and jitter, measured
+tiktak track song.mp3 --seconds 30    # the file, click riding its own beats
 ```
 
 `--latency-ms` is the output latency to compensate. Measure it before trusting
@@ -69,6 +70,30 @@ Two numbers come out, and the second is the one that matters:
 
 Nothing is compensated during the measurement itself, so the offset that comes
 back is the whole round trip and nothing else.
+
+### track
+
+The Phase 4 scenario end to end: a WAV/FLAC/MP3 in, the offline analysis finds
+its beat grid, and the track plays with the click exactly on its own beats —
+count-in first, and `--loop A:B` to cycle a difficult phrase by bars.
+
+```sh
+tiktak track song.mp3 --count-in 4 --loop 8:12
+tiktak track song.mp3 --hint 96          # manual mode: fix the tempo, find the phase
+tiktak track song.mp3 --seconds 8 -o out.wav   # same callback, virtual clock
+```
+
+The grid is analysed once and cached next to the file
+(`.tiktak/<content-hash>.grid`), so the second start is instant. The key is a
+hash of the encoded bytes: a renamed file still hits, a re-encoded one
+correctly misses, and a grid analysed under a `--hint` never masquerades as
+the automatic one. `--no-cache` forces a fresh analysis.
+
+The click is not latency-compensated against the track, on purpose: both leave
+through the same device buffer, so a click written on the beat's sample arrives
+with it whatever the output latency is. `--latency-ms` is therefore not needed
+here — it exists for the standalone metronome, whose reference is the wall
+clock rather than a track in the same buffer.
 
 ## What the run reports
 

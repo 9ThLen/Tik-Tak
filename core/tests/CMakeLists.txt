@@ -19,6 +19,7 @@ add_executable(tiktak_core_tests
     test_scheduler.cpp
     test_click.cpp
     test_metronome.cpp
+    test_player.cpp
     test_tempo.cpp
     test_tracker.cpp
     test_offline.cpp

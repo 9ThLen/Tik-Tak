@@ -881,3 +881,101 @@ TEST(GridApi, NullHandleIsHarmless) {
     EXPECT_EQ(tt_grid_key(nullptr, 0, key, sizeof(key)), TT_OK);
     EXPECT_EQ(tt_grid_key("abc", 3, nullptr, 65), TT_ERR_INVALID_ARG);
 }
+
+/* ----------------------------------------------------------------- player -- */
+
+namespace {
+
+struct Player {
+    explicit Player(const tt_player_config& cfg) {
+        handle = tt_player_create(&cfg, &status);
+    }
+    ~Player() { tt_player_destroy(handle); }
+    Player(const Player&) = delete;
+    Player& operator=(const Player&) = delete;
+
+    tt_player* handle = nullptr;
+    tt_status status = TT_OK;
+};
+
+}  // namespace
+
+TEST(PlayerApi, PlaysATrackWithClicksOnItsGrid) {
+    tt_player_config cfg;
+    tt_player_config_defaults(&cfg, 48000.0);
+    cfg.count_in_beats = 2;
+
+    Player player{cfg};
+    ASSERT_NE(player.handle, nullptr);
+
+    const std::vector<float> track(48000 * 4, 0.0f);
+    const double grid[] = {0.5, 1.0, 1.5, 2.0, 2.5, 3.0};
+    ASSERT_EQ(tt_player_set_track(player.handle, track.data(), track.size()), TT_OK);
+    ASSERT_EQ(tt_player_set_grid(player.handle, grid, 6), TT_OK);
+    ASSERT_EQ(tt_player_start(player.handle, 0.0, 0), TT_OK);
+    EXPECT_EQ(tt_player_running(player.handle), 1);
+
+    float buffer[512];
+    double energy = 0.0;
+    // 400 buffers ≈ 4.3 s: past the last grid beat (timeline 3.5 s — one
+    // second of count-in plus the 2.5 s from entry to the final beat).
+    for (int b = 0; b < 400; ++b) {
+        std::memset(buffer, 0, sizeof(buffer));
+        tt_player_process(player.handle, b * 512 / 48000.0, buffer, 512,
+                          nullptr, 0, nullptr);
+        for (float s : buffer) energy += static_cast<double>(s) * s;
+    }
+    EXPECT_GT(energy, 0.0);  // the clicks are audible over a silent track
+
+    tt_player_stats stats;
+    tt_player_stats_get(player.handle, &stats);
+    EXPECT_EQ(stats.beats, 8u);  // 2 count-in + 6 grid beats
+    EXPECT_EQ(stats.clean, 1);
+}
+
+TEST(PlayerApi, RejectsWhatTheCoreRejects) {
+    tt_player_config cfg;
+    tt_player_config_defaults(&cfg, 48000.0);
+    cfg.click.sample_rate = 44100.0;  // clock mismatch with the track
+    tt_status status = TT_OK;
+    EXPECT_EQ(tt_player_create(&cfg, &status), nullptr);
+    EXPECT_EQ(status, TT_ERR_INVALID_ARG);
+
+    tt_player_config good;
+    tt_player_config_defaults(&good, 48000.0);
+    Player player{good};
+    ASSERT_NE(player.handle, nullptr);
+
+    EXPECT_EQ(tt_player_start(player.handle, 0.0, 0), TT_ERR_INVALID_ARG);  // no track
+    const std::vector<float> track(48000, 0.0f);
+    ASSERT_EQ(tt_player_set_track(player.handle, track.data(), track.size()), TT_OK);
+    const double grid[] = {0.0, 0.5, 1.0, 1.5};
+    ASSERT_EQ(tt_player_set_grid(player.handle, grid, 4), TT_OK);
+    EXPECT_EQ(tt_player_set_loop(player.handle, 1, 1), TT_ERR_INVALID_ARG);
+    EXPECT_EQ(tt_player_start(player.handle, 0.0, 7), TT_ERR_INVALID_ARG);
+}
+
+TEST(PlayerApi, NullHandleIsHarmless) {
+    float buffer[16] = {0.0f};
+    size_t cue_count = 7;
+
+    EXPECT_EQ(tt_player_set_track(nullptr, nullptr, 0), TT_ERR_INVALID_ARG);
+    EXPECT_EQ(tt_player_set_grid(nullptr, nullptr, 0), TT_ERR_INVALID_ARG);
+    EXPECT_EQ(tt_player_set_loop(nullptr, 0, 1), TT_ERR_INVALID_ARG);
+    EXPECT_EQ(tt_player_start(nullptr, 0.0, 0), TT_ERR_INVALID_ARG);
+    EXPECT_EQ(tt_player_running(nullptr), 0);
+    EXPECT_DOUBLE_EQ(tt_player_position_sec(nullptr), 0.0);
+
+    tt_player_process(nullptr, 0.0, buffer, 16, nullptr, 0, &cue_count);
+    EXPECT_EQ(cue_count, 0u);
+
+    tt_player_stats stats;
+    tt_player_stats_get(nullptr, &stats);
+    EXPECT_EQ(stats.clean, 0);
+
+    tt_player_stop(nullptr);
+    tt_player_silence(nullptr);
+    tt_player_clear_loop(nullptr);
+    tt_player_destroy(nullptr);
+    tt_player_config_defaults(nullptr, 48000.0);
+}

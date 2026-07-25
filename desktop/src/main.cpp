@@ -43,6 +43,7 @@ int main(int argc, char** argv) {
     if (command == "render") return tiktak::desktop::cmdRender(options);
     if (command == "play") return tiktak::desktop::cmdPlay(options);
     if (command == "measure") return tiktak::desktop::cmdMeasure(options);
+    if (command == "track") return tiktak::desktop::cmdTrack(options);
 
     std::fprintf(stderr, "tiktak: unknown command '%s'\n\n", command.c_str());
     tiktak::desktop::printUsage();

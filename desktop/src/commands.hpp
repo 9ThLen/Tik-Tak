@@ -17,6 +17,17 @@ struct Options {
     double lookahead_sec = 0.25;
     std::string device_name;
     std::string output_path;
+
+    // The track command (Phase 4): play an analysed file with the click on its
+    // beat grid.
+    std::string track_path;          // the positional argument
+    int count_in = 4;                // count-in beats before the music
+    long long from_bar = 0;          // where to start
+    long long loop_from = -1;        // --loop A:B, bars; -1 = no loop
+    long long loop_to = -1;
+    double hint_bpm = 0.0;           // manual-mode tempo hint; 0 = estimate
+    bool no_click = false;           // the track alone, cache still exercised
+    bool no_cache = false;           // force a fresh analysis
 };
 
 // Returns false and fills `error` on a bad argument, rather than guessing.
@@ -27,6 +38,7 @@ int cmdDevices();
 int cmdRender(const Options& options);
 int cmdPlay(const Options& options);
 int cmdMeasure(const Options& options);
+int cmdTrack(const Options& options);
 
 void printUsage();
 

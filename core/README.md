@@ -48,6 +48,7 @@ all.
 | `src/schedule/scheduler` | beat grid: schedules events ahead, per-channel latency |
 | `src/render/click` | the click itself: sample-accurate placement, fixed voice pool |
 | `src/render/metronome` | grid + click wired together — one audio callback for every shell |
+| `src/render/player` | track playback riding the analysed grid: count-in, bar loops, cues |
 | `src/api.cpp` | C API |
 | `src/decode/` | WAV / FLAC / MP3 to mono float, over dr_libs — separate library |
 | `src/decode_api.cpp` | C API for the decoder |
@@ -69,9 +70,18 @@ Everything downstream of `tt_odf_create` runs in an audio callback, so:
 ## Status
 
 The ODF front-end, the offline analysis path (tempo, beat tracking, the
-`tt_offline_*` API), the beat grid cache, file decoding, the beat scheduler and
-the metronome itself (click synthesis plus the callback that drives it).
-Missing: the online tracker for the microphone path, and downbeat detection.
+`tt_offline_*` API), the beat grid cache, file decoding, the beat scheduler,
+the metronome itself (click synthesis plus the callback that drives it) and the
+track player (`tt_player_*` — playback on the analysed grid, with count-in and
+bar loops). Missing: the online tracker for the microphone path, and downbeat
+detection.
+
+The player places the click on the very sample of its beat rather than
+compensating for output latency: track and click leave through the same device
+buffer, so they arrive together whatever the latency is. Only haptic and
+visual cues carry latency arithmetic, compensated against the moment the beat
+is *heard*. Bars are bookkeeping until Phase 7 — `downbeat_offset` names which
+grid beat is "the one", it does not detect it.
 
 The grid cache serialises to bytes and leaves storage to the shell, for the
 same reason decoding accepts bytes rather than a path — every shell can persist
