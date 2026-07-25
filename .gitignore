@@ -36,3 +36,4 @@ models/*.tflite
 # OS noise
 .DS_Store
 Thumbs.db
+desktop/build/

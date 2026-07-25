@@ -1,0 +1,54 @@
+name: desktop
+
+on:
+  push:
+    branches: ["**"]
+    paths: ["desktop/**", "core/**", ".github/workflows/desktop.yml"]
+  pull_request:
+    paths: ["desktop/**", "core/**", ".github/workflows/desktop.yml"]
+
+jobs:
+  # Windows is where the harness actually gets used (ADR 0003), so it is the
+  # build that must not break. Linux is here because it is fast and catches the
+  # portable half of any mistake first.
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows · build and render
+            os: windows-latest
+          - name: linux · build and render
+            os: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -S desktop -B desktop/build
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DTIKTAK_BUILD_TESTS=OFF
+          -DTIKTAK_BUILD_DECODE=OFF
+
+      - name: Build
+        run: cmake --build desktop/build --config RelWithDebInfo
+
+      # No sound card on a runner, which is exactly why `render` exists: it
+      # drives the same callback a device would and writes the result to a file,
+      # so the metronome's timing is checked on every push rather than only when
+      # somebody sits down at a machine with speakers.
+      #
+      # 137 BPM on purpose — a tempo that does not divide the sample rate is the
+      # one that catches a click rounding into the wrong buffer.
+      - name: Render a metronome
+        shell: bash
+        run: |
+          BIN=desktop/build/tiktak
+          [ -x "$BIN" ] || BIN=desktop/build/RelWithDebInfo/tiktak.exe
+          "$BIN" render --bpm 137 --seconds 20 -o metronome.wav
+
+      - name: Check every beat landed on its sample
+        shell: bash
+        run: python3 desktop/tools/check_render.py metronome.wav --bpm 137 --start 0.5
