@@ -1,0 +1,9 @@
+[project]
+name = "tiktak-research"
+version = "0.1.0"
+description = "Research scaffolding for the tik-tak beat tracker (synthesis + evaluation)"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
