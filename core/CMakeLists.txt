@@ -76,13 +76,12 @@ if(TIKTAK_BUILD_DECODE)
         GIT_REPOSITORY https://github.com/mackron/dr_libs.git
         GIT_TAG        34a89ffe6bfc4d78db6888fef76cd408dba18185
         GIT_SHALLOW    FALSE
+        # dr_libs is consumed as headers only. Point MakeAvailable at a
+        # deliberately absent subdirectory so it populates the source without
+        # adding dr_libs' own test targets to this build.
+        SOURCE_SUBDIR  _tiktak_headers_only
     )
-    FetchContent_GetProperties(dr_libs)
-    if(NOT dr_libs_POPULATED)
-        # Populate without add_subdirectory: dr_libs is three headers, and its
-        # own CMakeLists only defines test targets we do not want.
-        FetchContent_Populate(dr_libs)
-    endif()
+    FetchContent_MakeAvailable(dr_libs)
 
     add_library(tiktak_decode STATIC
         src/decode/dr_libs.cpp

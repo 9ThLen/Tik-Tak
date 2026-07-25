@@ -23,6 +23,8 @@ android/**/build/
 research/.venv/
 research/**/__pycache__/
 research/**/*.pyc
+*.egg-info/
+.pytest_cache/
 .ipynb_checkpoints/
 
 # Datasets and analysis artefacts are large and often licence-restricted —

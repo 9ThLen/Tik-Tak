@@ -24,11 +24,11 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/mackron/miniaudio.git
     GIT_TAG        0.11.21
     GIT_SHALLOW    TRUE
+    # The harness includes miniaudio.h directly; none of the upstream examples
+    # or tests should become part of this build.
+    SOURCE_SUBDIR  _tiktak_headers_only
 )
-FetchContent_GetProperties(miniaudio)
-if(NOT miniaudio_POPULATED)
-    FetchContent_Populate(miniaudio)
-endif()
+FetchContent_MakeAvailable(miniaudio)
 
 add_executable(tiktak
     src/main.cpp

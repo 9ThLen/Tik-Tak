@@ -3,6 +3,18 @@ name = "tiktak-research"
 version = "0.1.0"
 description = "Research scaffolding for the tik-tak beat tracker (synthesis + evaluation)"
 requires-python = ">=3.11"
+dependencies = [
+    "mir_eval>=0.8",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8",
+]
+
+[tool.setuptools.packages.find]
+include = ["eval", "tiktak"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
