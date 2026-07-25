@@ -1,9 +1,13 @@
 #include "tiktak/tiktak.h"
 
 #include <algorithm>
+#include <cstdint>
+#include <cstring>
 #include <new>
+#include <utility>
 #include <vector>
 
+#include "analysis/grid_cache.hpp"
 #include "analysis/offline.hpp"
 #include "render/click.hpp"
 #include "dsp/odf.hpp"
@@ -298,6 +302,42 @@ size_t tt_offline_tempo_candidates(const tt_offline* offline, tt_tempo_candidate
 
 size_t tt_offline_frame_count(const tt_offline* offline) {
     return offline ? offline->impl.odfValues().size() : 0;
+}
+
+/* ------------------------------------------------------------- grid cache -- */
+
+tt_status tt_grid_key(const void* bytes, size_t n, char* out, size_t cap) {
+    if (!out || (n > 0 && !bytes)) return TT_ERR_INVALID_ARG;
+    if (cap < TT_GRID_KEY_HEX + 1) return TT_ERR_INVALID_ARG;
+    const std::string key = tiktak::analysis::gridCacheKey(bytes, n);
+    std::memcpy(out, key.c_str(), key.size() + 1);
+    return TT_OK;
+}
+
+size_t tt_offline_grid_size(const tt_offline* offline) {
+    if (!offline || !offline->finished) return 0;
+    return tiktak::analysis::serializeGrid(offline->result, offline->impl.config()).size();
+}
+
+size_t tt_offline_grid_serialize(const tt_offline* offline, void* out, size_t cap) {
+    if (!offline || !offline->finished || !out) return 0;
+    const std::vector<std::uint8_t> blob =
+        tiktak::analysis::serializeGrid(offline->result, offline->impl.config());
+    if (cap < blob.size()) return 0;
+    std::memcpy(out, blob.data(), blob.size());
+    return blob.size();
+}
+
+tt_status tt_offline_grid_restore(tt_offline* offline, const void* bytes, size_t n) {
+    if (!offline || !bytes) return TT_ERR_INVALID_ARG;
+    tiktak::analysis::OfflineResult restored;
+    if (!tiktak::analysis::deserializeGrid(static_cast<const std::uint8_t*>(bytes), n,
+                                           offline->impl.config(), &restored)) {
+        return TT_ERR_UNSUPPORTED;
+    }
+    offline->result = std::move(restored);
+    offline->finished = true;
+    return TT_OK;
 }
 
 /* -------------------------------------------------------------- scheduler -- */

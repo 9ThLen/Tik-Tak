@@ -237,6 +237,56 @@ TT_API size_t tt_offline_tempo_candidates(const tt_offline* offline,
 /* Onset frames collected so far — diagnostics and the parity harness. */
 TT_API size_t tt_offline_frame_count(const tt_offline* offline);
 
+/* ------------------------------------------------------------- grid cache -- */
+
+/*
+ * The beat grid cache: an analysed track serialised for reuse, so importing the
+ * same file twice costs seconds once and nothing after.
+ *
+ * The core serialises to bytes and leaves storage to the shell, for the same
+ * reason decoding accepts bytes rather than a path: every shell can persist
+ * bytes, while a portable "cache directory" does not exist. The intended flow:
+ *
+ *   key <- tt_grid_key(file bytes)              -- before decoding anything
+ *   have cached bytes under `key`?  tt_offline_grid_restore and skip analysis
+ *   otherwise: decode, feed, finish, tt_offline_grid_serialize, store as `key`
+ *
+ * The key is the SHA-256 of the *encoded file bytes*, not the file's name or
+ * its decoded samples — a renamed file still hits, a re-encoded one correctly
+ * misses, and nothing needs decoding just to ask.
+ */
+
+/* Hex characters in a grid key, excluding the terminator. */
+#define TT_GRID_KEY_HEX 64
+
+/*
+ * Writes the cache key for `bytes` into `out` as lowercase hex plus a
+ * terminating NUL. `cap` must be at least TT_GRID_KEY_HEX + 1.
+ */
+TT_API tt_status tt_grid_key(const void* bytes, size_t n, char* out, size_t cap);
+
+/* Size in bytes of the serialized grid. 0 before tt_offline_finish. */
+TT_API size_t tt_offline_grid_size(const tt_offline* offline);
+
+/*
+ * Serialises the finished analysis into `out`. Returns the bytes written, or 0
+ * when there is no finished result or `cap` is smaller than
+ * tt_offline_grid_size — a partial blob is useless, so none is written.
+ */
+TT_API size_t tt_offline_grid_serialize(const tt_offline* offline, void* out, size_t cap);
+
+/*
+ * Restores a previously serialized grid into the handle, after which the
+ * tt_offline_* accessors read it exactly as if the analysis had just run.
+ *
+ * The handle's configuration must match the one the grid was analysed under —
+ * the same audio under a different config (a manual-mode bpm_hint, say) is a
+ * different grid, and serving one for the other would put beats in the wrong
+ * place. A mismatch, a truncated blob, or a foreign format all return
+ * TT_ERR_UNSUPPORTED, and they all mean the same thing: re-analyse.
+ */
+TT_API tt_status tt_offline_grid_restore(tt_offline* offline, const void* bytes, size_t n);
+
 /* -------------------------------------------------------------- scheduler -- */
 
 /*

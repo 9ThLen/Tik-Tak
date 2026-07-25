@@ -44,6 +44,7 @@ all.
 | `src/analysis/tempo` | tempo from the ODF: autocorrelation + log-normal prior |
 | `src/analysis/tracker` | offline beat tracking by dynamic programming (Ellis 2007) |
 | `src/analysis/offline` | whole-file pipeline: audio in blocks → beat grid |
+| `src/analysis/grid_cache` | serialised beat grids, keyed by content hash — bytes, not files |
 | `src/schedule/scheduler` | beat grid: schedules events ahead, per-channel latency |
 | `src/render/click` | the click itself: sample-accurate placement, fixed voice pool |
 | `src/render/metronome` | grid + click wired together — one audio callback for every shell |
@@ -68,9 +69,17 @@ Everything downstream of `tt_odf_create` runs in an audio callback, so:
 ## Status
 
 The ODF front-end, the offline analysis path (tempo, beat tracking, the
-`tt_offline_*` API), file decoding, the beat scheduler and the metronome itself
-(click synthesis plus the callback that drives it). Missing: the beat grid
-cache, the online tracker for the microphone path, and downbeat detection.
+`tt_offline_*` API), the beat grid cache, file decoding, the beat scheduler and
+the metronome itself (click synthesis plus the callback that drives it).
+Missing: the online tracker for the microphone path, and downbeat detection.
+
+The grid cache serialises to bytes and leaves storage to the shell, for the
+same reason decoding accepts bytes rather than a path — every shell can persist
+bytes, while a portable "cache directory" does not exist. The key is the
+SHA-256 of the encoded file's bytes, so a renamed file still hits and a
+re-encoded one misses; the analysis config is part of the blob's identity, so a
+grid computed under a manual tempo hint is never served to an automatic run;
+and a truncated or corrupted blob reads as a miss, never as a shorter grid.
 
 `render::Metronome` is the whole audio callback, and it is here rather than in
 each shell because it is the same in all of them — the shells differ in how they

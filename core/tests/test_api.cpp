@@ -771,3 +771,113 @@ TEST(ClickApi, NullHandleIsHarmless) {
     tt_click_destroy(nullptr);
     tt_click_config_defaults(nullptr, 48000.0);
 }
+
+/* ------------------------------------------------------------- grid cache -- */
+
+TEST(GridApi, SavesAndRestoresAnAnalysisAcrossHandles) {
+    const std::vector<float> audio = clickTrack(120.0, 10.0, kOfflineRate);
+
+    Offline analysed{offlineDefaults()};
+    ASSERT_NE(analysed.handle, nullptr);
+    ASSERT_EQ(tt_offline_feed(analysed.handle, audio.data(), audio.size()), TT_OK);
+    ASSERT_EQ(tt_offline_finish(analysed.handle), TT_OK);
+
+    const size_t size = tt_offline_grid_size(analysed.handle);
+    ASSERT_GT(size, 0u);
+    std::vector<unsigned char> blob(size);
+    ASSERT_EQ(tt_offline_grid_serialize(analysed.handle, blob.data(), blob.size()), size);
+
+    // A fresh handle with the same config, no audio ever fed — the cache-hit
+    // path a shell takes on the second import of the same track.
+    Offline restored{offlineDefaults()};
+    ASSERT_NE(restored.handle, nullptr);
+    ASSERT_EQ(tt_offline_grid_restore(restored.handle, blob.data(), blob.size()), TT_OK);
+
+    EXPECT_EQ(readBeats(restored.handle), readBeats(analysed.handle));
+    EXPECT_EQ(tt_offline_bpm(restored.handle), tt_offline_bpm(analysed.handle));
+    EXPECT_EQ(tt_offline_confidence(restored.handle),
+              tt_offline_confidence(analysed.handle));
+    EXPECT_EQ(tt_offline_estimated_bpm(restored.handle),
+              tt_offline_estimated_bpm(analysed.handle));
+}
+
+TEST(GridApi, NothingToSaveBeforeFinish) {
+    Offline offline{offlineDefaults()};
+    ASSERT_NE(offline.handle, nullptr);
+
+    unsigned char buffer[256];
+    EXPECT_EQ(tt_offline_grid_size(offline.handle), 0u);
+    EXPECT_EQ(tt_offline_grid_serialize(offline.handle, buffer, sizeof(buffer)), 0u);
+}
+
+TEST(GridApi, SerializeRefusesATooSmallBuffer) {
+    const std::vector<float> audio = clickTrack(120.0, 10.0, kOfflineRate);
+
+    Offline offline{offlineDefaults()};
+    ASSERT_NE(offline.handle, nullptr);
+    ASSERT_EQ(tt_offline_feed(offline.handle, audio.data(), audio.size()), TT_OK);
+    ASSERT_EQ(tt_offline_finish(offline.handle), TT_OK);
+
+    const size_t size = tt_offline_grid_size(offline.handle);
+    ASSERT_GT(size, 1u);
+    std::vector<unsigned char> blob(size - 1);
+    EXPECT_EQ(tt_offline_grid_serialize(offline.handle, blob.data(), blob.size()), 0u);
+}
+
+TEST(GridApi, RestoreRefusesAGridFromAnotherConfig) {
+    const std::vector<float> audio = clickTrack(120.0, 10.0, kOfflineRate);
+
+    Offline analysed{offlineDefaults()};
+    ASSERT_NE(analysed.handle, nullptr);
+    ASSERT_EQ(tt_offline_feed(analysed.handle, audio.data(), audio.size()), TT_OK);
+    ASSERT_EQ(tt_offline_finish(analysed.handle), TT_OK);
+
+    std::vector<unsigned char> blob(tt_offline_grid_size(analysed.handle));
+    ASSERT_EQ(tt_offline_grid_serialize(analysed.handle, blob.data(), blob.size()),
+              blob.size());
+
+    tt_offline_config hinted = offlineDefaults();
+    hinted.bpm_hint = 120.0;
+    Offline other{hinted};
+    ASSERT_NE(other.handle, nullptr);
+
+    EXPECT_EQ(tt_offline_grid_restore(other.handle, blob.data(), blob.size()),
+              TT_ERR_UNSUPPORTED);
+    // The refusal must leave the handle empty, not half-restored.
+    EXPECT_EQ(tt_offline_beat_count(other.handle), 0u);
+}
+
+TEST(GridApi, RestoreRefusesGarbage) {
+    Offline offline{offlineDefaults()};
+    ASSERT_NE(offline.handle, nullptr);
+
+    const unsigned char noise[64] = {0};
+    EXPECT_EQ(tt_offline_grid_restore(offline.handle, noise, sizeof(noise)),
+              TT_ERR_UNSUPPORTED);
+    EXPECT_EQ(tt_offline_beat_count(offline.handle), 0u);
+}
+
+TEST(GridApi, KeyMatchesTheKnownSha256TestVector) {
+    char key[TT_GRID_KEY_HEX + 1];
+    ASSERT_EQ(tt_grid_key("abc", 3, key, sizeof(key)), TT_OK);
+    EXPECT_EQ(std::string(key),
+              "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+}
+
+TEST(GridApi, KeyRejectsATooSmallBufferInsteadOfTruncating) {
+    char key[TT_GRID_KEY_HEX];  // one byte short of key + terminator
+    EXPECT_EQ(tt_grid_key("abc", 3, key, sizeof(key)), TT_ERR_INVALID_ARG);
+}
+
+TEST(GridApi, NullHandleIsHarmless) {
+    unsigned char buffer[64] = {0};
+    char key[TT_GRID_KEY_HEX + 1];
+
+    EXPECT_EQ(tt_offline_grid_size(nullptr), 0u);
+    EXPECT_EQ(tt_offline_grid_serialize(nullptr, buffer, sizeof(buffer)), 0u);
+    EXPECT_EQ(tt_offline_grid_restore(nullptr, buffer, sizeof(buffer)),
+              TT_ERR_INVALID_ARG);
+    EXPECT_EQ(tt_grid_key(nullptr, 3, key, sizeof(key)), TT_ERR_INVALID_ARG);
+    EXPECT_EQ(tt_grid_key(nullptr, 0, key, sizeof(key)), TT_OK);
+    EXPECT_EQ(tt_grid_key("abc", 3, nullptr, 65), TT_ERR_INVALID_ARG);
+}
