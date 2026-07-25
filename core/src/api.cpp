@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "analysis/offline.hpp"
+#include "render/click.hpp"
 #include "dsp/odf.hpp"
 #include "schedule/scheduler.hpp"
 
@@ -36,6 +37,32 @@ tiktak::dsp::OdfConfig resolve(const tt_odf_config& in) {
                                                            : 0.5;
 
     if (out.melMaxHz > nyquist) out.melMaxHz = nyquist;
+    return out;
+}
+
+tiktak::render::ClickTone resolve(const tt_click_tone& in, const tiktak::render::ClickTone& fallback) {
+    tiktak::render::ClickTone out = fallback;
+    if (in.frequency_hz > 0.0) out.frequency_hz = in.frequency_hz;
+    if (in.length_sec > 0.0) out.length_sec = in.length_sec;
+    // Negative means "explicitly silent", since zero itself means "default" —
+    // the same convention the ODF config uses for whitening_strength.
+    if (in.gain > 0.0) out.gain = in.gain;
+    else if (in.gain < 0.0) out.gain = 0.0;
+    return out;
+}
+
+tiktak::render::ClickConfig resolve(const tt_click_config& in) {
+    const tiktak::render::ClickConfig defaults;
+    tiktak::render::ClickConfig out;
+
+    out.sample_rate = in.sample_rate;
+    out.downbeat = resolve(in.downbeat, defaults.downbeat);
+    out.beat = resolve(in.beat, defaults.beat);
+    out.subdivision = resolve(in.subdivision, defaults.subdivision);
+    out.max_voices = in.max_voices > 0 ? in.max_voices : defaults.max_voices;
+    out.max_pending = in.max_pending > 0 ? in.max_pending : defaults.max_pending;
+    out.late_tolerance_sec = in.late_tolerance_sec > 0.0 ? in.late_tolerance_sec
+                                                         : defaults.late_tolerance_sec;
     return out;
 }
 
@@ -399,4 +426,89 @@ double tt_scheduler_step_time(const tt_scheduler* scheduler, long long step) {
 
 size_t tt_scheduler_late_count(const tt_scheduler* scheduler) {
     return scheduler ? scheduler->impl.late_count() : 0;
+}
+
+/* ------------------------------------------------------------------ click -- */
+
+struct tt_click {
+    explicit tt_click(const tiktak::render::ClickConfig& cfg) : impl(cfg) {}
+    tiktak::render::ClickRenderer impl;
+};
+
+void tt_click_config_defaults(tt_click_config* cfg, double sample_rate) {
+    if (!cfg) return;
+    const tiktak::render::ClickConfig defaults;
+
+    const auto copy = [](tt_click_tone& out, const tiktak::render::ClickTone& in) {
+        out.frequency_hz = in.frequency_hz;
+        out.length_sec = in.length_sec;
+        out.gain = in.gain;
+    };
+
+    cfg->sample_rate = sample_rate;
+    copy(cfg->downbeat, defaults.downbeat);
+    copy(cfg->beat, defaults.beat);
+    copy(cfg->subdivision, defaults.subdivision);
+    cfg->max_voices = defaults.max_voices;
+    cfg->max_pending = defaults.max_pending;
+    cfg->late_tolerance_sec = defaults.late_tolerance_sec;
+}
+
+tt_click* tt_click_create(const tt_click_config* cfg, tt_status* status) {
+    const auto fail = [status](tt_status code) -> tt_click* {
+        if (status) *status = code;
+        return nullptr;
+    };
+
+    if (!cfg) return fail(TT_ERR_INVALID_ARG);
+
+    const tiktak::render::ClickConfig resolved = resolve(*cfg);
+    if (!resolved.valid()) return fail(TT_ERR_INVALID_ARG);
+
+    tt_click* handle = new (std::nothrow) tt_click(resolved);
+    if (!handle) return fail(TT_ERR_OUT_OF_MEMORY);
+
+    if (status) *status = TT_OK;
+    return handle;
+}
+
+void tt_click_destroy(tt_click* click) { delete click; }
+
+int tt_click_schedule(tt_click* click, double time_sec, int kind) {
+    if (!click) return 0;
+    if (kind < 0 || kind > static_cast<int>(tiktak::schedule::BeatKind::Subdivision)) return 0;
+    return click->impl.schedule(time_sec, static_cast<tiktak::schedule::BeatKind>(kind)) ? 1 : 0;
+}
+
+void tt_click_mix(tt_click* click, double start_time_sec, float* out, size_t frames) {
+    if (!click) return;
+    click->impl.mix(start_time_sec, out, frames);
+}
+
+void tt_click_reset(tt_click* click) {
+    if (click) click->impl.reset();
+}
+
+size_t tt_click_pending(const tt_click* click) {
+    return click ? click->impl.pending_count() : 0;
+}
+
+size_t tt_click_active_voices(const tt_click* click) {
+    return click ? click->impl.active_voice_count() : 0;
+}
+
+size_t tt_click_dropped_late(const tt_click* click) {
+    return click ? click->impl.dropped_late() : 0;
+}
+
+size_t tt_click_dropped_overflow(const tt_click* click) {
+    return click ? click->impl.dropped_overflow() : 0;
+}
+
+size_t tt_click_stolen(const tt_click* click) {
+    return click ? click->impl.stolen() : 0;
+}
+
+size_t tt_click_discontinuities(const tt_click* click) {
+    return click ? click->impl.discontinuities() : 0;
 }

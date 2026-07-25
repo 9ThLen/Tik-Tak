@@ -619,3 +619,155 @@ TEST(OfflineApi, FeedRejectsANullBufferWithSamples) {
     EXPECT_EQ(tt_offline_feed(offline.handle, nullptr, 128), TT_ERR_INVALID_ARG);
     EXPECT_EQ(tt_offline_feed(offline.handle, nullptr, 0), TT_OK);
 }
+
+/* ------------------------------------------------------------------ click -- */
+
+namespace {
+
+struct Click {
+    explicit Click(const tt_click_config& cfg) {
+        handle = tt_click_create(&cfg, &status);
+    }
+    ~Click() { tt_click_destroy(handle); }
+
+    Click(const Click&) = delete;
+    Click& operator=(const Click&) = delete;
+
+    tt_click* handle = nullptr;
+    tt_status status = TT_OK;
+};
+
+tt_click_config clickDefaults(double sample_rate = 48000.0) {
+    tt_click_config cfg{};
+    tt_click_config_defaults(&cfg, sample_rate);
+    return cfg;
+}
+
+}  // namespace
+
+TEST(ClickApi, DefaultsProduceAWorkingRenderer) {
+    Click click{clickDefaults()};
+    ASSERT_NE(click.handle, nullptr);
+    EXPECT_EQ(click.status, TT_OK);
+
+    EXPECT_EQ(tt_click_schedule(click.handle, 0.01, TT_BEAT_DOWNBEAT), 1);
+    EXPECT_EQ(tt_click_pending(click.handle), 1u);
+
+    // Shorter than the click, so it is still sounding at the end of the buffer.
+    std::vector<float> out(2400, 0.0f);
+    tt_click_mix(click.handle, 0.0, out.data(), out.size());
+
+    EXPECT_EQ(tt_click_pending(click.handle), 0u);
+    EXPECT_EQ(tt_click_active_voices(click.handle), 1u);
+
+    double peak = 0.0;
+    for (float v : out) peak = std::max(peak, std::fabs(static_cast<double>(v)));
+    EXPECT_GT(peak, 0.1);
+}
+
+TEST(ClickApi, ZeroMeansDefaultForEveryField) {
+    // A caller that memsets the struct and sets only the sample rate must get a
+    // usable metronome, the same convention the rest of the API follows.
+    tt_click_config cfg{};
+    cfg.sample_rate = 48000.0;
+
+    Click click{cfg};
+    ASSERT_NE(click.handle, nullptr);
+
+    tt_click_schedule(click.handle, 0.0, TT_BEAT_BEAT);
+    std::vector<float> out(4800, 0.0f);
+    tt_click_mix(click.handle, 0.0, out.data(), out.size());
+
+    double peak = 0.0;
+    for (float v : out) peak = std::max(peak, std::fabs(static_cast<double>(v)));
+    EXPECT_GT(peak, 0.1);
+}
+
+TEST(ClickApi, RejectsAConfigItCannotHonour) {
+    tt_click_config cfg = clickDefaults();
+    cfg.sample_rate = 0.0;
+    tt_status status = TT_OK;
+    EXPECT_EQ(tt_click_create(&cfg, &status), nullptr);
+    EXPECT_EQ(status, TT_ERR_INVALID_ARG);
+
+    // A tone past Nyquist would come back as a lower one, so it is refused
+    // rather than quietly mirrored.
+    cfg = clickDefaults(8000.0);
+    cfg.beat.frequency_hz = 5000.0;
+    EXPECT_EQ(tt_click_create(&cfg, nullptr), nullptr);
+
+    EXPECT_EQ(tt_click_create(nullptr, &status), nullptr);
+    EXPECT_EQ(status, TT_ERR_INVALID_ARG);
+}
+
+TEST(ClickApi, RefusesABeatKindItDoesNotKnow) {
+    Click click{clickDefaults()};
+    ASSERT_NE(click.handle, nullptr);
+
+    EXPECT_EQ(tt_click_schedule(click.handle, 0.1, -1), 0);
+    EXPECT_EQ(tt_click_schedule(click.handle, 0.1, 99), 0);
+    EXPECT_EQ(tt_click_pending(click.handle), 0u);
+}
+
+TEST(ClickApi, TakesTheSchedulersEventsDirectly) {
+    // The two are meant to be wired together without the shell converting
+    // anything: tt_event.time_sec and tt_event.kind go straight in.
+    tt_scheduler_config sched_cfg;
+    tt_scheduler_config_defaults(&sched_cfg);
+    sched_cfg.bpm = 120.0;
+    sched_cfg.channel_enabled[TT_CHANNEL_HAPTIC] = 0;
+    sched_cfg.channel_enabled[TT_CHANNEL_VISUAL] = 0;
+
+    tt_scheduler* scheduler = tt_scheduler_create(&sched_cfg, nullptr);
+    ASSERT_NE(scheduler, nullptr);
+
+    Click click{clickDefaults()};
+    ASSERT_NE(click.handle, nullptr);
+
+    tt_scheduler_start(scheduler, 1.0);
+
+    std::vector<float> out(static_cast<std::size_t>(2.0 * 48000), 0.0f);
+    tt_event events[32];
+
+    for (std::size_t i = 0; i < out.size(); i += 256) {
+        const std::size_t n = std::min<std::size_t>(256, out.size() - i);
+        const double t = static_cast<double>(i) / 48000.0;
+
+        const size_t count = tt_scheduler_pull(scheduler, t, events, 32, nullptr);
+        for (size_t e = 0; e < count; ++e) {
+            tt_click_schedule(click.handle, events[e].time_sec, events[e].kind);
+        }
+        tt_click_mix(click.handle, t, out.data() + i, n);
+    }
+
+    // Beats at 1.0 and 1.5, each landing on its own sample.
+    for (double beat_sec : {1.0, 1.5}) {
+        const auto at = static_cast<std::size_t>(beat_sec * 48000);
+        EXPECT_NEAR(out[at], 0.0f, 1e-6f) << "beat at " << beat_sec << " starts from silence";
+        EXPECT_GT(std::fabs(out[at + 1]), 1e-4f) << "beat at " << beat_sec;
+        EXPECT_EQ(out[at - 1], 0.0f) << "nothing before the beat at " << beat_sec;
+    }
+
+    EXPECT_EQ(tt_click_dropped_late(click.handle), 0u);
+    EXPECT_EQ(tt_click_dropped_overflow(click.handle), 0u);
+    EXPECT_EQ(tt_click_discontinuities(click.handle), 0u);
+
+    tt_scheduler_destroy(scheduler);
+}
+
+TEST(ClickApi, NullHandleIsHarmless) {
+    float buffer[16] = {0.0f};
+
+    EXPECT_EQ(tt_click_schedule(nullptr, 0.0, TT_BEAT_BEAT), 0);
+    EXPECT_EQ(tt_click_pending(nullptr), 0u);
+    EXPECT_EQ(tt_click_active_voices(nullptr), 0u);
+    EXPECT_EQ(tt_click_dropped_late(nullptr), 0u);
+    EXPECT_EQ(tt_click_dropped_overflow(nullptr), 0u);
+    EXPECT_EQ(tt_click_stolen(nullptr), 0u);
+    EXPECT_EQ(tt_click_discontinuities(nullptr), 0u);
+
+    tt_click_mix(nullptr, 0.0, buffer, 16);
+    tt_click_reset(nullptr);
+    tt_click_destroy(nullptr);
+    tt_click_config_defaults(nullptr, 48000.0);
+}

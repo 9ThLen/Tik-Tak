@@ -25,6 +25,8 @@ add_library(tiktak_core STATIC
     src/analysis/tempo.cpp
     src/analysis/tracker.cpp
     src/analysis/offline.cpp
+    src/render/click.cpp
+    src/render/metronome.cpp
 )
 
 target_include_directories(tiktak_core

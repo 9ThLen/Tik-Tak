@@ -45,13 +45,15 @@ all.
 | `src/analysis/tracker` | offline beat tracking by dynamic programming (Ellis 2007) |
 | `src/analysis/offline` | whole-file pipeline: audio in blocks → beat grid |
 | `src/schedule/scheduler` | beat grid: schedules events ahead, per-channel latency |
+| `src/render/click` | the click itself: sample-accurate placement, fixed voice pool |
+| `src/render/metronome` | grid + click wired together — one audio callback for every shell |
 | `src/api.cpp` | C API |
 | `src/decode/` | WAV / FLAC / MP3 to mono float, over dr_libs — separate library |
 | `src/decode_api.cpp` | C API for the decoder |
 
 ## Real-time rules
 
-The `dsp/` and `schedule/` components run in an audio callback. The `analysis/`
+The `dsp/`, `schedule/` and `render/` components run in an audio callback. The `analysis/`
 components deliberately do not — they allocate, size transforms to their input,
 and are driven from a file-reading thread. The rules below apply to the former.
 
@@ -66,8 +68,17 @@ Everything downstream of `tt_odf_create` runs in an audio callback, so:
 ## Status
 
 The ODF front-end, the offline analysis path (tempo, beat tracking, the
-`tt_offline_*` API), file decoding and the beat scheduler. Missing: the beat
-grid cache, the online tracker for the microphone path, and downbeat detection.
+`tt_offline_*` API), file decoding, the beat scheduler and the metronome itself
+(click synthesis plus the callback that drives it). Missing: the beat grid
+cache, the online tracker for the microphone path, and downbeat detection.
+
+`render::Metronome` is the whole audio callback, and it is here rather than in
+each shell because it is the same in all of them — the shells differ in how they
+get a buffer and a clock, and must not differ in what happens between them.
+`Metronome.DoesNotDriftOverAMinute` and
+`Metronome.DriftsNoMoreAtATempoThatDoesNotDivideTheSampleRate` are the two that
+matter: the second is the one that caught a click rounding into the wrong
+buffer, worth a whole sample and invisible at 120 BPM.
 
 The file path works end to end — `DecodeAndAnalyse.FindsTheBeatsOfAnEncodedClickTrack`
 takes a real MP3 and produces a beat grid, which is the only test that would

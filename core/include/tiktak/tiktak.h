@@ -344,6 +344,93 @@ TT_API double tt_scheduler_step_time(const tt_scheduler* scheduler, long long st
 /* Events dropped for lateness since the last start(). */
 TT_API size_t tt_scheduler_late_count(const tt_scheduler* scheduler);
 
+/* ------------------------------------------------------------------ click -- */
+
+/*
+ * Turns scheduled beats into audio.
+ *
+ * The scheduler decides when, this decides what it sounds like, and they are
+ * separate because the shells differ in the first and must not differ in the
+ * second: a click that sounded different on iOS and on the desktop harness
+ * would make every timing measurement taken on the harness unusable.
+ *
+ * Placement is sample-accurate — the click is written at the sample nearest its
+ * time, not at the start of the buffer that contains it. The difference is up
+ * to a whole buffer, grossly audible at 10 ms; the residual rounding is half a
+ * sample, which is not.
+ *
+ * Real-time safe: everything is sized at creation and nothing allocates.
+ */
+
+typedef struct tt_click tt_click;
+
+typedef struct tt_click_tone {
+    double frequency_hz;
+    /* How long the click lasts, measured as the time to fall 60 dB — the
+       number you would see on a stopwatch, not a time constant. It has to stay
+       well under a beat or fast tempos turn into a drone. 0 -> default. */
+    double length_sec;
+    double gain;              /* 0 -> default. Negative is rejected. */
+} tt_click_tone;
+
+typedef struct tt_click_config {
+    double sample_rate;       /* Must be > 0. */
+
+    /* Roughly G6 / C6 / G5 by default: a fifth apart so the downbeat reads as
+       "the one" rather than as a different instrument, and the subdivision an
+       octave under the beat so it stays beneath it. */
+    tt_click_tone downbeat;
+    tt_click_tone beat;
+    tt_click_tone subdivision;
+
+    int max_voices;           /* Overlapping clicks. 0 -> 8.  */
+    int max_pending;          /* Queued clicks.      0 -> 64. */
+
+    /* A click landing before the buffer it is handed to is nudged to the start
+       of that buffer if it is late by less than this, and dropped if it is
+       later. Both halves matter: a host that polls a hair late produces
+       sub-millisecond lateness that is inaudible when nudged and audible as a
+       hole when dropped, while a truly late click misleads a player and is
+       better missing. 0 -> 0.002. */
+    double late_tolerance_sec;
+} tt_click_config;
+
+TT_API void tt_click_config_defaults(tt_click_config* cfg, double sample_rate);
+
+TT_API tt_click* tt_click_create(const tt_click_config* cfg, tt_status* status);
+TT_API void tt_click_destroy(tt_click* click);
+
+/*
+ * Queues a click at `time_sec`, in the same clock domain the mix times use —
+ * hand it tt_event.time_sec straight from the scheduler. `kind` is a
+ * tt_beat_kind. Returns 0 if the queue is full.
+ */
+TT_API int tt_click_schedule(tt_click* click, double time_sec, int kind);
+
+/*
+ * Adds into `out`; it does not clear it. Mixing rather than filling is the
+ * contract because the click plays over a backing track, and a fill would
+ * silently erase it. `start_time_sec` is the time of the first sample of `out`.
+ */
+TT_API void tt_click_mix(tt_click* click, double start_time_sec, float* out, size_t frames);
+
+/* Silences everything sounding and queued, without tearing the renderer down.
+   The counters below survive, since they describe the run, not the take. */
+TT_API void tt_click_reset(tt_click* click);
+
+TT_API size_t tt_click_pending(const tt_click* click);
+TT_API size_t tt_click_active_voices(const tt_click* click);
+/* Clicks that arrived too late to place — see late_tolerance_sec. */
+TT_API size_t tt_click_dropped_late(const tt_click* click);
+/* Clicks refused because the queue was full. */
+TT_API size_t tt_click_dropped_overflow(const tt_click* click);
+/* Clicks cut short because every voice was busy. */
+TT_API size_t tt_click_stolen(const tt_click* click);
+/* Mixes whose start time did not follow on from the previous buffer: the
+   device dropped or repeated one. A sounding click assumes time is continuous,
+   so this is counted rather than hidden. */
+TT_API size_t tt_click_discontinuities(const tt_click* click);
+
 #ifdef __cplusplus
 }  /* extern "C" */
 #endif
