@@ -32,4 +32,42 @@ inline void addBurst(std::vector<float>& buffer, std::size_t at, std::size_t len
     }
 }
 
+// A metronome-like click track: a percussive burst on every beat, alternating
+// between a low "kick" and a higher "snare" so the material has the two-beat
+// pattern that makes naive autocorrelation pick the wrong period.
+inline std::vector<float> clickTrack(double bpm, double durationSec, double sampleRate,
+                                     double leadSec = 0.0) {
+    const auto total = static_cast<std::size_t>(durationSec * sampleRate);
+    std::vector<float> out(total, 0.0f);
+
+    const double interval = 60.0 / bpm;
+    const auto burst = static_cast<std::size_t>(0.03 * sampleRate);
+
+    std::size_t beat = 0;
+    for (double t = leadSec; t < durationSec; t += interval, ++beat) {
+        const auto at = static_cast<std::size_t>(t * sampleRate);
+        const bool strong = beat % 2 == 0;
+        addBurst(out, at, burst, strong ? 60.0 : 900.0, sampleRate, strong ? 1.0f : 0.6f);
+        // A little broadband energy, so the attack looks like a hit rather than
+        // a pure tone switching on.
+        addBurst(out, at, burst / 3, strong ? 1800.0 : 5000.0, sampleRate, 0.4f);
+    }
+    return out;
+}
+
+// The onset function such a track produces, built directly: an impulse train
+// with `spacing` frames between beats. Lets the tempo and tracker tests work on
+// a known-exact input instead of inheriting the ODF's own behaviour.
+inline std::vector<double> impulseTrain(std::size_t frames, double spacing, double offset = 0.0,
+                                        double strong = 1.0, double weak = 0.6) {
+    std::vector<double> out(frames, 0.0);
+    std::size_t beat = 0;
+    for (double position = offset; position < static_cast<double>(frames);
+         position += spacing, ++beat) {
+        const auto index = static_cast<std::size_t>(position + 0.5);
+        if (index < frames) out[index] = beat % 2 == 0 ? strong : weak;
+    }
+    return out;
+}
+
 }  // namespace tiktak::test

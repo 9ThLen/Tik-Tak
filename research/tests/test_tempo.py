@@ -71,14 +71,17 @@ def test_extreme_tempi_are_at_worst_an_octave_out(bpm):
     )
 
 
-def test_comb_summation_removes_non_metrical_peaks():
-    # Without the comb, a kick/snare pattern produces a strong autocorrelation
-    # peak at two-thirds of the beat, where unlike events happen to align. With
-    # it, candidates must be supported at every metrical level above them.
+def test_comb_is_off_by_default_and_still_works_when_asked_for():
+    # The comb was measured and did not survive: over 140 synthetic clips it was
+    # worse on every metric than scoring each period by its own lag, and it
+    # introduced the two-thirds errors it was meant to remove. See
+    # TempoConfig.comb_harmonics. This pins the default so it cannot drift back
+    # silently, and checks the machinery still functions when enabled.
+    assert TempoConfig().comb_harmonics == 1
+
     clip = make_clip(bpm=120, duration_sec=25, seed=11)
     result = odf_of(clip)
 
-    plain = estimate_tempo(result.full, result.fps, TempoConfig(comb_harmonics=1))
     combed = estimate_tempo(result.full, result.fps, TempoConfig(comb_harmonics=4))
 
     def metrical(bpm):
@@ -86,14 +89,33 @@ def test_comb_summation_removes_non_metrical_peaks():
         return min(abs(ratio - r) for r in (0.25, 0.5, 1.0, 2.0, 4.0)) < 0.06
 
     assert metrical(combed.bpm)
-    # The plain estimator is allowed to be wrong here; the point is that the
-    # combed one is not. Assert only on what we depend on.
-    del plain
 
 
 def test_silence_reports_no_confidence():
     estimate = estimate_tempo(np.zeros(1000), 93.75)
     assert estimate.confidence == 0.0
+
+
+def test_noise_reports_far_less_confidence_than_a_beat():
+    # A regression test for a real defect. Confidence used to be "how sharply
+    # the winner stands above the rest of the grid", and by that measure white
+    # noise scored 0.76 — higher than some genuine beats — because noise
+    # produces a sharp but meaningless autocorrelation peak. For a UI whose job
+    # is to tell "sure" from "guessing" that is exactly backwards.
+    #
+    # Confidence is now the autocorrelation at the chosen period as a fraction
+    # of the signal's variance, which asks the right question: does this
+    # actually repeat?
+    fps = 93.75
+    noise = np.random.default_rng(0).random(2000)
+    clip = make_clip(bpm=120, duration_sec=25, seed=17)
+    music = odf_of(clip)
+
+    noisy = estimate_tempo(noise, fps)
+    real = estimate_tempo(music.full, music.fps)
+
+    assert noisy.confidence < 0.1
+    assert real.confidence > 0.5
 
 
 def test_top_candidates_are_distinct():

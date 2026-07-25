@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <new>
+#include <vector>
 
+#include "analysis/offline.hpp"
 #include "dsp/odf.hpp"
 #include "schedule/scheduler.hpp"
 
@@ -131,6 +133,144 @@ void tt_odf_reset(tt_odf* odf) {
 double tt_odf_latency_sec(const tt_odf* odf) {
     if (!odf) return 0.0;
     return odf->impl.latencySec();
+}
+
+/* --------------------------------------------------------------- offline -- */
+
+namespace {
+
+tiktak::analysis::OfflineConfig resolve(const tt_offline_config& in) {
+    tiktak::analysis::OfflineConfig out;
+    out.odf = resolve(in.odf);
+
+    out.tempo.min_bpm = in.min_bpm > 0.0 ? in.min_bpm : 40.0;
+    out.tempo.max_bpm = in.max_bpm > 0.0 ? in.max_bpm : 220.0;
+    out.tempo.prior_centre_bpm = in.prior_centre_bpm > 0.0 ? in.prior_centre_bpm : 120.0;
+    out.tempo.prior_width_octaves =
+        in.prior_width_octaves > 0.0 ? in.prior_width_octaves : 0.7;
+    out.tempo.grid_size = in.tempo_grid_size > 0 ? in.tempo_grid_size : 512;
+    out.tempo.comb_harmonics = in.comb_harmonics > 0 ? in.comb_harmonics : 1;
+    out.tempo.comb_weight_decay = in.comb_weight_decay > 0.0 ? in.comb_weight_decay : 1.0;
+
+    out.tracker.tightness = in.tightness > 0.0 ? in.tightness : 100.0;
+    // Negative means "explicitly off", since zero means "default".
+    out.tracker.trim = in.trim >= 0;
+    out.bpm_hint = in.bpm_hint;
+    return out;
+}
+
+}  // namespace
+
+struct tt_offline {
+    explicit tt_offline(const tiktak::analysis::OfflineConfig& cfg) : impl(cfg) {}
+    tiktak::analysis::OfflineAnalyzer impl;
+    tiktak::analysis::OfflineResult result;
+    bool finished = false;
+};
+
+void tt_offline_config_defaults(tt_offline_config* cfg, double sample_rate) {
+    if (!cfg) return;
+    tt_odf_config_defaults(&cfg->odf, sample_rate);
+    cfg->min_bpm = 40.0;
+    cfg->max_bpm = 220.0;
+    cfg->prior_centre_bpm = 120.0;
+    cfg->prior_width_octaves = 0.7;
+    cfg->tempo_grid_size = 512;
+    cfg->comb_harmonics = 1;
+    cfg->comb_weight_decay = 1.0;
+    cfg->tightness = 100.0;
+    cfg->trim = 1;
+    cfg->bpm_hint = 0.0;
+}
+
+tt_offline* tt_offline_create(const tt_offline_config* cfg, tt_status* status) {
+    const auto fail = [status](tt_status code) -> tt_offline* {
+        if (status) *status = code;
+        return nullptr;
+    };
+
+    if (!cfg) return fail(TT_ERR_INVALID_ARG);
+
+    const tiktak::analysis::OfflineConfig resolved = resolve(*cfg);
+    if (!resolved.odf.valid() || !resolved.tempo.valid() || !resolved.tracker.valid()) {
+        return fail(TT_ERR_INVALID_ARG);
+    }
+
+    tt_offline* handle = new (std::nothrow) tt_offline(resolved);
+    if (!handle) return fail(TT_ERR_OUT_OF_MEMORY);
+
+    if (status) *status = TT_OK;
+    return handle;
+}
+
+void tt_offline_destroy(tt_offline* offline) { delete offline; }
+
+tt_status tt_offline_feed(tt_offline* offline, const float* samples, size_t n) {
+    if (!offline || (n > 0 && !samples)) return TT_ERR_INVALID_ARG;
+    offline->impl.feed(samples, n);
+    // More audio invalidates the previous answer rather than extending it, so
+    // a caller that forgets to finish again reads nothing instead of stale
+    // beats.
+    offline->finished = false;
+    return TT_OK;
+}
+
+tt_status tt_offline_finish(tt_offline* offline) {
+    if (!offline) return TT_ERR_INVALID_ARG;
+    offline->result = offline->impl.finish();
+    offline->finished = true;
+    return TT_OK;
+}
+
+void tt_offline_reset(tt_offline* offline) {
+    if (!offline) return;
+    offline->impl.reset();
+    offline->result = tiktak::analysis::OfflineResult{};
+    offline->finished = false;
+}
+
+double tt_offline_bpm(const tt_offline* offline) {
+    return offline && offline->finished ? offline->result.bpm : 0.0;
+}
+
+double tt_offline_estimated_bpm(const tt_offline* offline) {
+    return offline && offline->finished ? offline->result.estimated_bpm : 0.0;
+}
+
+double tt_offline_confidence(const tt_offline* offline) {
+    return offline && offline->finished ? offline->result.tempo_confidence : 0.0;
+}
+
+size_t tt_offline_beat_count(const tt_offline* offline) {
+    return offline && offline->finished ? offline->result.beats.size() : 0;
+}
+
+size_t tt_offline_beats(const tt_offline* offline, double* out, size_t capacity) {
+    if (!offline || !offline->finished || !out) return 0;
+    const std::size_t count = std::min(capacity, offline->result.beats.size());
+    std::copy(offline->result.beats.begin(),
+              offline->result.beats.begin() + static_cast<std::ptrdiff_t>(count), out);
+    return count;
+}
+
+size_t tt_offline_tempo_candidates(const tt_offline* offline, tt_tempo_candidate* out,
+                                   size_t capacity) {
+    if (!offline || !offline->finished || !out || capacity == 0) return 0;
+
+    // Staged through the C++ type rather than reinterpreted: the two structs
+    // happen to have the same layout today, and relying on that would be a
+    // silent trap the first time either gains a field.
+    std::vector<tiktak::analysis::TempoCandidate> staging(capacity);
+    const std::size_t count = offline->impl.tempoCandidates(staging.data(), capacity);
+    for (std::size_t i = 0; i < count; ++i) {
+        out[i].bpm = staging[i].bpm;
+        out[i].strength = staging[i].strength;
+    }
+    return count;
+}
+
+size_t tt_offline_frame_count(const tt_offline* offline) {
+    return offline ? offline->impl.odfValues().size() : 0;
 }
 
 /* -------------------------------------------------------------- scheduler -- */

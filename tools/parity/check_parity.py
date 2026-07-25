@@ -31,6 +31,8 @@ sys.path.insert(0, str(ROOT / "research"))
 
 from tiktak.odf import OdfConfig, compute_odf  # noqa: E402
 from tiktak.synth import make_clip  # noqa: E402
+from tiktak.tempo import estimate_tempo  # noqa: E402
+from tiktak.tracker import track_beats  # noqa: E402
 
 # float32 spectral flux accumulated over 81 mel bands: a few times the float32
 # epsilon per operation is expected. An order of magnitude above this means the
@@ -87,6 +89,73 @@ def compare(name: str, clip, binary: pathlib.Path, block: int) -> bool:
     return ok
 
 
+def run_cpp_beats(binary: pathlib.Path, audio: np.ndarray, sample_rate: int, block: int,
+                  bpm_hint: float = 0.0):
+    with tempfile.NamedTemporaryFile(suffix=".f32") as handle:
+        handle.write(np.asarray(audio, dtype=np.float32).tobytes())
+        handle.flush()
+
+        completed = subprocess.run(
+            [str(binary), handle.name, str(sample_rate), str(block), str(bpm_hint)],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+    header, _, body = completed.stdout.partition("\n\n")
+    fields = dict(line.split("=", 1) for line in header.strip().splitlines())
+    beats = np.array([float(line) for line in body.strip().splitlines()] or [],
+                     dtype=np.float64)
+    return fields, beats
+
+
+def compare_beats(name: str, clip, binary: pathlib.Path, block: int, bpm_hint: float) -> bool:
+    fields, cpp_beats = run_cpp_beats(binary, clip.audio, clip.sample_rate, block, bpm_hint)
+
+    odf = compute_odf(clip.audio, OdfConfig(sample_rate=clip.sample_rate))
+    estimate = estimate_tempo(odf.full, odf.fps)
+    tracked = track_beats(odf.full, odf.times, odf.fps,
+                          bpm=bpm_hint if bpm_hint > 0.0 else None)
+
+    ok = True
+    notes = []
+
+    # The tempo grid has 512 log-spaced points, so neighbouring candidates are
+    # 0.5% apart. Landing on the neighbouring point is float32 rounding; landing
+    # anywhere else is a difference in behaviour.
+    bpm_error = abs(float(fields["bpm"]) - tracked.bpm) / tracked.bpm
+    notes.append(f"bpm {bpm_error:.2e}")
+    if bpm_error > 0.006:
+        ok = False
+
+    estimated_error = abs(float(fields["estimated_bpm"]) - estimate.bpm) / estimate.bpm
+    notes.append(f"est {estimated_error:.2e}")
+    if estimated_error > 0.006:
+        ok = False
+
+    confidence_error = abs(float(fields["confidence"]) - tracked.tempo_confidence)
+    notes.append(f"conf {confidence_error:.2e}")
+    if confidence_error > 5e-3:
+        ok = False
+
+    # Beat times are quantised to ODF frames, so agreement is exact or it is a
+    # different decision. One frame of slack allows for a tie the two
+    # implementations broke differently; more than that is a real divergence.
+    hop = 512 / clip.sample_rate
+    if len(cpp_beats) != len(tracked.beats):
+        notes.append(f"BEAT COUNT {len(cpp_beats)} vs {len(tracked.beats)}")
+        ok = False
+    else:
+        beat_error = np.max(np.abs(cpp_beats - tracked.beats)) if len(cpp_beats) else 0.0
+        notes.append(f"beats {beat_error / hop:.2f} frames")
+        if beat_error > hop * 1.5:
+            ok = False
+
+    print(f"  {name:22} beats {len(tracked.beats):4d}  {', '.join(notes)}"
+          f"  {'ok' if ok else 'FAIL'}")
+    return ok
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -95,14 +164,19 @@ def main() -> int:
         default=ROOT / "tools" / "parity" / "build" / "dump_odf",
         help="path to the dump_odf executable",
     )
+    parser.add_argument(
+        "--beats-binary",
+        type=pathlib.Path,
+        default=ROOT / "tools" / "parity" / "build" / "dump_beats",
+        help="path to the dump_beats executable",
+    )
     args = parser.parse_args()
 
-    if not args.binary.exists():
-        print(f"dump_odf not found at {args.binary}\nBuild it first — see the module docstring.")
+    missing = [p for p in (args.binary, args.beats_binary) if not p.exists()]
+    if missing:
+        print("not found: " + ", ".join(str(p) for p in missing))
+        print("Build them first — see the module docstring.")
         return 2
-
-    print(f"comparing {args.binary} against research/tiktak/odf.py")
-    print(f"tolerance: {TOLERANCE:.0e} relative to the peak ODF value\n")
 
     cases = [
         ("steady 120", make_clip(bpm=120, duration_sec=12, seed=1), 137),
@@ -112,10 +186,22 @@ def main() -> int:
         ("silence lead", make_clip(bpm=120, duration_sec=12, silence_lead=3.0, seed=5), 137),
     ]
 
-    passed = all(compare(name, clip, args.binary, block) for name, clip, block in cases)
+    print(f"comparing {args.binary} against research/tiktak/odf.py")
+    print(f"tolerance: {TOLERANCE:.0e} relative to the peak ODF value\n")
+    odf_ok = all(compare(name, clip, args.binary, block) for name, clip, block in cases)
+
+    # The tracker makes discrete choices, so it needs its own comparison: the
+    # ODF can agree to seven digits while the beat sequence still differs.
+    print(f"\ncomparing {args.beats_binary} against research/tiktak/tracker.py\n")
+    beat_cases = [(name, clip, block, 0.0) for name, clip, block in cases]
+    beat_cases.append(("manual 100", make_clip(bpm=100, duration_sec=12, seed=6), 137, 100.0))
+    beat_cases.append(("drift 120->140",
+                       make_clip(bpm=120, duration_sec=15, tempo_drift=20, seed=7), 137, 0.0))
+    beats_ok = all(compare_beats(name, clip, args.beats_binary, block, hint)
+                   for name, clip, block, hint in beat_cases)
 
     print()
-    if passed:
+    if odf_ok and beats_ok:
         print("PARITY OK — the core and the reference agree to float32 precision.")
         return 0
     print("PARITY FAILED — the implementations have diverged. Fix before trusting any metric.")

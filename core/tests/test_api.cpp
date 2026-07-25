@@ -412,3 +412,210 @@ TEST(SchedulerApi, AlignToSnapsThePhase) {
         EXPECT_NEAR(beats, std::round(beats), 1e-9);
     }
 }
+
+/* --------------------------------------------------------------- offline -- */
+
+namespace {
+
+using tiktak::test::clickTrack;
+
+constexpr double kOfflineRate = 48000.0;
+
+// RAII around the C handle so a failing assertion cannot leak it.
+struct Offline {
+    explicit Offline(const tt_offline_config& cfg) {
+        handle = tt_offline_create(&cfg, &status);
+    }
+    ~Offline() { tt_offline_destroy(handle); }
+    Offline(const Offline&) = delete;
+    Offline& operator=(const Offline&) = delete;
+
+    tt_offline* handle = nullptr;
+    tt_status status = TT_OK;
+};
+
+tt_offline_config offlineDefaults() {
+    tt_offline_config cfg;
+    tt_offline_config_defaults(&cfg, kOfflineRate);
+    return cfg;
+}
+
+std::vector<double> readBeats(const tt_offline* offline) {
+    std::vector<double> beats(tt_offline_beat_count(offline));
+    if (!beats.empty()) tt_offline_beats(offline, beats.data(), beats.size());
+    return beats;
+}
+
+}  // namespace
+
+TEST(OfflineApi, AnalysesAClickTrackEndToEnd) {
+    const std::vector<float> audio = clickTrack(120.0, 20.0, kOfflineRate);
+
+    Offline offline{offlineDefaults()};
+    ASSERT_NE(offline.handle, nullptr);
+    EXPECT_EQ(offline.status, TT_OK);
+
+    EXPECT_EQ(tt_offline_feed(offline.handle, audio.data(), audio.size()), TT_OK);
+    EXPECT_EQ(tt_offline_finish(offline.handle), TT_OK);
+
+    EXPECT_NEAR(tt_offline_bpm(offline.handle), 120.0, 4.0);
+    EXPECT_GT(tt_offline_confidence(offline.handle), 0.3);
+    EXPECT_GT(tt_offline_frame_count(offline.handle), 0u);
+
+    const std::vector<double> beats = readBeats(offline.handle);
+    ASSERT_GT(beats.size(), 30u);
+    for (std::size_t i = 1; i < beats.size(); ++i) {
+        EXPECT_GT(beats[i], beats[i - 1]) << "at beat " << i;
+    }
+}
+
+TEST(OfflineApi, ZeroedConfigFallsBackToDefaults) {
+    tt_offline_config cfg;
+    std::memset(&cfg, 0, sizeof(cfg));
+    cfg.odf.sample_rate = kOfflineRate;
+
+    Offline offline{cfg};
+    ASSERT_NE(offline.handle, nullptr);
+
+    const std::vector<float> audio = clickTrack(120.0, 15.0, kOfflineRate);
+    ASSERT_EQ(tt_offline_feed(offline.handle, audio.data(), audio.size()), TT_OK);
+    ASSERT_EQ(tt_offline_finish(offline.handle), TT_OK);
+    EXPECT_NEAR(tt_offline_bpm(offline.handle), 120.0, 4.0);
+}
+
+TEST(OfflineApi, ResultsAreUnavailableUntilFinish) {
+    const std::vector<float> audio = clickTrack(120.0, 15.0, kOfflineRate);
+
+    Offline offline{offlineDefaults()};
+    ASSERT_NE(offline.handle, nullptr);
+    ASSERT_EQ(tt_offline_feed(offline.handle, audio.data(), audio.size()), TT_OK);
+
+    // Reading before finishing must return nothing rather than a stale or
+    // half-computed grid.
+    EXPECT_DOUBLE_EQ(tt_offline_bpm(offline.handle), 0.0);
+    EXPECT_EQ(tt_offline_beat_count(offline.handle), 0u);
+
+    ASSERT_EQ(tt_offline_finish(offline.handle), TT_OK);
+    EXPECT_GT(tt_offline_beat_count(offline.handle), 0u);
+
+    // Feeding more invalidates the answer again.
+    ASSERT_EQ(tt_offline_feed(offline.handle, audio.data(), 1024), TT_OK);
+    EXPECT_EQ(tt_offline_beat_count(offline.handle), 0u);
+}
+
+TEST(OfflineApi, BeatCopyRespectsCapacity) {
+    const std::vector<float> audio = clickTrack(120.0, 20.0, kOfflineRate);
+
+    Offline offline{offlineDefaults()};
+    ASSERT_NE(offline.handle, nullptr);
+    ASSERT_EQ(tt_offline_feed(offline.handle, audio.data(), audio.size()), TT_OK);
+    ASSERT_EQ(tt_offline_finish(offline.handle), TT_OK);
+
+    const std::size_t total = tt_offline_beat_count(offline.handle);
+    ASSERT_GT(total, 5u);
+
+    double few[5];
+    EXPECT_EQ(tt_offline_beats(offline.handle, few, 5), 5u);
+
+    std::vector<double> many(total + 10, -1.0);
+    EXPECT_EQ(tt_offline_beats(offline.handle, many.data(), many.size()), total);
+    EXPECT_DOUBLE_EQ(many[total], -1.0);   // nothing written past the end
+
+    for (std::size_t i = 0; i < 5; ++i) EXPECT_DOUBLE_EQ(few[i], many[i]);
+}
+
+TEST(OfflineApi, AHintIsUsedButTheAudioIsStillMeasured) {
+    const std::vector<float> audio = clickTrack(120.0, 20.0, kOfflineRate);
+
+    tt_offline_config cfg = offlineDefaults();
+    cfg.bpm_hint = 75.0;
+
+    Offline offline{cfg};
+    ASSERT_NE(offline.handle, nullptr);
+    ASSERT_EQ(tt_offline_feed(offline.handle, audio.data(), audio.size()), TT_OK);
+    ASSERT_EQ(tt_offline_finish(offline.handle), TT_OK);
+
+    EXPECT_DOUBLE_EQ(tt_offline_bpm(offline.handle), 75.0);
+    // The disagreement is what lets manual mode warn instead of tracking badly.
+    EXPECT_NEAR(tt_offline_estimated_bpm(offline.handle), 120.0, 4.0);
+}
+
+TEST(OfflineApi, OffersAlternativeTempoReadings) {
+    const std::vector<float> audio = clickTrack(120.0, 20.0, kOfflineRate);
+
+    Offline offline{offlineDefaults()};
+    ASSERT_NE(offline.handle, nullptr);
+    ASSERT_EQ(tt_offline_feed(offline.handle, audio.data(), audio.size()), TT_OK);
+    ASSERT_EQ(tt_offline_finish(offline.handle), TT_OK);
+
+    tt_tempo_candidate candidates[3];
+    const std::size_t written = tt_offline_tempo_candidates(offline.handle, candidates, 3);
+    ASSERT_EQ(written, 3u);
+
+    EXPECT_DOUBLE_EQ(candidates[0].strength, 1.0);
+    EXPECT_NEAR(candidates[0].bpm, tt_offline_bpm(offline.handle), 1e-9);
+    EXPECT_GE(candidates[0].strength, candidates[1].strength);
+    EXPECT_GE(candidates[1].strength, candidates[2].strength);
+}
+
+TEST(OfflineApi, ResetAllowsAnotherFile) {
+    const std::vector<float> slow = clickTrack(90.0, 20.0, kOfflineRate);
+    const std::vector<float> fast = clickTrack(140.0, 20.0, kOfflineRate);
+
+    Offline offline{offlineDefaults()};
+    ASSERT_NE(offline.handle, nullptr);
+
+    ASSERT_EQ(tt_offline_feed(offline.handle, slow.data(), slow.size()), TT_OK);
+    ASSERT_EQ(tt_offline_finish(offline.handle), TT_OK);
+    EXPECT_NEAR(tt_offline_bpm(offline.handle), 90.0, 4.0);
+
+    tt_offline_reset(offline.handle);
+    EXPECT_EQ(tt_offline_frame_count(offline.handle), 0u);
+    EXPECT_DOUBLE_EQ(tt_offline_bpm(offline.handle), 0.0);
+
+    ASSERT_EQ(tt_offline_feed(offline.handle, fast.data(), fast.size()), TT_OK);
+    ASSERT_EQ(tt_offline_finish(offline.handle), TT_OK);
+    EXPECT_NEAR(tt_offline_bpm(offline.handle), 140.0, 5.0);
+}
+
+TEST(OfflineApi, RejectsBadConfig) {
+    tt_offline_config cfg = offlineDefaults();
+    cfg.odf.sample_rate = 0.0;
+    tt_status status = TT_OK;
+    EXPECT_EQ(tt_offline_create(&cfg, &status), nullptr);
+    EXPECT_EQ(status, TT_ERR_INVALID_ARG);
+
+    cfg = offlineDefaults();
+    cfg.min_bpm = 300.0;   // above max_bpm
+    EXPECT_EQ(tt_offline_create(&cfg, nullptr), nullptr);
+
+    EXPECT_EQ(tt_offline_create(nullptr, &status), nullptr);
+    EXPECT_EQ(status, TT_ERR_INVALID_ARG);
+}
+
+TEST(OfflineApi, NullHandleIsHarmless) {
+    double beats[4];
+    tt_tempo_candidate candidates[2];
+
+    EXPECT_EQ(tt_offline_feed(nullptr, nullptr, 0), TT_ERR_INVALID_ARG);
+    EXPECT_EQ(tt_offline_finish(nullptr), TT_ERR_INVALID_ARG);
+    EXPECT_DOUBLE_EQ(tt_offline_bpm(nullptr), 0.0);
+    EXPECT_DOUBLE_EQ(tt_offline_estimated_bpm(nullptr), 0.0);
+    EXPECT_DOUBLE_EQ(tt_offline_confidence(nullptr), 0.0);
+    EXPECT_EQ(tt_offline_beat_count(nullptr), 0u);
+    EXPECT_EQ(tt_offline_beats(nullptr, beats, 4), 0u);
+    EXPECT_EQ(tt_offline_tempo_candidates(nullptr, candidates, 2), 0u);
+    EXPECT_EQ(tt_offline_frame_count(nullptr), 0u);
+
+    tt_offline_reset(nullptr);
+    tt_offline_destroy(nullptr);
+    tt_offline_config_defaults(nullptr, 48000.0);
+}
+
+TEST(OfflineApi, FeedRejectsANullBufferWithSamples) {
+    Offline offline{offlineDefaults()};
+    ASSERT_NE(offline.handle, nullptr);
+
+    EXPECT_EQ(tt_offline_feed(offline.handle, nullptr, 128), TT_ERR_INVALID_ARG);
+    EXPECT_EQ(tt_offline_feed(offline.handle, nullptr, 0), TT_OK);
+}

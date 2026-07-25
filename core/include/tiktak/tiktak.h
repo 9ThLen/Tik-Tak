@@ -133,6 +133,110 @@ TT_API void tt_odf_reset(tt_odf* odf);
 /* Latency between a sample arriving and the frame covering it being emitted. */
 TT_API double tt_odf_latency_sec(const tt_odf* odf);
 
+/* --------------------------------------------------------------- offline -- */
+
+/*
+ * Whole-file beat analysis: audio in, a beat grid out.
+ *
+ * This is the accurate path. It sees the entire piece before deciding anything,
+ * so it picks the globally best beat sequence rather than committing frame by
+ * frame the way the microphone path must. Use it for imported tracks.
+ *
+ * Audio is fed in blocks and reduced to onset frames as it arrives, so a long
+ * file never has to be held in memory at once. Nothing here is real-time safe —
+ * it allocates. Drive it from a file-reading thread, never an audio callback.
+ *
+ * Usage: create, feed repeatedly, finish, then read the results.
+ */
+
+typedef struct tt_offline tt_offline;
+
+typedef struct tt_offline_config {
+    tt_odf_config odf;
+
+    /* Tempo search. */
+    double min_bpm;              /* 0 -> 40                                    */
+    double max_bpm;              /* 0 -> 220                                   */
+    double prior_centre_bpm;     /* 0 -> 120                                   */
+    double prior_width_octaves;  /* Prior width in octaves. 0 -> 0.7           */
+    int    tempo_grid_size;      /* Candidate tempi. 0 -> 512                  */
+    /* Comb scoring over metrical multiples. 0 -> 1, which disables it: it
+       measured worse than plain autocorrelation on every metric available.
+       Kept configurable because that evidence is synthetic. */
+    int    comb_harmonics;
+    double comb_weight_decay;    /* 0 -> 1.0                                   */
+
+    /* Beat tracking. */
+    /* Weight of the tempo-consistency penalty. Higher keeps the grid rigid
+       through weak passages; lower follows a rubato performer. 0 -> 100. */
+    double tightness;
+    /* Drop beats at the start and end that sit on no real onset. The tracker
+       extends its grid into silence to stay regular, and clicking through the
+       silence before the music starts is exactly what the app must not do.
+       Non-zero enables; pass a negative value to disable. 0 -> enabled. */
+    int    trim;
+    /* Fix the tempo instead of estimating it, for manual mode. <= 0 estimates.
+       The tempo is measured either way — see tt_offline_estimated_bpm. */
+    double bpm_hint;
+} tt_offline_config;
+
+TT_API void tt_offline_config_defaults(tt_offline_config* cfg, double sample_rate);
+
+TT_API tt_offline* tt_offline_create(const tt_offline_config* cfg, tt_status* status);
+TT_API void tt_offline_destroy(tt_offline* offline);
+
+/* Appends `n` mono samples. Any block size. */
+TT_API tt_status tt_offline_feed(tt_offline* offline, const float* samples, size_t n);
+
+/*
+ * Runs tempo estimation and beat tracking over everything fed so far. Call
+ * before reading any result. Repeatable: feeding more and calling again extends
+ * the analysis rather than restarting it.
+ */
+TT_API tt_status tt_offline_finish(tt_offline* offline);
+
+/* Clears the collected audio and results, ready for another file. */
+TT_API void tt_offline_reset(tt_offline* offline);
+
+/* The tempo the beats were tracked at: the hint if one was given, else the
+   estimate. 0 before the first tt_offline_finish. */
+TT_API double tt_offline_bpm(const tt_offline* offline);
+
+/* What the audio itself says, measured even when a hint overrode it. Lets
+   manual mode warn that the user's 120 sounds like 90. */
+TT_API double tt_offline_estimated_bpm(const tt_offline* offline);
+
+/* 0..1: how strongly the onset function repeats at that tempo. 0 means no
+   periodicity was found, which is not the same as a slow tempo. */
+TT_API double tt_offline_confidence(const tt_offline* offline);
+
+TT_API size_t tt_offline_beat_count(const tt_offline* offline);
+
+/*
+ * Copies beat times, in seconds from the start of the audio, into `out`.
+ * Returns how many were written: min(capacity, beat count). The core keeps
+ * ownership of its own storage, so callers across the FFI boundary never have
+ * to free anything.
+ */
+TT_API size_t tt_offline_beats(const tt_offline* offline, double* out, size_t capacity);
+
+typedef struct tt_tempo_candidate {
+    double bpm;
+    double strength;   /* 0..1, relative to the winner */
+} tt_tempo_candidate;
+
+/*
+ * Alternative readings of the tempo, strongest first. When the runner-up sits
+ * an octave from the winner with a similar strength, the estimate is a coin
+ * toss — show the ambiguity and let the user resolve it rather than committing
+ * silently. Returns how many were written.
+ */
+TT_API size_t tt_offline_tempo_candidates(const tt_offline* offline,
+                                          tt_tempo_candidate* out, size_t capacity);
+
+/* Onset frames collected so far — diagnostics and the parity harness. */
+TT_API size_t tt_offline_frame_count(const tt_offline* offline);
+
 /* -------------------------------------------------------------- scheduler -- */
 
 /*

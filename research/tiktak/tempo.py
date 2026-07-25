@@ -29,12 +29,28 @@ class TempoConfig:
     prior_width_octaves: float = 0.7
     grid_size: int = 512
 
-    # A candidate period is scored by a comb: its own autocorrelation plus that
-    # of its multiples. A real beat period is supported at every metrical level
-    # above it, while a spurious peak at, say, two-thirds of the true period is
-    # supported at none — those are the errors this removes outright. It does
-    # *not* resolve the octave question, which is genuine ambiguity, not noise.
-    comb_harmonics: int = 4
+    # A candidate period can be scored by a comb: its own autocorrelation plus
+    # that of its multiples, on the theory that a real beat period is supported
+    # at every metrical level above it while a spurious peak is not.
+    #
+    # Off by default (1 = score each period by its own lag alone), because
+    # measurement disagreed with that theory. Over 140 synthetic clips spanning
+    # 60-196 BPM the comb was worse on every metric:
+    #
+    #     harmonics=1   F 0.900   CMLt 0.702   AMLt 0.991   non-metrical 0/140
+    #     harmonics=3   F 0.889   CMLt 0.681   AMLt 0.977   non-metrical 2/140
+    #     harmonics=4   F 0.880   CMLt 0.660   AMLt 0.970   non-metrical 4/140
+    #
+    # and it introduced the very error it was supposed to remove: candidates at
+    # two-thirds of the true period collect full support from every third
+    # multiple. Restricting the comb to powers of two does not rescue it
+    # (F 0.874); more levels is monotonically worse.
+    #
+    # Kept as a parameter rather than deleted: comb scoring is standard in the
+    # literature (Klapuri, Davies) and this evidence is entirely synthetic, from
+    # one generator. Re-measure on real annotated audio before concluding it is
+    # useless in general. See docs/PLAN.md section 10.
+    comb_harmonics: int = 1
     # Weight of harmonic k is k**-comb_weight_decay. Higher metrical levels
     # carry real but weaker evidence, so they should count for less.
     comb_weight_decay: float = 1.0
@@ -111,11 +127,13 @@ def comb_score(
 ) -> np.ndarray:
     """Score each candidate tempo by a comb over its metrical multiples.
 
-    Scoring a period by its own autocorrelation alone picks up peaks that are
-    not metrical at all — with a kick/snare pattern the strongest peak often
-    sits at two-thirds or three-halves of the beat, where unlike events happen
-    to line up. Summing over multiples requires a candidate to be supported at
-    every level above it, which those peaks are not.
+    The idea is that summing over multiples requires a candidate to be
+    supported at every metrical level above it, which a spurious peak at
+    two-thirds or three-halves of the beat is not.
+
+    In practice it did not survive measurement and is disabled by default; see
+    TempoConfig.comb_harmonics for the numbers. With `comb_harmonics == 1` this
+    reduces to interpolating the autocorrelation at each candidate's own lag.
     """
     lags = 60.0 * fps / bpm_grid
     index = np.arange(len(acf))
@@ -178,10 +196,21 @@ def estimate_tempo(
     posterior = posterior / peak
     best = int(np.argmax(posterior))
 
-    # Confidence as peak sharpness: how far the winner stands above the typical
-    # candidate. A flat posterior means "no periodicity found", not "120 BPM".
-    median = float(np.median(posterior[posterior > 0.0]))
-    confidence = float(np.clip(1.0 - median, 0.0, 1.0))
+    # Confidence is how periodic the signal actually is at the chosen tempo:
+    # the autocorrelation there as a fraction of the autocorrelation at lag
+    # zero, which is the signal's variance. 1.0 means the ODF repeats exactly
+    # at that period, 0.0 means it does not repeat at all.
+    #
+    # This replaced a "peak sharpness against the rest of the grid" measure that
+    # was measuring the wrong thing: white noise produces a sharp, meaningless
+    # peak and scored 0.76 by it — *higher* than a clean beat at 0.84 in some
+    # cases — which is exactly backwards for a UI whose job is to distinguish
+    # "sure" from "guessing". The same cases score 0.02 and 0.71 here.
+    confidence = 0.0
+    if acf[0] > 0.0:
+        lag = 60.0 * fps / float(bpm_grid[best])
+        strength = float(np.interp(lag, np.arange(len(acf)), acf))
+        confidence = float(np.clip(strength / acf[0], 0.0, 1.0))
 
     return TempoEstimate(
         bpm=float(bpm_grid[best]),

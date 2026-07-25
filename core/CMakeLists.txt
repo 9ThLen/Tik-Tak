@@ -22,6 +22,9 @@ add_library(tiktak_core STATIC
     src/dsp/stft.cpp
     src/schedule/scheduler.cpp
     src/dsp/odf.cpp
+    src/analysis/tempo.cpp
+    src/analysis/tracker.cpp
+    src/analysis/offline.cpp
 )
 
 target_include_directories(tiktak_core
