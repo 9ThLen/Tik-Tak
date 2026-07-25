@@ -22,6 +22,7 @@ add_executable(tiktak_core_tests
     test_tempo.cpp
     test_tracker.cpp
     test_offline.cpp
+    test_grid_cache.cpp
     test_api.cpp
 )
 
