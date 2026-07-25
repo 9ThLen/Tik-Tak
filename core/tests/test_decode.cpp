@@ -380,3 +380,57 @@ TEST(DecodeAndAnalyse, FindsTheBeatsOfAnEncodedClickTrack) {
 
     tt_offline_destroy(analysis);
 }
+
+TEST(DecodeAndTrackLive, FollowsAnEncodedClickTrackThroughTheMicrophonePath) {
+    // The same file the offline test analyses, driven through the *online*
+    // tracker in capture-sized blocks against a virtual clock. The two paths
+    // share only the ODF, so this is what would catch the live one being wired
+    // up correctly to a front-end it reads wrongly.
+    Decoder decoder{"click_120.mp3"};
+    ASSERT_NE(decoder.handle, nullptr);
+
+    const tt_audio_info info = tt_decoder_info(decoder.handle);
+    ASSERT_GT(info.sample_rate, 0.0);
+
+    tt_live_config config;
+    tt_live_config_defaults(&config, info.sample_rate);
+
+    tt_status status = TT_OK;
+    tt_live* live = tt_live_create(&config, &status);
+    ASSERT_NE(live, nullptr) << tt_status_string(status);
+
+    constexpr std::size_t kBlock = 256;
+    std::vector<float> block(kBlock);
+    std::vector<double> beats;
+    double time = 0.0;
+    for (;;) {
+        const std::size_t got = tt_decoder_read(decoder.handle, block.data(), block.size());
+        if (got == 0) break;
+        tt_live_process(live, time, block.data(), got);
+        time += static_cast<double>(got) / info.sample_rate;
+
+        double beat = 0.0;
+        while (tt_live_take_beat(live, time, 0.05, &beat)) beats.push_back(beat);
+        if (got < block.size()) break;
+    }
+
+    tt_live_estimate estimate;
+    tt_live_estimate_get(live, time, &estimate);
+    EXPECT_NEAR(estimate.bpm, 120.0, 6.0);
+    EXPECT_GT(estimate.confidence, 0.3);
+
+    // The clip has a beat every 0.5 s from zero, with eighth-note hits between
+    // them — the case that tempts a tracker into reading the subdivision as the
+    // beat. It takes this one about five of the clip's ten seconds to be sure,
+    // which is why only a handful of beats are expected: what matters is that
+    // every beat it does commit to lands on the real grid, within the standard
+    // 70 ms tolerance. (The offline path is both faster and more accurate here,
+    // and that is the point of having two — a file is never tracked live.)
+    ASSERT_GE(beats.size(), 4u);
+    for (std::size_t i = 0; i < beats.size(); ++i) {
+        const double off = std::fabs(beats[i] - std::round(beats[i] / 0.5) * 0.5);
+        EXPECT_LE(off, 0.07) << "beat " << i << " at " << beats[i];
+    }
+
+    tt_live_destroy(live);
+}

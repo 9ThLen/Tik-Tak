@@ -25,12 +25,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Decode is ON so the `track` command exists: the Phase 4 smoke test
+      # below imports a real MP3, and the cache round-trip needs the whole
+      # bytes → key → analyse → store → hit path.
       - name: Configure
         run: >
           cmake -S desktop -B desktop/build
           -DCMAKE_BUILD_TYPE=RelWithDebInfo
           -DTIKTAK_BUILD_TESTS=OFF
-          -DTIKTAK_BUILD_DECODE=OFF
+          -DTIKTAK_BUILD_DECODE=ON
 
       - name: Build
         run: cmake --build desktop/build --config RelWithDebInfo
@@ -52,3 +55,38 @@ jobs:
       - name: Check every beat landed on its sample
         shell: bash
         run: python3 desktop/tools/check_render.py metronome.wav --bpm 137 --start 0.5
+
+      # The Phase 4 path end to end, still with no sound card: a real MP3 in,
+      # analysed, rendered with the click riding its own grid — then again, and
+      # the second run must come from the cache and produce the identical file.
+      - name: Play a track against its own beat grid, twice
+        shell: bash
+        run: |
+          BIN=desktop/build/tiktak
+          [ -x "$BIN" ] || BIN=desktop/build/RelWithDebInfo/tiktak.exe
+          "$BIN" track core/tests/data/click_120.mp3 --seconds 8 -o track_first.wav \
+            | tee first.log
+          grep -q "beat grid: analysed" first.log
+          "$BIN" track core/tests/data/click_120.mp3 --seconds 8 -o track_second.wav \
+            | tee second.log
+          grep -q "beat grid: cache hit" second.log
+          cmp track_first.wav track_second.wav
+
+      # The microphone path, on a runner that has no microphone: the same
+      # tracker, fed from a file against a virtual clock. This is why `listen`
+      # takes a file at all — without it the whole Phase 5 path would only ever
+      # be exercised by hand, on a machine with a sound card, and never twice
+      # the same way.
+      - name: Track a beat through the microphone path
+        shell: bash
+        run: |
+          BIN=desktop/build/tiktak
+          [ -x "$BIN" ] || BIN=desktop/build/RelWithDebInfo/tiktak.exe
+          "$BIN" listen core/tests/data/click_120.mp3 --seconds 10 -o listened.wav \
+            | tee listen.log
+          grep -q "live tracker:" listen.log
+          grep -q "nothing dropped, nothing stolen" listen.log
+          # It has ten seconds to find a 120 BPM beat with eighth-notes over
+          # it. Anything outside 100-139 means it locked onto the wrong thing —
+          # most likely the subdivision, or every other beat.
+          grep -Eq "live tracker: 1[0-3][0-9]\.[0-9] BPM" listen.log

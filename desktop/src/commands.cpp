@@ -11,7 +11,20 @@
 
 #include "device.hpp"
 #include "render/metronome.hpp"
+#include "render/live_metronome.hpp"
+#include "render/player.hpp"
 #include "wav.hpp"
+
+#if defined(TIKTAK_HAVE_DECODE)
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+
+#include "analysis/grid_cache.hpp"
+#include "analysis/offline.hpp"
+#include "decode/decoder.hpp"
+#endif
 
 namespace tiktak::desktop {
 namespace {
@@ -64,6 +77,78 @@ void playCallback(void* user, double stream_time_sec, const float* input, float*
     (void)input;
     auto* state = static_cast<PlayState*>(user);
     state->metronome->process(stream_time_sec, output, frames);
+}
+
+#if defined(TIKTAK_HAVE_DECODE)
+
+struct TrackState {
+    tiktak::render::TrackPlayer* player = nullptr;
+};
+
+void trackCallback(void* user, double stream_time_sec, const float* input, float* output,
+                   std::size_t frames) {
+    (void)input;
+    auto* state = static_cast<TrackState*>(user);
+    state->player->process(stream_time_sec, output, frames);
+}
+
+void reportPlayerStats(const tiktak::render::TrackPlayer::Stats& stats) {
+    std::printf("  clicks scheduled    %zu\n", stats.beats);
+    if (stats.loops) std::printf("  loops completed     %zu\n", stats.loops);
+    if (stats.clean()) {
+        std::printf("  nothing dropped, nothing stolen, no gaps in the stream\n");
+        return;
+    }
+    std::printf("  ** the run was not clean **\n");
+    if (stats.clicks_late) std::printf("  clicks past their buffer %zu\n", stats.clicks_late);
+    if (stats.clicks_overflowed)
+        std::printf("  clicks refused, queue full %zu\n", stats.clicks_overflowed);
+    if (stats.voices_stolen) std::printf("  clicks cut short        %zu\n", stats.voices_stolen);
+    if (stats.discontinuities)
+        std::printf("  buffers out of sequence %zu  (the device glitched)\n",
+                    stats.discontinuities);
+    if (stats.cues_dropped) std::printf("  cues with no room       %zu\n", stats.cues_dropped);
+}
+
+#endif  // TIKTAK_HAVE_DECODE
+
+struct ListenState {
+    tiktak::render::LiveMetronome* metronome = nullptr;
+};
+
+// The one callback of a duplex device: the room comes in, the click goes out,
+// and both are stamped with the same clock — which is the whole reason the
+// tracker can put a click on a beat it heard.
+void listenCallback(void* user, double stream_time_sec, const float* input, float* output,
+                    std::size_t frames) {
+    auto* state = static_cast<ListenState*>(user);
+    if (input != nullptr) state->metronome->capture(stream_time_sec, input, frames);
+    state->metronome->process(stream_time_sec, output, frames);
+}
+
+void reportListen(const tiktak::render::LiveMetronome& metronome, double now_sec) {
+    const tiktak::tracking::BeatEstimate estimate = metronome.estimate(now_sec);
+    const tiktak::render::LiveMetronome::Stats stats = metronome.stats();
+
+    std::printf("live tracker: %.1f BPM (confidence %.2f, tempo spread %.3f octaves)\n",
+                estimate.bpm, estimate.confidence, estimate.tempo_spread_octaves);
+    std::printf("  beats played        %zu\n", stats.beats);
+    std::printf("  frames gated as ours %zu\n", stats.gated);
+    if (stats.clean()) {
+        std::printf("  nothing dropped, nothing stolen, no gaps in the stream\n");
+        return;
+    }
+    std::printf("  ** the run was not clean **\n");
+    if (stats.beats_late) std::printf("  beats predicted too late %zu\n", stats.beats_late);
+    if (stats.clicks_late) std::printf("  clicks past their buffer %zu\n", stats.clicks_late);
+    if (stats.clicks_overflowed)
+        std::printf("  clicks refused, queue full %zu\n", stats.clicks_overflowed);
+    if (stats.voices_stolen) std::printf("  clicks cut short        %zu\n", stats.voices_stolen);
+    if (stats.discontinuities)
+        std::printf("  buffers out of sequence %zu  (the device glitched)\n",
+                    stats.discontinuities);
+    if (stats.capture_discontinuities)
+        std::printf("  capture buffers out of sequence %zu\n", stats.capture_discontinuities);
 }
 
 struct MeasureState {
@@ -182,6 +267,47 @@ bool parseOptions(const std::vector<std::string>& args, Options& options, std::s
                 return false;
             }
             options.output_path = args[++i];
+        } else if (arg == "--count-in") {
+            if (!need(value)) return false;
+            options.count_in = static_cast<int>(value);
+        } else if (arg == "--from") {
+            if (!need(value)) return false;
+            options.from_bar = static_cast<long long>(value);
+        } else if (arg == "--loop") {
+            if (!has_value) {
+                error = "--loop needs a range, as in --loop 4:8";
+                return false;
+            }
+            const std::string range = args[++i];
+            const std::size_t colon = range.find(':');
+            bool ok = colon != std::string::npos && colon > 0 && colon + 1 < range.size();
+            if (ok) {
+                char* end = nullptr;
+                options.loop_from = std::strtoll(range.c_str(), &end, 10);
+                ok = end == range.c_str() + colon;
+                if (ok) {
+                    options.loop_to = std::strtoll(range.c_str() + colon + 1, &end, 10);
+                    ok = *end == '\0';
+                }
+            }
+            if (!ok) {
+                error = "'" + range + "' is not a bar range like 4:8";
+                return false;
+            }
+        } else if (arg == "--hint") {
+            if (!need(value)) return false;
+            options.hint_bpm = value;
+        } else if (arg == "--no-click") {
+            options.no_click = true;
+        } else if (arg == "--no-cache") {
+            options.no_cache = true;
+        } else if (!arg.empty() && arg[0] != '-') {
+            if (!options.track_path.empty()) {
+                error = "only one file at a time — got '" + options.track_path +
+                        "' and '" + arg + "'";
+                return false;
+            }
+            options.track_path = arg;
         } else {
             error = "unknown option '" + arg + "'";
             return false;
@@ -215,6 +341,8 @@ void printUsage() {
         "  tiktak render -o out.wav          render the metronome to a file\n"
         "  tiktak play                       play it on a real device\n"
         "  tiktak measure                    measure the round trip and the jitter\n"
+        "  tiktak track FILE                 play a file with the click on its own beats\n"
+        "  tiktak listen                     click on the beat of what the microphone hears\n"
         "\n"
         "Options:\n"
         "  --bpm N            tempo (120)\n"
@@ -225,7 +353,28 @@ void printUsage() {
         "  --latency-ms N     output latency to compensate (0) — measure it first\n"
         "  --lookahead-ms N   how far ahead beats are handed out (250)\n"
         "  --device NAME      playback device, as printed by `devices`\n"
-        "  -o, --out PATH     where to write (render, measure)\n"
+        "  -o, --out PATH     where to write (render, measure, track)\n"
+        "\n"
+        "Track options:\n"
+        "  --count-in N       count-in beats before the music (4)\n"
+        "  --from N           start at bar N (0)\n"
+        "  --loop A:B         loop bars A to B, end exclusive\n"
+        "  --hint N           manual-mode tempo hint in BPM; 0 estimates (0)\n"
+        "  --no-click         the track alone, no metronome\n"
+        "  --no-cache         re-analyse even when the beat grid is cached\n"
+        "\n"
+        "Listen options:\n"
+        "  FILE               drive the tracker from a file instead of a microphone\n"
+        "  --hint N           tempo to start from, in BPM; 0 searches (0)\n"
+        "  --no-click         listen and report, play nothing\n"
+        "\n"
+        "`listen` follows the room: the tracker predicts each beat and the click\n"
+        "goes out early by the round trip, so it is heard on the beat. Pass the\n"
+        "figure `measure` reports as --latency-ms, or the click is late by it.\n"
+        "\n"
+        "`track` analyses the file once and caches the beat grid next to it\n"
+        "(.tiktak/<content-hash>.grid), so the second start is instant. With -o\n"
+        "it renders to a WAV instead of a device — same callback, virtual clock.\n"
         "\n"
         "`render` needs no sound card, which is what makes the timing testable in\n"
         "CI and on any machine. `measure` needs the output to reach the input —\n"
@@ -457,5 +606,346 @@ int cmdMeasure(const Options& options) {
         "will not sit still.\n");
     return 0;
 }
+
+// -------------------------------------------------------------------- track --
+
+
+// ------------------------------------------------------------------ listen --
+
+int cmdListen(const Options& options) {
+    using tiktak::render::LiveMetronome;
+    using tiktak::render::LiveMetronomeConfig;
+
+    // A file was named: drive the tracker from it instead of a microphone,
+    // against a virtual clock. Not a lesser mode — it is what makes the
+    // microphone path testable on a machine with no microphone, which is every
+    // CI runner, and it is the only way to run the same input twice.
+    const bool from_file = !options.track_path.empty();
+
+    std::vector<float> room;
+    double rate = options.sample_rate > 0.0 ? options.sample_rate : 48000.0;
+
+    if (from_file) {
+#if defined(TIKTAK_HAVE_DECODE)
+        auto decoder = tiktak::decode::Decoder::open(options.track_path.c_str());
+        if (!decoder) {
+            std::fprintf(stderr, "tiktak: %s is not a WAV, FLAC or MP3 file\n",
+                         options.track_path.c_str());
+            return 1;
+        }
+        rate = decoder->info().sample_rate;
+        float block[65536];
+        for (;;) {
+            const std::size_t got = decoder->readMono(block, 65536);
+            if (got == 0) break;
+            room.insert(room.end(), block, block + got);
+        }
+        if (room.empty()) {
+            std::fprintf(stderr, "tiktak: %s decoded to nothing\n", options.track_path.c_str());
+            return 1;
+        }
+#else
+        std::fprintf(stderr,
+                     "tiktak: this build has no decoder — rebuild with "
+                     "-DTIKTAK_BUILD_DECODE=ON, or run `listen` with a microphone\n");
+        return 2;
+#endif
+    }
+
+    LiveMetronomeConfig cfg;
+    cfg.tracker = tiktak::tracking::liveConfigFor(rate);
+    cfg.click.sample_rate = rate;
+    // For `listen` the latency that matters is the *round trip*: the tracker's
+    // clock is the capture stream's, so the click has to leave early by the
+    // whole way out and back. That is the number `measure` reports.
+    cfg.round_trip_sec = options.output_latency_sec;
+    if (!cfg.valid()) {
+        std::fprintf(stderr, "tiktak: those settings do not make a live metronome\n");
+        return 2;
+    }
+
+    LiveMetronome metronome(cfg);
+    if (options.hint_bpm > 0.0) {
+        metronome.seedTempo(options.hint_bpm);
+        std::printf("starting from %.1f BPM\n", options.hint_bpm);
+    }
+    if (!options.no_click) metronome.start();
+
+    if (from_file) {
+        constexpr std::size_t kBlock = 256;
+        const auto total =
+            std::min(room.size(), static_cast<std::size_t>(options.seconds * rate));
+        std::vector<float> out(total, 0.0f);
+
+        std::printf("%s — %.1f s at %.0f Hz, through the microphone path\n",
+                    options.track_path.c_str(), static_cast<double>(total) / rate, rate);
+
+        for (std::size_t i = 0; i < total; i += kBlock) {
+            const std::size_t n = std::min(kBlock, total - i);
+            const double time = static_cast<double>(i) / rate;
+            metronome.capture(time, room.data() + i, n);
+
+            // The track is written under the click so the result can be
+            // listened to: a click that is off the beat is obvious in a second
+            // and invisible in any number of counters.
+            std::copy(room.begin() + static_cast<std::ptrdiff_t>(i),
+                      room.begin() + static_cast<std::ptrdiff_t>(i + n),
+                      out.begin() + static_cast<std::ptrdiff_t>(i));
+            metronome.process(time, out.data() + i, n);
+        }
+
+        if (!options.output_path.empty()) {
+            if (!writeWav(options.output_path, out, rate)) {
+                std::fprintf(stderr, "tiktak: could not write %s\n", options.output_path.c_str());
+                return 1;
+            }
+            std::printf("wrote %s — the room and the click it played over it\n",
+                        options.output_path.c_str());
+        }
+
+        reportListen(metronome, static_cast<double>(total) / rate);
+        return metronome.stats().clean() ? 0 : 1;
+    }
+
+    Device device;
+    ListenState state;
+    state.metronome = &metronome;
+
+    // Duplex: the microphone is the whole point, so a machine that cannot
+    // capture cannot run this at all.
+    if (!device.start(listenCallback, &state, options.sample_rate, true, options.device_name)) {
+        std::fprintf(stderr, "tiktak: %s\n", device.error().c_str());
+        return 1;
+    }
+
+    std::printf("%s via %s — %.0f Hz, %zu-frame periods\n", device.name().c_str(),
+                device.backend().c_str(), device.sample_rate(), device.period_frames());
+    if (cfg.round_trip_sec <= 0.0) {
+        std::printf(
+            "no round trip given: the click will be late by whatever the device's is.\n"
+            "  measure it with `tiktak measure` and pass it as --latency-ms\n");
+    }
+    std::printf("listening for %g s...\n", options.seconds);
+
+    const auto started = std::chrono::steady_clock::now();
+    double elapsed = 0.0;
+    while (elapsed < options.seconds) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+
+        // The tracker's clock is the stream's, and the harness only knows wall
+        // time, so this line is a progress report and not a measurement.
+        const auto estimate = metronome.estimate(elapsed);
+        std::printf("  %5.1f s   %6.1f BPM   confidence %.2f\n", elapsed, estimate.bpm,
+                    estimate.confidence);
+        std::fflush(stdout);
+    }
+
+    metronome.stop();
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));  // let the tail ring
+    device.stop();
+
+    reportListen(metronome, elapsed);
+    return metronome.stats().clean() ? 0 : 1;
+}
+
+#if defined(TIKTAK_HAVE_DECODE)
+
+int cmdTrack(const Options& options) {
+    namespace fs = std::filesystem;
+    using tiktak::analysis::OfflineConfig;
+    using tiktak::analysis::OfflineResult;
+    using tiktak::render::PlayerConfig;
+    using tiktak::render::TrackPlayer;
+
+    if (options.track_path.empty()) {
+        std::fprintf(stderr, "tiktak: track needs a file, as in `tiktak track song.mp3`\n");
+        return 2;
+    }
+
+    // The encoded bytes are read once and used twice: hashed for the cache key
+    // before anything is decoded, then decoded — the same flow a shell takes.
+    std::ifstream file(fs::path(options.track_path), std::ios::binary);
+    if (!file) {
+        std::fprintf(stderr, "tiktak: cannot read %s\n", options.track_path.c_str());
+        return 1;
+    }
+    const std::vector<unsigned char> bytes{std::istreambuf_iterator<char>(file),
+                                           std::istreambuf_iterator<char>()};
+    file.close();
+
+    auto decoder = tiktak::decode::Decoder::openMemory(bytes.data(), bytes.size());
+    if (!decoder) {
+        std::fprintf(stderr, "tiktak: %s is not a WAV, FLAC or MP3 file\n",
+                     options.track_path.c_str());
+        return 1;
+    }
+    const double rate = decoder->info().sample_rate;
+
+    std::vector<float> samples;
+    samples.reserve(static_cast<std::size_t>(decoder->info().frames));
+    float block[65536];
+    for (;;) {
+        const std::size_t got = decoder->readMono(block, 65536);
+        if (got == 0) break;
+        samples.insert(samples.end(), block, block + got);
+    }
+    if (samples.empty()) {
+        std::fprintf(stderr, "tiktak: %s decoded to nothing\n", options.track_path.c_str());
+        return 1;
+    }
+
+    OfflineConfig analysis;
+    analysis.odf.sampleRate = rate;
+    analysis.bpm_hint = options.hint_bpm;
+
+    // Content-addressed cache next to the file: the key is the hash of the
+    // encoded bytes, so a renamed file hits and a re-encoded one misses. The
+    // tempo hint goes into the name too — a hinted grid is a different grid,
+    // and one name per track would make the two modes overwrite each other on
+    // every switch. (The blob itself refuses a config it was not analysed
+    // under; the name only keeps both alive side by side.)
+    std::string cache_name = tiktak::analysis::gridCacheKey(bytes.data(), bytes.size());
+    if (options.hint_bpm > 0.0) {
+        char hint[32];
+        std::snprintf(hint, sizeof(hint), "-hint%g", options.hint_bpm);
+        cache_name += hint;
+    }
+    const fs::path cache_path =
+        fs::path(options.track_path).parent_path() / ".tiktak" / (cache_name + ".grid");
+
+    OfflineResult grid;
+    bool from_cache = false;
+    if (!options.no_cache) {
+        std::ifstream cached(cache_path, std::ios::binary);
+        if (cached) {
+            const std::vector<std::uint8_t> blob{std::istreambuf_iterator<char>(cached),
+                                                 std::istreambuf_iterator<char>()};
+            from_cache =
+                tiktak::analysis::deserializeGrid(blob.data(), blob.size(), analysis, &grid);
+        }
+    }
+
+    if (!from_cache) {
+        grid = tiktak::analysis::analyseOffline(samples.data(), samples.size(), analysis);
+        if (!options.no_cache) {
+            std::error_code ec;
+            fs::create_directories(cache_path.parent_path(), ec);
+            std::ofstream out(cache_path, std::ios::binary);
+            if (out) {
+                const std::vector<std::uint8_t> blob =
+                    tiktak::analysis::serializeGrid(grid, analysis);
+                out.write(reinterpret_cast<const char*>(blob.data()),
+                          static_cast<std::streamsize>(blob.size()));
+            }
+        }
+    }
+
+    std::printf("%s — %.1f s at %.0f Hz\n", options.track_path.c_str(),
+                static_cast<double>(samples.size()) / rate, rate);
+    std::printf("beat grid: %s — %zu beats at %.1f BPM (confidence %.2f)\n",
+                from_cache ? "cache hit" : "analysed", grid.beats.size(), grid.bpm,
+                grid.tempo_confidence);
+    if (grid.beats.empty()) {
+        std::printf("no beats found — playing the track without a click\n");
+    }
+
+    PlayerConfig cfg;
+    cfg.sample_rate = rate;
+    cfg.click.sample_rate = rate;
+    cfg.beats_per_bar = options.beats_per_bar;
+    cfg.count_in_beats = grid.beats.empty() ? 0 : options.count_in;
+    cfg.channel_enabled = {{!options.no_click && !grid.beats.empty(), false, false}};
+    if (!cfg.valid()) {
+        std::fprintf(stderr, "tiktak: those settings do not make a player\n");
+        return 2;
+    }
+
+    TrackPlayer player(cfg);
+    player.setTrack(samples.data(), samples.size());
+    player.setGrid(grid.beats.data(), grid.beats.size());
+
+    if (options.loop_from >= 0) {
+        if (!player.setLoop(options.loop_from, options.loop_to)) {
+            std::fprintf(stderr, "tiktak: the grid has no bars %lld:%lld to loop\n",
+                         options.loop_from, options.loop_to);
+            return 2;
+        }
+        std::printf("looping bars %lld:%lld\n", options.loop_from, options.loop_to);
+    }
+
+    const long long from_bar = grid.beats.empty() ? 0 : options.from_bar;
+
+    // Render mode: the same callback against a virtual clock, into a file —
+    // how the player's timing is checked without a sound card.
+    if (!options.output_path.empty()) {
+        if (!player.start(0.0, from_bar)) {
+            std::fprintf(stderr, "tiktak: bar %lld is not in the grid\n", from_bar);
+            return 2;
+        }
+
+        constexpr std::size_t kBlock = 256;
+        const auto total = static_cast<std::size_t>(options.seconds * rate);
+        std::vector<float> out(total, 0.0f);
+        for (std::size_t i = 0; i < total; i += kBlock) {
+            const std::size_t n = std::min(kBlock, total - i);
+            player.process(static_cast<double>(i) / rate, out.data() + i, n);
+        }
+
+        if (!writeWav(options.output_path, out, rate)) {
+            std::fprintf(stderr, "tiktak: could not write %s\n", options.output_path.c_str());
+            return 1;
+        }
+        std::printf("wrote %s — %.1f s\n", options.output_path.c_str(), options.seconds);
+        reportPlayerStats(player.stats());
+        return player.stats().clean() ? 0 : 1;
+    }
+
+    Device device;
+    TrackState state;
+    state.player = &player;
+
+    // The track fixes the rate; the device is asked for it and miniaudio
+    // converts if the hardware insists on another. The click stays bound to
+    // the track either way — they share the buffer.
+    if (!device.start(trackCallback, &state, rate, false, options.device_name)) {
+        std::fprintf(stderr, "tiktak: %s\n", device.error().c_str());
+        return 1;
+    }
+
+    if (!player.start(kStartDelaySec, from_bar)) {
+        device.stop();
+        std::fprintf(stderr, "tiktak: bar %lld is not in the grid\n", from_bar);
+        return 2;
+    }
+
+    std::printf("%s via %s — %.0f Hz, %zu-frame periods\n", device.name().c_str(),
+                device.backend().c_str(), device.sample_rate(), device.period_frames());
+
+    const double run_for = options.seconds;
+    const auto started = std::chrono::steady_clock::now();
+    while (std::chrono::duration<double>(std::chrono::steady_clock::now() - started)
+                   .count() < run_for &&
+           player.running()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    player.stop();
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));  // let the tail ring
+    device.stop();
+
+    std::printf("stopped at %.1f s into the track\n", player.positionSec());
+    reportPlayerStats(player.stats());
+    return player.stats().clean() ? 0 : 1;
+}
+
+#else  // !TIKTAK_HAVE_DECODE
+
+int cmdTrack(const Options&) {
+    std::fprintf(stderr,
+                 "tiktak: this build has no decoder — rebuild with -DTIKTAK_BUILD_DECODE=ON\n");
+    return 2;
+}
+
+#endif
 
 }  // namespace tiktak::desktop

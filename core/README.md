@@ -48,13 +48,17 @@ all.
 | `src/schedule/scheduler` | beat grid: schedules events ahead, per-channel latency |
 | `src/render/click` | the click itself: sample-accurate placement, fixed voice pool |
 | `src/render/metronome` | grid + click wired together — one audio callback for every shell |
+| `src/render/player` | track playback riding the analysed grid: count-in, bar loops, cues |
+| `src/tracking/particle` | online beat tracking: a particle filter over (period, phase) |
+| `src/tracking/live` | the microphone path: audio in, beat predictions out |
+| `src/render/live_metronome` | tracker + click, and the round-trip arithmetic between them |
 | `src/api.cpp` | C API |
 | `src/decode/` | WAV / FLAC / MP3 to mono float, over dr_libs — separate library |
 | `src/decode_api.cpp` | C API for the decoder |
 
 ## Real-time rules
 
-The `dsp/`, `schedule/` and `render/` components run in an audio callback. The `analysis/`
+The `dsp/`, `schedule/`, `tracking/` and `render/` components run in an audio callback. The `analysis/`
 components deliberately do not — they allocate, size transforms to their input,
 and are driven from a file-reading thread. The rules below apply to the former.
 
@@ -69,9 +73,56 @@ Everything downstream of `tt_odf_create` runs in an audio callback, so:
 ## Status
 
 The ODF front-end, the offline analysis path (tempo, beat tracking, the
-`tt_offline_*` API), the beat grid cache, file decoding, the beat scheduler and
-the metronome itself (click synthesis plus the callback that drives it).
-Missing: the online tracker for the microphone path, and downbeat detection.
+`tt_offline_*` API), the beat grid cache, file decoding, the beat scheduler,
+the metronome itself (click synthesis plus the callback that drives it) and the
+track player (`tt_player_*` — playback on the analysed grid, with count-in and
+bar loops) and the online tracker for the microphone path (`tt_live_*`, plus
+`render::LiveMetronome`, which is the tracker and the click wired together).
+Missing: downbeat detection.
+
+The player places the click on the very sample of its beat rather than
+compensating for output latency: track and click leave through the same device
+buffer, so they arrive together whatever the latency is. Only haptic and
+visual cues carry latency arithmetic, compensated against the moment the beat
+is *heard*. Bars are bookkeeping until Phase 7 — `downbeat_offset` names which
+grid beat is "the one", it does not detect it.
+
+The online tracker is a particle filter over `(period, phase)`, and four
+decisions in it are worth knowing before touching the numbers.
+
+*The observation is zero-mean.* An onset moves a particle's weight by
+`onset * (window(distance to its beat) - mean window)`, so a frame with no
+onset moves no weight at all. Silence therefore costs only diffusion — the
+cloud coasts at its last tempo instead of collapsing onto the first noise it
+hears — and dropping frames is safe, which is what the microphone path relies
+on when it gates out its own click.
+
+*A beat is charged for.* With the reward alone nothing opposes double tempo: a
+particle beating twice as fast is right on every real onset and is never
+charged for the beats it puts in the gaps. The charge is the point-process half
+of the likelihood, scaled by what a beat is currently worth so that silence
+stays free.
+
+*Evidence is the square of the onset, in units where a beat is 1.* Nearly all
+music has hits between the beats, and with evidence proportional to amplitude a
+hi-hat at a third the level buys a third of a beat's belief — which leaves the
+beat and its own subdivision within noise of each other, and the tracker
+flickering between them. Squaring makes that hi-hat worth a ninth.
+`LiveTracker` normalises against a running *peak* rather than a standard
+deviation to keep those units true whatever the room's level: a z-score moves
+with the material, so dense music would arrive as weaker evidence purely
+because there is more of it.
+
+*Confidence is agreement times coincidence.* Resampling makes a cloud agree
+with itself within seconds of white noise, so a filter reporting its own
+concentration reports near-certainty on material with no beat in it. The share
+of onset energy that actually keeps landing on the prediction is the other
+half, and both have to hold.
+
+Known and accepted: on material well outside 100-140 BPM the tracker sometimes
+settles an octave away — a slow piece tracked on its eighth-notes, a fast one
+in half time. That is the tempo prior doing its job, it is the most common
+failure of every beat tracker, and it is why the UI has x2 and /2 buttons.
 
 The grid cache serialises to bytes and leaves storage to the shell, for the
 same reason decoding accepts bytes rather than a path — every shell can persist

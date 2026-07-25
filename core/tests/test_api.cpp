@@ -881,3 +881,239 @@ TEST(GridApi, NullHandleIsHarmless) {
     EXPECT_EQ(tt_grid_key(nullptr, 0, key, sizeof(key)), TT_OK);
     EXPECT_EQ(tt_grid_key("abc", 3, nullptr, 65), TT_ERR_INVALID_ARG);
 }
+
+/* ----------------------------------------------------------------- player -- */
+
+namespace {
+
+struct Player {
+    explicit Player(const tt_player_config& cfg) {
+        handle = tt_player_create(&cfg, &status);
+    }
+    ~Player() { tt_player_destroy(handle); }
+    Player(const Player&) = delete;
+    Player& operator=(const Player&) = delete;
+
+    tt_player* handle = nullptr;
+    tt_status status = TT_OK;
+};
+
+}  // namespace
+
+TEST(PlayerApi, PlaysATrackWithClicksOnItsGrid) {
+    tt_player_config cfg;
+    tt_player_config_defaults(&cfg, 48000.0);
+    cfg.count_in_beats = 2;
+
+    Player player{cfg};
+    ASSERT_NE(player.handle, nullptr);
+
+    const std::vector<float> track(48000 * 4, 0.0f);
+    const double grid[] = {0.5, 1.0, 1.5, 2.0, 2.5, 3.0};
+    ASSERT_EQ(tt_player_set_track(player.handle, track.data(), track.size()), TT_OK);
+    ASSERT_EQ(tt_player_set_grid(player.handle, grid, 6), TT_OK);
+    ASSERT_EQ(tt_player_start(player.handle, 0.0, 0), TT_OK);
+    EXPECT_EQ(tt_player_running(player.handle), 1);
+
+    float buffer[512];
+    double energy = 0.0;
+    // 400 buffers ≈ 4.3 s: past the last grid beat (timeline 3.5 s — one
+    // second of count-in plus the 2.5 s from entry to the final beat).
+    for (int b = 0; b < 400; ++b) {
+        std::memset(buffer, 0, sizeof(buffer));
+        tt_player_process(player.handle, b * 512 / 48000.0, buffer, 512,
+                          nullptr, 0, nullptr);
+        for (float s : buffer) energy += static_cast<double>(s) * s;
+    }
+    EXPECT_GT(energy, 0.0);  // the clicks are audible over a silent track
+
+    tt_player_stats stats;
+    tt_player_stats_get(player.handle, &stats);
+    EXPECT_EQ(stats.beats, 8u);  // 2 count-in + 6 grid beats
+    EXPECT_EQ(stats.clean, 1);
+}
+
+TEST(PlayerApi, RejectsWhatTheCoreRejects) {
+    tt_player_config cfg;
+    tt_player_config_defaults(&cfg, 48000.0);
+    cfg.click.sample_rate = 44100.0;  // clock mismatch with the track
+    tt_status status = TT_OK;
+    EXPECT_EQ(tt_player_create(&cfg, &status), nullptr);
+    EXPECT_EQ(status, TT_ERR_INVALID_ARG);
+
+    tt_player_config good;
+    tt_player_config_defaults(&good, 48000.0);
+    Player player{good};
+    ASSERT_NE(player.handle, nullptr);
+
+    EXPECT_EQ(tt_player_start(player.handle, 0.0, 0), TT_ERR_INVALID_ARG);  // no track
+    const std::vector<float> track(48000, 0.0f);
+    ASSERT_EQ(tt_player_set_track(player.handle, track.data(), track.size()), TT_OK);
+    const double grid[] = {0.0, 0.5, 1.0, 1.5};
+    ASSERT_EQ(tt_player_set_grid(player.handle, grid, 4), TT_OK);
+    EXPECT_EQ(tt_player_set_loop(player.handle, 1, 1), TT_ERR_INVALID_ARG);
+    EXPECT_EQ(tt_player_start(player.handle, 0.0, 7), TT_ERR_INVALID_ARG);
+}
+
+TEST(PlayerApi, NullHandleIsHarmless) {
+    float buffer[16] = {0.0f};
+    size_t cue_count = 7;
+
+    EXPECT_EQ(tt_player_set_track(nullptr, nullptr, 0), TT_ERR_INVALID_ARG);
+    EXPECT_EQ(tt_player_set_grid(nullptr, nullptr, 0), TT_ERR_INVALID_ARG);
+    EXPECT_EQ(tt_player_set_loop(nullptr, 0, 1), TT_ERR_INVALID_ARG);
+    EXPECT_EQ(tt_player_start(nullptr, 0.0, 0), TT_ERR_INVALID_ARG);
+    EXPECT_EQ(tt_player_running(nullptr), 0);
+    EXPECT_DOUBLE_EQ(tt_player_position_sec(nullptr), 0.0);
+
+    tt_player_process(nullptr, 0.0, buffer, 16, nullptr, 0, &cue_count);
+    EXPECT_EQ(cue_count, 0u);
+
+    tt_player_stats stats;
+    tt_player_stats_get(nullptr, &stats);
+    EXPECT_EQ(stats.clean, 0);
+
+    tt_player_stop(nullptr);
+    tt_player_silence(nullptr);
+    tt_player_clear_loop(nullptr);
+    tt_player_destroy(nullptr);
+    tt_player_config_defaults(nullptr, 48000.0);
+}
+
+/* ------------------------------------------------------------ live input -- */
+
+namespace {
+
+struct Live {
+    explicit Live(const tt_live_config& cfg) { handle = tt_live_create(&cfg, &status); }
+    ~Live() { tt_live_destroy(handle); }
+    Live(const Live&) = delete;
+    Live& operator=(const Live&) = delete;
+
+    tt_live* handle = nullptr;
+    tt_status status = TT_OK;
+};
+
+}  // namespace
+
+TEST(LiveApi, TracksACaptureStreamAndHandsOutBeats) {
+    tt_live_config cfg;
+    tt_live_config_defaults(&cfg, 48000.0);
+    Live live{cfg};
+    ASSERT_NE(live.handle, nullptr) << tt_status_string(live.status);
+
+    const auto audio = tiktak::test::clickTrack(120.0, 14.0, 48000.0, 1.0);
+
+    constexpr std::size_t kBlock = 512;
+    std::vector<double> beats;
+    double time = 0.0;
+    for (std::size_t i = 0; i + kBlock <= audio.size(); i += kBlock) {
+        tt_live_process(live.handle, time, audio.data() + i, kBlock);
+        time += static_cast<double>(kBlock) / 48000.0;
+
+        double beat = 0.0;
+        while (tt_live_take_beat(live.handle, time, 0.05, &beat)) beats.push_back(beat);
+    }
+
+    tt_live_estimate estimate;
+    tt_live_estimate_get(live.handle, time, &estimate);
+    EXPECT_NEAR(estimate.bpm, 120.0, 4.0);
+    EXPECT_GT(estimate.confidence, 0.4);
+
+    tt_live_stats stats;
+    tt_live_stats_get(live.handle, &stats);
+    EXPECT_EQ(stats.beats, beats.size());
+    EXPECT_GT(stats.frames, 0u);
+    EXPECT_EQ(stats.gated, 0u);            // nothing was declared as our own
+    EXPECT_EQ(stats.discontinuities, 0u);
+    ASSERT_GT(beats.size(), 14u);
+
+    // Every beat handed out after the tracker locked is one of the track's own.
+    for (std::size_t i = beats.size() / 2; i < beats.size(); ++i) {
+        const double since = beats[i] - 1.0;
+        EXPECT_LT(std::fabs(since - std::round(since / 0.5) * 0.5), 0.04) << "beat " << i;
+    }
+}
+
+TEST(LiveApi, GatingIsWhatKeepsItFromTrackingItself) {
+    tt_live_config cfg;
+    tt_live_config_defaults(&cfg, 48000.0);
+    Live live{cfg};
+    ASSERT_NE(live.handle, nullptr);
+
+    const auto own_click = tiktak::test::clickTrack(120.0, 12.0, 48000.0, 1.0);
+
+    constexpr std::size_t kBlock = 512;
+    double time = 0.0;
+    for (std::size_t i = 0; i + kBlock <= own_click.size(); i += kBlock) {
+        const double end = time + static_cast<double>(kBlock) / 48000.0;
+        for (double beat = 1.0; beat < 12.0; beat += 0.5) {
+            if (beat >= time && beat < end) tt_live_gate_click(live.handle, beat);
+        }
+        tt_live_process(live.handle, time, own_click.data() + i, kBlock);
+        time = end;
+    }
+
+    tt_live_estimate estimate;
+    tt_live_estimate_get(live.handle, time, &estimate);
+    EXPECT_LT(estimate.confidence, 0.25);
+
+    tt_live_stats stats;
+    tt_live_stats_get(live.handle, &stats);
+    EXPECT_GT(stats.gated, 0u);
+    EXPECT_EQ(stats.beats, 0u);
+}
+
+TEST(LiveApi, SeedingAndResetting) {
+    tt_live_config cfg;
+    tt_live_config_defaults(&cfg, 48000.0);
+    Live live{cfg};
+    ASSERT_NE(live.handle, nullptr);
+
+    tt_live_seed_tempo(live.handle, 96.0, 0.0);  // 0 -> the default spread
+    tt_live_estimate estimate;
+    tt_live_estimate_get(live.handle, 0.0, &estimate);
+    EXPECT_NEAR(estimate.bpm, 96.0, 3.0);
+
+    const auto audio = tiktak::test::clickTrack(96.0, 4.0, 48000.0, 0.5);
+    tt_live_process(live.handle, 0.0, audio.data(), audio.size());
+
+    tt_live_reset(live.handle);
+    tt_live_stats stats;
+    tt_live_stats_get(live.handle, &stats);
+    EXPECT_EQ(stats.frames, 0u);
+}
+
+TEST(LiveApi, RejectsWhatTheCoreRejects) {
+    tt_status status = TT_OK;
+    EXPECT_EQ(tt_live_create(nullptr, &status), nullptr);
+    EXPECT_EQ(status, TT_ERR_INVALID_ARG);
+
+    tt_live_config cfg;
+    tt_live_config_defaults(&cfg, 48000.0);
+    cfg.max_bpm = 30.0;  // below the minimum
+    EXPECT_EQ(tt_live_create(&cfg, &status), nullptr);
+    EXPECT_EQ(status, TT_ERR_INVALID_ARG);
+}
+
+TEST(LiveApi, NullHandleIsHarmless) {
+    double beat = 0.0;
+    tt_live_process(nullptr, 0.0, nullptr, 0);
+    tt_live_gate_click(nullptr, 1.0);
+    tt_live_seed_tempo(nullptr, 120.0, 0.05);
+    tt_live_reset(nullptr);
+    EXPECT_EQ(tt_live_take_beat(nullptr, 0.0, 0.1, &beat), 0);
+
+    tt_live_estimate estimate;
+    tt_live_estimate_get(nullptr, 0.0, &estimate);
+    EXPECT_EQ(estimate.bpm, 0.0);
+
+    tt_live_stats stats;
+    tt_live_stats_get(nullptr, &stats);
+    EXPECT_EQ(stats.frames, 0u);
+
+    tt_live_config_defaults(nullptr, 48000.0);
+    tt_live_estimate_get(nullptr, 0.0, nullptr);
+    tt_live_stats_get(nullptr, nullptr);
+    tt_live_destroy(nullptr);
+}

@@ -10,6 +10,8 @@
 #include "analysis/grid_cache.hpp"
 #include "analysis/offline.hpp"
 #include "render/click.hpp"
+#include "render/player.hpp"
+#include "tracking/live.hpp"
 #include "dsp/odf.hpp"
 #include "schedule/scheduler.hpp"
 
@@ -551,4 +553,258 @@ size_t tt_click_stolen(const tt_click* click) {
 
 size_t tt_click_discontinuities(const tt_click* click) {
     return click ? click->impl.discontinuities() : 0;
+}
+
+/* ----------------------------------------------------------------- player -- */
+
+namespace {
+
+tiktak::render::PlayerConfig resolve(const tt_player_config& in) {
+    tiktak::render::PlayerConfig out;
+    out.sample_rate = in.sample_rate;
+
+    tt_click_config click = in.click;
+    if (click.sample_rate <= 0.0) click.sample_rate = in.sample_rate;
+    out.click = resolve(click);
+
+    out.beats_per_bar = in.beats_per_bar > 0 ? in.beats_per_bar : 4;
+    out.downbeat_offset = in.downbeat_offset;
+    out.count_in_beats = in.count_in_beats;
+    out.cue_lookahead_sec =
+        in.cue_lookahead_sec > 0.0 ? in.cue_lookahead_sec : 0.25;
+    for (int i = 0; i < TT_CHANNEL_COUNT; ++i) {
+        out.latency_sec[static_cast<std::size_t>(i)] =
+            in.latency_sec[i] > 0.0 ? in.latency_sec[i] : 0.0;
+        out.channel_enabled[static_cast<std::size_t>(i)] = in.channel_enabled[i] != 0;
+    }
+    return out;
+}
+
+}  // namespace
+
+struct tt_player {
+    explicit tt_player(const tiktak::render::PlayerConfig& cfg) : impl(cfg) {}
+    tiktak::render::TrackPlayer impl;
+};
+
+void tt_player_config_defaults(tt_player_config* cfg, double sample_rate) {
+    if (!cfg) return;
+    cfg->sample_rate = sample_rate;
+    tt_click_config_defaults(&cfg->click, sample_rate);
+    cfg->beats_per_bar = 4;
+    cfg->downbeat_offset = 0;
+    cfg->count_in_beats = 0;
+    cfg->cue_lookahead_sec = 0.25;
+    for (int i = 0; i < TT_CHANNEL_COUNT; ++i) {
+        cfg->latency_sec[i] = 0.0;
+        cfg->channel_enabled[i] = i == TT_CHANNEL_AUDIO ? 1 : 0;
+    }
+}
+
+tt_player* tt_player_create(const tt_player_config* cfg, tt_status* status) {
+    const auto fail = [status](tt_status code) -> tt_player* {
+        if (status) *status = code;
+        return nullptr;
+    };
+
+    if (!cfg) return fail(TT_ERR_INVALID_ARG);
+
+    const tiktak::render::PlayerConfig resolved = resolve(*cfg);
+    if (!resolved.valid()) return fail(TT_ERR_INVALID_ARG);
+
+    tt_player* handle = new (std::nothrow) tt_player(resolved);
+    if (!handle) return fail(TT_ERR_OUT_OF_MEMORY);
+
+    if (status) *status = TT_OK;
+    return handle;
+}
+
+void tt_player_destroy(tt_player* player) { delete player; }
+
+tt_status tt_player_set_track(tt_player* player, const float* samples, size_t frames) {
+    if (!player || (frames > 0 && !samples)) return TT_ERR_INVALID_ARG;
+    player->impl.setTrack(samples, frames);
+    return TT_OK;
+}
+
+tt_status tt_player_set_grid(tt_player* player, const double* beat_times, size_t count) {
+    if (!player || (count > 0 && !beat_times)) return TT_ERR_INVALID_ARG;
+    player->impl.setGrid(beat_times, count);
+    return TT_OK;
+}
+
+tt_status tt_player_set_loop(tt_player* player, long long start_bar, long long end_bar) {
+    if (!player) return TT_ERR_INVALID_ARG;
+    return player->impl.setLoop(start_bar, end_bar) ? TT_OK : TT_ERR_INVALID_ARG;
+}
+
+void tt_player_clear_loop(tt_player* player) {
+    if (player) player->impl.clearLoop();
+}
+
+tt_status tt_player_start(tt_player* player, double stream_time_sec,
+                          long long from_bar) {
+    if (!player) return TT_ERR_INVALID_ARG;
+    return player->impl.start(stream_time_sec, from_bar) ? TT_OK : TT_ERR_INVALID_ARG;
+}
+
+void tt_player_stop(tt_player* player) {
+    if (player) player->impl.stop();
+}
+
+void tt_player_silence(tt_player* player) {
+    if (player) player->impl.silence();
+}
+
+int tt_player_running(const tt_player* player) {
+    return player && player->impl.running() ? 1 : 0;
+}
+
+double tt_player_position_sec(const tt_player* player) {
+    return player ? player->impl.positionSec() : 0.0;
+}
+
+void tt_player_process(tt_player* player, double stream_time_sec, float* out,
+                       size_t frames, tt_event* cues, size_t cue_capacity,
+                       size_t* cue_count) {
+    if (cue_count) *cue_count = 0;
+    if (!player || !out) return;
+
+    // Staged through the C++ type for the same reason the scheduler is: the
+    // two event structs matching today is not a contract.
+    tiktak::schedule::Event staging[64];
+    const std::size_t capacity =
+        cues ? std::min(cue_capacity, static_cast<size_t>(64)) : 0;
+    std::size_t written = 0;
+    player->impl.process(stream_time_sec, out, frames, cues ? staging : nullptr,
+                         capacity, &written);
+    for (std::size_t i = 0; i < written; ++i) cues[i] = to_c(staging[i]);
+    if (cue_count) *cue_count = written;
+}
+
+void tt_player_stats_get(const tt_player* player, tt_player_stats* out) {
+    if (!out) return;
+    *out = tt_player_stats{};
+    if (!player) return;
+
+    const tiktak::render::TrackPlayer::Stats s = player->impl.stats();
+    out->beats = s.beats;
+    out->loops = s.loops;
+    out->clicks_late = s.clicks_late;
+    out->clicks_overflowed = s.clicks_overflowed;
+    out->voices_stolen = s.voices_stolen;
+    out->discontinuities = s.discontinuities;
+    out->cues_dropped = s.cues_dropped;
+    out->clean = s.clean() ? 1 : 0;
+}
+
+/* ------------------------------------------------------------ live input -- */
+
+struct tt_live {
+    explicit tt_live(const tiktak::tracking::LiveConfig& cfg) : impl(cfg) {}
+    tiktak::tracking::LiveTracker impl;
+};
+
+namespace {
+
+tiktak::tracking::LiveConfig resolve(const tt_live_config& in) {
+    // The front-end is sized from the capture rate rather than left at the
+    // ODF's sample-count defaults — see tracking::liveConfigFor.
+    tiktak::tracking::LiveConfig out = tiktak::tracking::liveConfigFor(in.sample_rate);
+
+    if (in.min_bpm > 0.0) out.filter.min_bpm = in.min_bpm;
+    if (in.max_bpm > 0.0) out.filter.max_bpm = in.max_bpm;
+    if (in.prior_centre_bpm > 0.0) out.filter.prior_centre_bpm = in.prior_centre_bpm;
+    if (in.particles > 0) out.filter.particles = static_cast<std::size_t>(in.particles);
+
+    if (in.gate_before_sec > 0.0) out.gate_before_sec = in.gate_before_sec;
+    if (in.gate_after_sec > 0.0) out.gate_after_sec = in.gate_after_sec;
+    if (in.lock_confidence > 0.0) out.lock_confidence = in.lock_confidence;
+    if (in.release_confidence > 0.0) out.release_confidence = in.release_confidence;
+    return out;
+}
+
+}  // namespace
+
+void tt_live_config_defaults(tt_live_config* cfg, double sample_rate) {
+    if (!cfg) return;
+    const tiktak::tracking::LiveConfig defaults;
+    cfg->sample_rate = sample_rate;
+    cfg->min_bpm = defaults.filter.min_bpm;
+    cfg->max_bpm = defaults.filter.max_bpm;
+    cfg->prior_centre_bpm = defaults.filter.prior_centre_bpm;
+    cfg->particles = static_cast<int>(defaults.filter.particles);
+    cfg->gate_before_sec = defaults.gate_before_sec;
+    cfg->gate_after_sec = defaults.gate_after_sec;
+    cfg->lock_confidence = defaults.lock_confidence;
+    cfg->release_confidence = defaults.release_confidence;
+}
+
+tt_live* tt_live_create(const tt_live_config* cfg, tt_status* status) {
+    const auto fail = [status](tt_status code) -> tt_live* {
+        if (status) *status = code;
+        return nullptr;
+    };
+
+    if (!cfg) return fail(TT_ERR_INVALID_ARG);
+
+    const tiktak::tracking::LiveConfig resolved = resolve(*cfg);
+    if (!resolved.valid()) return fail(TT_ERR_INVALID_ARG);
+
+    tt_live* handle = new (std::nothrow) tt_live(resolved);
+    if (!handle) return fail(TT_ERR_OUT_OF_MEMORY);
+
+    if (status) *status = TT_OK;
+    return handle;
+}
+
+void tt_live_destroy(tt_live* live) { delete live; }
+
+void tt_live_process(tt_live* live, double stream_time_sec, const float* samples,
+                     size_t frames) {
+    if (live) live->impl.process(stream_time_sec, samples, frames);
+}
+
+void tt_live_gate_click(tt_live* live, double heard_time_sec) {
+    if (live) live->impl.gateClick(heard_time_sec);
+}
+
+void tt_live_estimate_get(const tt_live* live, double now_sec, tt_live_estimate* out) {
+    if (!out) return;
+    *out = tt_live_estimate{};
+    if (!live) return;
+
+    const tiktak::tracking::BeatEstimate estimate = live->impl.estimate(now_sec);
+    out->bpm = estimate.bpm;
+    out->next_beat_sec = estimate.next_beat_sec;
+    out->confidence = estimate.confidence;
+    out->tempo_spread_octaves = estimate.tempo_spread_octaves;
+}
+
+int tt_live_take_beat(tt_live* live, double now_sec, double lookahead_sec, double* beat_sec) {
+    if (!live) return 0;
+    return live->impl.takeBeat(now_sec, lookahead_sec, beat_sec) ? 1 : 0;
+}
+
+void tt_live_seed_tempo(tt_live* live, double bpm, double spread_octaves) {
+    if (live) live->impl.seedTempo(bpm, spread_octaves > 0.0 ? spread_octaves : 0.05);
+}
+
+void tt_live_reset(tt_live* live) {
+    if (live) live->impl.reset();
+}
+
+void tt_live_stats_get(const tt_live* live, tt_live_stats* out) {
+    if (!out) return;
+    *out = tt_live_stats{};
+    if (!live) return;
+
+    const tiktak::tracking::LiveTracker::Stats s = live->impl.stats();
+    out->frames = s.frames;
+    out->gated = s.gated;
+    out->beats = s.beats;
+    out->beats_late = s.beats_late;
+    out->discontinuities = s.discontinuities;
+    out->resamples = s.filter.resamples;
+    out->reanchors = s.filter.reanchors;
 }

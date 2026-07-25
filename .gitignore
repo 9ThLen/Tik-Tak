@@ -37,3 +37,4 @@ models/*.tflite
 .DS_Store
 Thumbs.db
 desktop/build/
+.tiktak/

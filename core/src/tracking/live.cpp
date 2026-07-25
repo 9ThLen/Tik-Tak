@@ -1,0 +1,203 @@
+#include "tracking/live.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <limits>
+
+namespace tiktak::tracking {
+
+bool LiveConfig::valid() const {
+    return odf.valid() && filter.valid() && onset_peak_tau_sec > 0.0 &&
+           gate_before_sec >= 0.0 && gate_after_sec >= 0.0 && lock_confidence > 0.0 &&
+           lock_confidence <= 1.0 && release_confidence >= 0.0 &&
+           release_confidence < lock_confidence && discontinuity_tolerance_sec > 0.0;
+}
+
+LiveConfig liveConfigFor(double sample_rate) {
+    LiveConfig out;
+    out.odf.sampleRate = sample_rate;
+    if (!(sample_rate > 0.0)) return out;
+
+    const double scale = sample_rate / 48000.0;
+
+    // The hop is any integer; the window has to be a power of two for the
+    // radix-2 transform, so it is the nearest one to the scaled size.
+    out.odf.hopSize = std::max<std::size_t>(
+        64, static_cast<std::size_t>(std::lround(512.0 * scale)));
+
+    const double target = 2048.0 * scale;
+    std::size_t frame = 256;
+    while (frame < 8192 && static_cast<double>(frame) * 1.5 < target) frame *= 2;
+    out.odf.frameSize = std::max(frame, out.odf.hopSize * 2);
+    return out;
+}
+
+ParticleFilterConfig LiveTracker::resolveFilter(const LiveConfig& config) {
+    ParticleFilterConfig out = config.filter;
+
+    // The window says how late an onset may be and still count as on the beat,
+    // and it cannot usefully be tighter than the front-end's own resolution: at
+    // 22 kHz a hop is 23 ms, so a 25 ms window is one frame wide and most of a
+    // real onset's energy falls outside it however well the tempo is tracked.
+    // Confidence then reads as doubt about the audio when it is really doubt
+    // about the ODF's time resolution. A frame and a half is the floor.
+    const double hop_sec = static_cast<double>(config.odf.hopSize) / config.odf.sampleRate;
+    const double period = 60.0 / out.prior_centre_bpm;
+    out.beat_window = std::max(out.beat_window, 1.5 * hop_sec / period);
+    return out;
+}
+
+LiveTracker::LiveTracker(const LiveConfig& config)
+    : config_(config), odf_(config.odf), filter_(resolveFilter(config)) {
+    gate_start_.fill(std::numeric_limits<double>::infinity());
+    gate_end_.fill(-std::numeric_limits<double>::infinity());
+}
+
+void LiveTracker::gateClick(double heard_time_sec) {
+    gate_start_[gate_next_] = heard_time_sec - config_.gate_before_sec;
+    gate_end_[gate_next_] = heard_time_sec + config_.gate_after_sec;
+    gate_next_ = (gate_next_ + 1) % kGates;
+}
+
+bool LiveTracker::gatedAt(double frame_time_sec) const {
+    // A frame is not a moment: it is a window, and a click anywhere inside it
+    // colours the whole thing. The comparison is therefore window against
+    // window, not centre against window.
+    const double half = 0.5 * static_cast<double>(config_.odf.frameSize) / config_.odf.sampleRate;
+    const double start = frame_time_sec - half;
+    const double end = frame_time_sec + half;
+    for (std::size_t i = 0; i < kGates; ++i) {
+        if (end > gate_start_[i] && start < gate_end_[i]) return true;
+    }
+    return false;
+}
+
+void LiveTracker::process(double stream_time_sec, const float* samples, std::size_t n) {
+    if (samples == nullptr || n == 0) return;
+
+    const double sample_rate = config_.odf.sampleRate;
+
+    if (!started_) {
+        started_ = true;
+        origin_sec_ = stream_time_sec;
+        consumed_ = 0;
+    } else {
+        const double expected = origin_sec_ + static_cast<double>(consumed_) / sample_rate;
+        if (std::fabs(stream_time_sec - expected) > config_.discontinuity_tolerance_sec) {
+            // The device dropped or repeated a buffer. Follow the clock rather
+            // than the sample count — the samples in flight are real, their
+            // timestamps are what moved — by shifting the origin. Resetting the
+            // ODF instead would throw away a window of audio and a beat with
+            // it, for what is usually a one-buffer hiccup.
+            ++stats_.discontinuities;
+            origin_sec_ = stream_time_sec - static_cast<double>(consumed_) / sample_rate;
+        }
+    }
+
+    const double hop_sec = static_cast<double>(config_.odf.hopSize) / sample_rate;
+    const double decay = std::exp(-hop_sec / config_.onset_peak_tau_sec);
+
+    odf_.process(samples, n, [&](const dsp::OdfFrame& frame) {
+        ++stats_.frames;
+        const double time_sec = origin_sec_ + frame.timeSec;
+        const double value = static_cast<double>(frame.full);
+
+        // Gated frames are dropped before the level tracker sees them, not
+        // just before the filter does. Our own click is the loudest onset in
+        // the room, and letting it into the running level would raise the bar
+        // the actual music has to clear.
+        if (gatedAt(time_sec)) {
+            ++stats_.gated;
+            return;
+        }
+
+        // A decaying peak follower: it rises instantly to a new loudest onset
+        // and forgets one over a few seconds, so the scale tracks the room
+        // without a loud hit permanently deafening the tracker.
+        onset_peak_ = std::max(value, onset_peak_ * decay);
+
+        // The epsilon is what keeps digital silence and room hiss from being
+        // divided up into full-scale onsets.
+        const double normalised = std::min(1.0, value / (onset_peak_ + 1e-6));
+
+        filter_.observe(time_sec, normalised);
+    });
+
+    consumed_ += n;
+}
+
+bool LiveTracker::takeBeat(double now_sec, double lookahead_sec, double* beat_sec) {
+    const BeatEstimate current = filter_.estimate(now_sec);
+
+    if (current.confidence >= config_.lock_confidence) {
+        locked_ = true;
+    } else if (current.confidence < config_.release_confidence) {
+        locked_ = false;
+        published_ = false;
+    }
+    if (!locked_) return false;
+
+    double candidate = 0.0;
+    if (current.confidence >= config_.lock_confidence) {
+        candidate = current.next_beat_sec;
+        held_period_sec_ = 60.0 / current.bpm;
+    } else if (published_) {
+        // Coasting: the cloud has lost the phase but the music has not
+        // necessarily stopped. Carry on from the last beat at the last tempo we
+        // were sure of, so a quiet bar sounds like a metronome rather than like
+        // a fault.
+        candidate = last_beat_sec_ + held_period_sec_;
+    } else {
+        return false;
+    }
+
+    // One beat is handed out once. Between publishing a beat and that beat
+    // arriving, the estimate keeps naming it; without this guard every callback
+    // in that window would schedule another click on top of the same beat.
+    if (published_ && candidate < last_beat_sec_ + 0.5 * held_period_sec_) return false;
+
+    if (candidate > now_sec + lookahead_sec) return false;
+    if (candidate < now_sec) {
+        // Predicted into the past: the buffer it belonged in has already gone
+        // to the device. Skip it rather than play it late, and count it.
+        ++stats_.beats_late;
+        last_beat_sec_ = candidate;
+        published_ = true;
+        return false;
+    }
+
+    last_beat_sec_ = candidate;
+    published_ = true;
+    ++stats_.beats;
+    if (beat_sec != nullptr) *beat_sec = candidate;
+    return true;
+}
+
+void LiveTracker::seedTempo(double bpm, double spread_octaves) {
+    filter_.seedTempo(bpm, spread_octaves);
+}
+
+void LiveTracker::reset() {
+    odf_.reset();
+    filter_.reset();
+    origin_sec_ = 0.0;
+    consumed_ = 0;
+    started_ = false;
+    onset_peak_ = 0.0;
+    gate_start_.fill(std::numeric_limits<double>::infinity());
+    gate_end_.fill(-std::numeric_limits<double>::infinity());
+    gate_next_ = 0;
+    locked_ = false;
+    published_ = false;
+    last_beat_sec_ = 0.0;
+    held_period_sec_ = 0.5;
+    stats_ = Stats{};
+}
+
+LiveTracker::Stats LiveTracker::stats() const {
+    Stats out = stats_;
+    out.filter = filter_.stats();
+    return out;
+}
+
+}  // namespace tiktak::tracking
