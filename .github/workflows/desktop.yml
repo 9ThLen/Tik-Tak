@@ -71,3 +71,22 @@ jobs:
             | tee second.log
           grep -q "beat grid: cache hit" second.log
           cmp track_first.wav track_second.wav
+
+      # The microphone path, on a runner that has no microphone: the same
+      # tracker, fed from a file against a virtual clock. This is why `listen`
+      # takes a file at all — without it the whole Phase 5 path would only ever
+      # be exercised by hand, on a machine with a sound card, and never twice
+      # the same way.
+      - name: Track a beat through the microphone path
+        shell: bash
+        run: |
+          BIN=desktop/build/tiktak
+          [ -x "$BIN" ] || BIN=desktop/build/RelWithDebInfo/tiktak.exe
+          "$BIN" listen core/tests/data/click_120.mp3 --seconds 10 -o listened.wav \
+            | tee listen.log
+          grep -q "live tracker:" listen.log
+          grep -q "nothing dropped, nothing stolen" listen.log
+          # It has ten seconds to find a 120 BPM beat with eighth-notes over
+          # it. Anything outside 100-139 means it locked onto the wrong thing —
+          # most likely the subdivision, or every other beat.
+          grep -Eq "live tracker: 1[0-3][0-9]\.[0-9] BPM" listen.log

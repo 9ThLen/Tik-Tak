@@ -602,6 +602,120 @@ typedef struct tt_player_stats {
 
 TT_API void tt_player_stats_get(const tt_player* player, tt_player_stats* out);
 
+/* ------------------------------------------------------------ live input -- */
+
+/*
+ * The microphone path: captured audio in, beat predictions out.
+ *
+ * Predictions, not detections. A click has to be written into a buffer before
+ * its beat is heard, so the question this answers is "where is the next beat",
+ * which a tracker announcing beats it has already seen could never answer
+ * however accurate it was.
+ *
+ * Two things the shell must do for this to work at all:
+ *
+ * - Feed capture and ask for beats in the *same* clock. Whatever a platform
+ *   calls it, the number passed to tt_live_process and tt_live_take_beat has to
+ *   come from one timeline, or the beats come out shifted by the difference.
+ *
+ * - Declare its own click through tt_live_gate_click. A metronome listening
+ *   through a microphone hears itself, and a click is the most onset-like
+ *   sound there is; ungated, the tracker locks onto its own output, reports
+ *   full confidence and stops following the room.
+ *
+ * tt_live_process, tt_live_take_beat, tt_live_estimate and tt_live_gate_click
+ * are real-time safe. Create, seed and reset are not.
+ */
+
+typedef struct tt_live tt_live;
+
+typedef struct tt_live_config {
+    double sample_rate;        /* Must be > 0, the capture rate.               */
+
+    /* Tempo range and prior, the same belief the offline estimator applies. */
+    double min_bpm;            /* 0 -> 40                                      */
+    double max_bpm;            /* 0 -> 220                                     */
+    double prior_centre_bpm;   /* 0 -> 120                                     */
+
+    /* Particles carried. More is steadier and costs linearly. 0 -> 512. */
+    int particles;
+
+    /* How long our own click blinds the microphone, around the moment it is
+       heard. 0 -> 5 ms before, 50 ms after.                                   */
+    double gate_before_sec;
+    double gate_after_sec;
+
+    /* Confidence to start handing out beats at, and to stop at. Between them
+       the tracker coasts at the last tempo it was sure of, which is what a
+       musician does when the band drops out for a bar. 0 -> 0.35 / 0.15.      */
+    double lock_confidence;
+    double release_confidence;
+} tt_live_config;
+
+TT_API void tt_live_config_defaults(tt_live_config* cfg, double sample_rate);
+
+TT_API tt_live* tt_live_create(const tt_live_config* cfg, tt_status* status);
+TT_API void tt_live_destroy(tt_live* live);
+
+/*
+ * Captured mono audio. `stream_time_sec` is the time of samples[0]; a value
+ * that does not follow on from the last call is treated as the device having
+ * dropped or repeated a buffer, and counted.
+ */
+TT_API void tt_live_process(tt_live* live, double stream_time_sec,
+                            const float* samples, size_t frames);
+
+/*
+ * When our own click will reach the microphone: the moment it is *heard*,
+ * output latency and room delay already added by the caller. The core cannot
+ * work it out — only the shell knows what the round trip measured.
+ */
+TT_API void tt_live_gate_click(tt_live* live, double heard_time_sec);
+
+typedef struct tt_live_estimate {
+    double bpm;
+    double next_beat_sec;         /* prediction, in the caller's clock         */
+    double confidence;            /* 0..1: the cloud agrees AND onsets land    */
+    double tempo_spread_octaves;  /* how undecided the period itself is        */
+} tt_live_estimate;
+
+TT_API void tt_live_estimate_get(const tt_live* live, double now_sec,
+                                 tt_live_estimate* out);
+
+/*
+ * The next beat to play, handed out once, when it comes within
+ * `lookahead_sec` of `now_sec`. Returns 1 and writes `beat_sec` when there is
+ * one, 0 otherwise — including whenever confidence is too low to claim a beat
+ * at all, which is the tracker's way of saying it cannot hear the music.
+ *
+ * A beat, once handed out, is never revised: by then the click is in a buffer
+ * on its way to the device, and moving it would be a stutter rather than a
+ * correction. Refinements land on the beat after it.
+ */
+TT_API int tt_live_take_beat(tt_live* live, double now_sec, double lookahead_sec,
+                             double* beat_sec);
+
+/*
+ * Concentrates the cloud on a known tempo: an offline analysis of the same
+ * song, or a tempo the user typed. `spread_octaves` 0 -> 0.05.
+ */
+TT_API void tt_live_seed_tempo(tt_live* live, double bpm, double spread_octaves);
+
+/* Forgets the audio, the tempo and the clock — a new session. */
+TT_API void tt_live_reset(tt_live* live);
+
+typedef struct tt_live_stats {
+    size_t frames;           /* onset frames produced                          */
+    size_t gated;            /* frames withheld because our own click was in   */
+    size_t beats;            /* beats handed out                               */
+    size_t beats_late;       /* beats predicted into the past, skipped         */
+    size_t discontinuities;  /* capture buffers that did not follow the last   */
+    size_t resamples;        /* filter resampling steps, diagnostics           */
+    size_t reanchors;        /* gaps in the stream the cloud was re-anchored on*/
+} tt_live_stats;
+
+TT_API void tt_live_stats_get(const tt_live* live, tt_live_stats* out);
+
 #ifdef __cplusplus
 }  /* extern "C" */
 #endif

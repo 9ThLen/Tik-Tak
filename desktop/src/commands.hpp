@@ -39,6 +39,7 @@ int cmdRender(const Options& options);
 int cmdPlay(const Options& options);
 int cmdMeasure(const Options& options);
 int cmdTrack(const Options& options);
+int cmdListen(const Options& options);
 
 void printUsage();
 

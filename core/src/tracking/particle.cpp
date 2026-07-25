@@ -1,0 +1,387 @@
+#include "tracking/particle.hpp"
+
+#include <algorithm>
+#include <cmath>
+
+namespace tiktak::tracking {
+namespace {
+
+constexpr double kLn2 = 0.69314718055994530942;
+constexpr double kTwoPi = 6.283185307179586476925286766559;
+
+std::uint64_t splitMix64(std::uint64_t& state) {
+    state += 0x9E3779B97F4A7C15ull;
+    std::uint64_t z = state;
+    z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
+    z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
+    return z ^ (z >> 31);
+}
+
+// Mean of the beat window over a uniformly distributed phase. Subtracting it is
+// what makes the observation zero-mean, so integrating it once here decides the
+// filter's most important property; it is done numerically because the window
+// may change shape and an analytic form for each would not.
+double windowMean(double sigma) {
+    constexpr int kSteps = 4096;
+    double sum = 0.0;
+    for (int i = 0; i < kSteps; ++i) {
+        const double u = 0.5 * (static_cast<double>(i) + 0.5) / kSteps;
+        sum += std::exp(-0.5 * u * u / (sigma * sigma));
+    }
+    return sum / kSteps;
+}
+
+}  // namespace
+
+void Rng::reseed(std::uint64_t seed) {
+    std::uint64_t state = seed;
+    s0_ = splitMix64(state);
+    s1_ = splitMix64(state);
+    if (s0_ == 0 && s1_ == 0) s1_ = 1;
+}
+
+std::uint64_t Rng::next() {
+    std::uint64_t x = s0_;
+    const std::uint64_t y = s1_;
+    s0_ = y;
+    x ^= x << 23;
+    s1_ = x ^ y ^ (x >> 17) ^ (y >> 26);
+    return s1_ + y;
+}
+
+void Rng::normalPair(double* a, double* b) {
+    double u1 = uniform();
+    if (u1 < 1e-300) u1 = 1e-300;  // log(0) is the one input Box-Muller cannot take
+    const double r = std::sqrt(-2.0 * std::log(u1));
+    const double theta = kTwoPi * uniform();
+    *a = r * std::cos(theta);
+    *b = r * std::sin(theta);
+}
+
+bool ParticleFilterConfig::valid() const {
+    return particles >= 8 && min_bpm > 0.0 && max_bpm > min_bpm && prior_centre_bpm > 0.0 &&
+           prior_width_octaves > 0.0 && period_drift_octaves >= 0.0 && phase_drift >= 0.0 &&
+           beat_window > 0.0 && beat_window < 0.5 && observation_gain >= 0.0 &&
+           onset_exponent > 0.0 && beat_gain >= 0.0 && charge_tau_sec > 0.0 && evidence_tau_sec > 0.0 &&
+           roughening_octaves >= 0.0 &&
+           regeneration >= 0.0 && regeneration < 1.0 && prior_rate >= 0.0 &&
+           resample_ratio > 0.0 && resample_ratio <= 1.0 && max_gap_sec > 0.0;
+}
+
+BeatParticleFilter::BeatParticleFilter(const ParticleFilterConfig& config)
+    : config_(config),
+      rng_(config.seed),
+      period_(config.particles),
+      next_beat_(config.particles),
+      weight_(config.particles),
+      scratch_period_(config.particles),
+      scratch_beat_(config.particles),
+      min_period_(60.0 / config.max_bpm),
+      max_period_(60.0 / config.min_bpm),
+      window_mean_(windowMean(config.beat_window)) {
+    drawFromPrior();
+}
+
+void BeatParticleFilter::drawFromPrior() {
+    const double centre = std::log2(config_.prior_centre_bpm);
+    const std::size_t n = period_.size();
+    for (std::size_t i = 0; i < n; ++i) {
+        double a = 0.0;
+        double b = 0.0;
+        rng_.normalPair(&a, &b);
+        const double bpm = std::pow(2.0, centre + config_.prior_width_octaves * a);
+        const double period = std::min(max_period_, std::max(min_period_, 60.0 / bpm));
+        period_[i] = period;
+        // Phase is uniform over the period: before the first onset arrives the
+        // tracker knows nothing at all about where the beat sits.
+        next_beat_[i] = last_time_sec_ + rng_.uniform() * period;
+        weight_[i] = 1.0 / static_cast<double>(n);
+    }
+}
+
+void BeatParticleFilter::reset() {
+    started_ = false;
+    last_time_sec_ = 0.0;
+    mean_period_ = 60.0 / config_.prior_centre_bpm;
+    charge_ema_ = 0.0;
+    onset_ema_ = 0.0;
+    on_beat_ema_ = 0.0;
+    coincidence_ = 0.0;
+    stats_ = Stats{};
+    rng_.reseed(config_.seed);
+    drawFromPrior();
+}
+
+void BeatParticleFilter::seedTempo(double bpm, double spread_octaves) {
+    if (!(bpm > 0.0)) return;
+    const double centre = std::log2(bpm);
+    const double spread = std::max(0.0, spread_octaves);
+    const std::size_t n = period_.size();
+    for (std::size_t i = 0; i < n; ++i) {
+        double a = 0.0;
+        double b = 0.0;
+        rng_.normalPair(&a, &b);
+        const double drawn = std::pow(2.0, centre + spread * a);
+        period_[i] = std::min(max_period_, std::max(min_period_, 60.0 / drawn));
+        next_beat_[i] = last_time_sec_ + rng_.uniform() * period_[i];
+        weight_[i] = 1.0 / static_cast<double>(n);
+    }
+}
+
+void BeatParticleFilter::observe(double time_sec, double onset) {
+    const std::size_t n = period_.size();
+
+    if (!started_) {
+        started_ = true;
+        last_time_sec_ = time_sec;
+        for (std::size_t i = 0; i < n; ++i) next_beat_[i] = time_sec + rng_.uniform() * period_[i];
+        return;
+    }
+
+    const double dt = time_sec - last_time_sec_;
+    if (dt <= 0.0) {
+        ++stats_.out_of_order;
+        return;
+    }
+    if (dt > config_.max_gap_sec) {
+        for (std::size_t i = 0; i < n; ++i) next_beat_[i] = time_sec + rng_.uniform() * period_[i];
+        last_time_sec_ = time_sec;
+        ++stats_.reanchors;
+        return;
+    }
+    last_time_sec_ = time_sec;
+    ++stats_.observations;
+
+    const double walk = std::sqrt(dt);
+    const double sigma = config_.beat_window;
+    const double level = std::pow(std::max(0.0, onset), config_.onset_exponent);
+    const double gain = config_.observation_gain * level;
+
+    // What one predicted beat costs. The onset rate is per second, so
+    // multiplying by the cloud's period converts it into "the onset energy a
+    // beat is worth" — a number the reward above is measured in too. Note that
+    // it is the *cloud's* period, not the particle's: a per-particle period
+    // here would make the charge per second identical at every tempo and
+    // discriminate nothing, which is the whole point of the term.
+    const double charge = config_.beat_gain * (charge_ema_ / dt) * mean_period_;
+
+    // The prior, applied at a rate rather than once. `prior_scale` is half the
+    // inverse square of the width, so the term below is the log of a
+    // log-normal density in octaves, per second of elapsed time.
+    const double prior_centre = std::log2(config_.prior_centre_bpm);
+    const double prior_scale = config_.prior_rate * dt /
+                               (2.0 * config_.prior_width_octaves * config_.prior_width_octaves);
+
+    double sum = 0.0;
+    double predicted_on_beat = 0.0;
+    for (std::size_t i = 0; i < n; ++i) {
+        double a = 0.0;
+        double b = 0.0;
+        rng_.normalPair(&a, &b);
+
+        double period = period_[i] * std::exp(kLn2 * config_.period_drift_octaves * walk * a);
+        period = std::min(max_period_, std::max(min_period_, period));
+        double beat = next_beat_[i] + config_.phase_drift * period * walk * b;
+
+        // Advance to the first beat strictly after this frame, in one step
+        // rather than a loop: a loop would be unbounded work in the audio
+        // callback exactly when the period is small and the gap large.
+        double crossings = 0.0;
+        if (beat <= time_sec) {
+            crossings = std::floor((time_sec - beat) / period) + 1.0;
+            beat += crossings * period;
+        }
+
+        period_[i] = period;
+        next_beat_[i] = beat;
+
+        const double distance = std::min(beat - time_sec, time_sec - (beat - period));
+        const double u = distance / period;
+        const double window = std::exp(-0.5 * u * u / (sigma * sigma));
+
+        // Measured before the update, so it is a genuine prediction: how much
+        // of this frame's onset the cloud said would be here.
+        predicted_on_beat += weight_[i] * window;
+
+        const double octaves = std::log2(60.0 / period) - prior_centre;
+        const double w = weight_[i] * std::exp(gain * (window - window_mean_) -
+                                               charge * crossings - prior_scale * octaves * octaves);
+        weight_[i] = w;
+        sum += w;
+    }
+
+    if (!(sum > 0.0) || !std::isfinite(sum)) {
+        // Every hypothesis has been ruled out, which cannot be true — it means
+        // arithmetic, not evidence. Flatten rather than propagate NaN.
+        for (std::size_t i = 0; i < n; ++i) weight_[i] = 1.0 / static_cast<double>(n);
+        return;
+    }
+
+    double sum_squares = 0.0;
+    double log_period = 0.0;
+    for (std::size_t i = 0; i < n; ++i) {
+        weight_[i] /= sum;
+        sum_squares += weight_[i] * weight_[i];
+        log_period += weight_[i] * std::log(period_[i]);
+    }
+    mean_period_ = std::exp(log_period);
+
+    const double charge_decay = std::exp(-dt / config_.charge_tau_sec);
+    charge_ema_ = charge_decay * charge_ema_ + (1.0 - charge_decay) * level;
+
+    const double decay = std::exp(-dt / config_.evidence_tau_sec);
+    onset_ema_ = decay * onset_ema_ + (1.0 - decay) * level;
+    on_beat_ema_ = decay * on_beat_ema_ + (1.0 - decay) * level * predicted_on_beat;
+    if (onset_ema_ > 1e-6) {
+        // The share of onset energy that lands on the predicted beat, rescaled
+        // so that chance reads as zero: a cloud spread over every phase catches
+        // window_mean of it no matter what the audio does.
+        const double share = on_beat_ema_ / onset_ema_;
+        coincidence_ = std::min(1.0, std::max(0.0, (share - window_mean_) / (1.0 - window_mean_)));
+    }
+
+    const double ess = 1.0 / sum_squares;
+    if (ess < config_.resample_ratio * static_cast<double>(n)) resample();
+}
+
+void BeatParticleFilter::resample() {
+    const std::size_t n = period_.size();
+    const double step = 1.0 / static_cast<double>(n);
+
+    // Systematic resampling: one uniform draw and a single sweep. Cheaper than
+    // multinomial and lower variance, both of which matter more here than in a
+    // batch filter because this runs in an audio callback.
+    double target = rng_.uniform() * step;
+    std::size_t source = 0;
+    double cumulative = weight_[0];
+    for (std::size_t i = 0; i < n; ++i) {
+        while (target > cumulative && source + 1 < n) {
+            ++source;
+            cumulative += weight_[source];
+        }
+        scratch_period_[i] = period_[source];
+        scratch_beat_[i] = next_beat_[source];
+        target += step;
+    }
+
+    period_.swap(scratch_period_);
+    next_beat_.swap(scratch_beat_);
+
+    // Roughening. The sweep above produced duplicates, and duplicates are one
+    // hypothesis wearing many hats; spreading them back out is what lets the
+    // cloud still change its mind a minute later.
+    const double spread = kLn2 * config_.roughening_octaves;
+    for (std::size_t i = 0; i < n; i += 2) {
+        double a = 0.0;
+        double b = 0.0;
+        rng_.normalPair(&a, &b);
+        period_[i] = std::min(max_period_, std::max(min_period_, period_[i] * std::exp(spread * a)));
+        if (i + 1 < n) {
+            period_[i + 1] = std::min(max_period_,
+                                      std::max(min_period_, period_[i + 1] * std::exp(spread * b)));
+        }
+    }
+
+    // Regeneration: a few particles drawn afresh from the prior, so that a
+    // tempo nowhere near the current belief still has somebody arguing for it.
+    // They start with the same weight as everyone else and die within a beat
+    // unless the audio agrees, which is what makes this cheap.
+    const auto fresh = static_cast<std::size_t>(config_.regeneration * static_cast<double>(n));
+    const double centre = std::log2(config_.prior_centre_bpm);
+    for (std::size_t i = 0; i < fresh; ++i) {
+        double a = 0.0;
+        double b = 0.0;
+        rng_.normalPair(&a, &b);
+        const double bpm = std::pow(2.0, centre + config_.prior_width_octaves * a);
+        period_[i] = std::min(max_period_, std::max(min_period_, 60.0 / bpm));
+        next_beat_[i] = last_time_sec_ + rng_.uniform() * period_[i];
+    }
+
+    for (std::size_t i = 0; i < n; ++i) weight_[i] = step;
+    ++stats_.resamples;
+}
+
+BeatEstimate BeatParticleFilter::estimate(double now_sec) const {
+    const std::size_t n = period_.size();
+
+    // The answer is the dominant hypothesis, not the average of the cloud.
+    // A cloud split between 100 and 200 BPM averages to 141, a tempo not one
+    // particle argues for — the same mistake as taking the arithmetic mean of a
+    // phase that straddles the wrap-around. So the tempo is read off the
+    // heaviest region of log-period and only the particles inside it are
+    // averaged; the rest, including the handful regenerated from the prior
+    // every resample, contribute to how much of the cloud agrees and nothing
+    // else.
+    constexpr std::size_t kBins = 48;
+    double bin_weight[kBins] = {};
+    const double low = std::log2(min_period_);
+    const double span = std::log2(max_period_) - low;
+    const double scale = span > 0.0 ? static_cast<double>(kBins) / span : 0.0;
+
+    for (std::size_t i = 0; i < n; ++i) {
+        auto bin = static_cast<std::size_t>((std::log2(period_[i]) - low) * scale);
+        if (bin >= kBins) bin = kBins - 1;
+        bin_weight[bin] += weight_[i];
+    }
+
+    std::size_t peak = 0;
+    for (std::size_t b = 1; b < kBins; ++b) {
+        if (bin_weight[b] > bin_weight[peak]) peak = b;
+    }
+    const std::size_t first = peak > 0 ? peak - 1 : 0;
+    const std::size_t last = std::min(kBins - 1, peak + 1);
+
+    double share = 0.0;
+    double log_sum = 0.0;
+    double log_sq_sum = 0.0;
+    double x = 0.0;
+    double y = 0.0;
+    for (std::size_t i = 0; i < n; ++i) {
+        auto bin = static_cast<std::size_t>((std::log2(period_[i]) - low) * scale);
+        if (bin >= kBins) bin = kBins - 1;
+        if (bin < first || bin > last) continue;
+
+        const double w = weight_[i];
+        const double log_period = std::log(period_[i]);
+        share += w;
+        log_sum += w * log_period;
+        log_sq_sum += w * log_period * log_period;
+
+        // The phase mean has to be circular. Two particles predicting beats at
+        // 0.99 and 0.01 of a period from now agree far more than their
+        // arithmetic mean of 0.5 suggests, and on a cloud straddling the
+        // wrap-around that mean is not merely imprecise: it points at the one
+        // place no particle believes in.
+        const double fraction = (next_beat_[i] - now_sec) / period_[i];
+        const double phase = kTwoPi * (fraction - std::floor(fraction));
+        x += w * std::cos(phase);
+        y += w * std::sin(phase);
+    }
+
+    BeatEstimate out;
+    if (share <= 0.0) {
+        out.bpm = 60.0 / mean_period_;
+        out.next_beat_sec = now_sec + mean_period_;
+        return out;
+    }
+
+    const double mean_log = log_sum / share;
+    const double period = std::exp(mean_log);
+    out.bpm = 60.0 / period;
+
+    const double variance = std::max(0.0, log_sq_sum / share - mean_log * mean_log);
+    out.tempo_spread_octaves = std::sqrt(variance) / kLn2;
+
+    // Three things, and all of them have to hold: the winning hypothesis holds
+    // most of the cloud, its particles agree on the phase, and the onsets keep
+    // arriving where they say they will.
+    const double agreement = std::sqrt(x * x + y * y) / share;
+    out.confidence = std::min(1.0, share * agreement * coincidence_);
+
+    double fraction = std::atan2(y, x) / kTwoPi;
+    if (fraction < 0.0) fraction += 1.0;
+    out.next_beat_sec = now_sec + fraction * period;
+    return out;
+}
+
+}  // namespace tiktak::tracking

@@ -11,6 +11,7 @@
 
 #include "device.hpp"
 #include "render/metronome.hpp"
+#include "render/live_metronome.hpp"
 #include "render/player.hpp"
 #include "wav.hpp"
 
@@ -110,6 +111,45 @@ void reportPlayerStats(const tiktak::render::TrackPlayer::Stats& stats) {
 }
 
 #endif  // TIKTAK_HAVE_DECODE
+
+struct ListenState {
+    tiktak::render::LiveMetronome* metronome = nullptr;
+};
+
+// The one callback of a duplex device: the room comes in, the click goes out,
+// and both are stamped with the same clock — which is the whole reason the
+// tracker can put a click on a beat it heard.
+void listenCallback(void* user, double stream_time_sec, const float* input, float* output,
+                    std::size_t frames) {
+    auto* state = static_cast<ListenState*>(user);
+    if (input != nullptr) state->metronome->capture(stream_time_sec, input, frames);
+    state->metronome->process(stream_time_sec, output, frames);
+}
+
+void reportListen(const tiktak::render::LiveMetronome& metronome, double now_sec) {
+    const tiktak::tracking::BeatEstimate estimate = metronome.estimate(now_sec);
+    const tiktak::render::LiveMetronome::Stats stats = metronome.stats();
+
+    std::printf("live tracker: %.1f BPM (confidence %.2f, tempo spread %.3f octaves)\n",
+                estimate.bpm, estimate.confidence, estimate.tempo_spread_octaves);
+    std::printf("  beats played        %zu\n", stats.beats);
+    std::printf("  frames gated as ours %zu\n", stats.gated);
+    if (stats.clean()) {
+        std::printf("  nothing dropped, nothing stolen, no gaps in the stream\n");
+        return;
+    }
+    std::printf("  ** the run was not clean **\n");
+    if (stats.beats_late) std::printf("  beats predicted too late %zu\n", stats.beats_late);
+    if (stats.clicks_late) std::printf("  clicks past their buffer %zu\n", stats.clicks_late);
+    if (stats.clicks_overflowed)
+        std::printf("  clicks refused, queue full %zu\n", stats.clicks_overflowed);
+    if (stats.voices_stolen) std::printf("  clicks cut short        %zu\n", stats.voices_stolen);
+    if (stats.discontinuities)
+        std::printf("  buffers out of sequence %zu  (the device glitched)\n",
+                    stats.discontinuities);
+    if (stats.capture_discontinuities)
+        std::printf("  capture buffers out of sequence %zu\n", stats.capture_discontinuities);
+}
 
 struct MeasureState {
     Metronome* metronome = nullptr;
@@ -302,6 +342,7 @@ void printUsage() {
         "  tiktak play                       play it on a real device\n"
         "  tiktak measure                    measure the round trip and the jitter\n"
         "  tiktak track FILE                 play a file with the click on its own beats\n"
+        "  tiktak listen                     click on the beat of what the microphone hears\n"
         "\n"
         "Options:\n"
         "  --bpm N            tempo (120)\n"
@@ -321,6 +362,15 @@ void printUsage() {
         "  --hint N           manual-mode tempo hint in BPM; 0 estimates (0)\n"
         "  --no-click         the track alone, no metronome\n"
         "  --no-cache         re-analyse even when the beat grid is cached\n"
+        "\n"
+        "Listen options:\n"
+        "  FILE               drive the tracker from a file instead of a microphone\n"
+        "  --hint N           tempo to start from, in BPM; 0 searches (0)\n"
+        "  --no-click         listen and report, play nothing\n"
+        "\n"
+        "`listen` follows the room: the tracker predicts each beat and the click\n"
+        "goes out early by the round trip, so it is heard on the beat. Pass the\n"
+        "figure `measure` reports as --latency-ms, or the click is late by it.\n"
         "\n"
         "`track` analyses the file once and caches the beat grid next to it\n"
         "(.tiktak/<content-hash>.grid), so the second start is instant. With -o\n"
@@ -558,6 +608,146 @@ int cmdMeasure(const Options& options) {
 }
 
 // -------------------------------------------------------------------- track --
+
+
+// ------------------------------------------------------------------ listen --
+
+int cmdListen(const Options& options) {
+    using tiktak::render::LiveMetronome;
+    using tiktak::render::LiveMetronomeConfig;
+
+    // A file was named: drive the tracker from it instead of a microphone,
+    // against a virtual clock. Not a lesser mode — it is what makes the
+    // microphone path testable on a machine with no microphone, which is every
+    // CI runner, and it is the only way to run the same input twice.
+    const bool from_file = !options.track_path.empty();
+
+    std::vector<float> room;
+    double rate = options.sample_rate > 0.0 ? options.sample_rate : 48000.0;
+
+    if (from_file) {
+#if defined(TIKTAK_HAVE_DECODE)
+        auto decoder = tiktak::decode::Decoder::open(options.track_path.c_str());
+        if (!decoder) {
+            std::fprintf(stderr, "tiktak: %s is not a WAV, FLAC or MP3 file\n",
+                         options.track_path.c_str());
+            return 1;
+        }
+        rate = decoder->info().sample_rate;
+        float block[65536];
+        for (;;) {
+            const std::size_t got = decoder->readMono(block, 65536);
+            if (got == 0) break;
+            room.insert(room.end(), block, block + got);
+        }
+        if (room.empty()) {
+            std::fprintf(stderr, "tiktak: %s decoded to nothing\n", options.track_path.c_str());
+            return 1;
+        }
+#else
+        std::fprintf(stderr,
+                     "tiktak: this build has no decoder — rebuild with "
+                     "-DTIKTAK_BUILD_DECODE=ON, or run `listen` with a microphone\n");
+        return 2;
+#endif
+    }
+
+    LiveMetronomeConfig cfg;
+    cfg.tracker = tiktak::tracking::liveConfigFor(rate);
+    cfg.click.sample_rate = rate;
+    // For `listen` the latency that matters is the *round trip*: the tracker's
+    // clock is the capture stream's, so the click has to leave early by the
+    // whole way out and back. That is the number `measure` reports.
+    cfg.round_trip_sec = options.output_latency_sec;
+    if (!cfg.valid()) {
+        std::fprintf(stderr, "tiktak: those settings do not make a live metronome\n");
+        return 2;
+    }
+
+    LiveMetronome metronome(cfg);
+    if (options.hint_bpm > 0.0) {
+        metronome.seedTempo(options.hint_bpm);
+        std::printf("starting from %.1f BPM\n", options.hint_bpm);
+    }
+    if (!options.no_click) metronome.start();
+
+    if (from_file) {
+        constexpr std::size_t kBlock = 256;
+        const auto total =
+            std::min(room.size(), static_cast<std::size_t>(options.seconds * rate));
+        std::vector<float> out(total, 0.0f);
+
+        std::printf("%s — %.1f s at %.0f Hz, through the microphone path\n",
+                    options.track_path.c_str(), static_cast<double>(total) / rate, rate);
+
+        for (std::size_t i = 0; i < total; i += kBlock) {
+            const std::size_t n = std::min(kBlock, total - i);
+            const double time = static_cast<double>(i) / rate;
+            metronome.capture(time, room.data() + i, n);
+
+            // The track is written under the click so the result can be
+            // listened to: a click that is off the beat is obvious in a second
+            // and invisible in any number of counters.
+            std::copy(room.begin() + static_cast<std::ptrdiff_t>(i),
+                      room.begin() + static_cast<std::ptrdiff_t>(i + n),
+                      out.begin() + static_cast<std::ptrdiff_t>(i));
+            metronome.process(time, out.data() + i, n);
+        }
+
+        if (!options.output_path.empty()) {
+            if (!writeWav(options.output_path, out, rate)) {
+                std::fprintf(stderr, "tiktak: could not write %s\n", options.output_path.c_str());
+                return 1;
+            }
+            std::printf("wrote %s — the room and the click it played over it\n",
+                        options.output_path.c_str());
+        }
+
+        reportListen(metronome, static_cast<double>(total) / rate);
+        return metronome.stats().clean() ? 0 : 1;
+    }
+
+    Device device;
+    ListenState state;
+    state.metronome = &metronome;
+
+    // Duplex: the microphone is the whole point, so a machine that cannot
+    // capture cannot run this at all.
+    if (!device.start(listenCallback, &state, options.sample_rate, true, options.device_name)) {
+        std::fprintf(stderr, "tiktak: %s\n", device.error().c_str());
+        return 1;
+    }
+
+    std::printf("%s via %s — %.0f Hz, %zu-frame periods\n", device.name().c_str(),
+                device.backend().c_str(), device.sample_rate(), device.period_frames());
+    if (cfg.round_trip_sec <= 0.0) {
+        std::printf(
+            "no round trip given: the click will be late by whatever the device's is.\n"
+            "  measure it with `tiktak measure` and pass it as --latency-ms\n");
+    }
+    std::printf("listening for %g s...\n", options.seconds);
+
+    const auto started = std::chrono::steady_clock::now();
+    double elapsed = 0.0;
+    while (elapsed < options.seconds) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+
+        // The tracker's clock is the stream's, and the harness only knows wall
+        // time, so this line is a progress report and not a measurement.
+        const auto estimate = metronome.estimate(elapsed);
+        std::printf("  %5.1f s   %6.1f BPM   confidence %.2f\n", elapsed, estimate.bpm,
+                    estimate.confidence);
+        std::fflush(stdout);
+    }
+
+    metronome.stop();
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));  // let the tail ring
+    device.stop();
+
+    reportListen(metronome, elapsed);
+    return metronome.stats().clean() ? 0 : 1;
+}
 
 #if defined(TIKTAK_HAVE_DECODE)
 

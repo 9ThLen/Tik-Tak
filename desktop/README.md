@@ -33,6 +33,7 @@ tiktak play --bpm 120 --seconds 30    # a metronome, on a real device
 tiktak render --bpm 137 -o out.wav    # the same thing, to a file, no device
 tiktak measure --seconds 30           # round trip and jitter, measured
 tiktak track song.mp3 --seconds 30    # the file, click riding its own beats
+tiktak listen --seconds 30            # the room, click riding what it hears
 ```
 
 `--latency-ms` is the output latency to compensate. Measure it before trusting
@@ -94,6 +95,37 @@ through the same device buffer, so a click written on the beat's sample arrives
 with it whatever the output latency is. `--latency-ms` is therefore not needed
 here — it exists for the standalone metronome, whose reference is the wall
 clock rather than a track in the same buffer.
+
+### listen
+
+The microphone path: the tracker follows what the room is playing and the click
+goes out on its beat. This is the mode the harness pays for itself on — live
+sound in a real room, a hundred attempts an hour instead of a dozen a day.
+
+```sh
+tiktak listen --seconds 30 --latency-ms 24     # follow the room
+tiktak listen --hint 96                        # start from a tempo instead of searching
+tiktak listen song.mp3 -o heard.wav            # no microphone: drive it from a file
+```
+
+**`--latency-ms` here is the *round trip*, not the output latency** — the figure
+`measure` prints. The tracker's clock is the capture stream's, so a click has to
+leave early by the whole way out and back to be heard on the beat. Left at zero,
+the click is late by exactly the device's round trip.
+
+Given a file, `listen` drives the same tracker from it against a virtual clock
+and writes the room and the click it played over it. That is not a lesser mode:
+it is what makes the microphone path testable on a machine with no microphone
+(every CI runner is one), and the only way to feed the tracker the same input
+twice. It gates its own click there too, exactly as it would through a
+microphone, because the point is to exercise the path rather than to flatter it.
+
+What comes back is a tempo, a confidence and the counters. Confidence is the one
+to watch: it is the product of how much the tracker's particle cloud agrees with
+itself and how much of the room's onset energy keeps landing where it predicted,
+so silence, noise and a change of song all pull it down — and below the lock
+threshold the metronome coasts at the last tempo it was sure of rather than
+lunging at whatever it hears next.
 
 ## What the run reports
 
