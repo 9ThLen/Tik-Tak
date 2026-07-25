@@ -1,0 +1,102 @@
+name: core
+
+on:
+  push:
+    branches: ["**"]
+    paths: ["core/**", ".github/workflows/core.yml"]
+  pull_request:
+    paths: ["core/**", ".github/workflows/core.yml"]
+
+jobs:
+  # The tests only run here. The cross-compile jobs below exist to catch the
+  # core picking up a platform dependency, not to run anything.
+  test:
+    name: linux · build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Configure
+        run: >
+          cmake -S core -B core/build -G Ninja
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DTIKTAK_WERROR=ON
+
+      - name: Build
+        run: cmake --build core/build
+
+      - name: Test
+        run: ctest --test-dir core/build --output-on-failure
+
+  sanitizers:
+    name: linux · asan + ubsan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Configure
+        run: >
+          cmake -S core -B core/build-san -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
+
+      - name: Build
+        run: cmake --build core/build-san
+
+      - name: Test
+        run: ctest --test-dir core/build-san --output-on-failure
+        env:
+          ASAN_OPTIONS: detect_leaks=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+
+  # ADR 0001: the core must cross-compile to both mobile targets from day one,
+  # long before either app exists. Without this the core quietly grows an Apple
+  # dependency and Android becomes a rewrite instead of a port.
+  ios:
+    name: ios · cross-compile core
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -S core -B core/build-ios -G Xcode
+          -DCMAKE_SYSTEM_NAME=iOS
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
+          -DCMAKE_OSX_ARCHITECTURES=arm64
+          -DTIKTAK_BUILD_TESTS=OFF
+          -DTIKTAK_WERROR=ON
+
+      - name: Build
+        run: cmake --build core/build-ios --config Release -- -sdk iphoneos CODE_SIGNING_ALLOWED=NO
+
+  android:
+    name: android · cross-compile core
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Configure
+        run: >
+          cmake -S core -B core/build-android -G Ninja
+          -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_LATEST_HOME/build/cmake/android.toolchain.cmake
+          -DANDROID_ABI=${{ matrix.abi }}
+          -DANDROID_PLATFORM=android-24
+          -DCMAKE_BUILD_TYPE=Release
+          -DTIKTAK_BUILD_TESTS=OFF
+          -DTIKTAK_WERROR=ON
+
+      - name: Build
+        run: cmake --build core/build-android
