@@ -52,6 +52,75 @@ set_target_properties(tiktak_core PROPERTIES
     VISIBILITY_INLINES_HIDDEN ON
 )
 
+# ------------------------------------------------------------------ decoding --
+#
+# A separate target on purpose. tiktak_core has no third-party dependencies and
+# that property is worth keeping: it is what lets the analysis cross-compile
+# anywhere without a vendoring story. Decoding cannot have that property — it
+# needs codec implementations — so it lives beside the core rather than inside
+# it, and a platform that would rather use AVAssetReader or MediaCodec can link
+# the core alone.
+
+option(TIKTAK_BUILD_DECODE "Build the audio file decoder" ${TIKTAK_IS_TOP_LEVEL})
+
+if(TIKTAK_BUILD_DECODE)
+    include(FetchContent)
+
+    # Pinned to a commit because dr_libs publishes no tags. Updating it is a
+    # deliberate act, not something a fresh checkout does silently.
+    FetchContent_Declare(
+        dr_libs
+        GIT_REPOSITORY https://github.com/mackron/dr_libs.git
+        GIT_TAG        34a89ffe6bfc4d78db6888fef76cd408dba18185
+        GIT_SHALLOW    FALSE
+    )
+    FetchContent_GetProperties(dr_libs)
+    if(NOT dr_libs_POPULATED)
+        # Populate without add_subdirectory: dr_libs is three headers, and its
+        # own CMakeLists only defines test targets we do not want.
+        FetchContent_Populate(dr_libs)
+    endif()
+
+    add_library(tiktak_decode STATIC
+        src/decode/dr_libs.cpp
+        src/decode/decoder.cpp
+        src/decode_api.cpp
+    )
+
+    target_link_libraries(tiktak_decode PUBLIC tiktak_core)
+    target_include_directories(tiktak_decode
+        PUBLIC  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+        PRIVATE ${dr_libs_SOURCE_DIR}
+    )
+
+    if(MSVC)
+        target_compile_options(tiktak_decode PRIVATE /W4)
+        if(TIKTAK_WERROR)
+            target_compile_options(tiktak_decode PRIVATE /WX)
+        endif()
+    else()
+        target_compile_options(tiktak_decode PRIVATE -Wall -Wextra -Wpedantic -Wshadow)
+        if(TIKTAK_WERROR)
+            target_compile_options(tiktak_decode PRIVATE -Werror)
+        endif()
+    endif()
+
+    # Vendored C code compiled as C++ does not meet this project's warning bar,
+    # and patching it on every update would be worse than exempting the one
+    # translation unit that instantiates it.
+    set_source_files_properties(src/decode/dr_libs.cpp PROPERTIES COMPILE_OPTIONS "-w")
+    if(MSVC)
+        set_source_files_properties(src/decode/dr_libs.cpp PROPERTIES COMPILE_OPTIONS "/w")
+    endif()
+
+    set_target_properties(tiktak_decode PROPERTIES
+        POSITION_INDEPENDENT_CODE ON
+        CXX_VISIBILITY_PRESET hidden
+        VISIBILITY_INLINES_HIDDEN ON
+    )
+endif()
+
 if(TIKTAK_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)

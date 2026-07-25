@@ -58,6 +58,10 @@ jobs:
   # ADR 0001: the core must cross-compile to both mobile targets from day one,
   # long before either app exists. Without this the core quietly grows an Apple
   # dependency and Android becomes a rewrite instead of a port.
+  #
+  # The decoder is built here too, explicitly. It is a separate target with a
+  # third-party dependency, and the point of these jobs is to find out that
+  # something does not cross-compile now rather than in the phase that needs it.
   ios:
     name: ios · cross-compile core
     runs-on: macos-latest
@@ -71,6 +75,7 @@ jobs:
           -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
           -DCMAKE_OSX_ARCHITECTURES=arm64
           -DTIKTAK_BUILD_TESTS=OFF
+          -DTIKTAK_BUILD_DECODE=ON
           -DTIKTAK_WERROR=ON
 
       - name: Build
@@ -96,6 +101,7 @@ jobs:
           -DANDROID_PLATFORM=android-24
           -DCMAKE_BUILD_TYPE=Release
           -DTIKTAK_BUILD_TESTS=OFF
+          -DTIKTAK_BUILD_DECODE=ON
           -DTIKTAK_WERROR=ON
 
       - name: Build

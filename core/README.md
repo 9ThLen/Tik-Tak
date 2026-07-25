@@ -4,8 +4,16 @@ Portable C++17 analysis core, shared by the iOS and Android apps.
 See [`docs/adr/0001-portable-cpp-core.md`](../docs/adr/0001-portable-cpp-core.md)
 for why this is not Swift.
 
-The core has no platform SDK dependencies and no third-party dependencies. It is
-consumed through the flat C API in [`include/tiktak/tiktak.h`](include/tiktak/tiktak.h).
+`tiktak_core` has no platform SDK dependencies and no third-party dependencies.
+It is consumed through the flat C API in
+[`include/tiktak/tiktak.h`](include/tiktak/tiktak.h).
+
+`tiktak_decode` is a second, optional library for reading WAV, FLAC and MP3
+files, with its own header
+[`include/tiktak/tiktak_decode.h`](include/tiktak/tiktak_decode.h). It is
+separate precisely so the paragraph above stays true: decoding needs codec
+implementations, and a platform that would rather use `AVAssetReader` or
+`MediaCodec` links the core alone.
 
 ## Build
 
@@ -15,8 +23,14 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-Options: `TIKTAK_BUILD_TESTS` (on when top-level), `TIKTAK_WERROR` (off).
-googletest is fetched at configure time; nothing else is downloaded.
+Options: `TIKTAK_BUILD_TESTS` (on when top-level), `TIKTAK_BUILD_DECODE` (on when
+top-level), `TIKTAK_WERROR` (off).
+
+Two things are fetched at configure time: googletest for the tests, and
+[dr_libs](https://github.com/mackron/dr_libs) for the decoder, pinned to a
+commit because it publishes no tags. Configure with `-DTIKTAK_BUILD_DECODE=OFF`
+and `-DTIKTAK_BUILD_TESTS=OFF` to build the analysis core with no downloads at
+all.
 
 ## What is here
 
@@ -32,6 +46,8 @@ googletest is fetched at configure time; nothing else is downloaded.
 | `src/analysis/offline` | whole-file pipeline: audio in blocks → beat grid |
 | `src/schedule/scheduler` | beat grid: schedules events ahead, per-channel latency |
 | `src/api.cpp` | C API |
+| `src/decode/` | WAV / FLAC / MP3 to mono float, over dr_libs — separate library |
+| `src/decode_api.cpp` | C API for the decoder |
 
 ## Real-time rules
 
@@ -50,8 +66,12 @@ Everything downstream of `tt_odf_create` runs in an audio callback, so:
 ## Status
 
 The ODF front-end, the offline analysis path (tempo, beat tracking, the
-`tt_offline_*` API) and the beat scheduler. Missing: file decoding, the online
-tracker for the microphone path, and downbeat detection.
+`tt_offline_*` API), file decoding and the beat scheduler. Missing: the beat
+grid cache, the online tracker for the microphone path, and downbeat detection.
+
+The file path works end to end — `DecodeAndAnalyse.FindsTheBeatsOfAnEncodedClickTrack`
+takes a real MP3 and produces a beat grid, which is the only test that would
+notice two correct pieces being wired together wrongly.
 
 `tools/parity` checks this against the Python reference in `research/` on
 identical audio. Both the ODF and the whole offline pipeline are compared; as of
