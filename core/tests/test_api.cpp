@@ -469,6 +469,56 @@ TEST(OfflineApi, AnalysesAClickTrackEndToEnd) {
     }
 }
 
+TEST(OfflineApi, FindsTheBarLinesOfATrackThatHasThem) {
+    // Two beats of pickup, so this proves the bar line is found rather than
+    // assumed to be at the start of the file.
+    const std::vector<float> audio = tiktak::test::bandTrack(120.0, 8, 4, kOfflineRate, 2);
+
+    Offline offline{offlineDefaults()};
+    ASSERT_NE(offline.handle, nullptr);
+    ASSERT_EQ(tt_offline_feed(offline.handle, audio.data(), audio.size()), TT_OK);
+    ASSERT_EQ(tt_offline_finish(offline.handle), TT_OK);
+
+    EXPECT_EQ(tt_offline_beats_per_bar(offline.handle), 4);
+    EXPECT_GT(tt_offline_downbeat_strength(offline.handle), 0.5);
+    EXPECT_GT(tt_offline_downbeat_phase_margin(offline.handle), 0.3);
+
+    const std::size_t count = tt_offline_downbeat_count(offline.handle);
+    ASSERT_GT(count, 4u);
+    std::vector<double> bars(count);
+    ASSERT_EQ(tt_offline_downbeats(offline.handle, bars.data(), bars.size()), count);
+
+    // A quarter of the beats, and every one of them on a real bar line: at
+    // 120 BPM in four with two beats of pickup, that is every odd second.
+    EXPECT_NEAR(static_cast<double>(count),
+                static_cast<double>(tt_offline_beat_count(offline.handle)) / 4.0, 1.5);
+    for (double t : bars) {
+        const double n = (t - 1.0) / 2.0;
+        EXPECT_LT(std::abs(n - std::round(n)), 0.05) << "bar line at " << t;
+    }
+
+    // The copy respects capacity like every other array out of this API.
+    std::vector<double> two(2);
+    EXPECT_EQ(tt_offline_downbeats(offline.handle, two.data(), 2), 2u);
+    EXPECT_DOUBLE_EQ(two[0], bars[0]);
+}
+
+TEST(OfflineApi, BarLinesCanBeDeclined) {
+    const std::vector<float> audio = tiktak::test::bandTrack(120.0, 8, 4, kOfflineRate);
+
+    tt_offline_config cfg = offlineDefaults();
+    cfg.find_downbeats = -1;
+
+    Offline offline{cfg};
+    ASSERT_NE(offline.handle, nullptr);
+    ASSERT_EQ(tt_offline_feed(offline.handle, audio.data(), audio.size()), TT_OK);
+    ASSERT_EQ(tt_offline_finish(offline.handle), TT_OK);
+
+    EXPECT_GT(tt_offline_beat_count(offline.handle), 0u);
+    EXPECT_EQ(tt_offline_beats_per_bar(offline.handle), 0);
+    EXPECT_EQ(tt_offline_downbeat_count(offline.handle), 0u);
+}
+
 TEST(OfflineApi, ZeroedConfigFallsBackToDefaults) {
     tt_offline_config cfg;
     std::memset(&cfg, 0, sizeof(cfg));
@@ -606,6 +656,11 @@ TEST(OfflineApi, NullHandleIsHarmless) {
     EXPECT_EQ(tt_offline_beats(nullptr, beats, 4), 0u);
     EXPECT_EQ(tt_offline_tempo_candidates(nullptr, candidates, 2), 0u);
     EXPECT_EQ(tt_offline_frame_count(nullptr), 0u);
+    EXPECT_EQ(tt_offline_beats_per_bar(nullptr), 0);
+    EXPECT_EQ(tt_offline_downbeat_count(nullptr), 0u);
+    EXPECT_EQ(tt_offline_downbeats(nullptr, beats, 4), 0u);
+    EXPECT_DOUBLE_EQ(tt_offline_downbeat_strength(nullptr), 0.0);
+    EXPECT_DOUBLE_EQ(tt_offline_downbeat_phase_margin(nullptr), 0.0);
 
     tt_offline_reset(nullptr);
     tt_offline_destroy(nullptr);
@@ -903,6 +958,7 @@ struct Player {
 TEST(PlayerApi, PlaysATrackWithClicksOnItsGrid) {
     tt_player_config cfg;
     tt_player_config_defaults(&cfg, 48000.0);
+    EXPECT_EQ(cfg.accent_downbeats, 1);
     cfg.count_in_beats = 2;
 
     Player player{cfg};
@@ -931,6 +987,36 @@ TEST(PlayerApi, PlaysATrackWithClicksOnItsGrid) {
     tt_player_stats_get(player.handle, &stats);
     EXPECT_EQ(stats.beats, 8u);  // 2 count-in + 6 grid beats
     EXPECT_EQ(stats.clean, 1);
+}
+
+TEST(PlayerApi, CanKeepEveryBeatEvenWhenTheAnalysisWithholdsItsAccent) {
+    tt_player_config cfg;
+    tt_player_config_defaults(&cfg, 48000.0);
+    cfg.accent_downbeats = 0;
+    cfg.channel_enabled[TT_CHANNEL_HAPTIC] = 1;
+
+    Player player{cfg};
+    ASSERT_NE(player.handle, nullptr);
+
+    const std::vector<float> track(48000 * 3, 0.0f);
+    const double grid[] = {0.0, 0.5, 1.0, 1.5, 2.0, 2.5};
+    ASSERT_EQ(tt_player_set_track(player.handle, track.data(), track.size()), TT_OK);
+    ASSERT_EQ(tt_player_set_grid(player.handle, grid, 6), TT_OK);
+    ASSERT_EQ(tt_player_start(player.handle, 0.0, 0), TT_OK);
+
+    std::size_t seen = 0;
+    for (int b = 0; b < 250; ++b) {
+        float buffer[512] = {0.0f};
+        tt_event cues[8];
+        std::size_t count = 0;
+        tt_player_process(player.handle, b * 512 / 48000.0, buffer, 512,
+                          cues, 8, &count);
+        for (std::size_t i = 0; i < count; ++i) {
+            EXPECT_EQ(cues[i].kind, TT_BEAT_BEAT);
+            ++seen;
+        }
+    }
+    EXPECT_GE(seen, 4u);
 }
 
 TEST(PlayerApi, RejectsWhatTheCoreRejects) {
@@ -1101,8 +1187,12 @@ TEST(LiveApi, NullHandleIsHarmless) {
     tt_live_process(nullptr, 0.0, nullptr, 0);
     tt_live_gate_click(nullptr, 1.0);
     tt_live_seed_tempo(nullptr, 120.0, 0.05);
+    tt_live_set_manual_tempo(nullptr, 120.0);
     tt_live_reset(nullptr);
     EXPECT_EQ(tt_live_take_beat(nullptr, 0.0, 0.1, &beat), 0);
+    EXPECT_EQ(tt_live_manual_tempo(nullptr), 0.0);
+    EXPECT_EQ(tt_live_waiting(nullptr), 0);
+    EXPECT_EQ(tt_live_sync_strength(nullptr), 0.0);
 
     tt_live_estimate estimate;
     tt_live_estimate_get(nullptr, 0.0, &estimate);
@@ -1116,4 +1206,62 @@ TEST(LiveApi, NullHandleIsHarmless) {
     tt_live_estimate_get(nullptr, 0.0, nullptr);
     tt_live_stats_get(nullptr, nullptr);
     tt_live_destroy(nullptr);
+}
+
+TEST(LiveApi, ManualModeWaitsForTheRoomAndThenKeepsTheUsersTempo) {
+    tt_live_config cfg;
+    tt_live_config_defaults(&cfg, 48000.0);
+    Live live{cfg};
+    ASSERT_NE(live.handle, nullptr) << tt_status_string(live.status);
+
+    tt_live_set_manual_tempo(live.handle, 120.0);
+    EXPECT_EQ(tt_live_manual_tempo(live.handle), 120.0);
+    EXPECT_EQ(tt_live_waiting(live.handle), 1);
+
+    constexpr std::size_t kBlock = 512;
+    constexpr double kRate = 48000.0;
+
+    // Four seconds of an empty room: the tempo is known and the metronome is
+    // still deliberately silent, because the phase is not.
+    const std::vector<float> quiet(static_cast<std::size_t>(4.0 * kRate), 0.0f);
+    double time = 0.0;
+    double beat = 0.0;
+    for (std::size_t i = 0; i + kBlock <= quiet.size(); i += kBlock) {
+        tt_live_process(live.handle, time, quiet.data() + i, kBlock);
+        time += static_cast<double>(kBlock) / kRate;
+        EXPECT_EQ(tt_live_take_beat(live.handle, time, 0.05, &beat), 0);
+    }
+    EXPECT_EQ(tt_live_waiting(live.handle), 1);
+    EXPECT_EQ(tt_live_sync_strength(live.handle), 0.0);
+
+    // Then a band, coming in off any round number of beats. The click falls in
+    // on their phase and clicks at the tempo it was given.
+    const auto room = tiktak::test::clickTrack(120.0, 16.0, kRate, 1.17);
+    std::vector<double> beats;
+    for (std::size_t i = 0; i + kBlock <= room.size(); i += kBlock) {
+        tt_live_process(live.handle, time, room.data() + i, kBlock);
+        time += static_cast<double>(kBlock) / kRate;
+        while (tt_live_take_beat(live.handle, time, 0.05, &beat)) beats.push_back(beat);
+    }
+
+    EXPECT_EQ(tt_live_waiting(live.handle), 0);
+    EXPECT_GT(tt_live_sync_strength(live.handle), 0.5);
+
+    tt_live_estimate estimate;
+    tt_live_estimate_get(live.handle, time, &estimate);
+    EXPECT_NEAR(estimate.bpm, 120.0, 1e-9);
+
+    ASSERT_GT(beats.size(), 20u);
+    for (std::size_t i = 1; i < beats.size(); ++i) {
+        EXPECT_NEAR(beats[i] - beats[i - 1], 0.5, 0.03) << "beat " << i;
+    }
+    for (std::size_t i = beats.size() / 2; i < beats.size(); ++i) {
+        const double since = beats[i] - 1.17;
+        EXPECT_LT(std::fabs(since - std::round(since / 0.5) * 0.5), 0.05) << "beat " << i;
+    }
+
+    // A reset forgets the room. It does not forget the number that was typed.
+    tt_live_reset(live.handle);
+    EXPECT_EQ(tt_live_manual_tempo(live.handle), 120.0);
+    EXPECT_EQ(tt_live_waiting(live.handle), 1);
 }

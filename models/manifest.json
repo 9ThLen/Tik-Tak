@@ -1,0 +1,108 @@
+{
+  "_comment": [
+    "Model artifacts the app will eventually carry, with their provenance.",
+    "Licenses and sources were verified in docs/ml-models.md; the sha256",
+    "a pinned block exists only after bytes were fetched and verified;",
+    "unfetched entries stay null because an invented checksum is worse",
+    "than none. fetch.py pins the hash on the first successful fetch,",
+    "and verifies against the pin ever after — the pinning commit is the",
+    "provenance record."
+  ],
+  "artifacts": {
+    "beatnet_model_1": {
+      "purpose": "online joint beat/downbeat/meter research candidate; not a product dependency until licensing is cleared",
+      "license": "CC BY 4.0; App Store DRM distribution needs explicit legal/author clearance",
+      "source": {
+        "repo": "https://github.com/mjhydri/BeatNet",
+        "revision": "81cedd4beeb7235262db80969a0c9ce9a48a0ed4",
+        "url": "https://raw.githubusercontent.com/mjhydri/BeatNet/81cedd4beeb7235262db80969a0c9ce9a48a0ed4/src/BeatNet/models/model_1_weights.pt",
+        "path": "src/BeatNet/models/model_1_weights.pt"
+      },
+      "file": "beatnet_model_1_weights.pt",
+      "expected_mb": 1.54,
+      "pinned": null
+    },
+    "beat_this_small": {
+      "purpose": "offline file analysis and pseudo-labelling — MIT covers the weights too",
+      "license": "MIT, code and published weights (verified: repository README)",
+      "source": {
+        "repo": "https://github.com/CPJKU/beat_this",
+        "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+        "tag": "v1.1.0",
+        "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/small0.ckpt",
+        "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+        "path": "small0.ckpt"
+      },
+      "file": "beat_this_small.ckpt",
+      "expected_mb": 8.1,
+      "pinned": {
+        "sha256": "6074be2c4d490c5f6101fcc374a1ec72ae93456e23bb6019783b849f5dc7d47b",
+        "bytes": 8451101,
+        "provenance": {
+          "source": {
+            "repo": "https://github.com/CPJKU/beat_this",
+            "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+            "tag": "v1.1.0",
+            "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/small0.ckpt",
+            "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+            "path": "small0.ckpt"
+          }
+        },
+        "date": "2026-07-26"
+      }
+    },
+    "beat_this_cpp_onnx": {
+      "purpose": "third-party pre-converted ONNX — desktop evaluation only; reproduce the export before release",
+      "license": "MIT repository; source-weight and conversion provenance still required before distribution",
+      "source": {
+        "repo": "https://github.com/mosynthkey/beat_this_cpp",
+        "revision": "07ab790a9ec2eda8093d52d249e3ec4f0510ee72",
+        "url": "https://raw.githubusercontent.com/mosynthkey/beat_this_cpp/07ab790a9ec2eda8093d52d249e3ec4f0510ee72/onnx/beat_this.onnx",
+        "path": "onnx/beat_this.onnx"
+      },
+      "conversion": {
+        "model_variant": "final0",
+        "source_weights_sha256": null,
+        "exporter": {
+          "repo": "https://github.com/mosynthkey/beat_this_cpp",
+          "revision": "07ab790a9ec2eda8093d52d249e3ec4f0510ee72",
+          "version": null
+        },
+        "onnx_opset": 14,
+        "preprocessing": {
+          "sample_rate": 22050,
+          "n_fft": 1024,
+          "hop_length": 441,
+          "f_min": 30,
+          "f_max": 11000,
+          "n_mels": 128,
+          "mel_scale": "slaney",
+          "normalized": "frame_length",
+          "power": 1,
+          "compression": "log1p(1000*x)"
+        },
+        "io_contract": {
+          "input": {
+            "name": "input_spectrogram",
+            "shape": [
+              "batch",
+              "time",
+              128
+            ],
+            "dynamic_axes": [
+              "time"
+            ]
+          },
+          "outputs": [
+            "beat",
+            "downbeat"
+          ]
+        },
+        "note": "Populate source_weights_sha256 and exporter version before treating this ONNX as release-ready."
+      },
+      "file": "beat_this_large.onnx",
+      "expected_mb": 79.2,
+      "pinned": null
+    }
+  }
+}

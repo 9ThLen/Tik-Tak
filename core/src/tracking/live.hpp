@@ -5,12 +5,14 @@
 
 #include "dsp/odf.hpp"
 #include "tracking/particle.hpp"
+#include "tracking/sync.hpp"
 
 namespace tiktak::tracking {
 
 struct LiveConfig {
     dsp::OdfConfig odf;
     ParticleFilterConfig filter;
+    SyncConfig sync;  // manual mode only: finding the phase at a known tempo
 
     // Half-life of the peak the onset function is normalised against. The
     // filter's constants are calibrated in units where a beat is worth about
@@ -107,6 +109,38 @@ public:
     // song, or a tempo the user typed.
     void seedTempo(double bpm, double spread_octaves = 0.05);
 
+    // Manual mode: the tempo is the user's and the room is asked only where the
+    // beat falls. Zero goes back to tracking the tempo too.
+    //
+    // This is a different promise from auto mode, and the difference is worth
+    // being explicit about, because it is what the mode is for:
+    //
+    // - Nothing is played until the room has been heard. The user sets a tempo
+    //   and starts; the click waits, catches the first phrase, and falls in on
+    //   it. That waiting is the feature — a metronome that starts on the beat
+    //   the user's own count-in landed on needs no count-in of its own.
+    //
+    // - Once it has fallen in, it does not stop. In auto mode a room that goes
+    //   quiet has taken the tempo with it, so the tracker coasts and eventually
+    //   gives up; here the tempo was never the room's to take. The click keeps
+    //   the user's BPM through a silent bar, a solo, a cough, indefinitely.
+    //   That falls out of the filter rather than being special-cased: with the
+    //   period pinned and the observation zero-mean, silence moves no weights
+    //   and the grid simply continues.
+    //
+    // The tempo is taken as given even outside the configured BPM range — see
+    // BeatParticleFilter::pinPeriod.
+    void setManualTempo(double bpm);
+    double manualTempo() const { return manual_bpm_; }
+
+    // Manual mode, still waiting for something to synchronise to. What a shell
+    // shows as "listening…", and the reason no beats are coming out.
+    bool waiting() const { return manual_bpm_ > 0.0 && !acquired_; }
+
+    // How concentrated the room's onsets are at one phase, 0..1. Manual mode
+    // only, and useful mainly as the meter behind that "listening…".
+    double syncStrength() const { return sync_.strength(); }
+
     void reset();
 
     struct Stats {
@@ -130,6 +164,10 @@ private:
     LiveConfig config_;
     dsp::Odf odf_;
     BeatParticleFilter filter_;
+    PhaseSync sync_;
+
+    double manual_bpm_ = 0.0;
+    bool acquired_ = false;
 
     double origin_sec_ = 0.0;  // stream time of the ODF's sample zero
     std::size_t consumed_ = 0;

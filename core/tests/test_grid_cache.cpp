@@ -142,3 +142,56 @@ TEST(GridCache, RefusesACorruptedGrid) {
     OfflineResult restored;
     EXPECT_FALSE(deserializeGrid(blob.data(), blob.size(), config, &restored));
 }
+
+// Bar lines are part of the analysis, so they are part of what the cache owes
+// the caller. A grid that came back without them would make the second import
+// of a track quietly worse than the first.
+TEST(GridCache, RoundTripsTheBarLines) {
+    OfflineConfig config = testConfig();
+    OfflineResult original = analysedTrack();
+    // The click track has no harmony and an alternating accent, so rather than
+    // depend on what it detects, state a grid and require it back untouched.
+    original.beats_per_bar = 3;
+    original.downbeat_strength = 1.25;
+    original.downbeat_phase_margin = 0.75;
+    original.downbeats = {0.5, 2.0, 3.5, 5.0};
+
+    const std::vector<std::uint8_t> blob = serializeGrid(original, config);
+
+    OfflineResult restored;
+    ASSERT_TRUE(deserializeGrid(blob.data(), blob.size(), config, &restored));
+
+    EXPECT_EQ(restored.beats_per_bar, 3);
+    EXPECT_DOUBLE_EQ(restored.downbeat_strength, 1.25);
+    EXPECT_DOUBLE_EQ(restored.downbeat_phase_margin, 0.75);
+    ASSERT_EQ(restored.downbeats.size(), original.downbeats.size());
+    for (std::size_t i = 0; i < original.downbeats.size(); ++i) {
+        EXPECT_DOUBLE_EQ(restored.downbeats[i], original.downbeats[i]) << "at bar " << i;
+    }
+    // And the beats still survive alongside them.
+    ASSERT_EQ(restored.beats.size(), original.beats.size());
+    EXPECT_DOUBLE_EQ(restored.beats.front(), original.beats.front());
+}
+
+TEST(GridCache, RefusesAGridAnalysedWithADifferentIdeaOfBars) {
+    OfflineConfig config = testConfig();
+    const OfflineResult original = analysedTrack();
+    const std::vector<std::uint8_t> blob = serializeGrid(original, config);
+
+    // Same audio, same tracker — but a caller who weighs harmony differently
+    // gets different bar lines, and serving the old ones would be a stale
+    // cache the user experiences as the accent in the wrong place.
+    OfflineConfig other = config;
+    other.downbeat.harmony_weight = 0.25;
+
+    OfflineResult restored;
+    EXPECT_FALSE(deserializeGrid(blob.data(), blob.size(), other, &restored));
+
+    OfflineConfig fewer_meters = config;
+    fewer_meters.downbeat.meters = {{4, 1.0}};
+    EXPECT_FALSE(deserializeGrid(blob.data(), blob.size(), fewer_meters, &restored));
+
+    OfflineConfig stricter_evidence = config;
+    stricter_evidence.downbeat.min_salience_range = 0.10;
+    EXPECT_FALSE(deserializeGrid(blob.data(), blob.size(), stricter_evidence, &restored));
+}

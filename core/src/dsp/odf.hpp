@@ -2,8 +2,10 @@
 
 #include <cmath>
 #include <cstddef>
+#include <memory>
 #include <vector>
 
+#include "dsp/chroma.hpp"
 #include "dsp/mel.hpp"
 #include "dsp/stft.hpp"
 
@@ -38,6 +40,16 @@ struct OdfConfig {
     // rather than being normalised up to full scale. Must be in (0, 1).
     double whiteningFloorRel = 1e-3;  // -60 dB
 
+    // Also produce a pitch class profile per frame, for the downbeat analysis.
+    //
+    // Off by default because it is dead weight on the microphone path: the live
+    // tracker only wants the beat, and harmony is a bar-level cue that costs
+    // one extra pass over the spectrum every hop. The offline analyser turns it
+    // on, which is where bar lines are decided anyway.
+    bool chroma = false;
+    double chromaMinHz = 55.0;    // A1 — below this, pitch is mostly inharmonic
+    double chromaMaxHz = 2093.0;  // C7 — above this it is overtones of the rest
+
     bool valid() const;
 };
 
@@ -69,6 +81,15 @@ public:
     const OdfConfig& config() const { return config_; }
     std::size_t melBands() const { return mel_.bands(); }
 
+    // The current frame's pitch class profile: ChromaFilterbank::kBins values,
+    // or nullptr when OdfConfig::chroma is off.
+    //
+    // Read it from inside the process() callback. It points at storage owned by
+    // this object and is overwritten by the next frame — returning it by value
+    // would put twelve floats on the hot path for the benefit of the one caller
+    // that wants them.
+    const float* chroma() const { return chroma_.empty() ? nullptr : chroma_.data(); }
+
     std::size_t framesAvailable(std::size_t n) const { return stft_.framesAvailable(n); }
 
     // How far behind the newest sample an emitted frame's timestamp sits.
@@ -97,6 +118,8 @@ private:
     OdfConfig config_;
     Stft stft_;
     MelFilterbank mel_;
+    std::unique_ptr<ChromaFilterbank> chroma_bank_;
+    std::vector<float> chroma_;
 
     std::size_t lowSplit_ = 0;   // bands [0, lowSplit_) form the low band
     std::size_t highSplit_ = 0;  // bands [highSplit_, melBands) form the high band

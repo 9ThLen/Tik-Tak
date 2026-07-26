@@ -189,6 +189,7 @@ tiktak::analysis::OfflineConfig resolve(const tt_offline_config& in) {
     // Negative means "explicitly off", since zero means "default".
     out.tracker.trim = in.trim >= 0;
     out.bpm_hint = in.bpm_hint;
+    out.find_downbeats = in.find_downbeats >= 0;
     return out;
 }
 
@@ -214,6 +215,7 @@ void tt_offline_config_defaults(tt_offline_config* cfg, double sample_rate) {
     cfg->tightness = 100.0;
     cfg->trim = 1;
     cfg->bpm_hint = 0.0;
+    cfg->find_downbeats = 1;
 }
 
 tt_offline* tt_offline_create(const tt_offline_config* cfg, tt_status* status) {
@@ -284,6 +286,44 @@ size_t tt_offline_beats(const tt_offline* offline, double* out, size_t capacity)
     std::copy(offline->result.beats.begin(),
               offline->result.beats.begin() + static_cast<std::ptrdiff_t>(count), out);
     return count;
+}
+
+int tt_offline_beats_per_bar(const tt_offline* offline) {
+    if (!offline || !offline->finished) return 0;
+    return offline->result.beats_per_bar;
+}
+
+size_t tt_offline_downbeat_count(const tt_offline* offline) {
+    if (!offline || !offline->finished) return 0;
+    return offline->result.downbeats.size();
+}
+
+size_t tt_offline_downbeats(const tt_offline* offline, double* out, size_t capacity) {
+    if (!offline || !offline->finished || !out) return 0;
+    const std::size_t count = std::min(capacity, offline->result.downbeats.size());
+    std::copy(offline->result.downbeats.begin(),
+              offline->result.downbeats.begin() + static_cast<std::ptrdiff_t>(count), out);
+    return count;
+}
+
+double tt_offline_downbeat_strength(const tt_offline* offline) {
+    if (!offline || !offline->finished) return 0.0;
+    return offline->result.downbeat_strength;
+}
+
+double tt_offline_downbeat_phase_margin(const tt_offline* offline) {
+    if (!offline || !offline->finished) return 0.0;
+    return offline->result.downbeat_phase_margin;
+}
+
+double tt_offline_downbeat_meter_margin(const tt_offline* offline) {
+    if (!offline || !offline->finished) return 0.0;
+    return offline->result.downbeat_meter_margin;
+}
+
+int tt_offline_downbeat_confident(const tt_offline* offline) {
+    if (!offline || !offline->finished) return 0;
+    return offline->result.downbeat_confident ? 1 : 0;
 }
 
 size_t tt_offline_tempo_candidates(const tt_offline* offline, tt_tempo_candidate* out,
@@ -569,6 +609,7 @@ tiktak::render::PlayerConfig resolve(const tt_player_config& in) {
 
     out.beats_per_bar = in.beats_per_bar > 0 ? in.beats_per_bar : 4;
     out.downbeat_offset = in.downbeat_offset;
+    out.accent_downbeats = in.accent_downbeats != 0;
     out.count_in_beats = in.count_in_beats;
     out.cue_lookahead_sec =
         in.cue_lookahead_sec > 0.0 ? in.cue_lookahead_sec : 0.25;
@@ -593,6 +634,7 @@ void tt_player_config_defaults(tt_player_config* cfg, double sample_rate) {
     tt_click_config_defaults(&cfg->click, sample_rate);
     cfg->beats_per_bar = 4;
     cfg->downbeat_offset = 0;
+    cfg->accent_downbeats = 1;
     cfg->count_in_beats = 0;
     cfg->cue_lookahead_sec = 0.25;
     for (int i = 0; i < TT_CHANNEL_COUNT; ++i) {
@@ -788,6 +830,18 @@ int tt_live_take_beat(tt_live* live, double now_sec, double lookahead_sec, doubl
 
 void tt_live_seed_tempo(tt_live* live, double bpm, double spread_octaves) {
     if (live) live->impl.seedTempo(bpm, spread_octaves > 0.0 ? spread_octaves : 0.05);
+}
+
+void tt_live_set_manual_tempo(tt_live* live, double bpm) {
+    if (live) live->impl.setManualTempo(bpm);
+}
+
+double tt_live_manual_tempo(const tt_live* live) { return live ? live->impl.manualTempo() : 0.0; }
+
+int tt_live_waiting(const tt_live* live) { return live && live->impl.waiting() ? 1 : 0; }
+
+double tt_live_sync_strength(const tt_live* live) {
+    return live ? live->impl.syncStrength() : 0.0;
 }
 
 void tt_live_reset(tt_live* live) {

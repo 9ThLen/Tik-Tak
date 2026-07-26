@@ -102,7 +102,9 @@ void BeatParticleFilter::drawFromPrior() {
 void BeatParticleFilter::reset() {
     started_ = false;
     last_time_sec_ = 0.0;
-    mean_period_ = 60.0 / config_.prior_centre_bpm;
+    // A pin survives a reset. Resetting forgets what was heard; the tempo the
+    // user typed is not something that was heard.
+    mean_period_ = pinned_ ? min_period_ : 60.0 / config_.prior_centre_bpm;
     charge_ema_ = 0.0;
     onset_ema_ = 0.0;
     on_beat_ema_ = 0.0;
@@ -124,6 +126,53 @@ void BeatParticleFilter::seedTempo(double bpm, double spread_octaves) {
         const double drawn = std::pow(2.0, centre + spread * a);
         period_[i] = std::min(max_period_, std::max(min_period_, 60.0 / drawn));
         next_beat_[i] = last_time_sec_ + rng_.uniform() * period_[i];
+        weight_[i] = 1.0 / static_cast<double>(n);
+    }
+}
+
+void BeatParticleFilter::pinPeriod(double period_sec) {
+    if (!(period_sec > 0.0)) return;
+    if (!pinned_) {
+        free_min_period_ = min_period_;
+        free_max_period_ = max_period_;
+        pinned_ = true;
+    }
+    min_period_ = period_sec;
+    max_period_ = period_sec;
+    mean_period_ = period_sec;
+
+    const std::size_t n = period_.size();
+    for (std::size_t i = 0; i < n; ++i) {
+        period_[i] = period_sec;
+        // The phase is not known yet and pretending otherwise would be worse
+        // than admitting it: the correlation that finds it has not run.
+        next_beat_[i] = last_time_sec_ + rng_.uniform() * period_sec;
+        weight_[i] = 1.0 / static_cast<double>(n);
+    }
+}
+
+void BeatParticleFilter::unpinPeriod() {
+    if (!pinned_) return;
+    pinned_ = false;
+    min_period_ = free_min_period_;
+    max_period_ = free_max_period_;
+    mean_period_ = 60.0 / config_.prior_centre_bpm;
+    drawFromPrior();
+}
+
+void BeatParticleFilter::seedPhase(double next_beat_sec) {
+    const std::size_t n = period_.size();
+    for (std::size_t i = 0; i < n; ++i) {
+        // Each particle lands on the grid that beat belongs to *at its own
+        // period*, which pinned is the same grid for everybody and unpinned is
+        // the most that can honestly be said: a beat time on its own does not
+        // determine a grid without a period to repeat it at.
+        const double period = period_[i];
+        double beat = next_beat_sec;
+        if (beat <= last_time_sec_) {
+            beat += (std::floor((last_time_sec_ - beat) / period) + 1.0) * period;
+        }
+        next_beat_[i] = beat;
         weight_[i] = 1.0 / static_cast<double>(n);
     }
 }
@@ -163,14 +212,22 @@ void BeatParticleFilter::observe(double time_sec, double onset) {
     // it is the *cloud's* period, not the particle's: a per-particle period
     // here would make the charge per second identical at every tempo and
     // discriminate nothing, which is the whole point of the term.
-    const double charge = config_.beat_gain * (charge_ema_ / dt) * mean_period_;
+    //
+    // Both this and the prior below are switched off while the period is
+    // pinned: with one period left in the cloud neither can separate two
+    // hypotheses, and a term that discriminates nothing still adds variance to
+    // the phase. See pinPeriod().
+    const double charge =
+        pinned_ ? 0.0 : config_.beat_gain * (charge_ema_ / dt) * mean_period_;
 
     // The prior, applied at a rate rather than once. `prior_scale` is half the
     // inverse square of the width, so the term below is the log of a
     // log-normal density in octaves, per second of elapsed time.
     const double prior_centre = std::log2(config_.prior_centre_bpm);
-    const double prior_scale = config_.prior_rate * dt /
-                               (2.0 * config_.prior_width_octaves * config_.prior_width_octaves);
+    const double prior_scale =
+        pinned_ ? 0.0
+                : config_.prior_rate * dt /
+                      (2.0 * config_.prior_width_octaves * config_.prior_width_octaves);
 
     double sum = 0.0;
     double predicted_on_beat = 0.0;
@@ -287,14 +344,25 @@ void BeatParticleFilter::resample() {
     // They start with the same weight as everyone else and die within a beat
     // unless the audio agrees, which is what makes this cheap.
     const auto fresh = static_cast<std::size_t>(config_.regeneration * static_cast<double>(n));
-    const double centre = std::log2(config_.prior_centre_bpm);
-    for (std::size_t i = 0; i < fresh; ++i) {
-        double a = 0.0;
-        double b = 0.0;
-        rng_.normalPair(&a, &b);
-        const double bpm = std::pow(2.0, centre + config_.prior_width_octaves * a);
-        period_[i] = std::min(max_period_, std::max(min_period_, 60.0 / bpm));
-        next_beat_[i] = last_time_sec_ + rng_.uniform() * period_[i];
+    if (pinned_) {
+        // Pinned, "somewhere else" is a different phase rather than a different
+        // tempo, and the same argument applies: a band coming back in on a
+        // different beat is not a small perturbation of the current phase, so
+        // without a few particles on fresh ones the cloud could only ever creep
+        // towards the truth at the rate the phase drift allows.
+        for (std::size_t i = 0; i < fresh; ++i) {
+            next_beat_[i] = last_time_sec_ + rng_.uniform() * min_period_;
+        }
+    } else {
+        const double centre = std::log2(config_.prior_centre_bpm);
+        for (std::size_t i = 0; i < fresh; ++i) {
+            double a = 0.0;
+            double b = 0.0;
+            rng_.normalPair(&a, &b);
+            const double bpm = std::pow(2.0, centre + config_.prior_width_octaves * a);
+            period_[i] = std::min(max_period_, std::max(min_period_, 60.0 / bpm));
+            next_beat_[i] = last_time_sec_ + rng_.uniform() * period_[i];
+        }
     }
 
     for (std::size_t i = 0; i < n; ++i) weight_[i] = step;

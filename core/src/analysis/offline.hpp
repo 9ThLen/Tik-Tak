@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <vector>
 
+#include "analysis/downbeat.hpp"
 #include "analysis/tempo.hpp"
 #include "analysis/tracker.hpp"
 #include "dsp/odf.hpp"
@@ -13,8 +14,18 @@ struct OfflineConfig {
     dsp::OdfConfig odf;
     TempoConfig tempo;
     TrackerConfig tracker;
+    DownbeatConfig downbeat;
     // Fix the tempo instead of estimating it (manual mode). <= 0 estimates.
     double bpm_hint = 0.0;
+
+    // Also find the bar lines. Turning this on implies OdfConfig::chroma and
+    // makes the analyser keep the low band and a pitch class profile per frame
+    // as well — roughly fourteen extra numbers per hop, which for a five-minute
+    // track is a few megabytes and worth it for a file that is analysed once.
+    //
+    // Off is a real option, not a debugging one: a caller that only wants a
+    // click on every beat has no use for bar lines and should not pay for them.
+    bool find_downbeats = true;
 };
 
 struct OfflineResult {
@@ -28,6 +39,28 @@ struct OfflineResult {
     // silently tracking badly.
     double estimated_bpm = 0.0;
     std::size_t frame_count = 0;
+
+    // Bar lines, a subset of `beats`. Empty when they were not asked for, the
+    // track was too short for a repeated meter, or the scorer supplied too
+    // little varying bar-level evidence to choose one.
+    std::vector<double> downbeats;
+    int beats_per_bar = 0;
+    // See DownbeatResult, where all three are explained: how far the bar lines
+    // stand above the beats around them, how settled the beat they start on is,
+    // and how far ahead the winning meter is of the next one. All in the
+    // built-in salience backend's units; see DownbeatResult.
+    //
+    // A UI that accents downbeats needs both margins to be convincing, not just
+    // one — `downbeat_confident` below is that decision in a single place so no
+    // caller has to remember it.
+    double downbeat_strength = 0.0;
+    double downbeat_phase_margin = 0.0;
+    double downbeat_meter_margin = 0.0;
+
+    // Whether the bar lines are worth accenting. False means count from the
+    // first beat and accent nothing — putting the accent in the wrong place is
+    // worse for a player than putting it nowhere.
+    bool downbeat_confident = false;
 };
 
 // Whole-file beat analysis: audio in, a beat grid out.
@@ -72,6 +105,8 @@ public:
     }
 
 private:
+    static OfflineConfig prepare(OfflineConfig config);
+
     OfflineConfig config_;
     dsp::Odf odf_;
     TempoEstimator tempo_;
@@ -79,6 +114,8 @@ private:
 
     std::vector<double> odf_values_;
     std::vector<double> frame_times_;
+    std::vector<double> odf_low_;
+    std::vector<float> chroma_;  // frame-major, kBins per frame
 };
 
 // Convenience wrapper for callers that already hold the whole signal.

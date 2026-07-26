@@ -130,8 +130,17 @@ void reportListen(const tiktak::render::LiveMetronome& metronome, double now_sec
     const tiktak::tracking::BeatEstimate estimate = metronome.estimate(now_sec);
     const tiktak::render::LiveMetronome::Stats stats = metronome.stats();
 
-    std::printf("live tracker: %.1f BPM (confidence %.2f, tempo spread %.3f octaves)\n",
-                estimate.bpm, estimate.confidence, estimate.tempo_spread_octaves);
+    if (metronome.manualTempo() > 0.0) {
+        // In manual mode the tempo is not a finding, so reporting it as one
+        // would be reporting the dial back to whoever set it. What was actually
+        // worked out is the phase, and whether it was found at all.
+        std::printf("live tracker: manual %.1f BPM, %s\n", metronome.manualTempo(),
+                    metronome.waiting() ? "still listening for a beat to fall in with"
+                                        : "synchronised to the room");
+    } else {
+        std::printf("live tracker: %.1f BPM (confidence %.2f, tempo spread %.3f octaves)\n",
+                    estimate.bpm, estimate.confidence, estimate.tempo_spread_octaves);
+    }
     std::printf("  beats played        %zu\n", stats.beats);
     std::printf("  frames gated as ours %zu\n", stats.gated);
     if (stats.clean()) {
@@ -205,6 +214,15 @@ std::ptrdiff_t findClick(const float* window, std::size_t frames, double rate) {
     return -1;
 }
 
+// Which beat of the grid a bar line falls on. The downbeats are a subset of the
+// beats by construction, so this is a lookup and not a nearest-match: the small
+// slack absorbs the round trip through the cache, where both went through the
+// same decimal conversion but not necessarily the same arithmetic.
+int beatIndexOf(const std::vector<double>& beats, double downbeat) {
+    const auto at = std::lower_bound(beats.begin(), beats.end(), downbeat - 1e-9);
+    return static_cast<int>(at - beats.begin());
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------- arguments --
@@ -240,6 +258,7 @@ bool parseOptions(const std::vector<std::string>& args, Options& options, std::s
         } else if (arg == "--beats") {
             if (!need(value)) return false;
             options.beats_per_bar = static_cast<int>(value);
+            options.beats_per_bar_given = true;
         } else if (arg == "--sub") {
             if (!need(value)) return false;
             options.subdivisions = static_cast<int>(value);
@@ -297,6 +316,9 @@ bool parseOptions(const std::vector<std::string>& args, Options& options, std::s
         } else if (arg == "--hint") {
             if (!need(value)) return false;
             options.hint_bpm = value;
+        } else if (arg == "--manual") {
+            if (!need(value)) return false;
+            options.manual_bpm = value;
         } else if (arg == "--no-click") {
             options.no_click = true;
         } else if (arg == "--no-cache") {
@@ -346,7 +368,7 @@ void printUsage() {
         "\n"
         "Options:\n"
         "  --bpm N            tempo (120)\n"
-        "  --beats N          beats per bar (4)\n"
+        "  --beats N          beats per bar (4; `track` reads it off the audio)\n"
         "  --sub N            subdivisions per beat, 1 = beats only (1)\n"
         "  --seconds N        how long to run (10)\n"
         "  --rate N           sample rate; 0 takes the device's own (0)\n"
@@ -360,17 +382,35 @@ void printUsage() {
         "  --from N           start at bar N (0)\n"
         "  --loop A:B         loop bars A to B, end exclusive\n"
         "  --hint N           manual-mode tempo hint in BPM; 0 estimates (0)\n"
+        "\n"
+        "`track` finds the bar lines as well as the beats, and accents the one.\n"
+        "It reports separate phase and metre margins and accents only when both\n"
+        "are convincing, because an accent on the wrong beat is harder to play\n"
+        "to than none.\n"
+        "Passing --beats overrides the meter it found — the number you type is\n"
+        "an assertion about the music, the same way --hint is. It does not invent\n"
+        "which beat starts the bar when the audio cannot say.\n"
         "  --no-click         the track alone, no metronome\n"
         "  --no-cache         re-analyse even when the beat grid is cached\n"
         "\n"
         "Listen options:\n"
         "  FILE               drive the tracker from a file instead of a microphone\n"
         "  --hint N           tempo to start from, in BPM; 0 searches (0)\n"
+        "  --manual N         manual + sync: hold N BPM, take only the phase from\n"
+        "                     the room; plays nothing until it finds one (0)\n"
         "  --no-click         listen and report, play nothing\n"
         "\n"
         "`listen` follows the room: the tracker predicts each beat and the click\n"
         "goes out early by the round trip, so it is heard on the beat. Pass the\n"
         "figure `measure` reports as --latency-ms, or the click is late by it.\n"
+        "\n"
+        "With --manual the tempo stops being a question: the click holds the BPM\n"
+        "given, waits for the room to start, falls in on its phase, and then keeps\n"
+        "going whether the room does or not. Finding a phase at a known tempo is a\n"
+        "far smaller problem than finding a tempo, so this works on material the\n"
+        "automatic mode cannot follow — but it refuses to fall in with a room whose\n"
+        "beat is not the one asked for, rather than clicking somewhere and calling\n"
+        "it synchronised.\n"
         "\n"
         "`track` analyses the file once and caches the beat grid next to it\n"
         "(.tiktak/<content-hash>.grid), so the second start is instant. With -o\n"
@@ -665,7 +705,13 @@ int cmdListen(const Options& options) {
     }
 
     LiveMetronome metronome(cfg);
-    if (options.hint_bpm > 0.0) {
+    if (options.manual_bpm > 0.0) {
+        // Manual + sync: the tempo is not up for discussion, and the room is
+        // asked only where the beat falls. Nothing plays until it answers.
+        metronome.setManualTempo(options.manual_bpm);
+        std::printf("manual %.1f BPM — listening for a beat to fall in with\n",
+                    options.manual_bpm);
+    } else if (options.hint_bpm > 0.0) {
         metronome.seedTempo(options.hint_bpm);
         std::printf("starting from %.1f BPM\n", options.hint_bpm);
     }
@@ -736,8 +782,14 @@ int cmdListen(const Options& options) {
         // The tracker's clock is the stream's, and the harness only knows wall
         // time, so this line is a progress report and not a measurement.
         const auto estimate = metronome.estimate(elapsed);
-        std::printf("  %5.1f s   %6.1f BPM   confidence %.2f\n", elapsed, estimate.bpm,
-                    estimate.confidence);
+        if (options.manual_bpm > 0.0) {
+            std::printf("  %5.1f s   %6.1f BPM   %s   phase %.2f\n", elapsed, estimate.bpm,
+                        metronome.waiting() ? "listening" : "in sync  ",
+                        metronome.syncStrength());
+        } else {
+            std::printf("  %5.1f s   %6.1f BPM   confidence %.2f\n", elapsed, estimate.bpm,
+                        estimate.confidence);
+        }
         std::fflush(stdout);
     }
 
@@ -850,10 +902,68 @@ int cmdTrack(const Options& options) {
         std::printf("no beats found — playing the track without a click\n");
     }
 
+    // Where the bar starts, from the audio rather than from a convention.
+    //
+    // Two doubts have to clear before the accent is used at all: the phase
+    // margin says which beat starts the bar is settled, and the meter margin
+    // says no other bar length fits nearly as well. Either one alone is not
+    // enough — a piece read in three can be perfectly settled about where its
+    // bars start while four fits it just as well, and the phase margin cannot
+    // see that because every rival it weighs has already accepted three.
+    //
+    // Both thresholds live in the analysis config, not here, so that
+    // research/eval sweeps the same numbers this uses rather than a copy. They
+    // are placeholders; see research/eval/README.md.
+    int beats_per_bar = options.beats_per_bar;
+    int downbeat_offset = 0;
+    bool accent = false;
+
+    if (!grid.beats.empty() && grid.beats_per_bar > 0) {
+        std::printf("bar lines: %d beats to the bar "
+                    "(strength %.2f, phase margin %.2f, metre margin %.2f)%s\n",
+                    grid.beats_per_bar, grid.downbeat_strength,
+                    grid.downbeat_phase_margin, grid.downbeat_meter_margin,
+                    grid.downbeat_confident ? "" : " — too close to call");
+    } else if (!grid.beats.empty()) {
+        std::printf("bar lines: none found — not enough repeated bar-level evidence\n");
+    }
+
+    if (options.beats_per_bar_given) {
+        // An explicit --beats is the user's assertion about the music and
+        // outranks the analysis, exactly as an explicit --bpm does. It asserts
+        // the bar *length* though, and says nothing about which beat starts the
+        // bar. Use the phase only when the analysis independently supports it;
+        // otherwise an even click is the only answer that does not invent one.
+        if (grid.beats_per_bar == options.beats_per_bar && !grid.downbeats.empty() &&
+            grid.downbeat_phase_margin >= analysis.downbeat.min_phase_margin) {
+            downbeat_offset = beatIndexOf(grid.beats, grid.downbeats.front());
+            accent = true;
+            std::printf("bar starts on beat %d, from the audio\n", downbeat_offset + 1);
+        } else if (grid.beats_per_bar > 0 && grid.beats_per_bar != options.beats_per_bar) {
+            std::printf("using --beats %d over the %d the audio suggests"
+                        " — phase unknown, every beat clicks the same\n",
+                        options.beats_per_bar, grid.beats_per_bar);
+        } else {
+            std::printf("using --beats %d — phase unknown, every beat clicks the same\n",
+                        options.beats_per_bar);
+        }
+    } else if (grid.downbeat_confident) {
+        beats_per_bar = grid.beats_per_bar;
+        downbeat_offset = beatIndexOf(grid.beats, grid.downbeats.front());
+        accent = true;
+    } else if (!grid.beats.empty()) {
+        // Nothing was detected and nothing was asserted. Counting fours from the
+        // first beat would be an arbitrary accent worn with the same confidence
+        // as a real one, so the click stays even and says so.
+        std::printf("no accent — every beat clicks the same\n");
+    }
+
     PlayerConfig cfg;
     cfg.sample_rate = rate;
     cfg.click.sample_rate = rate;
-    cfg.beats_per_bar = options.beats_per_bar;
+    cfg.beats_per_bar = beats_per_bar;
+    cfg.downbeat_offset = downbeat_offset;
+    cfg.accent_downbeats = accent;
     cfg.count_in_beats = grid.beats.empty() ? 0 : options.count_in;
     cfg.channel_enabled = {{!options.no_click && !grid.beats.empty(), false, false}};
     if (!cfg.valid()) {

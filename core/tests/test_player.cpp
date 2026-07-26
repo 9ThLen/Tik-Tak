@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <vector>
@@ -407,5 +408,102 @@ TEST(Player, MixesIntoTheBufferRatherThanClearingIt) {
 
     for (std::size_t i = 0; i < kBuffer; i += 100) {
         EXPECT_NEAR(buffer[i], 1.0f + track[i], 1e-6f);
+    }
+}
+
+// The accent is a claim about the music, and when nothing supports it the
+// honest output is an even click. This is the behaviour the `track` command
+// relies on when the analysis is not confident, and it was possible to report
+// "too close to call" while still accenting every fourth beat — the message and
+// the sound disagreeing is worse than either alone.
+TEST(Player, WithTheAccentOffEveryBeatSoundsTheSame) {
+    PlayerConfig cfg = testConfig();
+    cfg.accent_downbeats = false;
+    cfg.channel_enabled = {{true, true, false}};
+
+    const std::vector<float> track(static_cast<std::size_t>(4.0 * kSampleRate), 0.0f);
+    const std::vector<double> grid = regularGrid(120.0, 0.0, 8);
+
+    TrackPlayer player(cfg);
+    player.setTrack(track.data(), track.size());
+    player.setGrid(grid.data(), grid.size());
+    ASSERT_TRUE(player.start(0.0));
+
+    std::vector<Event> cues;
+    run(player, 3.0, &cues);
+    ASSERT_GE(cues.size(), 4u);
+    for (const Event& cue : cues) {
+        EXPECT_EQ(cue.kind, BeatKind::Beat) << "at " << cue.beat_time_sec;
+    }
+}
+
+// Bars still exist with the accent off — looping and --from-bar are bar-based
+// and must keep working. Only the sound stops distinguishing them.
+TEST(Player, TheAccentIsSilencedWithoutLosingTheBarCount) {
+    PlayerConfig cfg = testConfig();
+    cfg.accent_downbeats = false;
+    cfg.beats_per_bar = 4;
+    cfg.channel_enabled = {{true, true, false}};
+
+    const std::vector<float> track(static_cast<std::size_t>(6.0 * kSampleRate), 0.0f);
+    const std::vector<double> grid = regularGrid(120.0, 0.0, 12);
+
+    TrackPlayer player(cfg);
+    player.setTrack(track.data(), track.size());
+    player.setGrid(grid.data(), grid.size());
+    ASSERT_TRUE(player.start(0.0));
+
+    std::vector<Event> cues;
+    run(player, 3.0, &cues);
+    ASSERT_GE(cues.size(), 5u);
+    EXPECT_EQ(cues[0].bar, 0);
+    EXPECT_EQ(cues[0].beat_in_bar, 0);
+    EXPECT_EQ(cues[4].bar, 1);
+    EXPECT_EQ(cues[4].beat_in_bar, 0);
+}
+
+// The accented and unaccented renders must differ in the audio itself, not only
+// in the cue metadata — the click is rendered in the callback, so a test that
+// only checked cues would pass even if the downbeat click were still sounding.
+TEST(Player, TheAccentIsAudiblyAbsentAndNotJustUnreported) {
+    const std::vector<float> track(static_cast<std::size_t>(3.0 * kSampleRate), 0.0f);
+    const std::vector<double> grid = regularGrid(120.0, 0.0, 6);
+
+    const auto render = [&](bool accent) {
+        PlayerConfig cfg = testConfig();
+        cfg.accent_downbeats = accent;
+        cfg.beats_per_bar = 4;
+        cfg.channel_enabled = {{true, false, false}};
+
+        TrackPlayer player(cfg);
+        player.setTrack(track.data(), track.size());
+        player.setGrid(grid.data(), grid.size());
+        EXPECT_TRUE(player.start(0.0));
+
+        std::vector<float> out(static_cast<std::size_t>(2.5 * kSampleRate), 0.0f);
+        constexpr std::size_t kBlock = 128;
+        for (std::size_t at = 0; at + kBlock <= out.size(); at += kBlock) {
+            player.process(static_cast<double>(at) / kSampleRate, out.data() + at, kBlock);
+        }
+        return out;
+    };
+
+    const std::vector<float> accented = render(true);
+    const std::vector<float> even = render(false);
+    ASSERT_EQ(accented.size(), even.size());
+
+    // The first beat is the downbeat, so the two renders differ there.
+    const std::size_t first_beat_end = static_cast<std::size_t>(0.25 * kSampleRate);
+    double difference = 0.0;
+    for (std::size_t i = 0; i < first_beat_end; ++i) {
+        difference = std::max(difference, static_cast<double>(std::fabs(accented[i] - even[i])));
+    }
+    EXPECT_GT(difference, 1e-4) << "the downbeat click sounds the same either way";
+
+    // Beat one, half a second in, is an ordinary beat in both and must be
+    // identical — switching the accent off changes the downbeat, nothing else.
+    const std::size_t second = static_cast<std::size_t>(0.5 * kSampleRate);
+    for (std::size_t i = second; i < second + first_beat_end; ++i) {
+        EXPECT_FLOAT_EQ(accented[i], even[i]) << "at sample " << i;
     }
 }

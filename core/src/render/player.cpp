@@ -138,6 +138,10 @@ double TrackPlayer::positionSec() const {
 }
 
 schedule::BeatKind TrackPlayer::kindOf(std::size_t beat_index) const {
+    // Checked before the arithmetic, not after: with the accent off every beat
+    // is the same kind of event, and there is no bar line to be on the wrong
+    // side of.
+    if (!config_.accent_downbeats) return schedule::BeatKind::Beat;
     const std::int64_t rel =
         static_cast<std::int64_t>(beat_index) - config_.downbeat_offset;
     if (rel >= 0 && rel % config_.beats_per_bar == 0) {

@@ -25,11 +25,12 @@ LiveMetronomeConfig config(double round_trip_sec = 0.0) {
 // Runs the room's audio through capture and the metronome's own output through
 // process, one block at a time, the way a duplex device would. Returns the
 // stream times at which a click was written into the output.
-std::vector<double> run(LiveMetronome& metronome, const std::vector<float>& room) {
+std::vector<double> run(LiveMetronome& metronome, const std::vector<float>& room,
+                        double from_sec = 0.0) {
     std::vector<float> out(kBlock);
     std::vector<double> clicks;
 
-    double time = 0.0;
+    double time = from_sec;
     std::size_t quiet_run = 1000;
     for (std::size_t i = 0; i + kBlock <= room.size(); i += kBlock) {
         metronome.capture(time, room.data() + i, kBlock);
@@ -148,4 +149,33 @@ TEST(LiveMetronomeConfig, RejectsTheImpossible) {
     LiveMetronomeConfig backwards = config();
     backwards.round_trip_sec = -0.01;
     EXPECT_FALSE(backwards.valid());
+}
+
+TEST(LiveMetronome, ManualModeWaitsForTheRoomThenHoldsTheTempoItWasGiven) {
+    LiveMetronome metronome{config()};
+    metronome.setManualTempo(120.0);
+    metronome.start();
+    EXPECT_TRUE(metronome.waiting());
+
+    // Four seconds of nothing: started, and deliberately silent. Manual mode's
+    // whole point is coming in *with* the music, and there is none yet.
+    const std::vector<float> quiet(static_cast<std::size_t>(4.0 * kRate), 0.0f);
+    EXPECT_TRUE(run(metronome, quiet).empty());
+    EXPECT_TRUE(metronome.waiting());
+
+    // Then the band comes in, off any round number of beats. The click falls in
+    // on their phase, and every click it plays is 120's spacing apart.
+    const auto room = tiktak::test::clickTrack(120.0, 16.0, kRate, 1.31);
+    const std::vector<double> clicks = run(metronome, room, 4.0);
+
+    EXPECT_FALSE(metronome.waiting());
+    ASSERT_GT(clicks.size(), 20u);
+    for (std::size_t i = 1; i < clicks.size(); ++i) {
+        EXPECT_NEAR(clicks[i] - clicks[i - 1], 0.5, 0.03) << "click " << i;
+    }
+    for (std::size_t i = clicks.size() / 2; i < clicks.size(); ++i) {
+        const double since = clicks[i] - 1.31;
+        EXPECT_LT(std::fabs(since - std::round(since / 0.5) * 0.5), 0.05) << "click " << i;
+    }
+    EXPECT_TRUE(metronome.stats().clean());
 }

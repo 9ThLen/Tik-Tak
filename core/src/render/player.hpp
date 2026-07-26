@@ -14,12 +14,26 @@ struct PlayerConfig {
     double sample_rate = 48000.0;
     ClickConfig click;
 
-    // Bars are bookkeeping over the analysed grid: beat `downbeat_offset` is
-    // taken as a bar's first beat and every `beats_per_bar`-th after it. Until
-    // Phase 7 finds real downbeats this is a convention, not a detection — the
-    // offset exists so the user can shift which beat is "the one".
+    // Bars over the analysed grid: beat `downbeat_offset` is taken as a bar's
+    // first beat and every `beats_per_bar`-th after it. Both come from the
+    // offline analysis when it is confident, and from the user's `--beats`
+    // otherwise.
     int beats_per_bar = 4;
     int downbeat_offset = 0;
+
+    // Whether the first beat of the bar is clicked differently at all.
+    //
+    // This exists because "fall back to counting fours from the first beat" is
+    // not a neutral default. It is an arbitrary accent delivered with exactly
+    // the same authority as a detected one, and a player following it is worse
+    // off than with a plain undifferentiated click — they will phrase to a bar
+    // line that is not there. When the analysis is not confident and the user
+    // has not said what the meter is, the honest output is an even click, and
+    // this is how a caller asks for one.
+    //
+    // Bars are still counted for looping and `--from-bar` when this is off;
+    // only the sound stops distinguishing them.
+    bool accent_downbeats = true;
 
     // Count-in beats before the music: clicks at the local beat interval, with
     // the track silent, so a singer knows the tempo before the first note.

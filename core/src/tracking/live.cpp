@@ -7,7 +7,7 @@
 namespace tiktak::tracking {
 
 bool LiveConfig::valid() const {
-    return odf.valid() && filter.valid() && onset_peak_tau_sec > 0.0 &&
+    return odf.valid() && filter.valid() && sync.valid() && onset_peak_tau_sec > 0.0 &&
            gate_before_sec >= 0.0 && gate_after_sec >= 0.0 && lock_confidence > 0.0 &&
            lock_confidence <= 1.0 && release_confidence >= 0.0 &&
            release_confidence < lock_confidence && discontinuity_tolerance_sec > 0.0;
@@ -48,7 +48,7 @@ ParticleFilterConfig LiveTracker::resolveFilter(const LiveConfig& config) {
 }
 
 LiveTracker::LiveTracker(const LiveConfig& config)
-    : config_(config), odf_(config.odf), filter_(resolveFilter(config)) {
+    : config_(config), odf_(config.odf), filter_(resolveFilter(config)), sync_(config.sync) {
     gate_start_.fill(std::numeric_limits<double>::infinity());
     gate_end_.fill(-std::numeric_limits<double>::infinity());
 }
@@ -120,6 +120,20 @@ void LiveTracker::process(double stream_time_sec, const float* samples, std::siz
         // divided up into full-scale onsets.
         const double normalised = std::min(1.0, value / (onset_peak_ + 1e-6));
 
+        if (manual_bpm_ > 0.0) {
+            sync_.observe(time_sec, normalised);
+            // Acquisition happens once. Handing the filter a fresh phase every
+            // frame would keep flattening the cloud it has been building, and
+            // the correlation is the coarser of the two answers — it is a mean
+            // over the last few seconds, so a syncopated bar drags it, whereas
+            // the filter's window is local and merely lowers the particles the
+            // stray hit missed.
+            if (!acquired_ && sync_.ready()) {
+                filter_.seedPhase(sync_.nextBeat(time_sec));
+                acquired_ = true;
+            }
+        }
+
         filter_.observe(time_sec, normalised);
     });
 
@@ -129,26 +143,55 @@ void LiveTracker::process(double stream_time_sec, const float* samples, std::siz
 bool LiveTracker::takeBeat(double now_sec, double lookahead_sec, double* beat_sec) {
     const BeatEstimate current = filter_.estimate(now_sec);
 
-    if (current.confidence >= config_.lock_confidence) {
-        locked_ = true;
-    } else if (current.confidence < config_.release_confidence) {
-        locked_ = false;
-        published_ = false;
-    }
-    if (!locked_) return false;
-
     double candidate = 0.0;
-    if (current.confidence >= config_.lock_confidence) {
-        candidate = current.next_beat_sec;
-        held_period_sec_ = 60.0 / current.bpm;
-    } else if (published_) {
-        // Coasting: the cloud has lost the phase but the music has not
-        // necessarily stopped. Carry on from the last beat at the last tempo we
-        // were sure of, so a quiet bar sounds like a metronome rather than like
-        // a fault.
-        candidate = last_beat_sec_ + held_period_sec_;
+    if (manual_bpm_ > 0.0) {
+        // Manual mode. There is no confidence gate past acquisition, and that
+        // is the whole difference between the two modes: the tempo was never
+        // the room's, so a room that falls silent takes nothing with it. The
+        // grid continues because the pinned cloud continues — silence moves no
+        // weights, so no special case is needed to keep it going.
+        if (!acquired_) return false;
+        held_period_sec_ = 60.0 / manual_bpm_;
+
+        const double free_run = last_beat_sec_ + held_period_sec_;
+        if (!published_ || free_run < now_sec - 2.0 * held_period_sec_) {
+            // Nothing to continue from — the first beat after acquisition, or a
+            // grid left so far behind that walking it back into the present one
+            // period at a time would be a loop of unknown length in an audio
+            // callback. Take the filter's answer whole.
+            candidate = current.next_beat_sec;
+        } else {
+            // Afterwards the grid runs at the user's tempo and the room is only
+            // allowed to nudge it. Folding the correction into half a period
+            // either way is what makes "nudge" meaningful: the filter names a
+            // beat, not a grid, and the beat it names may be the next one along
+            // from the one being corrected.
+            double correction = current.next_beat_sec - free_run;
+            correction -= std::round(correction / held_period_sec_) * held_period_sec_;
+            const double limit = config_.sync.max_drift * held_period_sec_;
+            candidate = free_run + std::max(-limit, std::min(limit, correction));
+        }
     } else {
-        return false;
+        if (current.confidence >= config_.lock_confidence) {
+            locked_ = true;
+        } else if (current.confidence < config_.release_confidence) {
+            locked_ = false;
+            published_ = false;
+        }
+        if (!locked_) return false;
+
+        if (current.confidence >= config_.lock_confidence) {
+            candidate = current.next_beat_sec;
+            held_period_sec_ = 60.0 / current.bpm;
+        } else if (published_) {
+            // Coasting: the cloud has lost the phase but the music has not
+            // necessarily stopped. Carry on from the last beat at the last
+            // tempo we were sure of, so a quiet bar sounds like a metronome
+            // rather than like a fault.
+            candidate = last_beat_sec_ + held_period_sec_;
+        } else {
+            return false;
+        }
     }
 
     // One beat is handed out once. Between publishing a beat and that beat
@@ -177,9 +220,48 @@ void LiveTracker::seedTempo(double bpm, double spread_octaves) {
     filter_.seedTempo(bpm, spread_octaves);
 }
 
+void LiveTracker::setManualTempo(double bpm) {
+    if (!(bpm > 0.0)) {
+        if (!(manual_bpm_ > 0.0)) return;
+        manual_bpm_ = 0.0;
+        sync_.setPeriod(0.0);
+        filter_.unpinPeriod();
+        acquired_ = false;
+        locked_ = false;
+        published_ = false;
+        return;
+    }
+    if (bpm == manual_bpm_) return;
+
+    // Whether there is a phase worth keeping. `published_` is precisely "a
+    // click is currently coming out", in either mode.
+    const bool carry = published_;
+
+    manual_bpm_ = bpm;
+    const double period = 60.0 / bpm;
+    held_period_sec_ = period;
+    locked_ = false;
+
+    // The correlation is measured in angles relative to a period, so a new
+    // period discards it. The phase is not so fragile, and a user nudging the
+    // BPM slider is asking for a different spacing between clicks, not for the
+    // click to fall silent and resynchronise — so if one was already playing,
+    // the new grid is anchored on the last beat actually played and carries
+    // straight on from it.
+    sync_.setPeriod(period);
+    filter_.pinPeriod(period);
+    if (carry) {
+        filter_.seedPhase(last_beat_sec_ + period);
+    } else {
+        acquired_ = false;
+    }
+}
+
 void LiveTracker::reset() {
     odf_.reset();
-    filter_.reset();
+    filter_.reset();  // keeps the pin: a reset forgets audio, not the user
+    sync_.reset();
+    acquired_ = false;
     origin_sec_ = 0.0;
     consumed_ = 0;
     started_ = false;

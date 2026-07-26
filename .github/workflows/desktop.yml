@@ -1,8 +1,14 @@
 name: desktop
 
 on:
+  # `push` on the default branch, `pull_request` everywhere else. With `push`
+  # on every branch as well, a branch with a PR open matches both triggers and
+  # runs each workflow twice against the same commit — eleven check runs for
+  # eight jobs, doubling the queue and making a red X ambiguous about which run
+  # it belongs to. The trade is that a branch with no PR gets no CI; opening
+  # one is how you ask for it.
   push:
-    branches: ["**"]
+    branches: ["main"]
     paths: ["desktop/**", "core/**", ".github/workflows/desktop.yml"]
   pull_request:
     paths: ["desktop/**", "core/**", ".github/workflows/desktop.yml"]
@@ -72,6 +78,33 @@ jobs:
           grep -q "beat grid: cache hit" second.log
           cmp track_first.wav track_second.wav
 
+      # Phase 7: the bar lines, not just the beats. The clip is four-four with
+      # a kick on the one, and the trap it sets is the ordinary one — its snare
+      # is louder broadband than its kick, so an analysis that follows the
+      # loudest beat accents beat four instead. Only checking the meter would
+      # miss that, so both margins are checked too. They answer different
+      # questions — the phase margin says the bar line is in one place rather
+      # than merely somewhere every four beats, and the metre margin says four
+      # is the bar length rather than three fitting nearly as well.
+      - name: Find the bar lines of a real file
+        shell: bash
+        run: |
+          BIN=desktop/build/tiktak
+          [ -x "$BIN" ] || BIN=desktop/build/RelWithDebInfo/tiktak.exe
+          "$BIN" track core/tests/data/click_120.mp3 --seconds 8 --no-cache -o bars.wav \
+            | tee bars.log
+          grep -q "bar lines: 4 beats to the bar" bars.log
+          grep -Eq "phase margin (0\.[3-9]|[1-9])" bars.log
+          grep -Eq "metre margin (0\.[4-9]|[1-9])" bars.log
+          # Confident enough to use, so it must not have said otherwise.
+          ! grep -q "too close to call" bars.log
+          ! grep -q "no accent" bars.log
+          # And an explicit --beats still outranks the analysis.
+          "$BIN" track core/tests/data/click_120.mp3 --seconds 8 --no-cache --beats 3 \
+            -o bars3.wav | tee bars3.log
+          grep -q "using --beats 3 over the 4 the audio suggests" bars3.log
+          grep -q "phase unknown, every beat clicks the same" bars3.log
+
       # The microphone path, on a runner that has no microphone: the same
       # tracker, fed from a file against a virtual clock. This is why `listen`
       # takes a file at all — without it the whole Phase 5 path would only ever
@@ -90,3 +123,21 @@ jobs:
           # it. Anything outside 100-139 means it locked onto the wrong thing —
           # most likely the subdivision, or every other beat.
           grep -Eq "live tracker: 1[0-3][0-9]\.[0-9] BPM" listen.log
+
+      # Manual + sync (Phase 6), and the half of it that is easy to get wrong.
+      # Falling in with the right tempo proves the correlation works; refusing
+      # the wrong one proves it means something. A synchroniser that always
+      # synchronises has said nothing, and only the second run can catch that.
+      - name: Fall in at a tempo it is given, and refuse one it is not
+        shell: bash
+        run: |
+          BIN=desktop/build/tiktak
+          [ -x "$BIN" ] || BIN=desktop/build/RelWithDebInfo/tiktak.exe
+          "$BIN" listen core/tests/data/click_120.mp3 --manual 120 --seconds 10 \
+            | tee sync.log
+          grep -q "manual 120.0 BPM, synchronised to the room" sync.log
+          grep -q "nothing dropped, nothing stolen" sync.log
+          "$BIN" listen core/tests/data/click_120.mp3 --manual 137 --seconds 10 \
+            | tee nosync.log
+          grep -q "manual 137.0 BPM, still listening" nosync.log
+          grep -q "beats played        0" nosync.log

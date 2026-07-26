@@ -90,6 +90,63 @@ hash of the encoded bytes: a renamed file still hits, a re-encoded one
 correctly misses, and a grid analysed under a `--hint` never masquerades as
 the automatic one. `--no-cache` forces a fresh analysis.
 
+#### Bar lines
+
+The analysis also finds where the bar starts and how many beats it holds, and
+the click accents the one:
+
+```
+song.mp3 — 184.0 s at 44100 Hz
+beat grid: analysed — 372 beats at 121.0 BPM (confidence 0.81)
+bar lines: 4 beats to the bar (strength …, phase margin …, metre margin …)
+```
+
+`strength` is how far the chosen bar lines stand above the beats around them.
+The two margins are separate because they answer separate questions, and
+conflating them hid real errors: the **phase margin** says which beat starts the
+bar is settled, and the **metre margin** says no other bar length fits nearly as
+well. A piece read in three can be completely unambiguous about where its bars
+start — a large phase margin — while four fits it just as well, because every
+rival the phase margin weighs has already accepted three.
+
+Both have to clear their thresholds before the accent is used. When they do not,
+the harness says so and the click stays even:
+
+```
+bar lines: 3 beats to the bar (strength 0.44, phase margin 0.04, metre margin 0.02) — too close to call
+no accent — every beat clicks the same
+```
+
+Counting fours from the first beat instead would be an arbitrary accent worn
+with the same confidence as a detected one, and a player following it phrases to
+a bar line that is not there.
+
+`--beats N` overrides the bar *length*. The number you type is an assertion about
+the music, the same way `--hint` is. It says nothing about which beat starts the
+bar, so when the analysis agreed about the metre the phase still comes from the
+audio:
+
+```
+bar lines: 4 beats to the bar (strength …, phase margin …, metre margin …)
+bar starts on beat 1, from the audio
+```
+
+and when it did not, the harness says it is overruling the audio and counts from
+no invented first beat as the downbeat:
+
+```
+using --beats 3 over the 4 the audio suggests — phase unknown, every beat clicks the same
+```
+
+The example numbers are omitted deliberately: they belong to a particular
+salience backend's scale. The resolver does not standardise arbitrary input, so
+the range gate and both margins are calibrated together and old values do not
+transfer to another model.
+
+The thresholds are provisional. `research/eval/downbeat_benchmark.py` is what
+sets them: it sweeps both, reports coverage against the wrong-accent rate, and
+picks the most generous pair inside a budget. See `research/eval/README.md`.
+
 The click is not latency-compensated against the track, on purpose: both leave
 through the same device buffer, so a click written on the beat's sample arrives
 with it whatever the output latency is. `--latency-ms` is therefore not needed
@@ -105,6 +162,7 @@ sound in a real room, a hundred attempts an hour instead of a dozen a day.
 ```sh
 tiktak listen --seconds 30 --latency-ms 24     # follow the room
 tiktak listen --hint 96                        # start from a tempo instead of searching
+tiktak listen --manual 96                      # hold 96, take only the phase from the room
 tiktak listen song.mp3 -o heard.wav            # no microphone: drive it from a file
 ```
 
@@ -126,6 +184,33 @@ itself and how much of the room's onset energy keeps landing where it predicted,
 so silence, noise and a change of song all pull it down — and below the lock
 threshold the metronome coasts at the last tempo it was sure of rather than
 lunging at whatever it hears next.
+
+#### `--manual N` — the tempo is yours, the phase is the room's
+
+With `--manual` the tempo stops being a question. The click holds the BPM given,
+waits for the room to start, falls in on its phase, and then keeps going whether
+the room does or not — because the tempo was never the room's to take away. It
+follows a player drifting within about 2% of the number set and free-runs
+against anything further off.
+
+Finding a phase at a known tempo is a far smaller problem than finding a tempo,
+so this mode works on material the automatic one cannot follow at all. The other
+half of that bargain is that it **refuses**: asked for a beat the room does not
+contain, it plays nothing and says so, rather than clicking somewhere and calling
+it synchronised.
+
+```
+$ tiktak listen click_120.mp3 --manual 120 --seconds 10
+live tracker: manual 120.0 BPM, synchronised to the room
+
+$ tiktak listen click_120.mp3 --manual 137 --seconds 10
+live tracker: manual 137.0 BPM, still listening for a beat to fall in with
+  beats played        0
+```
+
+Live, the progress line shows `listening` or `in sync` and a phase figure — how
+concentrated the room's onsets are at one point in the bar, which is the meter a
+UI would put behind "listening…".
 
 ## What the run reports
 

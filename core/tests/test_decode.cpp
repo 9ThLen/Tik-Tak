@@ -434,3 +434,108 @@ TEST(DecodeAndTrackLive, FollowsAnEncodedClickTrackThroughTheMicrophonePath) {
 
     tt_live_destroy(live);
 }
+
+TEST(DecodeAndSyncLive, FallsInWithARealFileAtATempoItIsToldAndRefusesOneItIsNot) {
+    // Manual + sync on real audio, which is where the mode has to earn its
+    // keep: the same file the tracker above takes half its length to be sure
+    // of, with the tempo simply given.
+    const tt_audio_info probe = [] {
+        Decoder decoder{"click_120.mp3"};
+        EXPECT_NE(decoder.handle, nullptr);
+        return tt_decoder_info(decoder.handle);
+    }();
+    ASSERT_GT(probe.sample_rate, 0.0);
+
+    const auto play = [&](double manual_bpm, std::vector<double>* beats) {
+        Decoder decoder{"click_120.mp3"};
+        EXPECT_NE(decoder.handle, nullptr);
+
+        tt_live_config config;
+        tt_live_config_defaults(&config, probe.sample_rate);
+        tt_live* live = tt_live_create(&config, nullptr);
+        EXPECT_NE(live, nullptr);
+        tt_live_set_manual_tempo(live, manual_bpm);
+
+        constexpr std::size_t kBlock = 256;
+        std::vector<float> block(kBlock);
+        double time = 0.0;
+        for (;;) {
+            const std::size_t got = tt_decoder_read(decoder.handle, block.data(), block.size());
+            if (got == 0) break;
+            tt_live_process(live, time, block.data(), got);
+            time += static_cast<double>(got) / probe.sample_rate;
+
+            double beat = 0.0;
+            while (tt_live_take_beat(live, time, 0.05, &beat)) beats->push_back(beat);
+            if (got < block.size()) break;
+        }
+        const int waiting = tt_live_waiting(live);
+        tt_live_destroy(live);
+        return waiting;
+    };
+
+    // Told 120, which the clip is: it falls in and every click lands on the
+    // clip's own grid. Nothing had to be discovered but the offset.
+    std::vector<double> beats;
+    EXPECT_EQ(play(120.0, &beats), 0);
+    ASSERT_GE(beats.size(), 10u);
+    for (std::size_t i = 0; i < beats.size(); ++i) {
+        const double off = std::fabs(beats[i] - std::round(beats[i] / 0.5) * 0.5);
+        EXPECT_LE(off, 0.05) << "beat " << i << " at " << beats[i];
+    }
+
+    // Told 137, which it is not. There is no 137 phase in this room to find,
+    // and refusing is the whole reason the mode can be trusted at 120: a
+    // synchroniser that always synchronises has said nothing.
+    std::vector<double> none;
+    EXPECT_EQ(play(137.0, &none), 1);
+    EXPECT_TRUE(none.empty());
+}
+
+// Phase 7 on a real encoded file: the bar lines, not just the beats.
+//
+// The clip was generated in four with the first bar starting at zero, and the
+// pattern that says so — kick on the one, snare on the three — survives an MP3
+// encode. Worth checking here rather than only on synthetic buffers, because
+// the harmony cue is silent on this material and the meter has to come from
+// the drums alone.
+TEST(DecodeAndAnalyse, FindsTheBarLinesOfAnEncodedClickTrack) {
+    Decoder decoder{"click_120.mp3"};
+    ASSERT_NE(decoder.handle, nullptr);
+
+    const tt_audio_info info = tt_decoder_info(decoder.handle);
+    ASSERT_GT(info.sample_rate, 0.0);
+
+    tt_offline_config config;
+    tt_offline_config_defaults(&config, info.sample_rate);
+
+    tt_status status = TT_OK;
+    tt_offline* analysis = tt_offline_create(&config, &status);
+    ASSERT_NE(analysis, nullptr) << tt_status_string(status);
+
+    std::vector<float> block(4096);
+    for (;;) {
+        const std::size_t got = tt_decoder_read(decoder.handle, block.data(), block.size());
+        if (got == 0) break;
+        ASSERT_EQ(tt_offline_feed(analysis, block.data(), got), TT_OK);
+        if (got < block.size()) break;
+    }
+    ASSERT_EQ(tt_offline_finish(analysis), TT_OK);
+
+    EXPECT_EQ(tt_offline_beats_per_bar(analysis), 4);
+    EXPECT_GT(tt_offline_downbeat_strength(analysis), 0.5);
+    EXPECT_GT(tt_offline_downbeat_phase_margin(analysis), 0.25);
+
+    const std::size_t count = tt_offline_downbeat_count(analysis);
+    ASSERT_GE(count, 4u);
+    std::vector<double> bars(count);
+    ASSERT_EQ(tt_offline_downbeats(analysis, bars.data(), bars.size()), count);
+
+    // At 120 BPM in four from zero, every bar line is on an even second.
+    for (double t : bars) {
+        const double n = t / 2.0;
+        EXPECT_LT(std::abs(n - std::round(n)), 0.07) << "bar line at " << t;
+    }
+
+    tt_offline_destroy(analysis);
+}

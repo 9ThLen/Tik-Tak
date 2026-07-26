@@ -178,6 +178,15 @@ typedef struct tt_offline_config {
     /* Fix the tempo instead of estimating it, for manual mode. <= 0 estimates.
        The tempo is measured either way — see tt_offline_estimated_bpm. */
     double bpm_hint;
+
+    /* Bar lines. Also find where each bar starts and how many beats it holds,
+       so the click can accent the downbeat instead of every beat equally.
+       Non-zero enables; pass a negative value to disable. 0 -> enabled.
+
+       Turning it off is a real option and not just a debugging one: it makes
+       the analyser skip the harmony front end, which is the expensive half.
+       A caller that only wants a click on every beat should not pay for it. */
+    int    find_downbeats;
 } tt_offline_config;
 
 TT_API void tt_offline_config_defaults(tt_offline_config* cfg, double sample_rate);
@@ -219,6 +228,55 @@ TT_API size_t tt_offline_beat_count(const tt_offline* offline);
  * to free anything.
  */
 TT_API size_t tt_offline_beats(const tt_offline* offline, double* out, size_t capacity);
+
+/*
+ * Bar lines.
+ *
+ * Beats per bar, or 0 when no meter was decided — the track was too short for
+ * any meter to repeat, or bar lines were not asked for. Bar lines themselves
+ * are a subset of the beats, copied out the same way.
+ */
+TT_API int tt_offline_beats_per_bar(const tt_offline* offline);
+TT_API size_t tt_offline_downbeat_count(const tt_offline* offline);
+TT_API size_t tt_offline_downbeats(const tt_offline* offline, double* out, size_t capacity);
+
+/*
+ * How far to trust those bar lines. All three are in the active salience
+ * backend's units and answer different questions. They may be compared with
+ * thresholds calibrated for that backend, but not with raw values from a
+ * different scorer.
+ *
+ * `strength` is how much louder the chosen bar lines are than the beats around
+ * them. Near zero means the audio has no bar-level pattern at all, and the
+ * honest thing to show is no accent.
+ *
+ * `phase_margin` is how far ahead the winning bar line is of the next best
+ * place to put it *within the same meter*. A strong pattern with a small phase
+ * margin means the bars are clear but which beat starts them is a coin toss.
+ *
+ * `meter_margin` is how far ahead the winning meter is of the next best meter.
+ * It has to be asked separately: every rival the phase margin considers has
+ * already accepted the bar length, so a piece read in three can look completely
+ * settled on that scale while four fits it nearly as well.
+ *
+ * Gate a UI on `tt_offline_downbeat_confident`, which requires both, rather
+ * than on either margin alone — that mistake is what this API separated.
+ */
+TT_API double tt_offline_downbeat_strength(const tt_offline* offline);
+TT_API double tt_offline_downbeat_phase_margin(const tt_offline* offline);
+TT_API double tt_offline_downbeat_meter_margin(const tt_offline* offline);
+
+/*
+ * Whether the bar lines are worth accenting at all: non-zero when a pattern
+ * exists and both margins clear their thresholds.
+ *
+ * When this is zero a player should count from the first beat and accent
+ * nothing. Accenting "every fourth beat starting from the first" as a fallback
+ * is not a neutral default — it is an arbitrary accent presented with the same
+ * confidence as a real one, and a player following it is worse off than with a
+ * plain click.
+ */
+TT_API int tt_offline_downbeat_confident(const tt_offline* offline);
 
 typedef struct tt_tempo_candidate {
     double bpm;
@@ -508,11 +566,18 @@ typedef struct tt_player_config {
     double sample_rate;         /* Must be > 0, and the track's rate.          */
     tt_click_config click;      /* click.sample_rate 0 -> sample_rate.         */
 
-    /* Bars are bookkeeping until Phase 7 detects real downbeats: grid beat
-       `downbeat_offset` is a bar's first beat, and every beats_per_bar-th
-       after it. The offset lets the user shift which beat is "the one". */
+    /* Grid beat `downbeat_offset` is a bar's first beat, and every
+       beats_per_bar-th after it. Both come from the offline analysis —
+       tt_offline_beats_per_bar and the first of tt_offline_downbeats — with
+       the offset left settable so the user can shift which beat is "the one"
+       when the analysis is unsure or simply wrong. */
     int beats_per_bar;          /* 0 -> 4                                      */
     int downbeat_offset;        /* 0-based grid index; negative rejected       */
+    /* Whether bar starts are distinguished at all. Read literally:
+       tt_player_config_defaults enables it; set to 0 when
+       tt_offline_downbeat_confident returns 0 so every beat sounds and is
+       reported alike. Bars remain available for looping and positioning. */
+    int accent_downbeats;
 
     /* Count-in clicks before the music, at the local beat interval read off
        the grid at the entry point, with the track silent underneath. */
@@ -701,7 +766,45 @@ TT_API int tt_live_take_beat(tt_live* live, double now_sec, double lookahead_sec
  */
 TT_API void tt_live_seed_tempo(tt_live* live, double bpm, double spread_octaves);
 
-/* Forgets the audio, the tempo and the clock — a new session. */
+/*
+ * Manual mode: the tempo is the user's and the room is asked only where the
+ * beat falls. 0 goes back to tracking the tempo too.
+ *
+ * A different promise from auto mode, in two ways that a shell has to show:
+ *
+ * - Nothing comes out until the room has been heard. The user sets a tempo and
+ *   starts; the click waits, catches the first phrase and falls in on it, which
+ *   is what makes a count-in of its own unnecessary. tt_live_waiting is that
+ *   state, and what a UI shows as "listening...".
+ *
+ * - Once it has fallen in, it does not stop. In auto mode a room that goes
+ *   quiet has taken the tempo with it; here the tempo was never the room's, so
+ *   the click holds it through a silent bar, a solo or a cough, indefinitely.
+ *
+ * The room may nudge the click by up to 2% of a beat at a time, so it follows a
+ * player drifting within about 2% of the tempo set and free-runs against
+ * anything further off. Finding the phase is a far smaller problem than finding
+ * a tempo, which is why this mode works on material the auto tracker cannot
+ * follow at all.
+ *
+ * The tempo is taken as given, including outside min_bpm..max_bpm: that range
+ * is a belief about what music is likely to be, and it does not overrule a
+ * number somebody typed.
+ */
+TT_API void tt_live_set_manual_tempo(tt_live* live, double bpm);
+TT_API double tt_live_manual_tempo(const tt_live* live);
+
+/* Manual mode, still listening for something to fall in with. 0 otherwise. */
+TT_API int tt_live_waiting(const tt_live* live);
+
+/*
+ * How concentrated the room's onsets are at one phase, 0..1 — the meter behind
+ * that "listening...". Manual mode only; 0 in auto mode.
+ */
+TT_API double tt_live_sync_strength(const tt_live* live);
+
+/* Forgets the audio and the clock — a new session. The manual tempo survives:
+   it was typed, not heard. */
 TT_API void tt_live_reset(tt_live* live);
 
 typedef struct tt_live_stats {

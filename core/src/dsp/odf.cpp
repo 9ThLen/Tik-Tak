@@ -28,6 +28,8 @@ bool OdfConfig::valid() const {
     if (whitening && !(whiteningTau > 0.0)) return false;
     if (whitening && !(whiteningFloorRel > 0.0 && whiteningFloorRel < 1.0)) return false;
     if (whitening && !(whiteningStrength >= 0.0 && whiteningStrength <= 1.0)) return false;
+    if (chroma && !(chromaMinHz > 0.0 && chromaMaxHz > chromaMinHz)) return false;
+    if (chroma && chromaMinHz >= sampleRate * 0.5) return false;
     return true;
 }
 
@@ -52,6 +54,12 @@ Odf::Odf(const OdfConfig& config)
     globalDecay_ = static_cast<float>(
         std::exp(-1.0 / (config_.whiteningTau * kGlobalTauMultiplier * framesPerSecond)));
 
+    if (config_.chroma) {
+        chroma_bank_ = std::make_unique<ChromaFilterbank>(
+            config_.frameSize, config_.sampleRate, config_.chromaMinHz, config_.chromaMaxHz);
+        chroma_.assign(ChromaFilterbank::kBins, 0.0f);
+    }
+
     whitenPeak_.assign(bands, 0.0f);
     melBuf_.assign(bands, 0.0f);
     logMel_.assign(bands, 0.0f);
@@ -65,11 +73,18 @@ void Odf::reset() {
     std::fill(melBuf_.begin(), melBuf_.end(), 0.0f);
     std::fill(logMel_.begin(), logMel_.end(), 0.0f);
     std::fill(prevLogMel_.begin(), prevLogMel_.end(), 0.0f);
+    std::fill(chroma_.begin(), chroma_.end(), 0.0f);
     hasPrev_ = false;
 }
 
 OdfFrame Odf::computeFrame(const float* magnitude, std::size_t frameStartSample) {
     const std::size_t bands = mel_.bands();
+
+    // From the raw spectrum, before whitening: whitening equalises each band
+    // against its own recent peak, which is exactly what a chord's balance of
+    // partials consists of. Whitened chroma would report a change every time
+    // one note in a held chord decayed faster than another.
+    if (chroma_bank_) chroma_bank_->apply(magnitude, chroma_.data());
 
     mel_.apply(magnitude, melBuf_.data());
 
