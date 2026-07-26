@@ -6,12 +6,14 @@ on:
     paths:
       - "research/**"
       - "tools/parity/**"
+      - "tools/eval/**"
       - "core/**"
       - ".github/workflows/research.yml"
   pull_request:
     paths:
       - "research/**"
       - "tools/parity/**"
+      - "tools/eval/**"
       - "core/**"
       - ".github/workflows/research.yml"
 
@@ -52,3 +54,21 @@ jobs:
 
       - name: Compare C++ against the Python reference
         run: python tools/parity/check_parity.py
+
+      - name: Configure the analysis dump
+        run: >
+          cmake -S tools/eval -B tools/eval/build -G Ninja
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DTIKTAK_WERROR=ON
+
+      - name: Build the analysis dump
+        run: cmake --build tools/eval/build
+
+      # A regression signal on synthetic clips, not a calibration: they have no
+      # chord changes, so the harmony cue is not exercised, and the margin
+      # threshold must be chosen on real recordings. Ten of the thirteen clips
+      # currently come back with the right metre and phase; the three that do
+      # not are named in research/eval/README.md.
+      - name: Score the bar lines
+        working-directory: research
+        run: python -m eval.downbeat_benchmark --expect-correct 10

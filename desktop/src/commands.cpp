@@ -899,6 +899,13 @@ int cmdTrack(const Options& options) {
     // on the wrong beat is worse for a player to follow than no accent. Below
     // the threshold the harness says so and falls back to counting from the
     // first beat, which is at least honestly arbitrary.
+    //
+    // 0.25 is a placeholder and not a calibration — nothing has been measured
+    // that says it is the right number. research/eval/downbeat_benchmark.py is
+    // what replaces it: it sweeps the threshold, reports coverage against the
+    // wrong-accent rate, and picks the most generous threshold inside a wrong
+    // rate budget. That needs 30–50 annotated recordings, which do not exist
+    // yet; see research/eval/README.md.
     constexpr double kMinMargin = 0.25;
     int beats_per_bar = options.beats_per_bar;
     int downbeat_offset = 0;
