@@ -4,9 +4,11 @@ import pytest
 from eval.analysis import Estimate
 from eval.annotations import Reference
 from eval.downbeat import (
+    SweepRow,
     Verdict,
     choose_margins,
     eligible,
+    evidence_gap,
     score,
     sweep,
     thresholds_from,
@@ -298,6 +300,38 @@ def test_every_observed_margin_gets_its_exact_decision_boundary():
     assert len(candidates) == len(values) + 1  # zero plus one boundary per value
     for value in values:
         assert float(np.nextafter(value, np.inf)) in candidates
+
+
+def _row(n, shown, correct):
+    return SweepRow(min_phase_margin=0.0, min_meter_margin=0.3, n=n, shown=shown,
+                    correct=correct, wrong_meter=0, wrong_phase=0,
+                    withheld=n - shown, no_answer=0)
+
+
+def test_a_clean_sweep_of_a_handful_of_clips_is_not_a_demonstrated_error_rate():
+    # The exact shape of every run so far: no wrong answers, and nowhere near
+    # enough results for that to mean the error rate is under five percent.
+    complaint = evidence_gap(_row(n=6, shown=4, correct=4))
+
+    assert complaint is not None
+    assert "60" in complaint and "30" in complaint
+
+
+def test_enough_clips_and_enough_shown_accents_carry_the_claim():
+    assert evidence_gap(_row(n=60, shown=30, correct=30)) is None
+
+
+def test_coverage_too_thin_fails_even_with_the_clips_to_spare():
+    # A hundred clips that only ever accent five of them says nothing about the
+    # conditional error, which is the number a player actually meets.
+    assert evidence_gap(_row(n=100, shown=5, correct=5)) is not None
+
+
+def test_a_looser_budget_needs_correspondingly_less_evidence():
+    row = _row(n=15, shown=10, correct=10)
+
+    assert evidence_gap(row, max_wrong_rate=0.05, max_conditional_error=0.10)
+    assert evidence_gap(row, max_wrong_rate=0.20, max_conditional_error=0.30) is None
 
 
 def test_thresholds_survive_an_empty_set():

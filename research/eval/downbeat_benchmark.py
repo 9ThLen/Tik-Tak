@@ -48,6 +48,7 @@ from eval.downbeat import (
     Verdict,
     choose_margins,
     eligible,
+    evidence_gap,
     format_scores,
     format_sweep,
     frontier,
@@ -227,6 +228,14 @@ def main(argv: list[str] | None = None) -> int:
                       f"metre >= {chosen.min_meter_margin:.2f} — coverage "
                       f"{chosen.coverage:.0%}, wrong rate {chosen.wrong_rate:.0%}, "
                       f"conditional error {chosen.conditional_error:.0%}")
+                # Printed against the number it qualifies, not in a footnote.
+                # A zero observed on a handful of clips reads as a result, and
+                # the only thing standing between that reading and shipping a
+                # threshold nothing supports is this line.
+                gap = evidence_gap(chosen, args.max_wrong_rate,
+                                   args.max_conditional_error)
+                if gap is not None:
+                    print(gap)
 
     # The one number the whole exercise is for: the chosen thresholds applied
     # once to material they were not chosen on. Reported whatever it says.

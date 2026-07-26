@@ -56,6 +56,7 @@ __all__ = [
     "score",
     "sweep",
     "choose_margins",
+    "evidence_gap",
     "thresholds_from",
     "format_scores",
     "format_sweep",
@@ -336,6 +337,11 @@ def choose_margins(rows: Sequence[SweepRow],
 
     Choose on a validation split and report on a held-out one. A threshold
     picked and reported on the same clips is a description of those clips.
+
+    Meeting a budget is not the same as demonstrating it. On a small split the
+    winning pair regularly reports a wrong rate of zero over a handful of shown
+    results, which the sample is far too small to support — ask
+    ``evidence_gap`` before repeating the number as a property of the app.
     """
     acceptable = [
         r for r in rows
@@ -353,6 +359,36 @@ def choose_margins(rows: Sequence[SweepRow],
         acceptable,
         key=lambda r: (r.coverage, -r.min_phase_margin, -r.min_meter_margin),
     )
+
+
+def evidence_gap(row: SweepRow,
+                 max_wrong_rate: float = 0.05,
+                 max_conditional_error: float = 0.10) -> str | None:
+    """Why this row cannot yet demonstrate the budget it satisfies, if it cannot.
+
+    A run that observes no wrong accents has not shown the error rate is small;
+    it has shown the error rate is smaller than its sample can resolve. By the
+    rule of three, zero failures in ``n`` trials puts the 95% upper bound at
+    about ``3/n``, so a claim of ``p`` needs roughly ``3/p`` results before the
+    data can carry it — 60 clips for a 5% wrong rate, 30 shown accents for a
+    10% conditional error.
+
+    This is the difference between the two numbers the benchmark prints. The
+    chooser answers "where would I put the threshold given what I have"; this
+    answers "may I repeat that as a property of the app", and on any split of
+    the size available so far the answer is no. Returned as a complaint rather
+    than raised, because the exploratory number is still worth seeing — it just
+    must not be seen alone.
+    """
+    needed_clips = int(np.ceil(3.0 / max_wrong_rate)) if max_wrong_rate > 0 else 0
+    needed_shown = (int(np.ceil(3.0 / max_conditional_error))
+                    if max_conditional_error > 0 else 0)
+    if row.n >= needed_clips and row.shown >= needed_shown:
+        return None
+    return (f"chosen, not demonstrated: {row.n} clip(s) and {row.shown} shown "
+            f"accent(s) cannot support {max_wrong_rate:.0%} wrong / "
+            f"{max_conditional_error:.0%} conditional — that needs about "
+            f"{needed_clips} clips and {needed_shown} shown")
 
 
 def frontier(rows: Sequence[SweepRow]) -> list[SweepRow]:
