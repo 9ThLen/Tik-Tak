@@ -21,8 +21,8 @@ android/**/build/
 
 # Python research environment
 research/.venv/
-research/**/__pycache__/
-research/**/*.pyc
+**/__pycache__/
+**/*.py[cod]
 *.egg-info/
 .pytest_cache/
 .ipynb_checkpoints/

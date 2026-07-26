@@ -84,3 +84,19 @@ jobs:
       - name: Score the bar lines
         working-directory: research
         run: python -m eval.downbeat_benchmark --expect-correct 10
+
+  model-artifacts-windows:
+    name: model artifacts (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install pytest
+        run: python -m pip install pytest
+
+      - name: Exercise Windows artifact locking
+        run: python -m pytest -q research/tests/test_model_artifacts.py
