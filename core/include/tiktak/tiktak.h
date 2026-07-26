@@ -571,6 +571,11 @@ typedef struct tt_player_config {
        when the analysis is unsure or simply wrong. */
     int beats_per_bar;          /* 0 -> 4                                      */
     int downbeat_offset;        /* 0-based grid index; negative rejected       */
+    /* Whether bar starts are distinguished at all. Read literally:
+       tt_player_config_defaults enables it; set to 0 when
+       tt_offline_downbeat_confident returns 0 so every beat sounds and is
+       reported alike. Bars remain available for looping and positioning. */
+    int accent_downbeats;
 
     /* Count-in clicks before the music, at the local beat interval read off
        the grid at the entry point, with the track silent underneath. */

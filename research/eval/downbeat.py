@@ -68,12 +68,6 @@ __all__ = [
 # be looked at rather than scored on a coin toss.
 PHASE_RECALL = 0.5
 
-# The core's current defaults, so a run can say what the shipped thresholds
-# would have done. Placeholders — see core/src/analysis/downbeat.hpp.
-DEFAULT_MIN_PHASE_MARGIN = 0.25
-DEFAULT_MIN_METER_MARGIN = 0.40
-
-
 class Verdict:
     """What happened on one clip, from the point of view of a player.
 
@@ -116,6 +110,18 @@ class ClipScore:
         if self.estimated_meter <= 0:
             return Verdict.NO_ANSWER
         if self.phase_margin < min_phase_margin or self.meter_margin < min_meter_margin:
+            return Verdict.WITHHELD
+        if not self.meter_correct:
+            return Verdict.WRONG_METER
+        if not self.phase_correct:
+            return Verdict.WRONG_PHASE
+        return Verdict.CORRECT
+
+    def shipped_verdict(self) -> str:
+        """What the C++ core decided under the thresholds it actually ships."""
+        if self.estimated_meter <= 0:
+            return Verdict.NO_ANSWER
+        if not self.shipped_confident:
             return Verdict.WITHHELD
         if not self.meter_correct:
             return Verdict.WRONG_METER
@@ -241,27 +247,31 @@ class SweepRow:
         return self.wrong / self.shown if self.shown else float("nan")
 
 
-def thresholds_from(values: Sequence[float], count: int = 12) -> list[float]:
+def thresholds_from(values: Sequence[float]) -> list[float]:
     """Candidate thresholds drawn from the margins actually observed.
 
     A fixed 0…1 grid was wrong in both directions: it wasted most of its rows on
     a range the data never occupies, and it stopped at 1.0 while real margins
     reach past 3, so every clip above 1.0 was lumped together and the top of the
-    curve was invisible. Quantiles put the candidates where the decisions
-    change.
+    curve was invisible. Observed margins put the candidates exactly where the
+    decisions change.
 
-    Zero is always included, so "accent everything the analysis offers" stays on
-    the curve as the baseline the thresholds have to beat.
+    Every distinct decision boundary is included. A 100–150 clip calibration
+    produces at most a few tens of thousands of threshold pairs, which is small
+    enough to evaluate exactly and avoids a quantile grid skipping the optimum.
+
+    Zero is always included, so "accent everything the analysis offers" stays
+    on the curve as the baseline the thresholds have to beat. Because a margin
+    equal to the threshold is still shown, the boundary is the next
+    representable float above each observed value.
     """
     finite = np.asarray([v for v in values if np.isfinite(v)], dtype=np.float64)
     if len(finite) == 0:
         return [0.0]
-    quantiles = np.linspace(0.0, 1.0, max(count, 2))
-    candidates = np.unique(np.round(np.quantile(finite, quantiles), 4))
-    # Just above the largest observed margin, so "never answer" is representable
-    # and visibly rejected rather than silently absent.
-    beyond = float(np.nextafter(finite.max(), np.inf))
-    return sorted({0.0, *candidates.tolist(), beyond})
+    return sorted({
+        0.0,
+        *(float(np.nextafter(value, np.inf)) for value in np.unique(finite)),
+    })
 
 
 def eligible(scores: Sequence[ClipScore]) -> list[ClipScore]:
@@ -359,9 +369,7 @@ def frontier(rows: Sequence[SweepRow]) -> list[SweepRow]:
     return sorted(best.values(), key=lambda r: (-r.shown, r.wrong))
 
 
-def format_scores(scores: Sequence[ClipScore],
-                  min_phase_margin: float = DEFAULT_MIN_PHASE_MARGIN,
-                  min_meter_margin: float = DEFAULT_MIN_METER_MARGIN) -> str:
+def format_scores(scores: Sequence[ClipScore]) -> str:
     lines = [
         f"{'clip':<24}{'beat F':>8}{'db F':>7}{'metre':>9}"
         f"{'phase':>8}{'metre m':>9}  verdict",
@@ -373,7 +381,7 @@ def format_scores(scores: Sequence[ClipScore],
         lines.append(
             f"{s.name[:23]:<24}{s.beat_f:>8.2f}{s.downbeat_f:>7.2f}{metre:>9}"
             f"{s.phase_margin:>8.2f}{s.meter_margin:>9.2f}  "
-            f"{s.verdict(min_phase_margin, min_meter_margin)}{note}"
+            f"{s.shipped_verdict()}{note}"
         )
     return "\n".join(lines)
 

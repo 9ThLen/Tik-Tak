@@ -384,11 +384,12 @@ void printUsage() {
         "  --hint N           manual-mode tempo hint in BPM; 0 estimates (0)\n"
         "\n"
         "`track` finds the bar lines as well as the beats, and accents the one.\n"
-        "It reports how far the bar line it picked stands above the next best\n"
-        "place to put it; below a margin of 0.25 it declines to accent anything,\n"
-        "because an accent on the wrong beat is harder to play to than none.\n"
+        "It reports separate phase and metre margins and accents only when both\n"
+        "are convincing, because an accent on the wrong beat is harder to play\n"
+        "to than none.\n"
         "Passing --beats overrides the meter it found — the number you type is\n"
-        "an assertion about the music, the same way --hint is.\n"
+        "an assertion about the music, the same way --hint is. It does not invent\n"
+        "which beat starts the bar when the audio cannot say.\n"
         "  --no-click         the track alone, no metronome\n"
         "  --no-cache         re-analyse even when the beat grid is cached\n"
         "\n"
@@ -931,18 +932,20 @@ int cmdTrack(const Options& options) {
         // An explicit --beats is the user's assertion about the music and
         // outranks the analysis, exactly as an explicit --bpm does. It asserts
         // the bar *length* though, and says nothing about which beat starts the
-        // bar — so the phase is still taken from the audio when the analysis
-        // agreed about the meter, rather than defaulting to the first beat and
-        // accenting a beat nobody chose.
-        accent = true;
+        // bar. Use the phase only when the analysis independently supports it;
+        // otherwise an even click is the only answer that does not invent one.
         if (grid.beats_per_bar == options.beats_per_bar && !grid.downbeats.empty() &&
             grid.downbeat_phase_margin >= analysis.downbeat.min_phase_margin) {
             downbeat_offset = beatIndexOf(grid.beats, grid.downbeats.front());
+            accent = true;
             std::printf("bar starts on beat %d, from the audio\n", downbeat_offset + 1);
         } else if (grid.beats_per_bar > 0 && grid.beats_per_bar != options.beats_per_bar) {
             std::printf("using --beats %d over the %d the audio suggests"
-                        " — counting the bar from the first beat\n",
+                        " — phase unknown, every beat clicks the same\n",
                         options.beats_per_bar, grid.beats_per_bar);
+        } else {
+            std::printf("using --beats %d — phase unknown, every beat clicks the same\n",
+                        options.beats_per_bar);
         }
     } else if (grid.downbeat_confident) {
         beats_per_bar = grid.beats_per_bar;

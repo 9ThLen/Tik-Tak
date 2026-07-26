@@ -103,6 +103,7 @@ jobs:
           "$BIN" track core/tests/data/click_120.mp3 --seconds 8 --no-cache --beats 3 \
             -o bars3.wav | tee bars3.log
           grep -q "using --beats 3 over the 4 the audio suggests" bars3.log
+          grep -q "phase unknown, every beat clicks the same" bars3.log
 
       # The microphone path, on a runner that has no microphone: the same
       # tracker, fed from a file against a virtual clock. This is why `listen`

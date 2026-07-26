@@ -28,9 +28,9 @@ A dataset folder holds audio with an annotation of the same name beside it::
       waltz.beats
 
 See eval/annotations.py for the annotation format. Thirty to fifty recordings
-covering what the app will actually meet — full band, drumless takes, vocals
-with guitar, waltzes, 6/8 — is the useful size; a dozen will move the threshold
-around by more than the threshold matters.
+covering what the app will actually meet are enough for a pilot. Calibrating a
+5% error claim needs roughly 60 independent *shown* results, so at realistic
+coverage the target is 100–150 clips; see eval/README.md.
 """
 
 from __future__ import annotations
@@ -45,8 +45,6 @@ import numpy as np
 from eval.analysis import Analyser, DEFAULT_BINARY
 from eval.annotations import Reference, find_pairs
 from eval.downbeat import (
-    DEFAULT_MIN_METER_MARGIN,
-    DEFAULT_MIN_PHASE_MARGIN,
     Verdict,
     choose_margins,
     eligible,
@@ -200,12 +198,10 @@ def main(argv: list[str] | None = None) -> int:
     # be read against the code as it stands rather than only against its own
     # best case.
     usable = eligible(scores)
-    shipped = [s.verdict(DEFAULT_MIN_PHASE_MARGIN, DEFAULT_MIN_METER_MARGIN)
-               for s in usable]
+    shipped = [s.shipped_verdict() for s in usable]
     shown = sum(v in Verdict.SHOWN for v in shipped)
     wrong = sum(v in Verdict.WRONG for v in shipped)
-    print(f"\nat the shipped thresholds "
-          f"(phase {DEFAULT_MIN_PHASE_MARGIN}, metre {DEFAULT_MIN_METER_MARGIN}): "
+    print(f"\nat the thresholds reported by the C++ core: "
           f"{shown}/{len(usable)} accented, {wrong} wrong")
 
     chosen = None

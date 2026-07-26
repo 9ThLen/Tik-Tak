@@ -609,6 +609,7 @@ tiktak::render::PlayerConfig resolve(const tt_player_config& in) {
 
     out.beats_per_bar = in.beats_per_bar > 0 ? in.beats_per_bar : 4;
     out.downbeat_offset = in.downbeat_offset;
+    out.accent_downbeats = in.accent_downbeats != 0;
     out.count_in_beats = in.count_in_beats;
     out.cue_lookahead_sec =
         in.cue_lookahead_sec > 0.0 ? in.cue_lookahead_sec : 0.25;
@@ -633,6 +634,7 @@ void tt_player_config_defaults(tt_player_config* cfg, double sample_rate) {
     tt_click_config_defaults(&cfg->click, sample_rate);
     cfg->beats_per_bar = 4;
     cfg->downbeat_offset = 0;
+    cfg->accent_downbeats = 1;
     cfg->count_in_beats = 0;
     cfg->cue_lookahead_sec = 0.25;
     for (int i = 0; i < TT_CHANNEL_COUNT; ++i) {

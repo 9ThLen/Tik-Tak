@@ -29,7 +29,7 @@ def reference(beats_per_bar=4, bars=8, bpm=120.0, phase=0):
 
 
 def estimate_from(ref, beats_per_bar=None, phase=0, margin=1.0, meter_margin=None,
-                  strength=1.0, shift=0.0):
+                  strength=1.0, shift=0.0, confident=True):
     beats_per_bar = beats_per_bar or ref.beats_per_bar
     beats = ref.beats + shift
     downbeats = beats[(np.arange(len(beats)) - phase) % beats_per_bar == 0]
@@ -40,6 +40,7 @@ def estimate_from(ref, beats_per_bar=None, phase=0, margin=1.0, meter_margin=Non
         downbeat_strength=strength,
         downbeat_phase_margin=margin,
         downbeat_meter_margin=margin if meter_margin is None else meter_margin,
+        downbeat_confident=confident,
     )
 
 
@@ -108,6 +109,15 @@ def test_a_low_margin_withholds_rather_than_answers_wrong():
 
     assert score(ref, wrong).verdict(0.25, 0.25) == Verdict.WITHHELD
     assert score(ref, wrong).verdict(0.05, 0.05) == Verdict.WRONG_PHASE
+
+
+def test_the_shipped_verdict_uses_the_cores_decision_not_a_python_threshold_copy():
+    ref = reference()
+    estimate = estimate_from(ref, margin=9.0, meter_margin=9.0, confident=False)
+    result = score(ref, estimate)
+
+    assert result.verdict(0.0, 0.0) == Verdict.CORRECT
+    assert result.shipped_verdict() == Verdict.WITHHELD
 
 
 def test_a_reference_without_bar_lines_is_scored_on_beats_only():
@@ -279,6 +289,15 @@ def test_candidate_thresholds_come_from_the_margins_actually_seen():
     assert min(candidates) == 0.0
     assert max(candidates) > 3.57, "there is a threshold that withholds everything"
     assert any(c > 1.0 for c in candidates), "the range above 1.0 is represented"
+
+
+def test_every_observed_margin_gets_its_exact_decision_boundary():
+    values = np.linspace(0.01, 3.57, 37)
+    candidates = thresholds_from(values)
+
+    assert len(candidates) == len(values) + 1  # zero plus one boundary per value
+    for value in values:
+        assert float(np.nextafter(value, np.inf)) in candidates
 
 
 def test_thresholds_survive_an_empty_set():

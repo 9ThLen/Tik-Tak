@@ -958,6 +958,7 @@ struct Player {
 TEST(PlayerApi, PlaysATrackWithClicksOnItsGrid) {
     tt_player_config cfg;
     tt_player_config_defaults(&cfg, 48000.0);
+    EXPECT_EQ(cfg.accent_downbeats, 1);
     cfg.count_in_beats = 2;
 
     Player player{cfg};
@@ -986,6 +987,36 @@ TEST(PlayerApi, PlaysATrackWithClicksOnItsGrid) {
     tt_player_stats_get(player.handle, &stats);
     EXPECT_EQ(stats.beats, 8u);  // 2 count-in + 6 grid beats
     EXPECT_EQ(stats.clean, 1);
+}
+
+TEST(PlayerApi, CanKeepEveryBeatEvenWhenTheAnalysisWithholdsItsAccent) {
+    tt_player_config cfg;
+    tt_player_config_defaults(&cfg, 48000.0);
+    cfg.accent_downbeats = 0;
+    cfg.channel_enabled[TT_CHANNEL_HAPTIC] = 1;
+
+    Player player{cfg};
+    ASSERT_NE(player.handle, nullptr);
+
+    const std::vector<float> track(48000 * 3, 0.0f);
+    const double grid[] = {0.0, 0.5, 1.0, 1.5, 2.0, 2.5};
+    ASSERT_EQ(tt_player_set_track(player.handle, track.data(), track.size()), TT_OK);
+    ASSERT_EQ(tt_player_set_grid(player.handle, grid, 6), TT_OK);
+    ASSERT_EQ(tt_player_start(player.handle, 0.0, 0), TT_OK);
+
+    std::size_t seen = 0;
+    for (int b = 0; b < 250; ++b) {
+        float buffer[512] = {0.0f};
+        tt_event cues[8];
+        std::size_t count = 0;
+        tt_player_process(player.handle, b * 512 / 48000.0, buffer, 512,
+                          cues, 8, &count);
+        for (std::size_t i = 0; i < count; ++i) {
+            EXPECT_EQ(cues[i].kind, TT_BEAT_BEAT);
+            ++seen;
+        }
+    }
+    EXPECT_GE(seen, 4u);
 }
 
 TEST(PlayerApi, RejectsWhatTheCoreRejects) {

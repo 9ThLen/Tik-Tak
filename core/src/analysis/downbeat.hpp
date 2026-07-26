@@ -93,21 +93,22 @@ struct DownbeatConfig {
     // anything. They live in the config rather than at the call site so that
     // research/eval sweeps the same numbers the app uses, not a copy of them.
     //
-    // **Provisional, on synthetic material only.** The metre threshold was
-    // chosen by research/eval/downbeat_benchmark.py on a six-clip validation
-    // split and checked once on the seven held out, where it took the wrong
-    // rate from 14% to zero. Six clips is not a calibration and the material
-    // has no chord changes in it at all, so the harmony cue had no say. Real
-    // recordings will move both numbers. The phase threshold has had no such
-    // check and remains a plain guess.
+    // **Provisional, on synthetic material only.** A metre threshold above the
+    // two observed wrong answers took the wrong rate from 14% to zero on seven
+    // held-out clips; 0.40 is a deliberately conservative round value inside
+    // that separation, not an optimum inferred from six validation clips.
+    // Six clips is not a calibration and the material has no chord changes in
+    // it at all, so the harmony cue had no say. Real recordings will move both
+    // numbers. The phase threshold has had no such check and remains a plain
+    // guess.
     //
     // A consequence worth knowing rather than discovering: a metre that divides
     // another is inherently less separable, because the longer bar fits the
     // shorter pattern exactly. Two-beat bars score a metre margin near zero
     // against four and are usually withheld. That is the measure being honest —
     // 4/4 really does fit a 2/4 accent pattern — but it means 2/4 mostly does
-    // not get an automatic accent, and asking for it with --beats is the way to
-    // get one.
+    // not get an automatic accent. `--beats` can assert the bar length, but it
+    // still needs a phase supported by the audio rather than inventing one.
     double min_phase_margin = 0.25;
     double min_meter_margin = 0.40;
 

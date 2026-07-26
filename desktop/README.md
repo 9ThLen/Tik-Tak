@@ -132,10 +132,10 @@ bar starts on beat 1, from the audio
 ```
 
 and when it did not, the harness says it is overruling the audio and counts from
-the first beat:
+no invented first beat as the downbeat:
 
 ```
-using --beats 3 over the 4 the audio suggests — counting the bar from the first beat
+using --beats 3 over the 4 the audio suggests — phase unknown, every beat clicks the same
 ```
 
 The thresholds are provisional. `research/eval/downbeat_benchmark.py` is what
