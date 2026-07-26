@@ -486,7 +486,6 @@ DownbeatResult resolveMeter(const std::vector<double>& salience,
     DownbeatResult result;
     const std::size_t n = salience.size();
     if (n == 0 || n != beat_times.size() || !config.valid()) return result;
-    if (n > (1ULL << 53)) return result;  // integer coefficients must be exact
 
     // Do not normalise a backend we do not own. A periodic difference of a few
     // millionths is still a few millionths of evidence, not a unit-variance bar
