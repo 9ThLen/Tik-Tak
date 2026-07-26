@@ -241,20 +241,40 @@ TT_API size_t tt_offline_downbeat_count(const tt_offline* offline);
 TT_API size_t tt_offline_downbeats(const tt_offline* offline, double* out, size_t capacity);
 
 /*
- * How far to trust those bar lines. Both are in standard deviations of the
+ * How far to trust those bar lines. All three are in standard deviations of the
  * per-beat cue, and they answer different questions.
  *
  * `strength` is how much louder the chosen bar lines are than the beats around
  * them. Near zero means the audio has no bar-level pattern at all, and the
  * honest thing to show is no accent.
  *
- * `margin` is how far ahead the winning bar line is of the next best place to
- * put it. A strong pattern with a small margin means the bars are clear but
- * which beat starts them is a coin toss — and an accent on the wrong beat is
- * worse than no accent, so this is the one to gate a UI on.
+ * `phase_margin` is how far ahead the winning bar line is of the next best
+ * place to put it *within the same meter*. A strong pattern with a small phase
+ * margin means the bars are clear but which beat starts them is a coin toss.
+ *
+ * `meter_margin` is how far ahead the winning meter is of the next best meter.
+ * It has to be asked separately: every rival the phase margin considers has
+ * already accepted the bar length, so a piece read in three can look completely
+ * settled on that scale while four fits it nearly as well.
+ *
+ * Gate a UI on `tt_offline_downbeat_confident`, which requires both, rather
+ * than on either margin alone — that mistake is what this API separated.
  */
 TT_API double tt_offline_downbeat_strength(const tt_offline* offline);
-TT_API double tt_offline_downbeat_margin(const tt_offline* offline);
+TT_API double tt_offline_downbeat_phase_margin(const tt_offline* offline);
+TT_API double tt_offline_downbeat_meter_margin(const tt_offline* offline);
+
+/*
+ * Whether the bar lines are worth accenting at all: non-zero when a pattern
+ * exists and both margins clear their thresholds.
+ *
+ * When this is zero a player should count from the first beat and accent
+ * nothing. Accenting "every fourth beat starting from the first" as a fallback
+ * is not a neutral default — it is an arbitrary accent presented with the same
+ * confidence as a real one, and a player following it is worse off than with a
+ * plain click.
+ */
+TT_API int tt_offline_downbeat_confident(const tt_offline* offline);
 
 typedef struct tt_tempo_candidate {
     double bpm;

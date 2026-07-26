@@ -194,7 +194,12 @@ int main(int argc, char** argv) {
     std::printf("  \"beats_per_bar\": %d,\n", tt_offline_beats_per_bar(offline));
     std::printf("  \"downbeat_strength\": %.17g,\n",
                 finite(tt_offline_downbeat_strength(offline)));
-    std::printf("  \"downbeat_margin\": %.17g,\n", finite(tt_offline_downbeat_margin(offline)));
+    std::printf("  \"downbeat_phase_margin\": %.17g,\n",
+                finite(tt_offline_downbeat_phase_margin(offline)));
+    std::printf("  \"downbeat_meter_margin\": %.17g,\n",
+                finite(tt_offline_downbeat_meter_margin(offline)));
+    std::printf("  \"downbeat_confident\": %s,\n",
+                tt_offline_downbeat_confident(offline) ? "true" : "false");
     printTimes("beats", beats, false);
     printTimes("downbeats", downbeats, true);
     std::printf("}\n");

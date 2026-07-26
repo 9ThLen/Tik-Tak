@@ -98,23 +98,49 @@ the click accents the one:
 ```
 song.mp3 — 184.0 s at 44100 Hz
 beat grid: analysed — 372 beats at 121.0 BPM (confidence 0.81)
-bar lines: 4 beats to the bar (strength 1.40, margin 0.80)
+bar lines: 4 beats to the bar (strength 1.40, phase margin 0.80, metre margin 0.87)
 ```
 
-`strength` is how far the chosen bar lines stand above the beats around them;
-`margin` is how far ahead they are of the next best place to put them. The
-margin is the one that decides whether the accent is used at all — below 0.25
-the harness prints `too close to call` and counts from the first beat instead,
-because an accent on the wrong beat is harder to play to than no accent.
+`strength` is how far the chosen bar lines stand above the beats around them.
+The two margins are separate because they answer separate questions, and
+conflating them hid real errors: the **phase margin** says which beat starts the
+bar is settled, and the **metre margin** says no other bar length fits nearly as
+well. A piece read in three can be completely unambiguous about where its bars
+start — a large phase margin — while four fits it just as well, because every
+rival the phase margin weighs has already accepted three.
 
-`--beats N` overrides what was found. The number you type is an assertion about
-the music, the same way `--hint` is, and the harness says when it is overruling
-the audio:
+Both have to clear their thresholds before the accent is used. When they do not,
+the harness says so and the click stays even:
 
 ```
-bar lines: 4 beats to the bar (strength 1.40, margin 0.80)
-using --beats 3 over the 4 the audio suggests
+bar lines: 3 beats to the bar (strength 0.44, phase margin 0.04, metre margin 0.02) — too close to call
+no accent — every beat clicks the same
 ```
+
+Counting fours from the first beat instead would be an arbitrary accent worn
+with the same confidence as a detected one, and a player following it phrases to
+a bar line that is not there.
+
+`--beats N` overrides the bar *length*. The number you type is an assertion about
+the music, the same way `--hint` is. It says nothing about which beat starts the
+bar, so when the analysis agreed about the metre the phase still comes from the
+audio:
+
+```
+bar lines: 4 beats to the bar (strength 1.40, phase margin 0.80, metre margin 0.87)
+bar starts on beat 1, from the audio
+```
+
+and when it did not, the harness says it is overruling the audio and counts from
+the first beat:
+
+```
+using --beats 3 over the 4 the audio suggests — counting the bar from the first beat
+```
+
+The thresholds are provisional. `research/eval/downbeat_benchmark.py` is what
+sets them: it sweeps both, reports coverage against the wrong-accent rate, and
+picks the most generous pair inside a budget. See `research/eval/README.md`.
 
 The click is not latency-compensated against the track, on purpose: both leave
 through the same device buffer, so a click written on the beat's sample arrives

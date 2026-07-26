@@ -153,7 +153,7 @@ TEST(GridCache, RoundTripsTheBarLines) {
     // depend on what it detects, state a grid and require it back untouched.
     original.beats_per_bar = 3;
     original.downbeat_strength = 1.25;
-    original.downbeat_margin = 0.75;
+    original.downbeat_phase_margin = 0.75;
     original.downbeats = {0.5, 2.0, 3.5, 5.0};
 
     const std::vector<std::uint8_t> blob = serializeGrid(original, config);
@@ -163,7 +163,7 @@ TEST(GridCache, RoundTripsTheBarLines) {
 
     EXPECT_EQ(restored.beats_per_bar, 3);
     EXPECT_DOUBLE_EQ(restored.downbeat_strength, 1.25);
-    EXPECT_DOUBLE_EQ(restored.downbeat_margin, 0.75);
+    EXPECT_DOUBLE_EQ(restored.downbeat_phase_margin, 0.75);
     ASSERT_EQ(restored.downbeats.size(), original.downbeats.size());
     for (std::size_t i = 0; i < original.downbeats.size(); ++i) {
         EXPECT_DOUBLE_EQ(restored.downbeats[i], original.downbeats[i]) << "at bar " << i;

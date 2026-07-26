@@ -524,7 +524,7 @@ TEST(DecodeAndAnalyse, FindsTheBarLinesOfAnEncodedClickTrack) {
 
     EXPECT_EQ(tt_offline_beats_per_bar(analysis), 4);
     EXPECT_GT(tt_offline_downbeat_strength(analysis), 0.5);
-    EXPECT_GT(tt_offline_downbeat_margin(analysis), 0.25);
+    EXPECT_GT(tt_offline_downbeat_phase_margin(analysis), 0.25);
 
     const std::size_t count = tt_offline_downbeat_count(analysis);
     ASSERT_GE(count, 4u);

@@ -74,7 +74,10 @@ OfflineResult OfflineAnalyzer::finish() {
         result.downbeats = bars.downbeats;
         result.beats_per_bar = bars.beats_per_bar;
         result.downbeat_strength = bars.strength;
-        result.downbeat_margin = bars.margin;
+        result.downbeat_phase_margin = bars.phase_margin;
+        result.downbeat_meter_margin = bars.meter_margin;
+        result.downbeat_confident = bars.confident(config_.downbeat.min_phase_margin,
+                                                   config_.downbeat.min_meter_margin);
     }
     return result;
 }

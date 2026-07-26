@@ -1,8 +1,14 @@
 name: desktop
 
 on:
+  # `push` on the default branch, `pull_request` everywhere else. With `push`
+  # on every branch as well, a branch with a PR open matches both triggers and
+  # runs each workflow twice against the same commit — eleven check runs for
+  # eight jobs, doubling the queue and making a red X ambiguous about which run
+  # it belongs to. The trade is that a branch with no PR gets no CI; opening
+  # one is how you ask for it.
   push:
-    branches: ["**"]
+    branches: ["main"]
     paths: ["desktop/**", "core/**", ".github/workflows/desktop.yml"]
   pull_request:
     paths: ["desktop/**", "core/**", ".github/workflows/desktop.yml"]
@@ -76,8 +82,10 @@ jobs:
       # a kick on the one, and the trap it sets is the ordinary one — its snare
       # is louder broadband than its kick, so an analysis that follows the
       # loudest beat accents beat four instead. Only checking the meter would
-      # miss that, so the margin is checked too: it is what says the bar line
-      # is in one place rather than merely somewhere every four beats.
+      # miss that, so both margins are checked too. They answer different
+      # questions — the phase margin says the bar line is in one place rather
+      # than merely somewhere every four beats, and the metre margin says four
+      # is the bar length rather than three fitting nearly as well.
       - name: Find the bar lines of a real file
         shell: bash
         run: |
@@ -86,7 +94,11 @@ jobs:
           "$BIN" track core/tests/data/click_120.mp3 --seconds 8 --no-cache -o bars.wav \
             | tee bars.log
           grep -q "bar lines: 4 beats to the bar" bars.log
-          grep -Eq "margin (0\.[3-9]|[1-9])" bars.log
+          grep -Eq "phase margin (0\.[3-9]|[1-9])" bars.log
+          grep -Eq "metre margin (0\.[4-9]|[1-9])" bars.log
+          # Confident enough to use, so it must not have said otherwise.
+          ! grep -q "too close to call" bars.log
+          ! grep -q "no accent" bars.log
           # And an explicit --beats still outranks the analysis.
           "$BIN" track core/tests/data/click_120.mp3 --seconds 8 --no-cache --beats 3 \
             -o bars3.wav | tee bars3.log

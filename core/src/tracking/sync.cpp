@@ -13,7 +13,12 @@ constexpr double kTwoPi = 6.283185307179586476925286766559;
 bool SyncConfig::valid() const {
     return tau_sec > 0.0 && onset_exponent > 0.0 && acquire_strength > 0.0 &&
            acquire_strength <= 1.0 && release_strength >= 0.0 &&
-           release_strength < acquire_strength && min_rayleigh > 0.0 && hold_sec >= 0.0 &&
+           // Strictly above one, for the reason the field's comment gives: one
+           // is exactly what a single isolated onset scores, and it does not
+           // decay, so at or below one a lone door slam acquires a beat and
+           // keeps it. Accepting such a config would be accepting a mode that
+           // cannot work.
+           release_strength < acquire_strength && min_rayleigh > 1.0 && hold_sec >= 0.0 &&
            max_drift > 0.0 && max_drift < 0.5 && max_gap_sec > 0.0;
 }
 
@@ -72,7 +77,16 @@ void PhaseSync::observe(double time_sec, double onset) {
     x_ = decay * x_ + level * std::cos(angle);
     y_ = decay * y_ + level * std::sin(angle);
     mass_ = decay * mass_ + level;
-    mass_sq_ = decay * mass_sq_ + level * level;
+    // Squared, because this accumulates the *squares* of the same weights that
+    // `mass_` accumulates. A weight that has faded to `decay` of what it was
+    // contributes `decay²` of its square, and decaying it at `decay` instead
+    // leaves stale squares in the sum — which inflates the denominator and
+    // makes `mass²/mass_sq` smaller than the participation ratio it claims to
+    // be. For a steady signal it reported 1/(1-decay) where the ratio is
+    // (1+decay)/(1-decay): understated by nearly half, so the mode was harder
+    // to acquire than its thresholds said. Both agree on a single onset, which
+    // is why the "a lone hit scores one" reasoning below was never affected.
+    mass_sq_ = decay * decay * mass_sq_ + level * level;
 
     // Acquiring needs both: concentrated enough to be worth acting on, and
     // concentrated enough for the amount of evidence behind it to rule out

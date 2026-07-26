@@ -481,7 +481,7 @@ TEST(OfflineApi, FindsTheBarLinesOfATrackThatHasThem) {
 
     EXPECT_EQ(tt_offline_beats_per_bar(offline.handle), 4);
     EXPECT_GT(tt_offline_downbeat_strength(offline.handle), 0.5);
-    EXPECT_GT(tt_offline_downbeat_margin(offline.handle), 0.3);
+    EXPECT_GT(tt_offline_downbeat_phase_margin(offline.handle), 0.3);
 
     const std::size_t count = tt_offline_downbeat_count(offline.handle);
     ASSERT_GT(count, 4u);
@@ -660,7 +660,7 @@ TEST(OfflineApi, NullHandleIsHarmless) {
     EXPECT_EQ(tt_offline_downbeat_count(nullptr), 0u);
     EXPECT_EQ(tt_offline_downbeats(nullptr, beats, 4), 0u);
     EXPECT_DOUBLE_EQ(tt_offline_downbeat_strength(nullptr), 0.0);
-    EXPECT_DOUBLE_EQ(tt_offline_downbeat_margin(nullptr), 0.0);
+    EXPECT_DOUBLE_EQ(tt_offline_downbeat_phase_margin(nullptr), 0.0);
 
     tt_offline_reset(nullptr);
     tt_offline_destroy(nullptr);

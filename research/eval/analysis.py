@@ -26,18 +26,49 @@ import numpy as np
 __all__ = ["Estimate", "Analyser", "DEFAULT_BINARY"]
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-DEFAULT_BINARY = ROOT / "tools" / "eval" / "build" / "dump_analysis"
+
+
+def _find_binary() -> pathlib.Path:
+    """Where dump_analysis lands, across the layouts CMake produces.
+
+    Windows adds .exe, and a multi-config generator (Visual Studio, Xcode) puts
+    the binary in a per-configuration subdirectory rather than at the top of the
+    build tree. Returning the first that exists — and the plain path when none
+    do — keeps the error message pointing at the expected location.
+    """
+    build = ROOT / "tools" / "eval" / "build"
+    names = ("dump_analysis", "dump_analysis.exe")
+    folders = (build, *(build / c for c in
+                        ("RelWithDebInfo", "Release", "Debug", "MinSizeRel")))
+    for folder in folders:
+        for name in names:
+            if (candidate := folder / name).is_file():
+                return candidate
+    return build / names[0]
+
+
+DEFAULT_BINARY = _find_binary()
 
 
 @dataclass
 class Estimate:
-    """One analysis result. Mirrors the JSON dump_analysis prints."""
+    """One analysis result. Mirrors the JSON dump_analysis prints.
+
+    The two margins are separate because they answer separate questions and
+    conflating them hid real errors — see eval/downbeat.py and the comment on
+    DownbeatResult in the core.
+    """
 
     beats: np.ndarray
     downbeats: np.ndarray
     beats_per_bar: int
     downbeat_strength: float
-    downbeat_margin: float
+    downbeat_phase_margin: float
+    downbeat_meter_margin: float
+    # What the core itself concluded, under its own default thresholds. The
+    # sweep applies its own instead — this is here so a run can report how the
+    # shipped defaults would have behaved.
+    downbeat_confident: bool = False
     bpm: float = 0.0
     confidence: float = 0.0
     sample_rate: float = 0.0
@@ -50,7 +81,9 @@ class Estimate:
             downbeats=np.asarray(payload.get("downbeats", []), dtype=np.float64),
             beats_per_bar=int(payload.get("beats_per_bar", 0)),
             downbeat_strength=float(payload.get("downbeat_strength", 0.0)),
-            downbeat_margin=float(payload.get("downbeat_margin", 0.0)),
+            downbeat_phase_margin=float(payload.get("downbeat_phase_margin", 0.0)),
+            downbeat_meter_margin=float(payload.get("downbeat_meter_margin", 0.0)),
+            downbeat_confident=bool(payload.get("downbeat_confident", False)),
             bpm=float(payload.get("bpm", 0.0)),
             confidence=float(payload.get("confidence", 0.0)),
             sample_rate=float(payload.get("sample_rate", 0.0)),

@@ -44,13 +44,22 @@ struct OfflineResult {
     // when the track was too short for any meter to repeat.
     std::vector<double> downbeats;
     int beats_per_bar = 0;
-    // See DownbeatResult: how far the bar lines stand above the beats around
-    // them, and how far ahead of the next best place to put them. Both in
-    // standard deviations of the per-beat cue. A UI that accents downbeats
-    // should stop doing so when `downbeat_margin` is small — putting the accent
-    // in the wrong place is worse than putting it nowhere.
+    // See DownbeatResult, where all three are explained: how far the bar lines
+    // stand above the beats around them, how settled the beat they start on is,
+    // and how far ahead the winning meter is of the next one. All in standard
+    // deviations of the per-beat cue.
+    //
+    // A UI that accents downbeats needs both margins to be convincing, not just
+    // one — `downbeat_confident` below is that decision in a single place so no
+    // caller has to remember it.
     double downbeat_strength = 0.0;
-    double downbeat_margin = 0.0;
+    double downbeat_phase_margin = 0.0;
+    double downbeat_meter_margin = 0.0;
+
+    // Whether the bar lines are worth accenting. False means count from the
+    // first beat and accent nothing — putting the accent in the wrong place is
+    // worse for a player than putting it nowhere.
+    bool downbeat_confident = false;
 };
 
 // Whole-file beat analysis: audio in, a beat grid out.

@@ -214,6 +214,15 @@ std::ptrdiff_t findClick(const float* window, std::size_t frames, double rate) {
     return -1;
 }
 
+// Which beat of the grid a bar line falls on. The downbeats are a subset of the
+// beats by construction, so this is a lookup and not a nearest-match: the small
+// slack absorbs the round trip through the cache, where both went through the
+// same decimal conversion but not necessarily the same arithmetic.
+int beatIndexOf(const std::vector<double>& beats, double downbeat) {
+    const auto at = std::lower_bound(beats.begin(), beats.end(), downbeat - 1e-9);
+    return static_cast<int>(at - beats.begin());
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------- arguments --
@@ -894,43 +903,56 @@ int cmdTrack(const Options& options) {
 
     // Where the bar starts, from the audio rather than from a convention.
     //
-    // The margin is what decides whether to use it at all: it says how far the
-    // chosen bar line stands above the next best place to put it, and an accent
-    // on the wrong beat is worse for a player to follow than no accent. Below
-    // the threshold the harness says so and falls back to counting from the
-    // first beat, which is at least honestly arbitrary.
+    // Two doubts have to clear before the accent is used at all: the phase
+    // margin says which beat starts the bar is settled, and the meter margin
+    // says no other bar length fits nearly as well. Either one alone is not
+    // enough — a piece read in three can be perfectly settled about where its
+    // bars start while four fits it just as well, and the phase margin cannot
+    // see that because every rival it weighs has already accepted three.
     //
-    // 0.25 is a placeholder and not a calibration — nothing has been measured
-    // that says it is the right number. research/eval/downbeat_benchmark.py is
-    // what replaces it: it sweeps the threshold, reports coverage against the
-    // wrong-accent rate, and picks the most generous threshold inside a wrong
-    // rate budget. That needs 30–50 annotated recordings, which do not exist
-    // yet; see research/eval/README.md.
-    constexpr double kMinMargin = 0.25;
+    // Both thresholds live in the analysis config, not here, so that
+    // research/eval sweeps the same numbers this uses rather than a copy. They
+    // are placeholders; see research/eval/README.md.
     int beats_per_bar = options.beats_per_bar;
     int downbeat_offset = 0;
+    bool accent = false;
 
     if (!grid.beats.empty() && grid.beats_per_bar > 0) {
-        std::printf("bar lines: %d beats to the bar (strength %.2f, margin %.2f)%s\n",
-                    grid.beats_per_bar, grid.downbeat_strength, grid.downbeat_margin,
-                    grid.downbeat_margin < kMinMargin ? " — too close to call" : "");
+        std::printf("bar lines: %d beats to the bar "
+                    "(strength %.2f, phase margin %.2f, metre margin %.2f)%s\n",
+                    grid.beats_per_bar, grid.downbeat_strength,
+                    grid.downbeat_phase_margin, grid.downbeat_meter_margin,
+                    grid.downbeat_confident ? "" : " — too close to call");
     } else if (!grid.beats.empty()) {
         std::printf("bar lines: none found — the track is too short to repeat a bar\n");
     }
 
     if (options.beats_per_bar_given) {
         // An explicit --beats is the user's assertion about the music and
-        // outranks the analysis, exactly as an explicit --bpm does.
-        if (grid.beats_per_bar > 0 && grid.beats_per_bar != options.beats_per_bar) {
-            std::printf("using --beats %d over the %d the audio suggests\n",
+        // outranks the analysis, exactly as an explicit --bpm does. It asserts
+        // the bar *length* though, and says nothing about which beat starts the
+        // bar — so the phase is still taken from the audio when the analysis
+        // agreed about the meter, rather than defaulting to the first beat and
+        // accenting a beat nobody chose.
+        accent = true;
+        if (grid.beats_per_bar == options.beats_per_bar && !grid.downbeats.empty() &&
+            grid.downbeat_phase_margin >= analysis.downbeat.min_phase_margin) {
+            downbeat_offset = beatIndexOf(grid.beats, grid.downbeats.front());
+            std::printf("bar starts on beat %d, from the audio\n", downbeat_offset + 1);
+        } else if (grid.beats_per_bar > 0 && grid.beats_per_bar != options.beats_per_bar) {
+            std::printf("using --beats %d over the %d the audio suggests"
+                        " — counting the bar from the first beat\n",
                         options.beats_per_bar, grid.beats_per_bar);
         }
-    } else if (grid.beats_per_bar > 0 && grid.downbeat_margin >= kMinMargin &&
-               !grid.downbeats.empty()) {
+    } else if (grid.downbeat_confident) {
         beats_per_bar = grid.beats_per_bar;
-        const auto first = std::lower_bound(grid.beats.begin(), grid.beats.end(),
-                                            grid.downbeats.front() - 1e-9);
-        downbeat_offset = static_cast<int>(first - grid.beats.begin());
+        downbeat_offset = beatIndexOf(grid.beats, grid.downbeats.front());
+        accent = true;
+    } else if (!grid.beats.empty()) {
+        // Nothing was detected and nothing was asserted. Counting fours from the
+        // first beat would be an arbitrary accent worn with the same confidence
+        // as a real one, so the click stays even and says so.
+        std::printf("no accent — every beat clicks the same\n");
     }
 
     PlayerConfig cfg;
@@ -938,6 +960,7 @@ int cmdTrack(const Options& options) {
     cfg.click.sample_rate = rate;
     cfg.beats_per_bar = beats_per_bar;
     cfg.downbeat_offset = downbeat_offset;
+    cfg.accent_downbeats = accent;
     cfg.count_in_beats = grid.beats.empty() ? 0 : options.count_in;
     cfg.channel_enabled = {{!options.no_click && !grid.beats.empty(), false, false}};
     if (!cfg.valid()) {

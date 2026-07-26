@@ -178,7 +178,7 @@ TEST(Offline, FindsTheBarLinesOfAFourFourTrack) {
     EXPECT_EQ(result.beats_per_bar, 4);
     ASSERT_FALSE(result.downbeats.empty());
     EXPECT_GT(result.downbeat_strength, 0.5);
-    EXPECT_GT(result.downbeat_margin, 0.3);
+    EXPECT_GT(result.downbeat_phase_margin, 0.3);
 
     // Every bar line must sit on a bar line of the material, two seconds apart
     // at 120 BPM in four.
@@ -194,7 +194,7 @@ TEST(Offline, FindsTheBarLinesOfAWaltz) {
     const OfflineResult result = analyseOffline(audio.data(), audio.size(), testConfig());
 
     EXPECT_EQ(result.beats_per_bar, 3);
-    EXPECT_GT(result.downbeat_margin, 0.3);
+    EXPECT_GT(result.downbeat_phase_margin, 0.3);
 }
 
 TEST(Offline, BarLinesAreNotAskedForWhenTheyAreNotWanted) {

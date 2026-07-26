@@ -1,10 +1,10 @@
-"""Scoring bar lines, and choosing the margin threshold from data.
+"""Scoring bar lines, and choosing the margin thresholds from data.
 
 Beat tracking has a settled metric and downbeat tracking mostly borrows it: the
 ±70 ms F-measure, applied to the sparser sequence. That is the right number for
 comparing this analysis against a model later, and :func:`score` reports it.
 
-It is not, on its own, the number the app needs. Two reasons:
+It is not, on its own, the number the app needs. Three reasons:
 
 * **F-measure cannot see a metre error.** Call a 4/4 track 2/4 and every real
   bar line is still hit — recall is perfect, precision is a half, and the
@@ -12,19 +12,30 @@ It is not, on its own, the number the app needs. Two reasons:
   that is simply wrong. So the metre is scored separately, and a clip only
   counts as right if the metre *and* the phase are both right.
 
-* **The app does not have to answer.** Below a margin threshold the harness
-  withholds the accent and counts from the first beat instead, because an accent
-  on the wrong beat is worse to play along to than no accent at all. That makes
-  this a decision with three outcomes and not two, and the interesting question
-  is not "how accurate is it" but "how much can it cover at an acceptable wrong
-  rate". :func:`sweep` produces that curve and :func:`choose_margin` reads a
-  threshold off it.
+* **The app does not have to answer.** Below its thresholds the analysis
+  withholds the accent and the click stays even, because an accent on the wrong
+  beat is worse to play along to than no accent at all. That makes this a
+  decision with three outcomes and not two, and the interesting question is not
+  "how accurate is it" but "how much can it cover at an acceptable wrong rate".
+
+* **There are two separate doubts, so there are two thresholds.** The phase
+  margin says which beat starts the bar is settled; the metre margin says no
+  other bar length fits nearly as well. Sweeping only the first is what let a
+  4/4 track read as three with a phase margin of 0.69 — inside that wrong
+  metre, the phase really was unambiguous. :func:`sweep` crosses both.
 
 The asymmetry is the whole point and is worth stating once: withholding costs
-the user a feature, and a wrong accent costs them the take. The threshold is
-therefore chosen by capping the wrong rate and maximising coverage under that
-cap — never by maximising accuracy, which a threshold of 1.0 would win by
-answering almost never.
+the user a feature, and a wrong accent costs them the take. Thresholds are
+therefore chosen by capping the error and maximising coverage under that cap —
+never by maximising accuracy, which answering almost never would win.
+
+Two error rates are reported because they fail differently.  ``wrong_rate`` is
+wrong answers over *all* clips: it is what the user experiences across their
+library, but it can be driven to zero by never answering.  ``conditional_error``
+is wrong answers over the clips actually accented: it is what the user
+experiences *when the feature fires*, and a threshold with 10% coverage and 40%
+conditional error is a bad feature even though its wrong rate is only 4%.
+:func:`choose_margins` bounds both.
 """
 
 from __future__ import annotations
@@ -44,7 +55,8 @@ __all__ = [
     "SweepRow",
     "score",
     "sweep",
-    "choose_margin",
+    "choose_margins",
+    "thresholds_from",
     "format_scores",
     "format_sweep",
 ]
@@ -56,6 +68,11 @@ __all__ = [
 # be looked at rather than scored on a coin toss.
 PHASE_RECALL = 0.5
 
+# The core's current defaults, so a run can say what the shipped thresholds
+# would have done. Placeholders — see core/src/analysis/downbeat.hpp.
+DEFAULT_MIN_PHASE_MARGIN = 0.25
+DEFAULT_MIN_METER_MARGIN = 0.40
+
 
 class Verdict:
     """What happened on one clip, from the point of view of a player.
@@ -63,7 +80,7 @@ class Verdict:
     ``NO_ANSWER`` and ``WITHHELD`` are both "no accent shown" and differ only in
     why: the first is the analysis finding no bar-level pattern at all, the
     second is it finding one it is not confident enough to use. Keeping them
-    apart is what tells a low coverage number caused by a weak threshold from
+    apart is what tells a low coverage number caused by strict thresholds from
     one caused by material the cues cannot read.
     """
 
@@ -84,7 +101,8 @@ class ClipScore:
     downbeat_f: float
     reference_meter: int
     estimated_meter: int
-    margin: float
+    phase_margin: float
+    meter_margin: float
     strength: float
     # None when the reference has no bar lines annotated, so the question was
     # never asked. Distinct from False, which means it was asked and missed.
@@ -92,11 +110,12 @@ class ClipScore:
     phase_correct: bool | None
     scorable: bool          # whether the reference carried bar lines at all
     meter_is_stable: bool = True
+    shipped_confident: bool = False   # what the core's own defaults concluded
 
-    def verdict(self, min_margin: float) -> str:
+    def verdict(self, min_phase_margin: float, min_meter_margin: float) -> str:
         if self.estimated_meter <= 0:
             return Verdict.NO_ANSWER
-        if self.margin < min_margin:
+        if self.phase_margin < min_phase_margin or self.meter_margin < min_meter_margin:
             return Verdict.WITHHELD
         if not self.meter_correct:
             return Verdict.WRONG_METER
@@ -166,25 +185,32 @@ def score(reference, estimate, name: str | None = None) -> ClipScore:
         downbeat_f=_f_measure(ref_downbeats, est_downbeats) if scorable else float("nan"),
         reference_meter=int(reference.beats_per_bar),
         estimated_meter=int(estimate.beats_per_bar),
-        margin=float(estimate.downbeat_margin),
+        phase_margin=float(estimate.downbeat_phase_margin),
+        meter_margin=float(estimate.downbeat_meter_margin),
         strength=float(estimate.downbeat_strength),
         meter_correct=meter_correct,
         phase_correct=phase_correct,
         scorable=scorable,
         meter_is_stable=getattr(reference, "meter_is_stable", True),
+        shipped_confident=bool(getattr(estimate, "downbeat_confident", False)),
     )
 
 
 @dataclass
 class SweepRow:
-    min_margin: float
-    n: int              # clips with bar lines in the reference
+    min_phase_margin: float
+    min_meter_margin: float
+    n: int              # clips eligible for calibration
     shown: int          # clips the app would have accented
     correct: int
     wrong_meter: int
     wrong_phase: int
     withheld: int
     no_answer: int
+
+    @property
+    def wrong(self) -> int:
+        return self.wrong_meter + self.wrong_phase
 
     @property
     def coverage(self) -> float:
@@ -200,87 +226,168 @@ class SweepRow:
     def wrong_rate(self) -> float:
         """Fraction of *all* clips given a wrong accent.
 
-        The one to hold down. Precision alone can be pushed to 1.0 by answering
-        almost never, which is not a better product.
+        What the user meets across a library. Can be pushed to zero by never
+        answering, which is why it is never the only bound.
         """
-        return (self.wrong_meter + self.wrong_phase) / self.n if self.n else float("nan")
+        return self.wrong / self.n if self.n else float("nan")
+
+    @property
+    def conditional_error(self) -> float:
+        """Fraction of the accents actually shown that are wrong.
+
+        What the user meets when the feature fires. Blind to coverage, so it is
+        never the only bound either — the two are bounded together.
+        """
+        return self.wrong / self.shown if self.shown else float("nan")
+
+
+def thresholds_from(values: Sequence[float], count: int = 12) -> list[float]:
+    """Candidate thresholds drawn from the margins actually observed.
+
+    A fixed 0…1 grid was wrong in both directions: it wasted most of its rows on
+    a range the data never occupies, and it stopped at 1.0 while real margins
+    reach past 3, so every clip above 1.0 was lumped together and the top of the
+    curve was invisible. Quantiles put the candidates where the decisions
+    change.
+
+    Zero is always included, so "accent everything the analysis offers" stays on
+    the curve as the baseline the thresholds have to beat.
+    """
+    finite = np.asarray([v for v in values if np.isfinite(v)], dtype=np.float64)
+    if len(finite) == 0:
+        return [0.0]
+    quantiles = np.linspace(0.0, 1.0, max(count, 2))
+    candidates = np.unique(np.round(np.quantile(finite, quantiles), 4))
+    # Just above the largest observed margin, so "never answer" is representable
+    # and visibly rejected rather than silently absent.
+    beyond = float(np.nextafter(finite.max(), np.inf))
+    return sorted({0.0, *candidates.tolist(), beyond})
+
+
+def eligible(scores: Sequence[ClipScore]) -> list[ClipScore]:
+    """The clips a threshold may be calibrated on.
+
+    Excludes clips with no annotated bar lines, and clips whose metre changes
+    partway: for those no single answer is right for the whole take, so counting
+    them either way would move the threshold on the strength of a question the
+    analysis was never asked. They are reported separately instead.
+    """
+    return [s for s in scores if s.scorable and s.meter_is_stable]
 
 
 def sweep(scores: Sequence[ClipScore],
-          thresholds: Iterable[float] | None = None) -> list[SweepRow]:
-    """Outcome counts across a range of margin thresholds."""
-    if thresholds is None:
-        thresholds = np.round(np.arange(0.0, 1.001, 0.05), 3)
+          phase_thresholds: Iterable[float] | None = None,
+          meter_thresholds: Iterable[float] | None = None) -> list[SweepRow]:
+    """Outcome counts across the cross product of both thresholds."""
+    usable = eligible(scores)
+    if phase_thresholds is None:
+        phase_thresholds = thresholds_from([s.phase_margin for s in usable])
+    if meter_thresholds is None:
+        meter_thresholds = thresholds_from([s.meter_margin for s in usable])
 
-    scorable = [s for s in scores if s.scorable]
     rows = []
-    for threshold in thresholds:
-        verdicts = [s.verdict(float(threshold)) for s in scorable]
-        rows.append(
-            SweepRow(
-                min_margin=float(threshold),
-                n=len(scorable),
-                shown=sum(v in Verdict.SHOWN for v in verdicts),
-                correct=verdicts.count(Verdict.CORRECT),
-                wrong_meter=verdicts.count(Verdict.WRONG_METER),
-                wrong_phase=verdicts.count(Verdict.WRONG_PHASE),
-                withheld=verdicts.count(Verdict.WITHHELD),
-                no_answer=verdicts.count(Verdict.NO_ANSWER),
+    for phase in phase_thresholds:
+        for meter in meter_thresholds:
+            verdicts = [s.verdict(float(phase), float(meter)) for s in usable]
+            rows.append(
+                SweepRow(
+                    min_phase_margin=float(phase),
+                    min_meter_margin=float(meter),
+                    n=len(usable),
+                    shown=sum(v in Verdict.SHOWN for v in verdicts),
+                    correct=verdicts.count(Verdict.CORRECT),
+                    wrong_meter=verdicts.count(Verdict.WRONG_METER),
+                    wrong_phase=verdicts.count(Verdict.WRONG_PHASE),
+                    withheld=verdicts.count(Verdict.WITHHELD),
+                    no_answer=verdicts.count(Verdict.NO_ANSWER),
+                )
             )
-        )
     return rows
 
 
-def choose_margin(rows: Sequence[SweepRow], max_wrong_rate: float = 0.05) -> SweepRow | None:
-    """The most generous threshold whose wrong rate stays inside the budget.
+def choose_margins(rows: Sequence[SweepRow],
+                   max_wrong_rate: float = 0.05,
+                   max_conditional_error: float = 0.10) -> SweepRow | None:
+    """The threshold pair with the widest coverage inside both error budgets.
 
-    "Most generous" means the lowest threshold, i.e. the widest coverage — the
-    tie is broken towards showing the accent, because among thresholds that are
-    all acceptably safe the useful one is the one that answers most often.
+    Coverage is what is maximised, not accuracy: among pairs that are all
+    acceptably safe, the useful one is the one that answers most often. Ties go
+    to the lower thresholds, so a pair is not made stricter than the evidence
+    requires.
 
-    Returns None when no threshold meets the budget, which is a real answer: it
-    says the cues cannot support an automatic accent on this material at that
-    level of safety, and the honest response is to leave the feature off rather
-    than to raise the budget until it passes.
+    Both budgets are enforced because either alone has a degenerate optimum —
+    ``wrong_rate`` is minimised by never answering, and ``conditional_error`` is
+    minimised by answering only on the easiest clip in the set.
+
+    Returns None when nothing meets both, which is a real answer: it says the
+    cues cannot support an automatic accent on this material at that level of
+    safety, and the honest response is to leave the feature off rather than to
+    raise the budget until it passes.
 
     Choose on a validation split and report on a held-out one. A threshold
     picked and reported on the same clips is a description of those clips.
     """
-    # ``shown`` has to be non-zero: a threshold above every clip's margin has a
-    # wrong rate of zero and would win on the budget alone, while describing a
-    # feature that never fires. That is not a calibration, it is the feature
-    # being off, and the caller asked which threshold to switch it on at.
-    acceptable = [r for r in rows if r.n and r.shown and r.wrong_rate <= max_wrong_rate]
+    acceptable = [
+        r for r in rows
+        # ``shown`` must be non-zero: a pair above every clip's margins has a
+        # wrong rate of zero and would win on the budget alone, while describing
+        # a feature that never fires. That is not a calibration, it is the
+        # feature being off, and the caller asked what to switch it on at.
+        if r.n and r.shown
+        and r.wrong_rate <= max_wrong_rate
+        and r.conditional_error <= max_conditional_error
+    ]
     if not acceptable:
         return None
-    return min(acceptable, key=lambda r: (r.min_margin, -r.coverage))
+    return max(
+        acceptable,
+        key=lambda r: (r.coverage, -r.min_phase_margin, -r.min_meter_margin),
+    )
 
 
-def format_scores(scores: Sequence[ClipScore], min_margin: float) -> str:
+def frontier(rows: Sequence[SweepRow]) -> list[SweepRow]:
+    """The rows worth looking at: no other row is both safer and wider.
+
+    A full cross product is mostly noise — many threshold pairs produce
+    identical outcomes. This keeps the trade-off and drops the rest.
+    """
+    best: dict[int, SweepRow] = {}
+    for row in rows:
+        current = best.get(row.shown)
+        if current is None or row.wrong < current.wrong:
+            best[row.shown] = row
+    return sorted(best.values(), key=lambda r: (-r.shown, r.wrong))
+
+
+def format_scores(scores: Sequence[ClipScore],
+                  min_phase_margin: float = DEFAULT_MIN_PHASE_MARGIN,
+                  min_meter_margin: float = DEFAULT_MIN_METER_MARGIN) -> str:
     lines = [
-        f"{'clip':<28}{'beat F':>8}{'db F':>7}{'metre':>12}{'margin':>8}  verdict",
-        "-" * 78,
+        f"{'clip':<24}{'beat F':>8}{'db F':>7}{'metre':>9}"
+        f"{'phase':>8}{'metre m':>9}  verdict",
+        "-" * 82,
     ]
     for s in scores:
         metre = f"{s.estimated_meter or '-'}/{s.reference_meter or '?'}"
         note = "" if s.meter_is_stable else "  (metre changes)"
         lines.append(
-            f"{s.name[:27]:<28}{s.beat_f:>8.2f}{s.downbeat_f:>7.2f}"
-            f"{metre:>12}{s.margin:>8.2f}  {s.verdict(min_margin)}{note}"
+            f"{s.name[:23]:<24}{s.beat_f:>8.2f}{s.downbeat_f:>7.2f}{metre:>9}"
+            f"{s.phase_margin:>8.2f}{s.meter_margin:>9.2f}  "
+            f"{s.verdict(min_phase_margin, min_meter_margin)}{note}"
         )
     return "\n".join(lines)
 
 
 def format_sweep(rows: Sequence[SweepRow]) -> str:
     lines = [
-        f"{'margin':>7}{'coverage':>10}{'precision':>11}{'wrong rate':>12}"
-        f"{'correct':>9}{'metre':>7}{'phase':>7}{'held':>6}{'none':>6}",
-        "-" * 75,
+        f"{'phase':>7}{'metre':>7}{'coverage':>10}{'wrong rate':>12}"
+        f"{'cond err':>10}{'correct':>9}{'metre':>7}{'phase':>7}{'held':>6}{'none':>6}",
+        "-" * 81,
     ]
     for r in rows:
         lines.append(
-            f"{r.min_margin:>7.2f}{r.coverage:>10.2f}{r.precision:>11.2f}"
-            f"{r.wrong_rate:>12.2f}{r.correct:>9d}{r.wrong_meter:>7d}"
-            f"{r.wrong_phase:>7d}{r.withheld:>6d}{r.no_answer:>6d}"
+            f"{r.min_phase_margin:>7.2f}{r.min_meter_margin:>7.2f}{r.coverage:>10.2f}"
+            f"{r.wrong_rate:>12.2f}{r.conditional_error:>10.2f}{r.correct:>9d}"
+            f"{r.wrong_meter:>7d}{r.wrong_phase:>7d}{r.withheld:>6d}{r.no_answer:>6d}"
         )
     return "\n".join(lines)

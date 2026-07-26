@@ -221,7 +221,7 @@ DownbeatResult findDownbeats(const std::vector<BeatFeature>& features,
             result.beats_per_bar = entry.beats_per_bar;
             result.phase = entry.phase;
             result.strength = std::max(best_contrast, 0.0);
-            result.margin = std::max(best_contrast - runner_up, 0.0);
+            result.phase_margin = std::max(best_contrast - runner_up, 0.0);
         }
     }
 
@@ -229,6 +229,26 @@ DownbeatResult findDownbeats(const std::vector<BeatFeature>& features,
                      [](const MeterScore& a, const MeterScore& b) { return a.score > b.score; });
 
     if (!have_best) return result;
+
+    // How much better the winning meter is than the best of the others.
+    //
+    // This has to be a separate number from the phase margin and cannot be
+    // derived from it: within one meter every rival phase has already conceded
+    // the bar length, so a piece can be entirely unambiguous about where its
+    // three-beat bars start while four fits it very nearly as well. Measuring
+    // only the first produced confidently wrong meters — a 4/4 track read as
+    // three with a phase margin of 0.69, which is the observation that put this
+    // here.
+    //
+    // Scores rather than raw contrasts, so the prior that picked the winner is
+    // the same quantity being compared. With one meter in the running there is
+    // no rival to lose to, and the winner keeps its whole score.
+    result.meter_margin = best_score;
+    for (const MeterScore& other : result.candidates) {
+        if (other.beats_per_bar == result.beats_per_bar) continue;
+        result.meter_margin = std::max(best_score - other.score, 0.0);
+        break;  // sorted best first, so the first other meter is the rival
+    }
 
     for (std::size_t i = static_cast<std::size_t>(result.phase); i < n;
          i += static_cast<std::size_t>(result.beats_per_bar)) {

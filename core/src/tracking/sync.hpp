@@ -47,7 +47,22 @@ struct SyncConfig {
     // what a single isolated hit scores — a resultant of one on one onset — and
     // that score does not decay, so at one a lone door slam would acquire a
     // beat and keep it.
-    double min_rayleigh = 1.5;
+    // 3.0 rather than the 1.5 this started at, and the change is not a
+    // loosening: `evidence()` used to decay the squared weights at the decay
+    // rate instead of its square, which understated the participation ratio by
+    // very nearly a factor of two. Doubling the threshold alongside the fix
+    // keeps the operating point where it was measured to work.
+    //
+    // Measured on the reference clip, sustained statistic after three seconds:
+    // 8.9 when the dial matches the room, and 0.4–0.7 when it does not, with
+    // the wrong dials peaking transiently at 1.8–1.9 as their onsets drift past
+    // a phase. 1.5 sat *below* those transients, which is exactly how a 137 BPM
+    // dial fell in with a 120 BPM clip. 3.0 clears the worst transient by half
+    // again and sits three times under the real thing.
+    //
+    // One clip is not a calibration. It is enough to place the threshold
+    // between two populations that do not overlap on it.
+    double min_rayleigh = 3.0;
 
     // How long both conditions have to keep holding before the answer is
     // handed over. A moment of coincidence is not a beat: the statistic above

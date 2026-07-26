@@ -1,8 +1,14 @@
 name: core
 
 on:
+  # `push` on the default branch, `pull_request` everywhere else. With `push`
+  # on every branch as well, a branch with a PR open matches both triggers and
+  # runs each workflow twice against the same commit — eleven check runs for
+  # eight jobs, doubling the queue and making a red X ambiguous about which run
+  # it belongs to. The trade is that a branch with no PR gets no CI; opening
+  # one is how you ask for it.
   push:
-    branches: ["**"]
+    branches: ["main"]
     paths: ["core/**", ".github/workflows/core.yml"]
   pull_request:
     paths: ["core/**", ".github/workflows/core.yml"]

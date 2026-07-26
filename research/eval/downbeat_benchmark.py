@@ -45,18 +45,19 @@ import numpy as np
 from eval.analysis import Analyser, DEFAULT_BINARY
 from eval.annotations import Reference, find_pairs
 from eval.downbeat import (
+    DEFAULT_MIN_METER_MARGIN,
+    DEFAULT_MIN_PHASE_MARGIN,
     Verdict,
-    choose_margin,
+    choose_margins,
+    eligible,
     format_scores,
     format_sweep,
+    frontier,
     score,
     sweep,
 )
 from tiktak.synth import make_clip
 
-# The placeholder the desktop harness currently uses, so a run says plainly
-# whether the evidence supports it. See desktop/src/commands.cpp.
-CURRENT_MIN_MARGIN = 0.25
 
 
 def synthetic_cases() -> list[tuple[Reference, np.ndarray, int]]:
@@ -113,8 +114,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--binary", type=pathlib.Path, default=DEFAULT_BINARY,
                         help="path to the dump_analysis executable")
     parser.add_argument("--max-wrong-rate", type=float, default=0.05,
-                        help="the wrong-accent budget the threshold is chosen "
-                             "under (default 0.05)")
+                        help="wrong accents as a share of all clips (default 0.05)")
+    parser.add_argument("--max-conditional-error", type=float, default=0.10,
+                        help="wrong accents as a share of the accents actually "
+                             "shown (default 0.10)")
+    parser.add_argument("--allow-partial", action="store_true",
+                        help="score the clips that loaded even when others in "
+                             "the dataset could not be read")
     parser.add_argument("--test-fraction", type=float, default=0.35,
                         help="share of clips held out; the threshold is chosen "
                              "on the rest (default 0.35)")
@@ -141,6 +147,15 @@ def main(argv: list[str] | None = None) -> int:
         if not references:
             print("nothing to score.")
             return 2
+        if problems and not args.allow_partial:
+            # Refusing by default rather than scoring what happens to have
+            # loaded. A run that silently covered 12 of someone's 40 recordings
+            # reports a healthy-looking mean over a set that mostly never ran,
+            # and the threshold that comes out of it is calibrated on a
+            # different dataset than the one they think they built.
+            print(f"\n{len(problems)} problem(s) above. Fix them, or pass "
+                  f"--allow-partial to score the {len(references)} that loaded.")
+            return 2
         print(f"scoring {len(references)} annotated recording(s) from {args.dataset}\n")
         for reference in references:
             estimate = analyser.analyse_file(reference.audio_path)
@@ -162,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{len(changing)} clip(s) change metre; no single answer is right "
               f"for the whole take.\n")
 
-    print(format_scores(scores, CURRENT_MIN_MARGIN))
+    print(format_scores(scores))
     beat_f = np.array([s.beat_f for s in scores], dtype=np.float64)
     print(f"\nbeat F-measure: mean {np.nanmean(beat_f):.3f}, "
           f"median {np.nanmedian(beat_f):.3f}")
@@ -181,47 +196,66 @@ def main(argv: list[str] | None = None) -> int:
                       if split_of(s.name, args.test_fraction) == "test"]),
         ]
 
+    # What the thresholds the app currently ships would have done, so a run can
+    # be read against the code as it stands rather than only against its own
+    # best case.
+    usable = eligible(scores)
+    shipped = [s.verdict(DEFAULT_MIN_PHASE_MARGIN, DEFAULT_MIN_METER_MARGIN)
+               for s in usable]
+    shown = sum(v in Verdict.SHOWN for v in shipped)
+    wrong = sum(v in Verdict.WRONG for v in shipped)
+    print(f"\nat the shipped thresholds "
+          f"(phase {DEFAULT_MIN_PHASE_MARGIN}, metre {DEFAULT_MIN_METER_MARGIN}): "
+          f"{shown}/{len(usable)} accented, {wrong} wrong")
+
     chosen = None
     for label, subset in splits:
         rows = sweep(subset)
-        print(f"\n--- {label} ({len(subset)} clip(s)) ---")
+        print(f"\n--- {label} ({len(eligible(subset))} clip(s) usable) ---")
         if not any(r.n for r in rows):
-            print("no clip in this split has bar lines annotated.")
+            print("no clip in this split can be calibrated on.")
             continue
-        print(format_sweep(rows))
+        print(format_sweep(frontier(rows)))
 
         if label != "test":
-            chosen = choose_margin(rows, args.max_wrong_rate)
+            chosen = choose_margins(rows, args.max_wrong_rate,
+                                    args.max_conditional_error)
             if chosen is None:
-                print(f"\nNo threshold keeps the wrong rate at or under "
-                      f"{args.max_wrong_rate:.0%}. On this material the accent "
-                      f"should stay off rather than the budget be raised.")
+                print(f"\nNo threshold pair keeps the wrong rate at or under "
+                      f"{args.max_wrong_rate:.0%} and the conditional error "
+                      f"under {args.max_conditional_error:.0%}. On this material "
+                      f"the accent should stay off rather than the budget be "
+                      f"raised.")
             else:
-                print(f"\nchosen on {label}: margin >= {chosen.min_margin:.2f} "
-                      f"— coverage {chosen.coverage:.0%}, "
-                      f"wrong rate {chosen.wrong_rate:.0%}")
+                print(f"\nchosen on {label}: phase >= {chosen.min_phase_margin:.2f}, "
+                      f"metre >= {chosen.min_meter_margin:.2f} — coverage "
+                      f"{chosen.coverage:.0%}, wrong rate {chosen.wrong_rate:.0%}, "
+                      f"conditional error {chosen.conditional_error:.0%}")
 
-    # The one number the whole exercise is for: the chosen threshold applied
-    # once to material it was not chosen on. Reported whatever it says.
+    # The one number the whole exercise is for: the chosen thresholds applied
+    # once to material they were not chosen on. Reported whatever it says.
     if chosen is not None and not args.no_split:
-        held_out = [s for s in scores
-                    if split_of(s.name, args.test_fraction) == "test" and s.scorable]
+        held_out = [s for s in eligible(scores)
+                    if split_of(s.name, args.test_fraction) == "test"]
         if held_out:
-            verdicts = [s.verdict(chosen.min_margin) for s in held_out]
+            verdicts = [s.verdict(chosen.min_phase_margin, chosen.min_meter_margin)
+                        for s in held_out]
             shown = sum(v in Verdict.SHOWN for v in verdicts)
             wrong = sum(v in Verdict.WRONG for v in verdicts)
-            print(f"\nheld out, at margin >= {chosen.min_margin:.2f}: "
+            print(f"\nheld out, at phase >= {chosen.min_phase_margin:.2f} and "
+                  f"metre >= {chosen.min_meter_margin:.2f}: "
                   f"{shown}/{len(held_out)} accented, {wrong} wrong "
                   f"({wrong / len(held_out):.0%})")
         else:
             print("\nheld-out split is empty — too few clips to hold any out.")
 
     if args.expect_correct is not None:
-        # Counted with the threshold out of the way, so this measures the
-        # analysis and not the threshold: withholding an accent is a product
+        # Counted with the thresholds out of the way, so this measures the
+        # analysis and not the thresholds: withholding an accent is a product
         # decision, and a change that starts withholding everything should show
-        # up here as clips lost, not be hidden by a threshold that agrees.
-        correct = sum(s.verdict(0.0) == Verdict.CORRECT for s in scores if s.scorable)
+        # up here as clips lost, not be hidden by thresholds that agree.
+        correct = sum(s.verdict(0.0, 0.0) == Verdict.CORRECT
+                      for s in scores if s.scorable)
         print(f"\n{correct} clip(s) right on metre and phase "
               f"(expected at least {args.expect_correct})")
         if correct < args.expect_correct:

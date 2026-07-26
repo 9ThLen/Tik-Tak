@@ -89,6 +89,28 @@ struct DownbeatConfig {
     // accident in the audio.
     int min_bars = 3;
 
+    // How convincing the answer has to be before a caller should accent
+    // anything. They live in the config rather than at the call site so that
+    // research/eval sweeps the same numbers the app uses, not a copy of them.
+    //
+    // **Provisional, on synthetic material only.** The metre threshold was
+    // chosen by research/eval/downbeat_benchmark.py on a six-clip validation
+    // split and checked once on the seven held out, where it took the wrong
+    // rate from 14% to zero. Six clips is not a calibration and the material
+    // has no chord changes in it at all, so the harmony cue had no say. Real
+    // recordings will move both numbers. The phase threshold has had no such
+    // check and remains a plain guess.
+    //
+    // A consequence worth knowing rather than discovering: a metre that divides
+    // another is inherently less separable, because the longer bar fits the
+    // shorter pattern exactly. Two-beat bars score a metre margin near zero
+    // against four and are usually withheld. That is the measure being honest —
+    // 4/4 really does fit a 2/4 accent pattern — but it means 2/4 mostly does
+    // not get an automatic accent, and asking for it with --beats is the way to
+    // get one.
+    double min_phase_margin = 0.25;
+    double min_meter_margin = 0.40;
+
     bool valid() const;
 };
 
@@ -108,24 +130,49 @@ struct DownbeatResult {
     int phase = 0;
 
     // How far the winning answer stands above the alternatives, in standard
-    // deviations of the per-beat score. Two separate doubts, kept separate
-    // because the UI should treat them differently:
+    // deviations of the per-beat score. Three separate doubts, kept separate
+    // because they fail differently and a caller should be able to tell which
+    // one it has:
     //
     //   `strength` is the winner's own contrast — how much louder, in the
     //   combined cue, the chosen bar lines are than everything else. Near zero
     //   means the audio simply has no bar-level pattern, and the honest display
     //   is no bar lines at all.
     //
-    //   `margin` is how far ahead of the runner-up it is. A large strength with
-    //   a small margin means the bars are clear but the *phase* or the meter is
-    //   a coin toss, which is the failure a listener notices immediately —
-    //   a metronome accenting beat 3 is worse than one accenting nothing.
+    //   `phase_margin` is how far ahead of the next best *phase of the same
+    //   meter* the answer is. A large strength with a small phase margin means
+    //   the bars are clear but which beat starts them is a coin toss — the
+    //   failure a listener notices immediately, since a metronome accenting
+    //   beat 3 is worse than one accenting nothing.
+    //
+    //   `meter_margin` is how far ahead of the best *other meter* it is. This
+    //   is a genuinely different question, and conflating the two was a real
+    //   bug: a piece scored in three can be perfectly unambiguous about which
+    //   beat starts its bars — a large phase margin — while four fits it very
+    //   nearly as well. The phase margin cannot see that, because every rival
+    //   it considers has already accepted the wrong meter.
+    //
+    // A caller that accents downbeats needs *both* to be convincing. See
+    // DownbeatResult::confident().
     double strength = 0.0;
-    double margin = 0.0;
+    double phase_margin = 0.0;
+    double meter_margin = 0.0;
 
     // Every meter considered, best first, for diagnostics and for a UI that
     // wants to offer "no, it is a waltz".
     std::vector<MeterScore> candidates;
+
+    // Whether the answer is worth acting on: a bar-level pattern exists, the
+    // beat it starts on is settled, and no other meter is nearly as good.
+    //
+    // The thresholds are the caller's, because the cost of being wrong is the
+    // caller's. Both default to placeholders rather than calibrated numbers —
+    // see research/eval/README.md, which is what will replace them.
+    bool confident(double min_phase_margin = 0.25,
+                   double min_meter_margin = 0.40) const {
+        return beats_per_bar > 0 && !downbeats.empty() &&
+               phase_margin >= min_phase_margin && meter_margin >= min_meter_margin;
+    }
 };
 
 // The per-beat cues, gathered from ODF frames and their pitch class profiles.

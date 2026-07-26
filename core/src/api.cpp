@@ -311,9 +311,19 @@ double tt_offline_downbeat_strength(const tt_offline* offline) {
     return offline->result.downbeat_strength;
 }
 
-double tt_offline_downbeat_margin(const tt_offline* offline) {
+double tt_offline_downbeat_phase_margin(const tt_offline* offline) {
     if (!offline || !offline->finished) return 0.0;
-    return offline->result.downbeat_margin;
+    return offline->result.downbeat_phase_margin;
+}
+
+double tt_offline_downbeat_meter_margin(const tt_offline* offline) {
+    if (!offline || !offline->finished) return 0.0;
+    return offline->result.downbeat_meter_margin;
+}
+
+int tt_offline_downbeat_confident(const tt_offline* offline) {
+    if (!offline || !offline->finished) return 0;
+    return offline->result.downbeat_confident ? 1 : 0;
 }
 
 size_t tt_offline_tempo_candidates(const tt_offline* offline, tt_tempo_candidate* out,

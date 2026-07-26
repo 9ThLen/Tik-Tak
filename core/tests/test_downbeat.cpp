@@ -43,7 +43,7 @@ TEST(Downbeat, FindsFourFourAndWhereTheBarStarts) {
     EXPECT_EQ(result.beats_per_bar, 4);
     EXPECT_EQ(result.phase, 0);
     EXPECT_GT(result.strength, 1.0);
-    EXPECT_GT(result.margin, 1.0);
+    EXPECT_GT(result.phase_margin, 1.0);
 
     ASSERT_EQ(result.downbeats.size(), 8u);
     for (std::size_t i = 0; i < result.downbeats.size(); ++i) {
@@ -67,7 +67,7 @@ TEST(Downbeat, AWaltzIsNotFourFour) {
 
     EXPECT_EQ(result.beats_per_bar, 3);
     EXPECT_EQ(result.phase, 0);
-    EXPECT_GT(result.margin, 1.0);
+    EXPECT_GT(result.phase_margin, 1.0);
 
     ASSERT_EQ(result.downbeats.size(), 10u);
     EXPECT_NEAR(result.downbeats[1], 3 * kBeat, 1e-9);
@@ -95,7 +95,7 @@ TEST(Downbeat, AChordChangeIsEnoughOnItsOwn) {
 
     EXPECT_EQ(result.beats_per_bar, 4);
     EXPECT_EQ(result.phase, 2);
-    EXPECT_GT(result.margin, 1.0);
+    EXPECT_GT(result.phase_margin, 1.0);
 }
 
 TEST(Downbeat, TheCuesAddUpRatherThanFight) {
@@ -124,7 +124,7 @@ TEST(Downbeat, MusicWithNoBarLineGetsNone) {
 
     const auto result = findDownbeats(flat, DownbeatConfig{});
     EXPECT_DOUBLE_EQ(result.strength, 0.0);
-    EXPECT_DOUBLE_EQ(result.margin, 0.0);
+    EXPECT_DOUBLE_EQ(result.phase_margin, 0.0);
 }
 
 TEST(Downbeat, OneBarIsNotAPattern) {
@@ -296,3 +296,79 @@ TEST(BeatFeatures, IgnoresNothing) {
 }
 
 }  // namespace
+
+// -------------------------------------------------------------- two doubts --
+
+// The failure the meter margin exists to catch, and the reason it cannot be
+// derived from the phase margin: every beat carries the same cue, so all four
+// phases of a four-beat bar are equally good and all three of a three-beat bar
+// are too. Nothing here says anything about the meter, and the answer — whatever
+// it is — must not be presented as settled.
+TEST(Downbeat, MetreIsNotSettledWhenEveryMetreFitsEquallyWell) {
+    std::vector<BeatFeature> flat(48);
+    for (std::size_t i = 0; i < flat.size(); ++i) {
+        flat[i].time_sec = static_cast<double>(i) * kBeat;
+        flat[i].low = 1.0;
+    }
+    const auto result = findDownbeats(flat, DownbeatConfig{});
+    EXPECT_LT(result.meter_margin, 0.05);
+    EXPECT_FALSE(result.confident());
+}
+
+TEST(Downbeat, AClearFourFourIsSettledOnBothCounts) {
+    const auto result = findDownbeats(bars(4, 0, 32, Cue::kLow), DownbeatConfig{});
+    EXPECT_GT(result.phase_margin, 1.0);
+    EXPECT_GT(result.meter_margin, 0.4);
+    EXPECT_TRUE(result.confident());
+}
+
+// A six-beat pattern contains a three-beat one: mark every sixth beat and the
+// bar lines of three land on a subset of them, so three scores respectably.
+// The phase margin cannot express that doubt, because within three the phase is
+// perfectly clear — which is exactly how a confidently wrong meter arises.
+TEST(Downbeat, ARelatedMetreShowsUpInTheMetreMarginNotThePhaseMargin) {
+    const auto result = findDownbeats(bars(6, 0, 48, Cue::kLow), DownbeatConfig{});
+
+    ASSERT_GE(result.candidates.size(), 2u);
+    EXPECT_GT(result.phase_margin, 0.5) << "the phase within the winning metre is clear";
+    EXPECT_LT(result.meter_margin, result.phase_margin)
+        << "and yet a related metre is close behind, which only this can say";
+}
+
+TEST(Downbeat, ConfidenceNeedsBothMarginsAndNotJustOne) {
+    tiktak::analysis::DownbeatResult result;
+    result.beats_per_bar = 4;
+    result.downbeats = {0.0, 2.0};
+    result.phase_margin = 2.0;
+    result.meter_margin = 0.01;
+    EXPECT_FALSE(result.confident()) << "a settled phase inside the wrong metre";
+
+    result.phase_margin = 0.01;
+    result.meter_margin = 2.0;
+    EXPECT_FALSE(result.confident()) << "the right metre started on a coin toss";
+
+    result.phase_margin = 2.0;
+    EXPECT_TRUE(result.confident());
+
+    // Nothing found at all is never confident, whatever the margins say.
+    result.beats_per_bar = 0;
+    EXPECT_FALSE(result.confident());
+}
+
+TEST(Downbeat, WithOneMetreOfferedThereIsNoRivalToLoseTo) {
+    DownbeatConfig config;
+    config.meters = {{4, 1.0}};
+    const auto result = findDownbeats(bars(4, 0, 32, Cue::kLow), config);
+
+    EXPECT_EQ(result.beats_per_bar, 4);
+    EXPECT_GT(result.meter_margin, 0.0) << "the winner keeps its whole score";
+}
+
+TEST(Downbeat, MusicWithNoBarLineIsConfidentAboutNothing) {
+    std::vector<BeatFeature> noise(48);
+    for (std::size_t i = 0; i < noise.size(); ++i) {
+        noise[i].time_sec = static_cast<double>(i) * kBeat;
+        noise[i].low = (i % 7 == 0) ? 0.31 : 0.29;   // a period no meter offers
+    }
+    EXPECT_FALSE(findDownbeats(noise, DownbeatConfig{}).confident());
+}

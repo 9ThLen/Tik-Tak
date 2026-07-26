@@ -218,6 +218,22 @@ price is stated in the header: a piece that *changes* metre partway cannot be
 represented, and bringing the DP back is what that would need — for that
 reason, not for smoothing.
 
+**Confidence is two numbers, not one — and that was a bug before it was a
+design.** The result carries a `phase_margin` (how far ahead of the next best
+phase *of the same metre*) and a `meter_margin` (how far ahead of the best other
+metre). Only the first existed at first, and it cannot see a metre error at all:
+every rival it weighs has already accepted the bar length, so a 4/4 track read as
+three came back with a phase margin of 0.69 — confidently wrong. On the
+synthetic set the metre margin separates cleanly, 1.2–1.7 where the answer is
+right against 0.26–0.28 where it is not. `confident()` requires both, and a
+caller that accents downbeats should gate on it rather than on either margin.
+
+A consequence worth knowing: a metre that divides another is inherently less
+separable, because the longer bar fits the shorter pattern exactly. Two-beat
+bars score near zero against four and are usually withheld. The measure is being
+honest — 4/4 really does fit a 2/4 accent pattern — but it means 2/4 mostly
+needs `--beats` to get an accent.
+
 **The score is a contrast, not a sum.** A sum over the chosen beats hands the
 win to the shortest bar automatically, because two-four claims half the beats
 where four-four claims a quarter. The difference between the mean at the chosen
