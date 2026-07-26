@@ -185,6 +185,12 @@ bool nonnegativeFinite(const char* text, double& value) {
 int main(int argc, char** argv) {
     std::vector<std::string> positional;
     std::string salience_path;
+    // A beat grid supplied from outside, so that a bad grid and a bad scorer
+    // can be told apart. The bar-line stage takes the beats as given, and when
+    // the tracker is an octave out every bar line is wrong for a reason that
+    // has nothing to do with the downbeat cues. Replacing the grid isolates
+    // the resolver; it is a research seam and never a product path.
+    std::string beats_path;
     // The three numbers a backend calibrates as one set. Defaulted from the
     // built-in cue backend and overridden together — see the loop below for
     // why passing only some of them is refused.
@@ -213,6 +219,14 @@ int main(int argc, char** argv) {
             salience_path = argv[++i];
             continue;
         }
+        if (std::strcmp(argv[i], "--beats") == 0) {
+            if (i + 1 >= argc) {
+                std::fprintf(stderr, "--beats needs a file\n");
+                return 2;
+            }
+            beats_path = argv[++i];
+            continue;
+        }
 
         bool matched = false;
         for (const Threshold& threshold : thresholds) {
@@ -235,6 +249,17 @@ int main(int argc, char** argv) {
     }
 
     const int kCalibrationSize = static_cast<int>(std::size(thresholds));
+
+    // A foreign grid without a foreign scorer would be a lie: the built-in cues
+    // are gathered from ODF frames against the tracker's own beats and cannot
+    // be recomputed here for someone else's grid, so the metre and phase would
+    // still be the original analysis's while the beats printed beside them came
+    // from the file.
+    if (!beats_path.empty() && salience_path.empty()) {
+        std::fprintf(stderr, "--beats replaces the grid the scorer runs on, so it "
+                             "needs --salience for that grid too\n");
+        return 2;
+    }
 
     if (calibration_given > 0 && salience_path.empty()) {
         std::fprintf(stderr,
@@ -344,6 +369,37 @@ int main(int argc, char** argv) {
     std::vector<double> beats(tt_offline_beat_count(offline));
     if (!beats.empty()) tt_offline_beats(offline, beats.data(), beats.size());
 
+    bool beats_replaced = false;
+    if (!beats_path.empty()) {
+        std::vector<double> supplied;
+        std::string complaint;
+        if (!readSalience(beats_path.c_str(), supplied, complaint)) {
+            std::fprintf(stderr, "%s: %s\n", beats_path.c_str(), complaint.c_str());
+            tt_offline_destroy(offline);
+            return 1;
+        }
+        if (supplied.size() < 2) {
+            std::fprintf(stderr, "%s holds %zu beat time(s); a grid needs at least 2\n",
+                         beats_path.c_str(), supplied.size());
+            tt_offline_destroy(offline);
+            return 1;
+        }
+        // Sorted and strictly increasing, because everything downstream indexes
+        // bars by position in this list. An unsorted grid would not fail, it
+        // would silently answer about a different piece of music.
+        for (std::size_t i = 1; i < supplied.size(); ++i) {
+            if (!(supplied[i] > supplied[i - 1])) {
+                std::fprintf(stderr,
+                             "%s: beat times must strictly increase (%zu: %.17g <= %.17g)\n",
+                             beats_path.c_str(), i, supplied[i], supplied[i - 1]);
+                tt_offline_destroy(offline);
+                return 1;
+            }
+        }
+        beats = supplied;
+        beats_replaced = true;
+    }
+
     std::vector<double> downbeats(tt_offline_downbeat_count(offline));
     if (!downbeats.empty()) tt_offline_downbeats(offline, downbeats.data(), downbeats.size());
 
@@ -395,6 +451,8 @@ int main(int argc, char** argv) {
     std::printf("  \"path\": \"%s\",\n", escape(path).c_str());
     std::printf("  \"salience_source\": \"%s\",\n",
                 salience_path.empty() ? "cues" : "file");
+    std::printf("  \"beats_source\": \"%s\",\n",
+                beats_replaced ? "file" : "tracker");
     std::printf("  \"sample_rate\": %.17g,\n", rate);
     std::printf("  \"duration_sec\": %.17g,\n", static_cast<double>(samples.size()) / rate);
     std::printf("  \"bpm\": %.17g,\n", finiteOrZero(tt_offline_bpm(offline)));

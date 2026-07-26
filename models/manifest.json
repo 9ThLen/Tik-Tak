@@ -102,7 +102,59 @@
       },
       "file": "beat_this_large.onnx",
       "expected_mb": 79.2,
-      "pinned": null
+      "pinned": {
+        "sha256": "c5c1466e08abdb03fdeb50668a06f244b787d564c212490482231a9cfbe9ccbd",
+        "bytes": 83077778,
+        "provenance": {
+          "source": {
+            "repo": "https://github.com/mosynthkey/beat_this_cpp",
+            "revision": "07ab790a9ec2eda8093d52d249e3ec4f0510ee72",
+            "url": "https://raw.githubusercontent.com/mosynthkey/beat_this_cpp/07ab790a9ec2eda8093d52d249e3ec4f0510ee72/onnx/beat_this.onnx",
+            "path": "onnx/beat_this.onnx"
+          },
+          "conversion": {
+            "model_variant": "final0",
+            "source_weights_sha256": null,
+            "exporter": {
+              "repo": "https://github.com/mosynthkey/beat_this_cpp",
+              "revision": "07ab790a9ec2eda8093d52d249e3ec4f0510ee72",
+              "version": null
+            },
+            "onnx_opset": 14,
+            "preprocessing": {
+              "sample_rate": 22050,
+              "n_fft": 1024,
+              "hop_length": 441,
+              "f_min": 30,
+              "f_max": 11000,
+              "n_mels": 128,
+              "mel_scale": "slaney",
+              "normalized": "frame_length",
+              "power": 1,
+              "compression": "log1p(1000*x)"
+            },
+            "io_contract": {
+              "input": {
+                "name": "input_spectrogram",
+                "shape": [
+                  "batch",
+                  "time",
+                  128
+                ],
+                "dynamic_axes": [
+                  "time"
+                ]
+              },
+              "outputs": [
+                "beat",
+                "downbeat"
+              ]
+            },
+            "note": "Populate source_weights_sha256 and exporter version before treating this ONNX as release-ready."
+          }
+        },
+        "date": "2026-07-26"
+      }
     }
   }
 }
