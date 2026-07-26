@@ -98,7 +98,7 @@ the click accents the one:
 ```
 song.mp3 — 184.0 s at 44100 Hz
 beat grid: analysed — 372 beats at 121.0 BPM (confidence 0.81)
-bar lines: 4 beats to the bar (strength 1.40, phase margin 0.80, metre margin 0.87)
+bar lines: 4 beats to the bar (strength …, phase margin …, metre margin …)
 ```
 
 `strength` is how far the chosen bar lines stand above the beats around them.
@@ -127,7 +127,7 @@ bar, so when the analysis agreed about the metre the phase still comes from the
 audio:
 
 ```
-bar lines: 4 beats to the bar (strength 1.40, phase margin 0.80, metre margin 0.87)
+bar lines: 4 beats to the bar (strength …, phase margin …, metre margin …)
 bar starts on beat 1, from the audio
 ```
 
@@ -137,6 +137,11 @@ no invented first beat as the downbeat:
 ```
 using --beats 3 over the 4 the audio suggests — phase unknown, every beat clicks the same
 ```
+
+The example numbers are omitted deliberately: they belong to a particular
+salience backend's scale. The resolver does not standardise arbitrary input, so
+the range gate and both margins are calibrated together and old values do not
+transfer to another model.
 
 The thresholds are provisional. `research/eval/downbeat_benchmark.py` is what
 sets them: it sweeps both, reports coverage against the wrong-accent rate, and

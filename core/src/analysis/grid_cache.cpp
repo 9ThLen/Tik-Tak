@@ -213,6 +213,7 @@ std::uint64_t fingerprint(const OfflineConfig& c) {
     putF64(bytes, c.downbeat.window_before);
     putF64(bytes, c.downbeat.window_after);
     put64(bytes, static_cast<std::uint64_t>(c.downbeat.min_bars));
+    putF64(bytes, c.downbeat.min_salience_range);
     putF64(bytes, c.downbeat.min_phase_margin);
     putF64(bytes, c.downbeat.min_meter_margin);
     for (const MeterCandidate& m : c.downbeat.meters) {

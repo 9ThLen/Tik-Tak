@@ -190,4 +190,8 @@ TEST(GridCache, RefusesAGridAnalysedWithADifferentIdeaOfBars) {
     OfflineConfig fewer_meters = config;
     fewer_meters.downbeat.meters = {{4, 1.0}};
     EXPECT_FALSE(deserializeGrid(blob.data(), blob.size(), fewer_meters, &restored));
+
+    OfflineConfig stricter_evidence = config;
+    stricter_evidence.downbeat.min_salience_range = 0.10;
+    EXPECT_FALSE(deserializeGrid(blob.data(), blob.size(), stricter_evidence, &restored));
 }

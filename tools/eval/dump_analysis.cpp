@@ -9,6 +9,7 @@
 //   dump_analysis <song.mp3>                 decode WAV, FLAC or MP3
 //   dump_analysis <clip.f32> <sample_rate>   raw 32-bit float mono, native order
 //   dump_analysis <audio> [rate] --salience <file>
+//                    [--salience-min-range <value>]
 //                                            replace the built-in cues with a
 //                                            per-beat salience read from a file
 //
@@ -17,14 +18,18 @@
 // already float arrays in memory.
 //
 // --salience is the seam in analysis/downbeat.hpp made reachable from outside:
-// one number per beat, whitespace-separated, `#` starts a comment. The beat
-// grid still comes from the core's own tracker, and the bar length and phase
-// still come from the core's own resolver — only the per-beat scorer is
-// swapped. That is exactly the substitution an ONNX model will make, which is
-// what lets a model be *scored* through the shipping resolver before a line of
-// it is ported: run once to get the beats, sample the model's activation at
-// those beat times, run again with the file. The count must match the beat
-// count exactly; a mismatch is an error, not an alignment guess.
+// one finite number per beat, whitespace-separated, `#` starts a comment. The
+// values keep their original scale: the resolver will not turn an almost-flat
+// model output into unit-variance evidence. The beat grid still comes from the
+// core's own tracker, and the bar length and phase still come from the core's
+// own resolver — only the per-beat scorer is swapped. That is exactly the
+// substitution an ONNX model will make, which is what lets a model be *scored*
+// through the shipping resolver before a line of it is ported: run once to get
+// the beats, sample the model's activation at those beat times, run again with
+// the file. The count must match the beat count exactly; a mismatch is an
+// error, not an alignment guess. --salience-min-range supplies the evidence
+// gate in that backend's own units; it is part of a backend's calibration and
+// deliberately has no universal model-independent value.
 //
 // Output is one JSON object on stdout. Times are printed at full double
 // precision because this is a machine format: a diff between two runs should
@@ -37,6 +42,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -76,9 +82,13 @@ std::vector<float> readRaw(const char* path) {
 // One value per beat, whitespace-separated, `#` to end of line. Text rather
 // than binary because the writer is a numpy one-liner and the file is worth
 // being able to look at when a result surprises.
-bool readSalience(const char* path, std::vector<double>& out) {
+bool readSalience(const char* path, std::vector<double>& out,
+                  std::string& error) {
     std::FILE* file = std::fopen(path, "rb");
-    if (!file) return false;
+    if (!file) {
+        error = "cannot open salience file";
+        return false;
+    }
 
     std::string text;
     char block[4096];
@@ -99,7 +109,16 @@ bool readSalience(const char* path, std::vector<double>& out) {
             char* end = nullptr;
             const double value = std::strtod(text.c_str() + i, &end);
             const std::size_t consumed = static_cast<std::size_t>(end - (text.c_str() + i));
-            if (consumed == 0) return false;  // something that is not a number
+            if (consumed == 0) {
+                error = "invalid salience token at byte " + std::to_string(i);
+                return false;
+            }
+            if (!std::isfinite(value)) {
+                error = "non-finite salience value " +
+                        std::to_string(out.size() + 1) + " at byte " +
+                        std::to_string(i);
+                return false;
+            }
             out.push_back(value);
             i += consumed;
         }
@@ -112,7 +131,7 @@ bool readSalience(const char* path, std::vector<double>& out) {
 // none of these values, so they are reported as 0 with the empty beat list
 // alongside saying why.
 double finite(double value) {
-    return (value == value && value > -1e308 && value < 1e308) ? value : 0.0;
+    return std::isfinite(value) ? value : 0.0;
 }
 
 void printTimes(const char* name, const std::vector<double>& times, bool last) {
@@ -149,11 +168,19 @@ std::string escape(const std::string& text) {
     return out;
 }
 
+bool nonnegativeFinite(const char* text, double& value) {
+    char* end = nullptr;
+    value = std::strtod(text, &end);
+    return end != text && *end == '\0' && value >= 0.0 && std::isfinite(value);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
     std::vector<std::string> positional;
     std::string salience_path;
+    double salience_min_range = 0.0;
+    bool salience_min_range_given = false;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--salience") == 0) {
             if (i + 1 >= argc) {
@@ -161,15 +188,33 @@ int main(int argc, char** argv) {
                 return 2;
             }
             salience_path = argv[++i];
+        } else if (std::strcmp(argv[i], "--salience-min-range") == 0) {
+            if (i + 1 >= argc) {
+                std::fprintf(stderr, "--salience-min-range needs a value\n");
+                return 2;
+            }
+            if (!nonnegativeFinite(argv[++i], salience_min_range)) {
+                std::fprintf(stderr,
+                             "--salience-min-range must be a finite, non-negative number\n");
+                return 2;
+            }
+            salience_min_range_given = true;
         } else {
             positional.push_back(argv[i]);
         }
     }
 
+    if (salience_min_range_given && salience_path.empty()) {
+        std::fprintf(stderr, "--salience-min-range only applies with --salience\n");
+        return 2;
+    }
+
     if (positional.empty() || positional.size() > 2) {
         std::fprintf(stderr,
-                     "usage: %s <song.mp3|song.wav|song.flac> [--salience <file>]\n"
-                     "       %s <clip.f32> <sample_rate> [--salience <file>]\n",
+                     "usage: %s <song.mp3|song.wav|song.flac> "
+                     "[--salience <file> [--salience-min-range <value>]]\n"
+                     "       %s <clip.f32> <sample_rate> "
+                     "[--salience <file> [--salience-min-range <value>]]\n",
                      argv[0], argv[0]);
         return 2;
     }
@@ -260,9 +305,10 @@ int main(int argc, char** argv) {
 
     if (!salience_path.empty()) {
         std::vector<double> salience;
-        if (!readSalience(salience_path.c_str(), salience)) {
-            std::fprintf(stderr, "cannot read %s as per-beat salience\n",
-                         salience_path.c_str());
+        std::string salience_error;
+        if (!readSalience(salience_path.c_str(), salience, salience_error)) {
+            std::fprintf(stderr, "%s: %s\n", salience_path.c_str(),
+                         salience_error.c_str());
             tt_offline_destroy(offline);
             return 1;
         }
@@ -275,10 +321,14 @@ int main(int argc, char** argv) {
             return 1;
         }
         // The C API offers no way to override the downbeat configuration, so
-        // the pipeline runs the C++ defaults — the same DownbeatConfig{} used
-        // here. If that ever stops being true this tool will disagree with the
-        // core visibly, in the numbers, which is the failure mode to want.
-        const tiktak::analysis::DownbeatConfig db_config;
+        // this research seam reaches the resolver directly. The range gate is
+        // backend-specific and can be supplied explicitly; the margin values
+        // remain in the same backend's units and must be calibrated with it
+        // before downbeat_confident is a product claim.
+        tiktak::analysis::DownbeatConfig db_config;
+        if (salience_min_range_given) {
+            db_config.min_salience_range = salience_min_range;
+        }
         const tiktak::analysis::DownbeatResult resolved =
             tiktak::analysis::resolveMeter(salience, beats, db_config);
         downbeats = resolved.downbeats;

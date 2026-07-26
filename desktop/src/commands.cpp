@@ -925,7 +925,7 @@ int cmdTrack(const Options& options) {
                     grid.downbeat_phase_margin, grid.downbeat_meter_margin,
                     grid.downbeat_confident ? "" : " — too close to call");
     } else if (!grid.beats.empty()) {
-        std::printf("bar lines: none found — the track is too short to repeat a bar\n");
+        std::printf("bar lines: none found — not enough repeated bar-level evidence\n");
     }
 
     if (options.beats_per_bar_given) {

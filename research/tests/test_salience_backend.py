@@ -73,6 +73,62 @@ def test_a_flat_salience_is_no_answer_whatever_the_audio_says(analyser, clip, gr
     assert not result.downbeat_confident
 
 
+def test_a_nearly_flat_periodic_salience_is_not_normalised_into_an_answer(
+        analyser, clip, grid):
+    salience = np.where(np.arange(len(grid.beats)) % 4 == 0,
+                        0.500003, 0.500001)
+    result = analyser.analyse_audio(clip.audio, clip.sample_rate,
+                                    salience=salience)
+
+    assert result.beats_per_bar == 0
+    assert not result.downbeats.size
+    assert not result.downbeat_confident
+
+
+def test_an_external_backend_can_supply_its_own_range_gate(
+        analyser, clip, grid):
+    salience = np.where(np.arange(len(grid.beats)) % 4 == 0,
+                        0.500003, 0.500001)
+    result = analyser.analyse_audio(
+        clip.audio,
+        clip.sample_rate,
+        salience=salience,
+        salience_min_range=1e-7,
+    )
+
+    assert result.beats_per_bar == 4
+    assert result.downbeats[0] == pytest.approx(grid.beats[0])
+    # Admitting this backend's scale does not make the ordinary cue backend's
+    # much larger margin thresholds magically applicable to it.
+    assert not result.downbeat_confident
+
+
+@pytest.mark.parametrize("bad", [-1.0, np.nan, np.inf])
+def test_an_external_range_gate_must_be_non_negative_and_finite(
+        analyser, clip, grid, bad):
+    with pytest.raises(
+            RuntimeError,
+            match=r"--salience-min-range must be a finite, non-negative number"):
+        analyser.analyse_audio(
+            clip.audio,
+            clip.sample_rate,
+            salience=np.ones(len(grid.beats)),
+            salience_min_range=bad,
+        )
+
+
+@pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf],
+                         ids=["nan", "positive infinity", "negative infinity"])
+def test_non_finite_salience_is_rejected_with_its_position_named(
+        analyser, clip, grid, bad):
+    salience = np.ones(len(grid.beats))
+    salience[1] = bad
+
+    with pytest.raises(RuntimeError,
+                       match=r"non-finite salience value 2 at byte"):
+        analyser.analyse_audio(clip.audio, clip.sample_rate, salience=salience)
+
+
 def test_a_count_mismatch_is_refused_with_both_counts_named(analyser, clip):
     with pytest.raises(RuntimeError, match=r"3 value\(s\).*beat\(s\)"):
         analyser.analyse_audio(clip.audio, clip.sample_rate,

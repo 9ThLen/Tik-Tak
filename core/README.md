@@ -223,10 +223,27 @@ design.** The result carries a `phase_margin` (how far ahead of the next best
 phase *of the same metre*) and a `meter_margin` (how far ahead of the best other
 metre). Only the first existed at first, and it cannot see a metre error at all:
 every rival it weighs has already accepted the bar length, so a 4/4 track read as
-three came back with a phase margin of 0.69 — confidently wrong. On the
-synthetic set the metre margin separates cleanly, 1.2–1.7 where the answer is
-right against 0.26–0.28 where it is not. `confident()` requires both, and a
-caller that accents downbeats should gate on it rather than on either margin.
+three can come back with a large phase margin — confidently wrong.
+`confident()` requires both, and a caller that accents downbeats should gate on
+it rather than on either margin.
+
+Margins are in the salience backend's units. `resolveMeter()` removes a
+constant offset but deliberately does not standardise or rescale the incoming
+vector: a periodic ripple of a few millionths is still a few millionths of
+evidence. Each backend therefore calibrates `min_salience_range`,
+`min_phase_margin` and `min_meter_margin` together; numeric ranges measured for
+one scorer are not evidence about another.
+
+Those calibrated thresholds also bound the usable dynamic range. Before
+scoring, the resolver checks that the peak-to-peak span still leaves eight
+floating-point guard bits after accounting for the number of beats. A backend
+that mixes `DBL_MAX`-scale values with unit-scale evidence gets no answer rather
+than a meter manufactured by rounding. An internal power-of-two shift keeps
+ordinary arithmetic finite, but its exponent is restored in every public
+margin, so this safety step does not promote weak evidence.
+For the same reason, a zero phase threshold is not a usable automatic
+configuration; a zero meter threshold is accepted only when the caller has
+already reduced the candidates to one eligible meter.
 
 A consequence worth knowing: a metre that divides another is inherently less
 separable, because the longer bar fits the shorter pattern exactly. Two-beat

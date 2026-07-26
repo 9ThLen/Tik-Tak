@@ -37,11 +37,14 @@ struct MeterCandidate {
 struct DownbeatConfig {
     // Bar lengths considered, strongest prior first.
     //
-    // 4, 3 and 2 cover very nearly all of the repertoire this app is for. 6 is
-    // here for 6/8 counted in eighths, and carries the weakest prior because
-    // it is only ever distinguishable from 3 by which of the two accents in the
-    // bar is bigger — a genuinely subtle question that this stage should be
-    // allowed to decline rather than answer badly.
+    // 4, 3 and 2 cover very nearly all of the repertoire this app is for. 6
+    // means six pulses of the *incoming beat grid* per cycle and carries the
+    // weakest prior because it is only ever distinguishable from 3 by which of
+    // the two accents in the cycle is bigger. It describes 6/8 only when the
+    // upstream tracker counted eighth-note pulses. A tracker working at the
+    // usual tactus often represents 6/8 as two dotted-quarter beats; this
+    // resolver sees neither a denominator nor subdivisions and cannot tell
+    // that apart from 2/4.
     //
     // The priors are ratios against 4/4 and encode how common each meter is,
     // nothing more. They matter only when the audio is close to a tie.
@@ -89,9 +92,24 @@ struct DownbeatConfig {
     // accident in the audio.
     int min_bars = 3;
 
+    // The smallest peak-to-peak range that this scorer considers evidence.
+    // A nearly constant output is ignorance, even if its tiny numerical ripple
+    // happens to repeat every four beats; normalising that ripple would turn
+    // floating-point leakage into a full-scale accent.
+    //
+    // This number is in the scorer's own units. The default belongs to the
+    // built-in cue backend and rejects the roughly 0.01 chroma variation seen
+    // on drums-only material.
+    // A learned backend must calibrate and pass its own value together with its
+    // margin thresholds; the resolver deliberately does not rescale arbitrary
+    // backend output.
+    double min_salience_range = 0.05;
+
     // How convincing the answer has to be before a caller should accent
-    // anything. They live in the config rather than at the call site so that
-    // research/eval sweeps the same numbers the app uses, not a copy of them.
+    // anything. These values and min_salience_range are one backend-specific
+    // calibration. They live in the config rather than at the call site so
+    // that research/eval sweeps the same numbers the app uses, not a copy of
+    // them.
     //
     // **Provisional, on synthetic material only.** A metre threshold above the
     // two observed wrong answers took the wrong rate from 14% to zero on seven
@@ -118,7 +136,10 @@ struct DownbeatConfig {
 struct MeterScore {
     int beats_per_bar = 0;
     int phase = 0;       // index of the first downbeat within the beat list
-    double score = 0.0;  // best contrast for this meter, prior applied
+    // Best contrast for this meter, prior applied. Saturated at the largest
+    // finite double for diagnostics; the resolver retains an overflow-safe
+    // internal key so saturation never changes which meter wins.
+    double score = 0.0;
 };
 
 struct DownbeatResult {
@@ -130,10 +151,12 @@ struct DownbeatResult {
     int beats_per_bar = 0;
     int phase = 0;
 
-    // How far the winning answer stands above the alternatives, in standard
-    // deviations of the per-beat score. Three separate doubts, kept separate
-    // because they fail differently and a caller should be able to tell which
-    // one it has:
+    // How far the winning answer stands above the alternatives, in the units
+    // supplied by the salience backend. The built-in backend standardises its
+    // onset components but keeps harmony in absolute cosine-distance units;
+    // resolveMeter preserves that mixture or a learned backend's calibrated
+    // scale. Three separate doubts, kept separate because they fail differently
+    // and a caller should be able to tell which one it has:
     //
     //   `strength` is the winner's own contrast — how much louder, in the
     //   combined cue, the chosen bar lines are than everything else. Near zero
@@ -229,40 +252,50 @@ DownbeatResult findDownbeats(const std::vector<BeatFeature>& features,
 // would replace — Beat This! and BeatNet both emit a per-beat (or per-frame)
 // downbeat activation and leave the counting to something else.
 //
-// The seam is therefore a plain `std::vector<double>`, one value per beat, and
-// not an abstract class. A backend has to produce that vector from whatever it
-// likes — these cues, an ONNX session, a file of activations dumped by a Python
-// experiment — and nothing in the resolver knows or asks which. A virtual
-// interface would add a vtable and a factory in exchange for nothing that a
-// free function taking a vector does not already give, and would have to be
-// designed now against a model that cannot even be downloaded in this
-// environment. When a second backend exists and the shape of its needs is
-// known, an interface can be introduced over two working implementations
-// instead of one imagined one.
+// The seam is therefore a plain `std::vector<double>`, one finite value per
+// beat, where a larger value means stronger downbeat evidence. A backend has to
+// produce that vector from whatever it likes — these cues, an ONNX session, a
+// file of activations dumped by a Python experiment — and declare its scale
+// through DownbeatConfig: min_salience_range, min_phase_margin and
+// min_meter_margin are calibrated as a set. Nothing in the resolver knows or
+// asks which backend produced them. A virtual interface would add a vtable and
+// a factory in exchange for nothing that a free function taking a vector does
+// not already give, and would have to be designed now against a model that
+// cannot even be downloaded in this environment. When a second backend exists
+// and the shape of its needs is known, an interface can be introduced over two
+// working implementations instead of one imagined one.
 
 // Per-beat downbeat salience from the built-in cues.
 //
 // The onset cues are standardised here because their units are arbitrary and
 // cue-specific; harmony is not, because a chroma distance already means
-// something absolute. Both are decisions about *these* cues and belong on this
-// side of the seam. What comes out is not normalised and need not be — see
-// resolveMeter.
+// something absolute. The mixture keeps those units; the range gate is applied
+// once by resolveMeter to the actual vector crossing the seam. Those are
+// decisions about *this* backend and belong on this side of the seam.
 std::vector<double> cueSalience(const std::vector<BeatFeature>& features,
                                 const DownbeatConfig& config);
 
 // Bar length and phase from any per-beat salience, whatever produced it.
 //
-// `salience` and `beat_times` must be the same length; a mismatch returns an
-// empty result rather than guessing which is right.
+// `salience` and `beat_times` must be the same length and every salience value
+// must be finite; invalid input returns an empty result rather than guessing.
+// The same applies when finite values span so many orders of magnitude that
+// their distinct levels cannot all survive the resolver's affine double
+// representation: merging evidence levels can create a false periodic
+// contrast, so no answer is safer than a numerically invented meter. The
+// calibrated range and margin thresholds also define the numerical resolution:
+// a dynamic range that leaves fewer than eight guard bits after accounting for
+// the number of beats is rejected. A zero phase margin cannot provide that
+// contract and is therefore no answer; a zero meter margin is allowed only
+// when at most one meter is eligible. A range below config.min_salience_range
+// is likewise no answer.
 //
-// Standardising the salience is done *here*, deliberately, and it is the reason
-// a threshold calibrated on one backend means anything on another. The margins
-// this returns are quoted in standard deviations of the incoming salience, so a
-// model emitting probabilities in [0, 1] and these cues emitting arbitrary
-// weighted sums land on the same scale, and `min_meter_margin` does not have to
-// be recalibrated from scratch the day the scorer changes. It would still be
-// worth re-checking — the *shape* of a distribution is not fixed by its mean and
-// spread — but it starts from a comparable number rather than an unrelated one.
+// The resolver removes an irrelevant constant offset but does not divide by
+// the range or standard deviation. Scale is evidence: turning probabilities
+// 0.500001 and 0.500003 into unit variance would make an ignorant model look
+// certain. Consequently strength and margins remain in this backend's units,
+// and replacing a scorer requires calibrating the range and margin thresholds
+// on held-out material rather than inheriting another backend's numbers.
 DownbeatResult resolveMeter(const std::vector<double>& salience,
                             const std::vector<double>& beat_times,
                             const DownbeatConfig& config);

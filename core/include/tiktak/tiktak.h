@@ -241,8 +241,10 @@ TT_API size_t tt_offline_downbeat_count(const tt_offline* offline);
 TT_API size_t tt_offline_downbeats(const tt_offline* offline, double* out, size_t capacity);
 
 /*
- * How far to trust those bar lines. All three are in standard deviations of the
- * per-beat cue, and they answer different questions.
+ * How far to trust those bar lines. All three are in the active salience
+ * backend's units and answer different questions. They may be compared with
+ * thresholds calibrated for that backend, but not with raw values from a
+ * different scorer.
  *
  * `strength` is how much louder the chosen bar lines are than the beats around
  * them. Near zero means the audio has no bar-level pattern at all, and the

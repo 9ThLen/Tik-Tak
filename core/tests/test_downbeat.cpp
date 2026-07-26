@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <limits>
 #include <utility>
 #include <vector>
 
@@ -99,6 +100,18 @@ TEST(Downbeat, AChordChangeIsEnoughOnItsOwn) {
     EXPECT_GT(result.phase_margin, 1.0);
 }
 
+TEST(Downbeat, TinyHarmonicLeakageIsNotPromotedIntoAChordChange) {
+    // The absolute scale of chroma distance carries information. This is the
+    // drums-only failure seen in practice: a periodic numerical ripple around
+    // 0.01 is not a quiet but certain chord progression.
+    const auto result =
+        findDownbeats(bars(4, 0, 32, Cue::kHarmony, 0.011, 0.010),
+                      DownbeatConfig{});
+
+    EXPECT_EQ(result.beats_per_bar, 0);
+    EXPECT_TRUE(result.downbeats.empty());
+}
+
 TEST(Downbeat, TheCuesAddUpRatherThanFight) {
     // Each cue alone is weak and noisy; together they should still land on the
     // same bar line, which is the only reason to carry three of them.
@@ -114,8 +127,8 @@ TEST(Downbeat, TheCuesAddUpRatherThanFight) {
 }
 
 TEST(Downbeat, MusicWithNoBarLineGetsNone) {
-    // Every beat identical. There is a meter to name only because something has
-    // to be returned; what matters is that the strength says not to believe it.
+    // Every beat identical. The scorer's range gate makes this no evidence,
+    // rather than returning an arbitrary first candidate with zero strength.
     std::vector<BeatFeature> flat(32);
     for (std::size_t i = 0; i < flat.size(); ++i) {
         flat[i].time_sec = static_cast<double>(i) * kBeat;
@@ -124,6 +137,8 @@ TEST(Downbeat, MusicWithNoBarLineGetsNone) {
     }
 
     const auto result = findDownbeats(flat, DownbeatConfig{});
+    EXPECT_EQ(result.beats_per_bar, 0);
+    EXPECT_TRUE(result.downbeats.empty());
     EXPECT_DOUBLE_EQ(result.strength, 0.0);
     EXPECT_DOUBLE_EQ(result.phase_margin, 0.0);
 }
@@ -144,10 +159,10 @@ TEST(Downbeat, NoBeatsAtAllIsNotACrash) {
     EXPECT_TRUE(result.downbeats.empty());
 }
 
-TEST(Downbeat, ASixEightBarCanBeAskedForSpecifically) {
-    // Six is in the default list but carries the weakest prior, because it is
-    // only distinguishable from three by which of its two accents is bigger.
-    // A caller who knows the piece can say so, and then it must be found.
+TEST(Downbeat, ASixPulseCycleCanBeAskedForSpecifically) {
+    // This says only that six pulses of the supplied grid repeat. It is 6/8 if
+    // those pulses are eighth notes; with a tactus-level grid, ordinary 6/8 is
+    // usually two pulses and cannot be distinguished from 2/4 here.
     DownbeatConfig config;
     config.meters = {{6, 1.0}, {3, 1.0}};
 
@@ -190,6 +205,26 @@ TEST(DownbeatConfigTest, RejectsTheImpossible) {
     auto one_bar = DownbeatConfig{};
     one_bar.min_bars = 1;
     EXPECT_FALSE(one_bar.valid());
+
+    auto negative_range = DownbeatConfig{};
+    negative_range.min_salience_range = -0.01;
+    EXPECT_FALSE(negative_range.valid());
+
+    auto infinite_range = DownbeatConfig{};
+    infinite_range.min_salience_range = std::numeric_limits<double>::infinity();
+    EXPECT_FALSE(infinite_range.valid());
+
+    auto infinite_prior = DownbeatConfig{};
+    infinite_prior.meters.front().prior = std::numeric_limits<double>::infinity();
+    EXPECT_FALSE(infinite_prior.valid());
+
+    auto infinite_weight = DownbeatConfig{};
+    infinite_weight.low_weight = std::numeric_limits<double>::infinity();
+    EXPECT_FALSE(infinite_weight.valid());
+
+    auto infinite_margin = DownbeatConfig{};
+    infinite_margin.min_phase_margin = std::numeric_limits<double>::infinity();
+    EXPECT_FALSE(infinite_margin.valid());
 }
 
 // --------------------------------------------------------------- features --
@@ -408,11 +443,71 @@ TEST(Resolver, CountsBarsFromASalienceItDidNotProduce) {
     EXPECT_NEAR(result.downbeats.front(), kBeat, 1e-12);
 }
 
-TEST(Resolver, TheMarginsDoNotDependOnTheScaleOfTheSalience) {
-    // The point of standardising inside the resolver rather than in each
-    // scorer: a model emitting probabilities in [0, 1] and cues emitting
-    // arbitrary weighted sums must land on the same margins, or every threshold
-    // has to be recalibrated the day the scorer changes.
+TEST(Resolver, IneligibleMeterPriorDoesNotConstrainNumericalResolution) {
+    const auto [salience, times] = salienceBars(4, 0, 32);
+    DownbeatConfig config;
+    config.meters = {
+        {4, 1.0},
+        {1000, std::numeric_limits<double>::max()},
+    };
+
+    const auto result = resolveMeter(salience, times, config);
+
+    EXPECT_EQ(result.beats_per_bar, 4);
+    EXPECT_EQ(result.phase, 0);
+}
+
+TEST(Resolver, ZeroPhaseThresholdCannotMakeARoundedTieConfident) {
+    std::vector<double> salience(18, 0.0);
+    std::vector<double> times(18);
+    salience[0] = 1e10;
+    salience[1] = 1e10;
+    salience[7] = 1e-7;
+    salience[13] = 1e-7;
+    for (std::size_t i = 0; i < times.size(); ++i) {
+        times[i] = static_cast<double>(i) * kBeat;
+    }
+    DownbeatConfig config;
+    config.meters = {{6, 1.0}};
+    config.min_phase_margin = 0.0;
+
+    const auto result = resolveMeter(salience, times, config);
+
+    EXPECT_EQ(result.beats_per_bar, 0);
+    EXPECT_TRUE(result.downbeats.empty());
+}
+
+TEST(Resolver, ZeroMeterThresholdNeedsAtMostOneEligibleMeter) {
+    const auto [salience, times] = salienceBars(4, 0, 32);
+    DownbeatConfig config;
+    config.min_meter_margin = 0.0;
+
+    const auto ambiguous = resolveMeter(salience, times, config);
+    EXPECT_EQ(ambiguous.beats_per_bar, 0);
+
+    config.meters = {{4, 1.0}};
+    const auto asserted = resolveMeter(salience, times, config);
+    EXPECT_EQ(asserted.beats_per_bar, 4);
+    EXPECT_EQ(asserted.phase, 0);
+}
+
+TEST(Resolver, DuplicateCandidatesAreOneMeterForTheZeroMarginGate) {
+    const auto [salience, times] = salienceBars(4, 0, 12);
+    DownbeatConfig config;
+    config.meters = {{4, 1.0}, {4, 2.0}};
+    config.min_meter_margin = 0.0;
+
+    const auto result = resolveMeter(salience, times, config);
+
+    EXPECT_EQ(result.beats_per_bar, 4);
+    EXPECT_EQ(result.phase, 0);
+}
+
+TEST(Resolver, PreservesBackendScaleButIgnoresAnOffset) {
+    // A backend owns its units and calibrates the three evidence thresholds in
+    // those units. Adding a DC offset changes nothing; multiplying the evidence
+    // must multiply the margins rather than turn weak and strong signals into
+    // the same answer.
     const auto [unit, times] = salienceBars(4, 0, 32, 1.0, 0.0);
     std::vector<double> loud(unit.size());
     for (std::size_t i = 0; i < unit.size(); ++i) loud[i] = unit[i] * 250.0 - 7.0;
@@ -422,9 +517,9 @@ TEST(Resolver, TheMarginsDoNotDependOnTheScaleOfTheSalience) {
 
     EXPECT_EQ(a.beats_per_bar, b.beats_per_bar);
     EXPECT_EQ(a.phase, b.phase);
-    EXPECT_NEAR(a.strength, b.strength, 1e-9);
-    EXPECT_NEAR(a.phase_margin, b.phase_margin, 1e-9);
-    EXPECT_NEAR(a.meter_margin, b.meter_margin, 1e-9);
+    EXPECT_NEAR(a.strength * 250.0, b.strength, 1e-9);
+    EXPECT_NEAR(a.phase_margin * 250.0, b.phase_margin, 1e-9);
+    EXPECT_NEAR(a.meter_margin * 250.0, b.meter_margin, 1e-9);
 }
 
 TEST(Resolver, MismatchedLengthsAreRefusedRatherThanGuessedAt) {
@@ -474,7 +569,287 @@ TEST(Resolver, AFlatSalienceDecidesNothingHoweverLargeItIs) {
     std::vector<double> times(48);
     for (std::size_t i = 0; i < times.size(); ++i) times[i] = static_cast<double>(i) * kBeat;
 
-    EXPECT_FALSE(resolveMeter(flat, times, DownbeatConfig{}).confident());
+    const auto result = resolveMeter(flat, times, DownbeatConfig{});
+    EXPECT_EQ(result.beats_per_bar, 0);
+    EXPECT_TRUE(result.downbeats.empty());
+}
+
+TEST(Resolver, ANearlyFlatPeriodicRippleIsNotFullScaleEvidence) {
+    const auto [salience, times] =
+        salienceBars(4, 0, 32, 0.500003, 0.500001);
+
+    const auto rejected = resolveMeter(salience, times, DownbeatConfig{});
+    EXPECT_EQ(rejected.beats_per_bar, 0);
+    EXPECT_TRUE(rejected.downbeats.empty());
+
+    // A backend may deliberately lower its own range gate, but the resolver
+    // still preserves the tiny scale: the default margin thresholds therefore
+    // do not call this confident.
+    DownbeatConfig model_config;
+    model_config.min_salience_range = 1e-7;
+    const auto admitted = resolveMeter(salience, times, model_config);
+    EXPECT_EQ(admitted.beats_per_bar, 4);
+    EXPECT_EQ(admitted.phase, 0);
+    EXPECT_GT(admitted.strength, 0.0);
+    EXPECT_LT(admitted.strength, 1e-4);
+    EXPECT_FALSE(admitted.confident(model_config.min_phase_margin,
+                                    model_config.min_meter_margin));
+}
+
+TEST(Resolver, NonFiniteBackendOutputIsNotAnAnswer) {
+    const auto [finite_salience, times] = salienceBars(4, 0, 32);
+    for (double bad : {std::numeric_limits<double>::quiet_NaN(),
+                       std::numeric_limits<double>::infinity(),
+                       -std::numeric_limits<double>::infinity()}) {
+        auto salience = finite_salience;
+        salience[3] = bad;
+        const auto result = resolveMeter(salience, times, DownbeatConfig{});
+        EXPECT_EQ(result.beats_per_bar, 0);
+        EXPECT_TRUE(result.downbeats.empty());
+    }
+}
+
+TEST(Resolver, ExtremeFiniteBackendOutputKeepsEveryMetricFinite) {
+    // A two-level salience can be represented safely even at the edge of the
+    // finite range. Repeated DBL_MAX values used to overflow per-phase sums; a
+    // positive and negative extreme could also overflow ranges and margins.
+    const double limit = std::numeric_limits<double>::max();
+    const auto [salience, times] = salienceBars(4, 0, 32, limit, -limit);
+    DownbeatConfig config;
+    config.meters = {{4, 2.0}, {3, 1.0}, {2, 0.75}, {6, 0.6}};
+    config.min_salience_range = limit / 8.0;
+    config.min_phase_margin = limit / 8.0;
+    config.min_meter_margin = limit / 4.0;
+
+    const auto result = resolveMeter(salience, times, config);
+
+    EXPECT_EQ(result.beats_per_bar, 4);
+    EXPECT_EQ(result.phase, 0);
+    EXPECT_TRUE(std::isfinite(result.strength));
+    EXPECT_TRUE(std::isfinite(result.phase_margin));
+    EXPECT_TRUE(std::isfinite(result.meter_margin));
+    ASSERT_FALSE(result.candidates.empty());
+    for (const auto& candidate : result.candidates) {
+        EXPECT_TRUE(std::isfinite(candidate.score))
+            << "meter " << candidate.beats_per_bar;
+    }
+}
+
+TEST(Resolver, ExtremeFiniteOffsetDoesNotCollapseDistinctSalienceLevels) {
+    // Subtracting -DBL_MAX in the public double scale would saturate both zero
+    // and +DBL_MAX to the same value. The resolver must form its internal
+    // affine weights in a shared power-of-two scale so that the mathematical
+    // six-pulse pattern and its phase survive before ProductKey ranks meters.
+    const double limit = std::numeric_limits<double>::max();
+    const std::vector<double> cycle = {
+        -limit, 0.0, -limit, limit, -limit, -limit,
+    };
+    std::vector<double> salience;
+    std::vector<double> times;
+    for (int repeat = 0; repeat < 4; ++repeat) {
+        for (double value : cycle) {
+            salience.push_back(value);
+            times.push_back(static_cast<double>(times.size()) * kBeat);
+        }
+    }
+
+    DownbeatConfig config;
+    config.min_salience_range = limit / 8.0;
+    config.min_phase_margin = limit / 8.0;
+    config.min_meter_margin = limit / 8.0;
+    const auto result = resolveMeter(salience, times, config);
+
+    EXPECT_EQ(result.beats_per_bar, 6);
+    EXPECT_EQ(result.phase, 3);
+    EXPECT_TRUE(std::isfinite(result.strength));
+    EXPECT_TRUE(std::isfinite(result.phase_margin));
+    EXPECT_TRUE(std::isfinite(result.meter_margin));
+}
+
+TEST(Resolver, UnrepresentableFiniteDynamicRangeIsNotAnAnswer) {
+    // max-min is exactly DBL_MAX here, but after subtracting the minimum both
+    // -1 and 0 round to DBL_MAX. Treating those distinct levels as equal creates
+    // a large periodic contrast that does not exist in the input. Until an
+    // exact/binned accumulator is justified, the safe contract is to withhold.
+    const double limit = std::numeric_limits<double>::max();
+    std::vector<double> salience(48, -1.0);
+    std::vector<double> times(48);
+    for (std::size_t i = 0; i < salience.size(); ++i) {
+        if (i < 12) {
+            salience[i] = -limit;
+        } else if (i % 6 == 3) {
+            salience[i] = 0.0;
+        }
+        times[i] = static_cast<double>(i) * kBeat;
+    }
+
+    const auto result = resolveMeter(salience, times, DownbeatConfig{});
+
+    EXPECT_EQ(result.beats_per_bar, 0);
+    EXPECT_TRUE(result.downbeats.empty());
+    EXPECT_TRUE(result.candidates.empty());
+}
+
+TEST(Resolver, UnsafeScaleWithLargeCommonTermsIsNotAnAnswer) {
+    // Each phase sees the same share of the first twelve DBL_MAX values, so
+    // their exact contribution to every contrast is zero. But a backend that
+    // calls both DBL_MAX and 1 meaningful under ordinary sub-unit thresholds
+    // has not supplied a numerically usable scale, so it must be rejected
+    // before arithmetic can manufacture a roughly 5e291 contrast.
+    const double limit = std::numeric_limits<double>::max();
+    std::vector<double> salience(48, 0.0);
+    std::vector<double> times(48);
+    for (std::size_t i = 0; i < salience.size(); ++i) {
+        if (i < 12) {
+            salience[i] = limit;
+        } else if (i % 6 == 3) {
+            salience[i] = 1.0;
+        }
+        times[i] = static_cast<double>(i) * kBeat;
+    }
+
+    const auto result = resolveMeter(salience, times, DownbeatConfig{});
+
+    EXPECT_EQ(result.beats_per_bar, 0);
+    EXPECT_TRUE(result.downbeats.empty());
+    EXPECT_TRUE(result.candidates.empty());
+}
+
+TEST(Resolver, UnsafeScaleCannotUnderflowBeforeItIsRejected) {
+    // After normalising DBL_MAX, 2^-50 becomes DBL_TRUE_MIN. Dividing that
+    // numerator by the phase counts in double would round every contrast to
+    // zero before the common 2^1024 exponent was restored. The numerical range
+    // contract rejects that backend scale instead of choosing an arbitrary
+    // phase.
+    const double limit = std::numeric_limits<double>::max();
+    const double small = 0x1p-50;
+    std::vector<double> salience(48, 0.0);
+    std::vector<double> times(48);
+    for (std::size_t i = 0; i < salience.size(); ++i) {
+        if (i < 12) {
+            salience[i] = limit;
+        } else if (i == 15 || i == 21 || i == 27) {
+            salience[i] = small;
+        }
+        times[i] = static_cast<double>(i) * kBeat;
+    }
+
+    const auto result = resolveMeter(salience, times, DownbeatConfig{});
+
+    EXPECT_EQ(result.beats_per_bar, 0);
+    EXPECT_TRUE(result.downbeats.empty());
+    EXPECT_TRUE(result.candidates.empty());
+}
+
+TEST(Resolver, UnsafeScaleCannotHideAPhaseDifferenceInRounding) {
+    // The exact phase-one contrast beats phase zero by 0.8, but beside
+    // DBL_MAX that difference is below the calibrated numerical resolution.
+    // Collapsing the expansion to one double used to turn it into an accidental
+    // earliest-phase tie; the range contract must withhold before ranking.
+    const double limit = std::numeric_limits<double>::max();
+    std::vector<double> salience(18, 1.0);
+    std::vector<double> times(18);
+    salience[0] = limit;
+    salience[1] = limit;
+    salience[7] = 2.0;
+    salience[13] = 2.0;
+    for (std::size_t i = 0; i < times.size(); ++i) {
+        times[i] = static_cast<double>(i) * kBeat;
+    }
+    DownbeatConfig config;
+    config.meters = {{6, 1.0}};
+
+    const auto result = resolveMeter(salience, times, config);
+
+    EXPECT_EQ(result.beats_per_bar, 0);
+    EXPECT_TRUE(result.downbeats.empty());
+    EXPECT_TRUE(result.candidates.empty());
+}
+
+TEST(Resolver, ProductAtTheRoundedOverflowBoundaryIsSaturated) {
+    // For this exact pair DBL_MAX / prior rounds back to contrast, so checking
+    // `contrast > DBL_MAX / prior` misses the overflow even though the product
+    // is +Inf. The reported diagnostic must remain valid JSON data.
+    constexpr double contrast = 0x1.0776248bc6c27p+753;
+    constexpr double prior = 0x1.f17fe8a887318p+270;
+    const auto [salience, times] = salienceBars(4, 0, 32, contrast, 0.0);
+    DownbeatConfig config;
+    config.meters = {{4, prior}};
+    config.min_salience_range = contrast / 2.0;
+    config.min_phase_margin = contrast / 2.0;
+    config.min_meter_margin = std::numeric_limits<double>::max();
+
+    const auto result = resolveMeter(salience, times, config);
+
+    ASSERT_EQ(result.candidates.size(), 1u);
+    EXPECT_EQ(result.candidates.front().score,
+              std::numeric_limits<double>::max());
+    EXPECT_TRUE(std::isfinite(result.meter_margin));
+}
+
+TEST(Resolver, ProductAtTheSubnormalHalfwayBoundaryRoundsOnce) {
+    // high + low followed by scalbn double-rounds this exact product to zero.
+    // Direct rounding in DBL_TRUE_MIN units must see that it lies just above
+    // the halfway point and retain the smallest positive double.
+    constexpr double contrast = 0x1.0000000000001p-538;
+    constexpr double prior = 0x1.fffffffffffffp-538;
+    const auto [salience, times] =
+        salienceBars(4, 0, 32, contrast, 0.0);
+    DownbeatConfig config;
+    config.meters = {{4, prior}};
+    config.min_salience_range = 0.0;
+
+    const auto result = resolveMeter(salience, times, config);
+
+    ASSERT_EQ(result.candidates.size(), 1u);
+    EXPECT_EQ(result.candidates.front().score,
+              std::numeric_limits<double>::denorm_min());
+    EXPECT_EQ(result.meter_margin,
+              std::numeric_limits<double>::denorm_min());
+}
+
+TEST(Resolver, OverflowedReportedScoresStillUseTheMathematicalOrder) {
+    // On this four-beat pattern both candidate products overflow:
+    //   3-beat contrast * 30 < 4-beat contrast * 2.
+    // Saturating the public scores is necessary, but using those saturated
+    // values as the ordering key would turn the real inequality into a tie and
+    // incorrectly preserve the deliberately adverse input order.
+    const double limit = std::numeric_limits<double>::max();
+    const auto [salience, times] = salienceBars(4, 0, 32, limit, 0.0);
+    DownbeatConfig config;
+    config.meters = {{3, 30.0}, {4, 2.0}};
+    config.min_salience_range = limit / 4.0;
+    config.min_phase_margin = limit / 4.0;
+    config.min_meter_margin = limit;
+
+    const auto result = resolveMeter(salience, times, config);
+
+    ASSERT_EQ(result.candidates.size(), 2u);
+    EXPECT_EQ(result.candidates[0].score, limit);
+    EXPECT_EQ(result.candidates[1].score, limit);
+    EXPECT_EQ(result.candidates[0].beats_per_bar, 4);
+    EXPECT_EQ(result.beats_per_bar, 4);
+    EXPECT_EQ(result.phase, 0);
+    EXPECT_TRUE(std::isfinite(result.meter_margin));
+    EXPECT_GT(result.meter_margin, 0.0);
+}
+
+TEST(Resolver, ExactProductTiesKeepTheConfiguredOrder) {
+    // On a 4-pulse pattern, meter 2 has half the contrast of meter 4. These
+    // priors make the mathematical products exactly equal, so neither the
+    // internal key nor sorting may invent a preference behind the caller's
+    // configured order.
+    const auto [salience, times] = salienceBars(4, 0, 32);
+    DownbeatConfig config;
+    config.meters = {{2, 2.0}, {4, 1.0}};
+
+    const auto result = resolveMeter(salience, times, config);
+
+    ASSERT_EQ(result.candidates.size(), 2u);
+    EXPECT_DOUBLE_EQ(result.candidates[0].score,
+                     result.candidates[1].score);
+    EXPECT_EQ(result.candidates[0].beats_per_bar, 2);
+    EXPECT_EQ(result.beats_per_bar, 2);
 }
 
 }  // namespace

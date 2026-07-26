@@ -40,14 +40,15 @@ struct OfflineResult {
     double estimated_bpm = 0.0;
     std::size_t frame_count = 0;
 
-    // Bar lines, a subset of `beats`. Empty when they were not asked for, or
-    // when the track was too short for any meter to repeat.
+    // Bar lines, a subset of `beats`. Empty when they were not asked for, the
+    // track was too short for a repeated meter, or the scorer supplied too
+    // little varying bar-level evidence to choose one.
     std::vector<double> downbeats;
     int beats_per_bar = 0;
     // See DownbeatResult, where all three are explained: how far the bar lines
     // stand above the beats around them, how settled the beat they start on is,
-    // and how far ahead the winning meter is of the next one. All in standard
-    // deviations of the per-beat cue.
+    // and how far ahead the winning meter is of the next one. All in the
+    // built-in salience backend's units; see DownbeatResult.
     //
     // A UI that accents downbeats needs both margins to be convincing, not just
     // one — `downbeat_confident` below is that decision in a single place so no
