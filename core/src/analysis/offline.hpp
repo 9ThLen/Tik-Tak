@@ -61,6 +61,20 @@ struct OfflineResult {
     // first beat and accent nothing — putting the accent in the wrong place is
     // worse for a player than putting it nowhere.
     bool downbeat_confident = false;
+
+    // The per-beat cues the bar-line decision was made from, kept rather than
+    // discarded so the decision can be taken apart afterwards.
+    //
+    // Measured on real recordings, the metre comes back right and the phase
+    // comes back wrong, which is a statement about these three numbers and
+    // cannot be investigated from the verdict alone. Keeping them also means
+    // cue weights can be swept outside the core — recombine these into a
+    // salience and feed it back through the resolver — instead of needing a
+    // rebuild per candidate weighting.
+    //
+    // Cheap: about 32 bytes a beat, so a twenty-minute track costs under a
+    // hundred kilobytes against the tens of megabytes its audio occupied.
+    std::vector<BeatFeature> beat_features;
 };
 
 // Whole-file beat analysis: audio in, a beat grid out.

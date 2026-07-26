@@ -453,7 +453,10 @@ std::vector<double> cueSalience(const std::vector<BeatFeature>& features,
     for (std::size_t i = 0; i < n; ++i) {
         low[i] = features[i].low;
         accent[i] = features[i].accent;
-        harmony[i] = features[i].harmonic_change;
+        // Floored, not standardised: noise below the floor is discarded and
+        // what remains keeps its absolute meaning. See DownbeatConfig.
+        harmony[i] = std::max(features[i].harmonic_change -
+                              DownbeatConfig::kHarmonyFloor, 0.0);
     }
     // The onset cues are standardised because their units are arbitrary; the
     // harmony cue is left alone because its units are not. See the weights in
@@ -464,7 +467,7 @@ std::vector<double> cueSalience(const std::vector<BeatFeature>& features,
     std::vector<double> salience(n);
     for (std::size_t i = 0; i < n; ++i) {
         salience[i] = config.low_weight * low[i] + config.accent_weight * accent[i] +
-                      config.harmony_weight * harmony[i];
+                      config.harmony_weight * DownbeatConfig::kHarmonyScale * harmony[i];
     }
     // No final normalisation: low and accent were put in this backend's chosen
     // units above, while harmony has an absolute cosine-distance scale. The

@@ -59,6 +59,7 @@
 // public C API instead would mean growing that API for a research need. The
 // parity tools set the precedent.
 #include "analysis/downbeat.hpp"
+#include "analysis/offline.hpp"
 
 #if defined(TIKTAK_HAVE_DECODE)
 #include "decode/decoder.hpp"
@@ -171,6 +172,16 @@ std::string escape(const std::string& text) {
                 }
         }
     }
+    return out;
+}
+
+using tiktak::analysis::BeatFeature;
+
+std::vector<double> cueColumn(const std::vector<BeatFeature>& features,
+                              double BeatFeature::*member) {
+    std::vector<double> out;
+    out.reserve(features.size());
+    for (const BeatFeature& f : features) out.push_back(f.*member);
     return out;
 }
 
@@ -338,15 +349,19 @@ int main(int argc, char** argv) {
 #endif
     }
 
-    tt_offline_config config;
-    tt_offline_config_defaults(&config, rate);
-
-    tt_status status = TT_OK;
-    tt_offline* offline = tt_offline_create(&config, &status);
-    if (!offline) {
-        std::fprintf(stderr, "tt_offline_create failed: %s\n", tt_status_string(status));
-        return 1;
-    }
+    // The C++ analyser rather than the C API, so the per-beat cues and the
+    // runner-up tempos are reachable. Growing the product API to expose either
+    // would be paying for a research need in a header that ships; the parity
+    // tools set this precedent already.
+    tiktak::analysis::OfflineConfig config;
+    config.odf.sampleRate = rate;
+    // The same clamp tt_odf_config_defaults applies. Without it a file below
+    // 32 kHz gets mel bands above its own Nyquist and a different onset
+    // function from the one the app would compute — the tool would be
+    // measuring a configuration that never ships.
+    config.odf.melMaxHz = std::min(16000.0, rate * 0.5);
+    config.find_downbeats = true;
+    tiktak::analysis::OfflineAnalyzer analyzer(config);
 
     // Fed in blocks that are not a multiple of the hop, for the same reason
     // dump_beats does it: a decoder hands over whatever size it likes and the
@@ -354,20 +369,10 @@ int main(int argc, char** argv) {
     constexpr std::size_t kBlock = 4099;
     for (std::size_t pos = 0; pos < samples.size(); pos += kBlock) {
         const std::size_t take = std::min(kBlock, samples.size() - pos);
-        if (tt_offline_feed(offline, samples.data() + pos, take) != TT_OK) {
-            std::fprintf(stderr, "tt_offline_feed failed\n");
-            tt_offline_destroy(offline);
-            return 1;
-        }
+        analyzer.feed(samples.data() + pos, take);
     }
-    if (tt_offline_finish(offline) != TT_OK) {
-        std::fprintf(stderr, "tt_offline_finish failed\n");
-        tt_offline_destroy(offline);
-        return 1;
-    }
-
-    std::vector<double> beats(tt_offline_beat_count(offline));
-    if (!beats.empty()) tt_offline_beats(offline, beats.data(), beats.size());
+    const tiktak::analysis::OfflineResult analysis = analyzer.finish();
+    std::vector<double> beats = analysis.beats;
 
     bool beats_replaced = false;
     if (!beats_path.empty()) {
@@ -375,13 +380,11 @@ int main(int argc, char** argv) {
         std::string complaint;
         if (!readSalience(beats_path.c_str(), supplied, complaint)) {
             std::fprintf(stderr, "%s: %s\n", beats_path.c_str(), complaint.c_str());
-            tt_offline_destroy(offline);
             return 1;
         }
         if (supplied.size() < 2) {
             std::fprintf(stderr, "%s holds %zu beat time(s); a grid needs at least 2\n",
                          beats_path.c_str(), supplied.size());
-            tt_offline_destroy(offline);
             return 1;
         }
         // Sorted and strictly increasing, because everything downstream indexes
@@ -392,7 +395,6 @@ int main(int argc, char** argv) {
                 std::fprintf(stderr,
                              "%s: beat times must strictly increase (%zu: %.17g <= %.17g)\n",
                              beats_path.c_str(), i, supplied[i], supplied[i - 1]);
-                tt_offline_destroy(offline);
                 return 1;
             }
         }
@@ -400,14 +402,12 @@ int main(int argc, char** argv) {
         beats_replaced = true;
     }
 
-    std::vector<double> downbeats(tt_offline_downbeat_count(offline));
-    if (!downbeats.empty()) tt_offline_downbeats(offline, downbeats.data(), downbeats.size());
-
-    int beats_per_bar = tt_offline_beats_per_bar(offline);
-    double strength = tt_offline_downbeat_strength(offline);
-    double phase_margin = tt_offline_downbeat_phase_margin(offline);
-    double meter_margin = tt_offline_downbeat_meter_margin(offline);
-    bool confident = tt_offline_downbeat_confident(offline) != 0;
+    std::vector<double> downbeats = analysis.downbeats;
+    int beats_per_bar = analysis.beats_per_bar;
+    double strength = analysis.downbeat_strength;
+    double phase_margin = analysis.downbeat_phase_margin;
+    double meter_margin = analysis.downbeat_meter_margin;
+    bool confident = analysis.downbeat_confident;
 
     if (!salience_path.empty()) {
         std::vector<double> salience;
@@ -415,7 +415,6 @@ int main(int argc, char** argv) {
         if (!readSalience(salience_path.c_str(), salience, salience_error)) {
             std::fprintf(stderr, "%s: %s\n", salience_path.c_str(),
                          salience_error.c_str());
-            tt_offline_destroy(offline);
             return 1;
         }
         if (salience.size() != beats.size()) {
@@ -423,7 +422,6 @@ int main(int argc, char** argv) {
                          "%s holds %zu value(s) but the analysis found %zu beat(s) — "
                          "one number per beat, in beat order\n",
                          salience_path.c_str(), salience.size(), beats.size());
-            tt_offline_destroy(offline);
             return 1;
         }
         // The C API offers no way to override the downbeat configuration, so
@@ -455,9 +453,9 @@ int main(int argc, char** argv) {
                 beats_replaced ? "file" : "tracker");
     std::printf("  \"sample_rate\": %.17g,\n", rate);
     std::printf("  \"duration_sec\": %.17g,\n", static_cast<double>(samples.size()) / rate);
-    std::printf("  \"bpm\": %.17g,\n", finiteOrZero(tt_offline_bpm(offline)));
+    std::printf("  \"bpm\": %.17g,\n", finiteOrZero(analysis.bpm));
     std::printf("  \"confidence\": %.17g,\n",
-                finiteOrZero(tt_offline_confidence(offline)));
+                finiteOrZero(analysis.tempo_confidence));
     std::printf("  \"beats_per_bar\": %d,\n", beats_per_bar);
     std::printf("  \"downbeat_strength\": %.17g,\n", finiteOrZero(strength));
     std::printf("  \"downbeat_phase_margin\": %.17g,\n",
@@ -465,10 +463,32 @@ int main(int argc, char** argv) {
     std::printf("  \"downbeat_meter_margin\": %.17g,\n",
                 finiteOrZero(meter_margin));
     std::printf("  \"downbeat_confident\": %s,\n", confident ? "true" : "false");
+    // The three cues, one value per beat, in the order the beats are printed.
+    // Measured on real music the metre is usually right and the phase usually
+    // wrong, which is a claim about these numbers; printing them is what lets
+    // that be investigated, and what lets cue weights be swept outside the core
+    // by recombining them and feeding the result back through --salience.
+    printTimes("cue_low", cueColumn(analysis.beat_features, &BeatFeature::low), false);
+    printTimes("cue_accent", cueColumn(analysis.beat_features, &BeatFeature::accent), false);
+    printTimes("cue_harmony",
+               cueColumn(analysis.beat_features, &BeatFeature::harmonic_change), false);
+
+    // Runner-up tempos, strongest first. An octave-away runner-up with a
+    // similar strength is the classic ambiguity, and it is the difference
+    // between a tracker that is wrong and one that was handed a coin toss.
+    std::printf("  \"tempo_candidates\": [");
+    tiktak::analysis::TempoCandidate candidates[8];
+    const std::size_t found = analyzer.tempoCandidates(candidates, 8);
+    for (std::size_t i = 0; i < found; ++i) {
+        std::printf("%s{\"bpm\": %.17g, \"strength\": %.17g}", i ? ", " : "",
+                    finiteOrZero(candidates[i].bpm),
+                    finiteOrZero(candidates[i].strength));
+    }
+    std::printf("],\n");
+
     printTimes("beats", beats, false);
     printTimes("downbeats", downbeats, true);
     std::printf("}\n");
 
-    tt_offline_destroy(offline);
     return 0;
 }

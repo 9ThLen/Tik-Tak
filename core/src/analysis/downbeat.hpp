@@ -51,6 +51,31 @@ struct DownbeatConfig {
     std::vector<MeterCandidate> meters = {{4, 1.0}, {3, 0.9}, {2, 0.75}, {6, 0.6}};
 
     // Relative weight of each cue in the per-beat score.
+    //
+    // **The two onset cues and harmony answer different questions**, which is
+    // the thing measurement showed and argument had not. On real recordings the
+    // low band gets the bar *length* right and the bar *line* wrong: a kick
+    // pattern repeats every N beats whether or not the kick is on the one, so
+    // it establishes N and says little about the phase. A chord change is the
+    // opposite — it is weak evidence about the length and strong evidence about
+    // where the bar starts.
+    //
+    // Measured over five recordings whose reference bar grid is regular enough
+    // to trust: with the low band dominant the metre came back right four times
+    // out of five and the phase zero times out of five. Shifting the balance
+    // towards harmony kept the metre at four and took the phase to two — and
+    // broke the percussion-only reference clip completely, where harmony is
+    // nothing but noise and the low band is the only cue there is.
+    //
+    // So the weight stays where it was, and that is a report of a dead end
+    // rather than a result. **No single fixed mixture serves both**: the useful
+    // conclusion is that these are not interchangeable evidence for one
+    // question and should not be blended into one number at all. Scoring the
+    // metre from the onset cues and the phase from harmony, with a fallback to
+    // the onsets when harmony has nothing to say, is the change this points to.
+    // It is a change to the resolver rather than to a constant, five recordings
+    // do not justify making it, and pretending a reweighting solved it would
+    // have buried the finding under a number that did nothing.
     double low_weight = 1.0;
 
     // Off by default, and this is the one number here that was decided by
@@ -78,6 +103,33 @@ struct DownbeatConfig {
     // would be actively wrong — on a drums-only track the chord "changes" by
     // 0.01 from beat to beat, pure noise, and forcing that to unit variance
     // would promote it to an equal vote with the kick drum.
+    //
+    // That reasoning is right and it hid a plain bug. A standardised onset cue
+    // has a spread of exactly 1 by construction; a chroma distance, measured
+    // across real recordings, has a spread of about 0.086. So the two weights
+    // were multiplying quantities an order of magnitude apart, and
+    // `harmony_weight = 1.0` was really 0.086 — the harmony cue could be given
+    // a nominal weight of sixteen and still lose to the low band. The weights
+    // were not describing the mixture they produced.
+    //
+    // kHarmonyScale fixes that without standardising: a **fixed** factor, not
+    // one derived from the piece, so a drums-only track's chroma noise is
+    // magnified by the same constant as a real chord change instead of being
+    // stretched to fill the range. What it buys is that the weights above now
+    // mean what they say.
+    static constexpr double kHarmonyScale = 12.0;
+
+    // Below this much movement, a chroma distance is measurement noise and is
+    // discarded rather than scaled up with everything else. An absolute floor,
+    // which is only defensible because the quantity is absolute — the whole
+    // reason harmony is not standardised in the first place.
+    //
+    // Measured: the percussion-only reference clip, which has no chord changes
+    // at all, never exceeds 0.043 and averages 0.010. The weakest real
+    // recording to hand peaks at 0.165 and the rest reach 0.35 to 0.64. The
+    // floor sits in that gap, so silence from the harmony cue on drum-only
+    // material is a statement rather than an accident.
+    static constexpr double kHarmonyFloor = 0.05;
     double harmony_weight = 1.0;
 
     // Where a beat's onset energy is collected from, as a fraction of the gap
