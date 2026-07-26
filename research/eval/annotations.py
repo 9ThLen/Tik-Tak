@@ -98,8 +98,18 @@ def parse_annotation(text: str) -> tuple[np.ndarray, np.ndarray, int, tuple[int,
             t = float(fields[0])
         except ValueError as exc:
             raise ValueError(f"line {lineno}: {fields[0]!r} is not a time") from exc
-        if not np.isfinite(t) or t < 0.0:
+        if not np.isfinite(t):
             raise ValueError(f"line {lineno}: {t} is not a usable beat time")
+        if t < 0.0:
+            # Dropped, not refused. Seven of the 911 Harmonix annotations open
+            # with a beat a few milliseconds before zero — the annotator's grid
+            # extrapolated back past the start of the file, which is an ordinary
+            # convention and not a broken file. Such a beat cannot be matched by
+            # any estimate anyway, since the audio begins at zero, so dropping
+            # it costs nothing and refusing it would have cost seven recordings.
+            # The leading partial bar it leaves behind is the same shape as a
+            # pickup, which the metre vote already ignores.
+            continue
 
         position: int | None = None
         if len(fields) > 1:
