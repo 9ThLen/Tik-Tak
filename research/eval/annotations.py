@@ -55,6 +55,10 @@ class Reference:
     downbeats: np.ndarray             # the subset that starts a bar
     beats_per_bar: int = 0            # 0 = not annotated
     name: str = ""
+    # Independent statistical unit: every excerpt from the same song, session,
+    # or backing track shares this id. None means this recording is its own
+    # group, which is the right fallback for synthetic and exploratory runs.
+    group_id: str | None = None
     audio_path: pathlib.Path | None = None
     annotation_path: pathlib.Path | None = None
     bar_lengths: tuple[int, ...] = field(default_factory=tuple)

@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+import eval.downbeat_benchmark as benchmark
 from eval.analysis import Estimate
 from eval.annotations import Reference
 from eval.downbeat import (
@@ -9,12 +10,18 @@ from eval.downbeat import (
     choose_margins,
     eligible,
     evidence_gap,
+    grouped_verdicts,
     score,
     sweep,
     thresholds_from,
     wilson_upper,
 )
-from eval.downbeat_benchmark import split_of
+from eval.downbeat_benchmark import (
+    group_manifest_path,
+    held_out_error_report,
+    load_groups,
+    split_of,
+)
 
 
 def reference(beats_per_bar=4, bars=8, bpm=120.0, phase=0):
@@ -182,6 +189,66 @@ def test_the_counts_account_for_every_clip():
         assert row.shown == row.correct + row.wrong_meter + row.wrong_phase
 
 
+def test_many_excerpts_from_one_group_are_one_wilson_trial():
+    scores = _scores([(1.0, 0, 4)] * 50)
+    for clip in scores:
+        clip.group_id = "same-song-and-session"
+
+    row = sweep(scores, [0.0], [0.0])[0]
+
+    assert row.n == 1
+    assert row.shown == 1
+    assert row.correct == 1
+
+
+def test_any_wrong_excerpt_makes_the_independent_group_wrong():
+    scores = _scores([
+        (1.0, 0, 4),
+        (1.0, 2, 4),
+    ])
+    for clip in scores:
+        clip.group_id = "same-backing-track"
+
+    row = sweep(scores, [0.0], [0.0])[0]
+
+    assert row.n == 1
+    assert row.shown == 1
+    assert row.correct == 0
+    assert row.wrong_phase == 1
+
+
+def test_held_out_accounting_uses_the_same_independent_group_outcomes():
+    scores = _scores([
+        (1.0, 0, 4),
+        (1.0, 2, 4),
+    ])
+    for clip in scores:
+        clip.group_id = "one-held-out-session"
+
+    verdicts = grouped_verdicts(scores, 0.0, 0.0)
+    shown = sum(verdict in Verdict.SHOWN for verdict in verdicts)
+    wrong = sum(verdict in Verdict.WRONG for verdict in verdicts)
+    report = held_out_error_report(wrong, len(verdicts), shown)
+
+    assert verdicts == [Verdict.WRONG_PHASE]
+    assert "wrong rate 100.00%" in report
+
+
+def test_wrong_metre_is_the_diagnostic_for_a_group_with_both_wrong_kinds():
+    scores = _scores([
+        (1.0, 2, 4),
+        (1.0, 0, 3),
+    ])
+    for clip in scores:
+        clip.group_id = "same-song"
+
+    row = sweep(scores, [0.0], [0.0])[0]
+
+    assert row.n == 1
+    assert row.wrong_meter == 1
+    assert row.wrong_phase == 0
+
+
 def test_the_threshold_is_the_most_generous_one_inside_the_budget():
     # Two thresholds are safe; the useful one is the lower, because among
     # equally safe options the one that answers more often is the better product.
@@ -246,6 +313,121 @@ def test_the_split_is_roughly_the_fraction_asked_for():
 
 def test_everything_is_one_split_or_the_other():
     assert all(split_of(f"c{i}", 0.5) in ("test", "validation") for i in range(50))
+
+
+def test_related_excerpts_cannot_leak_across_splits():
+    names = [f"clip-{i}" for i in range(100)]
+    test_name = next(name for name in names if split_of(name, 0.35) == "test")
+    validation_name = next(
+        name for name in names if split_of(name, 0.35) == "validation"
+    )
+    assert split_of(test_name, 0.35) != split_of(validation_name, 0.35)
+
+    assert (
+        split_of(test_name, 0.35, group_id="same-song-and-session")
+        == split_of(validation_name, 0.35, group_id="same-song-and-session")
+    )
+
+
+def test_group_manifest_is_path_stable_and_backwards_compatible(tmp_path):
+    manifest = tmp_path / "groups.json"
+    manifest.write_text(
+        '{"set\\\\take-1": "song-a", "set/take-2": "song-a"}',
+        encoding="utf-8",
+    )
+
+    groups = load_groups(manifest)
+
+    assert groups["set/take-1"] == groups["set/take-2"] == "song-a"
+    assert split_of("set\\take-1", 0.35) == split_of("set/take-1", 0.35)
+    assert split_of("clip", 0.35) == split_of(
+        "clip", 0.35, group_id=None
+    )
+
+
+def test_a_real_held_out_split_requires_independent_groups(tmp_path):
+    with pytest.raises(ValueError, match="group manifest is required"):
+        group_manifest_path(tmp_path, requested=None, no_split=False)
+
+    assert group_manifest_path(
+        tmp_path, requested=None, no_split=True
+    ) is None
+
+    manifest = tmp_path / "groups.json"
+    manifest.write_text("{}", encoding="utf-8")
+    assert group_manifest_path(
+        tmp_path, requested=None, no_split=False
+    ) == manifest
+
+
+@pytest.mark.parametrize("fraction", ["0", "-0.1", "1", "nan", "inf"])
+def test_test_fraction_must_be_finite_and_strictly_inside_unit_interval(
+        fraction, capsys):
+    with pytest.raises(SystemExit) as stopped:
+        benchmark.main(["--test-fraction", fraction])
+
+    assert stopped.value.code == 2
+    assert "finite and strictly between 0 and 1" in capsys.readouterr().err
+
+
+def test_a_realized_empty_split_refuses_calibration(monkeypatch, capsys):
+    ref = reference()
+
+    class FakeAnalyser:
+        def __init__(self, _binary):
+            self.available = True
+
+        def analyse_audio(self, _audio, _sample_rate):
+            return estimate_from(ref)
+
+    monkeypatch.setattr(benchmark, "Analyser", FakeAnalyser)
+    monkeypatch.setattr(
+        benchmark,
+        "synthetic_cases",
+        lambda: [(ref, np.zeros(32, dtype=np.float32), 48_000)],
+    )
+
+    assert benchmark.main([]) == 2
+    output = capsys.readouterr().out
+    assert "cannot calibrate" in output
+    assert "0 validation and 1 test group(s)" in output or (
+        "1 validation and 0 test group(s)" in output
+    )
+
+
+def test_no_split_reports_the_frontier_but_never_calibrates(
+        monkeypatch, capsys):
+    ref = reference()
+
+    class FakeAnalyser:
+        def __init__(self, _binary):
+            self.available = True
+
+        def analyse_audio(self, _audio, _sample_rate):
+            return estimate_from(ref)
+
+    monkeypatch.setattr(benchmark, "Analyser", FakeAnalyser)
+    monkeypatch.setattr(
+        benchmark,
+        "synthetic_cases",
+        lambda: [(ref, np.zeros(32, dtype=np.float32), 48_000)],
+    )
+
+    assert benchmark.main(["--no-split"]) == 0
+    output = capsys.readouterr().out
+    assert "--- all clips" in output
+    assert "exploratory --no-split run" in output
+    assert "no threshold is calibrated" in output
+    assert "chosen on" not in output
+
+
+def test_group_id_is_propagated_from_reference_to_score():
+    ref = reference()
+    ref.group_id = "song/session"
+
+    result = score(ref, estimate_from(ref))
+
+    assert result.group_id == "song/session"
 
 
 # ------------------------------------------------------- the second doubt --
@@ -356,11 +538,33 @@ def test_a_clean_sweep_of_a_handful_of_clips_is_not_a_demonstrated_error_rate():
     complaint = evidence_gap(_row(n=6, shown=4, correct=4))
 
     assert complaint is not None
-    assert "60" in complaint and "30" in complaint
+    assert "73 independent groups" in complaint
+    assert "35 shown groups" in complaint
 
 
 def test_enough_clips_and_enough_shown_accents_carry_the_claim():
-    assert evidence_gap(_row(n=60, shown=30, correct=30)) is None
+    assert evidence_gap(_row(n=60, shown=30, correct=30)) is not None
+    assert evidence_gap(_row(n=73, shown=35, correct=35)) is None
+
+
+def test_evidence_requirement_includes_failures_already_observed():
+    row = SweepRow(
+        min_phase_margin=0.0,
+        min_meter_margin=0.3,
+        n=80,
+        shown=80,
+        correct=79,
+        wrong_meter=1,
+        wrong_phase=0,
+        withheld=0,
+        no_answer=0,
+    )
+
+    complaint = evidence_gap(row)
+
+    assert complaint is not None
+    assert "110 independent groups" in complaint
+    assert "53 shown groups" in complaint
 
 
 def test_coverage_too_thin_fails_even_with_the_clips_to_spare():
@@ -370,10 +574,65 @@ def test_coverage_too_thin_fails_even_with_the_clips_to_spare():
 
 
 def test_a_looser_budget_needs_correspondingly_less_evidence():
-    row = _row(n=15, shown=10, correct=10)
+    row = _row(n=16, shown=10, correct=10)
 
     assert evidence_gap(row, max_wrong_rate=0.05, max_conditional_error=0.10)
     assert evidence_gap(row, max_wrong_rate=0.20, max_conditional_error=0.30) is None
+
+
+def test_held_out_report_carries_both_wilson_upper_bounds():
+    report = held_out_error_report(wrong=0, total=73, shown=35)
+
+    assert "wrong rate 0.00% (95% upper 5.00%)" in report
+    assert "conditional error 0.00% (95% upper 9.89%)" in report
+    assert "both budgets DEMONSTRATED" in report
+
+
+def test_no_held_out_accents_reports_no_conditional_point_estimate():
+    report = held_out_error_report(wrong=0, total=10, shown=0)
+
+    assert "conditional error n/a" in report
+    assert "95% upper 100.00%" in report
+    assert "both budgets NOT DEMONSTRATED" in report
+
+
+def test_a_small_clean_held_out_split_is_explicitly_not_demonstrated():
+    report = held_out_error_report(wrong=0, total=10, shown=10)
+
+    assert "wrong rate 0.00%" in report
+    assert "both budgets NOT DEMONSTRATED" in report
+
+
+def test_a_bound_just_over_budget_is_not_rounded_down_to_look_compliant():
+    report = held_out_error_report(wrong=0, total=72, shown=72)
+    gap = evidence_gap(_row(n=72, shown=72, correct=72))
+
+    assert "95% upper 5.07%" in report
+    assert "both budgets NOT DEMONSTRATED" in report
+    assert gap is not None
+    assert "upper bounds here: 5.07%" in gap
+
+
+def test_one_failure_just_below_the_required_n_is_visibly_over_budget():
+    row = SweepRow(
+        min_phase_margin=0.0,
+        min_meter_margin=0.0,
+        n=109,
+        shown=109,
+        correct=108,
+        wrong_meter=1,
+        wrong_phase=0,
+        withheld=0,
+        no_answer=0,
+    )
+    report = held_out_error_report(wrong=1, total=109, shown=109)
+    gap = evidence_gap(row)
+
+    assert "95% upper 5.01%" in report
+    assert "both budgets NOT DEMONSTRATED" in report
+    assert gap is not None
+    assert "upper bounds here: 5.01%" in gap
+    assert "at least 110 independent groups" in gap
 
 
 def test_thresholds_survive_an_empty_set():
