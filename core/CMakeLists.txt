@@ -19,11 +19,13 @@ add_library(tiktak_core STATIC
     src/dsp/fft.cpp
     src/dsp/window.cpp
     src/dsp/mel.cpp
+    src/dsp/chroma.cpp
     src/dsp/stft.cpp
     src/schedule/scheduler.cpp
     src/dsp/odf.cpp
     src/analysis/tempo.cpp
     src/analysis/tracker.cpp
+    src/analysis/downbeat.cpp
     src/analysis/offline.cpp
     src/analysis/grid_cache.cpp
     src/tracking/particle.cpp

@@ -12,6 +12,7 @@ using tiktak::analysis::OfflineAnalyzer;
 using tiktak::analysis::OfflineConfig;
 using tiktak::analysis::OfflineResult;
 using tiktak::analysis::analyseOffline;
+using tiktak::test::bandTrack;
 using tiktak::test::clickTrack;
 
 namespace {
@@ -165,4 +166,117 @@ TEST(Offline, EmptyInputIsHandled) {
     const OfflineResult result = analyzer.finish();
     EXPECT_TRUE(result.beats.empty());
     EXPECT_EQ(result.frame_count, 0u);
+}
+
+// ---------------------------------------------------------------- downbeats --
+
+TEST(Offline, FindsTheBarLinesOfAFourFourTrack) {
+    const std::vector<float> audio = bandTrack(120.0, 8, 4, kSampleRate);
+
+    const OfflineResult result = analyseOffline(audio.data(), audio.size(), testConfig());
+
+    EXPECT_EQ(result.beats_per_bar, 4);
+    ASSERT_FALSE(result.downbeats.empty());
+    EXPECT_GT(result.downbeat_strength, 0.5);
+    EXPECT_GT(result.downbeat_margin, 0.3);
+
+    // Every bar line must sit on a bar line of the material, two seconds apart
+    // at 120 BPM in four.
+    for (double t : result.downbeats) {
+        const double bars = t / 2.0;
+        EXPECT_LT(std::abs(bars - std::round(bars)), 0.05) << "bar line at " << t;
+    }
+}
+
+TEST(Offline, FindsTheBarLinesOfAWaltz) {
+    const std::vector<float> audio = bandTrack(150.0, 10, 3, kSampleRate);
+
+    const OfflineResult result = analyseOffline(audio.data(), audio.size(), testConfig());
+
+    EXPECT_EQ(result.beats_per_bar, 3);
+    EXPECT_GT(result.downbeat_margin, 0.3);
+}
+
+TEST(Offline, BarLinesAreNotAskedForWhenTheyAreNotWanted) {
+    OfflineConfig cfg = testConfig();
+    cfg.find_downbeats = false;
+
+    const std::vector<float> audio = bandTrack(120.0, 8, 4, kSampleRate);
+    const OfflineResult result = analyseOffline(audio.data(), audio.size(), cfg);
+
+    EXPECT_FALSE(result.beats.empty());
+    EXPECT_TRUE(result.downbeats.empty());
+    EXPECT_EQ(result.beats_per_bar, 0);
+}
+
+TEST(Offline, ATrackTooShortToRepeatGetsNoBarLines) {
+    const std::vector<float> audio = bandTrack(120.0, 1, 4, kSampleRate);
+    const OfflineResult result = analyseOffline(audio.data(), audio.size(), testConfig());
+
+    EXPECT_EQ(result.beats_per_bar, 0);
+    EXPECT_TRUE(result.downbeats.empty());
+}
+
+TEST(Offline, ResetClearsTheDownbeatCuesToo) {
+    OfflineAnalyzer analyzer(testConfig());
+
+    const std::vector<float> waltz = bandTrack(150.0, 10, 3, kSampleRate);
+    analyzer.feed(waltz.data(), waltz.size());
+    ASSERT_EQ(analyzer.finish().beats_per_bar, 3);
+
+    analyzer.reset();
+    const std::vector<float> four = bandTrack(120.0, 8, 4, kSampleRate);
+    analyzer.feed(four.data(), four.size());
+    EXPECT_EQ(analyzer.finish().beats_per_bar, 4);
+}
+
+TEST(Offline, FindsTheBarLineWhenTheRecordingStartsMidBar) {
+    // Two beats of pickup before the first bar line. Placing the accent on
+    // beat three is the one downbeat error a listener notices immediately.
+    const std::vector<float> audio = bandTrack(120.0, 8, 4, kSampleRate, 2);
+
+    const OfflineResult result = analyseOffline(audio.data(), audio.size(), testConfig());
+    ASSERT_EQ(result.beats_per_bar, 4);
+    ASSERT_FALSE(result.downbeats.empty());
+
+    // Bar lines now fall on odd seconds: two beats of 0.5 s, then every 2 s.
+    for (double t : result.downbeats) {
+        const double bars = (t - 1.0) / 2.0;
+        EXPECT_LT(std::abs(bars - std::round(bars)), 0.05) << "bar line at " << t;
+    }
+}
+
+TEST(Offline, TheHarmonyAloneFindsTheBarWithNoDrumsToHelp) {
+    // Worth proving separately, because it is the cue most easily lost: the
+    // front end's window cannot resolve a semitone below roughly 800 Hz, so
+    // this only works at all if a chord change moves the upper partials enough
+    // to see. With the rhythm cues switched off there is nothing else left.
+    OfflineConfig cfg = testConfig();
+    cfg.downbeat.low_weight = 0.0;
+    cfg.downbeat.accent_weight = 0.0;
+
+    const std::vector<float> audio = bandTrack(120.0, 8, 4, kSampleRate, 2);
+    const OfflineResult result = analyseOffline(audio.data(), audio.size(), cfg);
+
+    EXPECT_EQ(result.beats_per_bar, 4);
+    ASSERT_FALSE(result.downbeats.empty());
+    for (double t : result.downbeats) {
+        const double bars = (t - 1.0) / 2.0;
+        EXPECT_LT(std::abs(bars - std::round(bars)), 0.05) << "bar line at " << t;
+    }
+}
+
+TEST(Offline, TheDrumsAloneFindTheBarWithNoHarmonyToHelp) {
+    OfflineConfig cfg = testConfig();
+    cfg.downbeat.harmony_weight = 0.0;
+
+    const std::vector<float> audio = bandTrack(120.0, 8, 4, kSampleRate, 2);
+    const OfflineResult result = analyseOffline(audio.data(), audio.size(), cfg);
+
+    EXPECT_EQ(result.beats_per_bar, 4);
+    ASSERT_FALSE(result.downbeats.empty());
+    for (double t : result.downbeats) {
+        const double bars = (t - 1.0) / 2.0;
+        EXPECT_LT(std::abs(bars - std::round(bars)), 0.05) << "bar line at " << t;
+    }
 }

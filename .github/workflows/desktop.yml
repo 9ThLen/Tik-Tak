@@ -72,6 +72,26 @@ jobs:
           grep -q "beat grid: cache hit" second.log
           cmp track_first.wav track_second.wav
 
+      # Phase 7: the bar lines, not just the beats. The clip is four-four with
+      # a kick on the one, and the trap it sets is the ordinary one — its snare
+      # is louder broadband than its kick, so an analysis that follows the
+      # loudest beat accents beat four instead. Only checking the meter would
+      # miss that, so the margin is checked too: it is what says the bar line
+      # is in one place rather than merely somewhere every four beats.
+      - name: Find the bar lines of a real file
+        shell: bash
+        run: |
+          BIN=desktop/build/tiktak
+          [ -x "$BIN" ] || BIN=desktop/build/RelWithDebInfo/tiktak.exe
+          "$BIN" track core/tests/data/click_120.mp3 --seconds 8 --no-cache -o bars.wav \
+            | tee bars.log
+          grep -q "bar lines: 4 beats to the bar" bars.log
+          grep -Eq "margin (0\.[3-9]|[1-9])" bars.log
+          # And an explicit --beats still outranks the analysis.
+          "$BIN" track core/tests/data/click_120.mp3 --seconds 8 --no-cache --beats 3 \
+            -o bars3.wav | tee bars3.log
+          grep -q "using --beats 3 over the 4 the audio suggests" bars3.log
+
       # The microphone path, on a runner that has no microphone: the same
       # tracker, fed from a file against a virtual clock. This is why `listen`
       # takes a file at all — without it the whole Phase 5 path would only ever

@@ -10,6 +10,10 @@ namespace tiktak::desktop {
 struct Options {
     double bpm = 120.0;
     int beats_per_bar = 4;
+    // Whether --beats was actually given. `track` detects the meter from the
+    // audio, and needs to tell "the user asked for four" apart from "nobody
+    // said anything and four is the default".
+    bool beats_per_bar_given = false;
     int subdivisions = 1;
     double seconds = 10.0;
     double sample_rate = 0.0;        // 0 = whatever the device prefers

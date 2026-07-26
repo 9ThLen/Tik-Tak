@@ -90,6 +90,32 @@ hash of the encoded bytes: a renamed file still hits, a re-encoded one
 correctly misses, and a grid analysed under a `--hint` never masquerades as
 the automatic one. `--no-cache` forces a fresh analysis.
 
+#### Bar lines
+
+The analysis also finds where the bar starts and how many beats it holds, and
+the click accents the one:
+
+```
+song.mp3 — 184.0 s at 44100 Hz
+beat grid: analysed — 372 beats at 121.0 BPM (confidence 0.81)
+bar lines: 4 beats to the bar (strength 1.40, margin 0.80)
+```
+
+`strength` is how far the chosen bar lines stand above the beats around them;
+`margin` is how far ahead they are of the next best place to put them. The
+margin is the one that decides whether the accent is used at all — below 0.25
+the harness prints `too close to call` and counts from the first beat instead,
+because an accent on the wrong beat is harder to play to than no accent.
+
+`--beats N` overrides what was found. The number you type is an assertion about
+the music, the same way `--hint` is, and the harness says when it is overruling
+the audio:
+
+```
+bar lines: 4 beats to the bar (strength 1.40, margin 0.80)
+using --beats 3 over the 4 the audio suggests
+```
+
 The click is not latency-compensated against the track, on purpose: both leave
 through the same device buffer, so a click written on the beat's sample arrives
 with it whatever the output latency is. `--latency-ms` is therefore not needed

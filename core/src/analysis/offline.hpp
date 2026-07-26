@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <vector>
 
+#include "analysis/downbeat.hpp"
 #include "analysis/tempo.hpp"
 #include "analysis/tracker.hpp"
 #include "dsp/odf.hpp"
@@ -13,8 +14,18 @@ struct OfflineConfig {
     dsp::OdfConfig odf;
     TempoConfig tempo;
     TrackerConfig tracker;
+    DownbeatConfig downbeat;
     // Fix the tempo instead of estimating it (manual mode). <= 0 estimates.
     double bpm_hint = 0.0;
+
+    // Also find the bar lines. Turning this on implies OdfConfig::chroma and
+    // makes the analyser keep the low band and a pitch class profile per frame
+    // as well — roughly fourteen extra numbers per hop, which for a five-minute
+    // track is a few megabytes and worth it for a file that is analysed once.
+    //
+    // Off is a real option, not a debugging one: a caller that only wants a
+    // click on every beat has no use for bar lines and should not pay for them.
+    bool find_downbeats = true;
 };
 
 struct OfflineResult {
@@ -28,6 +39,18 @@ struct OfflineResult {
     // silently tracking badly.
     double estimated_bpm = 0.0;
     std::size_t frame_count = 0;
+
+    // Bar lines, a subset of `beats`. Empty when they were not asked for, or
+    // when the track was too short for any meter to repeat.
+    std::vector<double> downbeats;
+    int beats_per_bar = 0;
+    // See DownbeatResult: how far the bar lines stand above the beats around
+    // them, and how far ahead of the next best place to put them. Both in
+    // standard deviations of the per-beat cue. A UI that accents downbeats
+    // should stop doing so when `downbeat_margin` is small — putting the accent
+    // in the wrong place is worse than putting it nowhere.
+    double downbeat_strength = 0.0;
+    double downbeat_margin = 0.0;
 };
 
 // Whole-file beat analysis: audio in, a beat grid out.
@@ -72,6 +95,8 @@ public:
     }
 
 private:
+    static OfflineConfig prepare(OfflineConfig config);
+
     OfflineConfig config_;
     dsp::Odf odf_;
     TempoEstimator tempo_;
@@ -79,6 +104,8 @@ private:
 
     std::vector<double> odf_values_;
     std::vector<double> frame_times_;
+    std::vector<double> odf_low_;
+    std::vector<float> chroma_;  // frame-major, kBins per frame
 };
 
 // Convenience wrapper for callers that already hold the whole signal.

@@ -122,7 +122,7 @@ struct Sha256 {
 // Bumped whenever the analysis itself changes in a way that makes old grids
 // wrong, not just whenever the byte layout changes: a cache of results from a
 // better-tuned tracker is stale even if it still parses.
-constexpr std::uint32_t kVersion = 1;
+constexpr std::uint32_t kVersion = 2;
 
 constexpr std::uint8_t kMagic[4] = {'T', 'T', 'G', 'R'};
 
@@ -200,16 +200,33 @@ std::uint64_t fingerprint(const OfflineConfig& c) {
     put64(bytes, static_cast<std::uint64_t>(c.tempo.grid_size));
     put64(bytes, static_cast<std::uint64_t>(c.tempo.comb_harmonics));
     putF64(bytes, c.tempo.comb_weight_decay);
+    putF64(bytes, c.odf.chroma ? 1.0 : 0.0);
+    putF64(bytes, c.odf.chromaMinHz);
+    putF64(bytes, c.odf.chromaMaxHz);
     putF64(bytes, c.tracker.tightness);
     put64(bytes, c.tracker.trim ? 1 : 0);
     putF64(bytes, c.bpm_hint);
+    put64(bytes, c.find_downbeats ? 1 : 0);
+    putF64(bytes, c.downbeat.low_weight);
+    putF64(bytes, c.downbeat.accent_weight);
+    putF64(bytes, c.downbeat.harmony_weight);
+    putF64(bytes, c.downbeat.window_before);
+    putF64(bytes, c.downbeat.window_after);
+    put64(bytes, static_cast<std::uint64_t>(c.downbeat.min_bars));
+    for (const MeterCandidate& m : c.downbeat.meters) {
+        put64(bytes, static_cast<std::uint64_t>(m.beats_per_bar));
+        putF64(bytes, m.prior);
+    }
     return fnv1a(bytes.data(), bytes.size());
 }
 
 // magic, version, fingerprint, bpm, confidence, estimated bpm, frame count,
-// beat count — everything before the beats themselves.
-constexpr std::size_t kHeaderSize = 4 + 4 + 8 + 8 + 8 + 8 + 8 + 8;
+// beats per bar, downbeat strength, downbeat margin, beat count, downbeat
+// count — everything before the two arrays of times.
+constexpr std::size_t kHeaderSize = 4 + 4 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8;
 constexpr std::size_t kChecksumSize = 8;
+constexpr std::size_t kBeatCountOffset = 72;
+constexpr std::size_t kDownbeatCountOffset = 80;
 
 }  // namespace
 
@@ -231,7 +248,8 @@ std::string gridCacheKey(const void* bytes, std::size_t n) {
 std::vector<std::uint8_t> serializeGrid(const OfflineResult& result,
                                         const OfflineConfig& config) {
     std::vector<std::uint8_t> out;
-    out.reserve(kHeaderSize + result.beats.size() * 8 + kChecksumSize);
+    out.reserve(kHeaderSize + (result.beats.size() + result.downbeats.size()) * 8 +
+                kChecksumSize);
 
     out.insert(out.end(), kMagic, kMagic + sizeof(kMagic));
     put32(out, kVersion);
@@ -240,8 +258,13 @@ std::vector<std::uint8_t> serializeGrid(const OfflineResult& result,
     putF64(out, result.tempo_confidence);
     putF64(out, result.estimated_bpm);
     put64(out, result.frame_count);
+    put64(out, static_cast<std::uint64_t>(result.beats_per_bar));
+    putF64(out, result.downbeat_strength);
+    putF64(out, result.downbeat_margin);
     put64(out, result.beats.size());
+    put64(out, result.downbeats.size());
     for (double beat : result.beats) putF64(out, beat);
+    for (double beat : result.downbeats) putF64(out, beat);
 
     put64(out, fnv1a(out.data(), out.size()));
     return out;
@@ -255,13 +278,15 @@ bool deserializeGrid(const std::uint8_t* bytes, std::size_t n,
     if (get32(bytes + 4) != kVersion) return false;
     if (get64(bytes + 8) != fingerprint(config)) return false;
 
-    const std::uint64_t beat_count = get64(bytes + kHeaderSize - 8);
-    // Checked against the actual size before it is used to index anything, so
-    // a corrupted count reads as "not a grid" rather than as a huge read.
-    if (beat_count != (n - kHeaderSize - kChecksumSize) / 8 ||
-        n != kHeaderSize + beat_count * 8 + kChecksumSize) {
-        return false;
-    }
+    // Checked against the actual size before either count is used to index
+    // anything, so a corrupted count reads as "not a grid" rather than as a
+    // huge read. Compared against the payload rather than added together first,
+    // because two attacker-chosen 64-bit counts can be made to sum to anything.
+    const std::uint64_t payload = (n - kHeaderSize - kChecksumSize) / 8;
+    const std::uint64_t beat_count = get64(bytes + kBeatCountOffset);
+    const std::uint64_t downbeat_count = get64(bytes + kDownbeatCountOffset);
+    if (beat_count > payload || downbeat_count > payload - beat_count) return false;
+    if (n != kHeaderSize + (beat_count + downbeat_count) * 8 + kChecksumSize) return false;
     if (get64(bytes + n - kChecksumSize) != fnv1a(bytes, n - kChecksumSize)) return false;
 
     OfflineResult result;
@@ -269,9 +294,17 @@ bool deserializeGrid(const std::uint8_t* bytes, std::size_t n,
     result.tempo_confidence = getF64(bytes + 24);
     result.estimated_bpm = getF64(bytes + 32);
     result.frame_count = static_cast<std::size_t>(get64(bytes + 40));
+    result.beats_per_bar = static_cast<int>(get64(bytes + 48));
+    result.downbeat_strength = getF64(bytes + 56);
+    result.downbeat_margin = getF64(bytes + 64);
     result.beats.resize(static_cast<std::size_t>(beat_count));
     for (std::size_t i = 0; i < result.beats.size(); ++i) {
         result.beats[i] = getF64(bytes + kHeaderSize + i * 8);
+    }
+    const std::uint8_t* after_beats = bytes + kHeaderSize + result.beats.size() * 8;
+    result.downbeats.resize(static_cast<std::size_t>(downbeat_count));
+    for (std::size_t i = 0; i < result.downbeats.size(); ++i) {
+        result.downbeats[i] = getF64(after_beats + i * 8);
     }
 
     *out = std::move(result);

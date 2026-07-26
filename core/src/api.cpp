@@ -189,6 +189,7 @@ tiktak::analysis::OfflineConfig resolve(const tt_offline_config& in) {
     // Negative means "explicitly off", since zero means "default".
     out.tracker.trim = in.trim >= 0;
     out.bpm_hint = in.bpm_hint;
+    out.find_downbeats = in.find_downbeats >= 0;
     return out;
 }
 
@@ -214,6 +215,7 @@ void tt_offline_config_defaults(tt_offline_config* cfg, double sample_rate) {
     cfg->tightness = 100.0;
     cfg->trim = 1;
     cfg->bpm_hint = 0.0;
+    cfg->find_downbeats = 1;
 }
 
 tt_offline* tt_offline_create(const tt_offline_config* cfg, tt_status* status) {
@@ -284,6 +286,34 @@ size_t tt_offline_beats(const tt_offline* offline, double* out, size_t capacity)
     std::copy(offline->result.beats.begin(),
               offline->result.beats.begin() + static_cast<std::ptrdiff_t>(count), out);
     return count;
+}
+
+int tt_offline_beats_per_bar(const tt_offline* offline) {
+    if (!offline || !offline->finished) return 0;
+    return offline->result.beats_per_bar;
+}
+
+size_t tt_offline_downbeat_count(const tt_offline* offline) {
+    if (!offline || !offline->finished) return 0;
+    return offline->result.downbeats.size();
+}
+
+size_t tt_offline_downbeats(const tt_offline* offline, double* out, size_t capacity) {
+    if (!offline || !offline->finished || !out) return 0;
+    const std::size_t count = std::min(capacity, offline->result.downbeats.size());
+    std::copy(offline->result.downbeats.begin(),
+              offline->result.downbeats.begin() + static_cast<std::ptrdiff_t>(count), out);
+    return count;
+}
+
+double tt_offline_downbeat_strength(const tt_offline* offline) {
+    if (!offline || !offline->finished) return 0.0;
+    return offline->result.downbeat_strength;
+}
+
+double tt_offline_downbeat_margin(const tt_offline* offline) {
+    if (!offline || !offline->finished) return 0.0;
+    return offline->result.downbeat_margin;
 }
 
 size_t tt_offline_tempo_candidates(const tt_offline* offline, tt_tempo_candidate* out,

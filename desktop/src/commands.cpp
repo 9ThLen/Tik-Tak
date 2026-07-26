@@ -249,6 +249,7 @@ bool parseOptions(const std::vector<std::string>& args, Options& options, std::s
         } else if (arg == "--beats") {
             if (!need(value)) return false;
             options.beats_per_bar = static_cast<int>(value);
+            options.beats_per_bar_given = true;
         } else if (arg == "--sub") {
             if (!need(value)) return false;
             options.subdivisions = static_cast<int>(value);
@@ -358,7 +359,7 @@ void printUsage() {
         "\n"
         "Options:\n"
         "  --bpm N            tempo (120)\n"
-        "  --beats N          beats per bar (4)\n"
+        "  --beats N          beats per bar (4; `track` reads it off the audio)\n"
         "  --sub N            subdivisions per beat, 1 = beats only (1)\n"
         "  --seconds N        how long to run (10)\n"
         "  --rate N           sample rate; 0 takes the device's own (0)\n"
@@ -372,6 +373,13 @@ void printUsage() {
         "  --from N           start at bar N (0)\n"
         "  --loop A:B         loop bars A to B, end exclusive\n"
         "  --hint N           manual-mode tempo hint in BPM; 0 estimates (0)\n"
+        "\n"
+        "`track` finds the bar lines as well as the beats, and accents the one.\n"
+        "It reports how far the bar line it picked stands above the next best\n"
+        "place to put it; below a margin of 0.25 it declines to accent anything,\n"
+        "because an accent on the wrong beat is harder to play to than none.\n"
+        "Passing --beats overrides the meter it found — the number you type is\n"
+        "an assertion about the music, the same way --hint is.\n"
         "  --no-click         the track alone, no metronome\n"
         "  --no-cache         re-analyse even when the beat grid is cached\n"
         "\n"
@@ -884,10 +892,45 @@ int cmdTrack(const Options& options) {
         std::printf("no beats found — playing the track without a click\n");
     }
 
+    // Where the bar starts, from the audio rather than from a convention.
+    //
+    // The margin is what decides whether to use it at all: it says how far the
+    // chosen bar line stands above the next best place to put it, and an accent
+    // on the wrong beat is worse for a player to follow than no accent. Below
+    // the threshold the harness says so and falls back to counting from the
+    // first beat, which is at least honestly arbitrary.
+    constexpr double kMinMargin = 0.25;
+    int beats_per_bar = options.beats_per_bar;
+    int downbeat_offset = 0;
+
+    if (!grid.beats.empty() && grid.beats_per_bar > 0) {
+        std::printf("bar lines: %d beats to the bar (strength %.2f, margin %.2f)%s\n",
+                    grid.beats_per_bar, grid.downbeat_strength, grid.downbeat_margin,
+                    grid.downbeat_margin < kMinMargin ? " — too close to call" : "");
+    } else if (!grid.beats.empty()) {
+        std::printf("bar lines: none found — the track is too short to repeat a bar\n");
+    }
+
+    if (options.beats_per_bar_given) {
+        // An explicit --beats is the user's assertion about the music and
+        // outranks the analysis, exactly as an explicit --bpm does.
+        if (grid.beats_per_bar > 0 && grid.beats_per_bar != options.beats_per_bar) {
+            std::printf("using --beats %d over the %d the audio suggests\n",
+                        options.beats_per_bar, grid.beats_per_bar);
+        }
+    } else if (grid.beats_per_bar > 0 && grid.downbeat_margin >= kMinMargin &&
+               !grid.downbeats.empty()) {
+        beats_per_bar = grid.beats_per_bar;
+        const auto first = std::lower_bound(grid.beats.begin(), grid.beats.end(),
+                                            grid.downbeats.front() - 1e-9);
+        downbeat_offset = static_cast<int>(first - grid.beats.begin());
+    }
+
     PlayerConfig cfg;
     cfg.sample_rate = rate;
     cfg.click.sample_rate = rate;
-    cfg.beats_per_bar = options.beats_per_bar;
+    cfg.beats_per_bar = beats_per_bar;
+    cfg.downbeat_offset = downbeat_offset;
     cfg.count_in_beats = grid.beats.empty() ? 0 : options.count_in;
     cfg.channel_enabled = {{!options.no_click && !grid.beats.empty(), false, false}};
     if (!cfg.valid()) {

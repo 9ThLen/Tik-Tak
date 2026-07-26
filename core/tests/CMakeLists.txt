@@ -14,6 +14,7 @@ add_executable(tiktak_core_tests
     test_fft.cpp
     test_window.cpp
     test_mel.cpp
+    test_chroma.cpp
     test_stft.cpp
     test_odf.cpp
     test_scheduler.cpp
@@ -26,6 +27,7 @@ add_executable(tiktak_core_tests
     test_sync.cpp
     test_tempo.cpp
     test_tracker.cpp
+    test_downbeat.cpp
     test_offline.cpp
     test_grid_cache.cpp
     test_api.cpp

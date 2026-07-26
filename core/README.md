@@ -39,10 +39,12 @@ all.
 | `src/dsp/fft` | radix-2 FFT behind an interface a SIMD backend can replace |
 | `src/dsp/window` | periodic Hann |
 | `src/dsp/mel` | triangular mel filterbank, sparse |
+| `src/dsp/chroma` | twelve pitch classes from a spectrum — the harmony cue |
 | `src/dsp/stft` | streaming STFT, allocation-free, block-size agnostic |
 | `src/dsp/odf` | onset detection function — full / low / high bands |
 | `src/analysis/tempo` | tempo from the ODF: autocorrelation + log-normal prior |
 | `src/analysis/tracker` | offline beat tracking by dynamic programming (Ellis 2007) |
+| `src/analysis/downbeat` | bar lines and metre from beat-synchronous cues |
 | `src/analysis/offline` | whole-file pipeline: audio in blocks → beat grid |
 | `src/analysis/grid_cache` | serialised beat grids, keyed by content hash — bytes, not files |
 | `src/schedule/scheduler` | beat grid: schedules events ahead, per-channel latency |
@@ -78,15 +80,16 @@ The ODF front-end, the offline analysis path (tempo, beat tracking, the
 the metronome itself (click synthesis plus the callback that drives it) and the
 track player (`tt_player_*` — playback on the analysed grid, with count-in and
 bar loops) and the online tracker for the microphone path (`tt_live_*`, plus
-`render::LiveMetronome`, which is the tracker and the click wired together).
-Missing: downbeat detection.
+`render::LiveMetronome`, which is the tracker and the click wired together),
+and offline downbeat and metre detection (`tt_offline_beats_per_bar`,
+`tt_offline_downbeats`). Missing: the ML models — see below.
 
 The player places the click on the very sample of its beat rather than
 compensating for output latency: track and click leave through the same device
 buffer, so they arrive together whatever the latency is. Only haptic and
 visual cues carry latency arithmetic, compensated against the moment the beat
-is *heard*. Bars are bookkeeping until Phase 7 — `downbeat_offset` names which
-grid beat is "the one", it does not detect it.
+is *heard*. `downbeat_offset` names which grid beat is "the one"; the offline
+analysis now says which one that should be, and the harness feeds it in.
 
 The online tracker is a particle filter over `(period, phase)`, and four
 decisions in it are worth knowing before touching the numbers.
@@ -198,3 +201,65 @@ comb scoring over metrical multiples is **off**. It was on, on theoretical
 grounds, until it was measured over 140 clips and turned out to be worse on
 every metric. Read the comment on `TempoConfig::comb_harmonics` before turning
 it back on.
+
+### Bar lines
+
+Three things about the downbeat stage are worth knowing before touching it.
+
+**There is no dynamic programming, and that is a finding.** The plan called for
+Markov smoothing over a per-beat downbeat probability, so a single loud beat in
+the wrong place could not move the bar line. But smoothing exists only because
+the model underneath is allowed to answer per beat, and a metre that does not
+change has exactly one degree of freedom beyond itself — the phase. Fix the
+metre and the phase and every bar line in the piece is determined, so the whole
+hypothesis space is a dozen or so (metre, phase) pairs that can each be scored
+exactly. The smoothing a Viterbi pass would approximate is already total. The
+price is stated in the header: a piece that *changes* metre partway cannot be
+represented, and bringing the DP back is what that would need — for that
+reason, not for smoothing.
+
+**The score is a contrast, not a sum.** A sum over the chosen beats hands the
+win to the shortest bar automatically, because two-four claims half the beats
+where four-four claims a quarter. The difference between the mean at the chosen
+beats and the mean at the rest does not.
+
+**`accent_weight` defaults to 0, and that one was decided by measurement.** How
+hard a beat is struck sounds like a downbeat cue and is very nearly its
+opposite: in the ordinary kick-on-one, snare-on-the-backbeat pattern, the snare
+is broadband and the kick is not, so the full-band onset function peaks on two
+and four while the low band peaks on one. On the reference clip the accent
+averages 1.2 on the backbeats against 0.68 on the downbeat. At a weight of 0.5
+it won, and the analysis confidently accented beat four. The cue is real in
+music where the downbeat genuinely is the loudest event, so it survives as a
+parameter — it is simply not a safe default.
+
+A fourth, smaller one: the harmony cue is **not** standardised before being
+weighted, unlike the onset cues. A cosine distance between pitch class profiles
+already means something absolute; an onset value means nothing until compared
+with the rest of the piece. Standardising harmony would take the 0.01-scale
+noise of a drums-only track and promote it to an equal vote with the kick.
+
+### What the chroma front end can and cannot see
+
+`ChromaFilterbank` raises the bottom of its range to `resolvedMinHz()` — the
+frequency below which a semitone is narrower than a couple of FFT bins and
+neighbouring pitch classes share bins. At 48 kHz with the ODF's 2048-sample
+window that is about 800 Hz, so the harmony cue is built from the upper partials
+of a chord rather than its roots. Measured to be enough:
+`Offline.TheHarmonyAloneFindsTheBarWithNoDrumsToHelp` finds the bar line with
+both rhythm cues switched off. A dedicated longer window, or a constant-Q
+transform, is the real fix and is not here.
+
+Normalising the profile is also a trap worth knowing about, and it is the same
+trap as the ODF's whitening floor: divide by a vanishing length and spectral
+leakage arrives at full scale, so a bass note below the resolvable range comes
+back as a confident chord assembled from nothing. The guard is relative to the
+whole spectrum, so it holds at any input gain.
+
+### The ML models are not here yet
+
+Phase 7 in the plan is ONNX Runtime with BeatNet online and Beat This! offline.
+What is implemented is the portable half — the cues, the decision, and the
+whole path from audio to bar lines to an accented click — which has to exist
+whatever computes the per-beat probability, and which now gives any model a
+measured baseline to beat rather than an empty slot to fill.

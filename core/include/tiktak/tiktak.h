@@ -178,6 +178,15 @@ typedef struct tt_offline_config {
     /* Fix the tempo instead of estimating it, for manual mode. <= 0 estimates.
        The tempo is measured either way — see tt_offline_estimated_bpm. */
     double bpm_hint;
+
+    /* Bar lines. Also find where each bar starts and how many beats it holds,
+       so the click can accent the downbeat instead of every beat equally.
+       Non-zero enables; pass a negative value to disable. 0 -> enabled.
+
+       Turning it off is a real option and not just a debugging one: it makes
+       the analyser skip the harmony front end, which is the expensive half.
+       A caller that only wants a click on every beat should not pay for it. */
+    int    find_downbeats;
 } tt_offline_config;
 
 TT_API void tt_offline_config_defaults(tt_offline_config* cfg, double sample_rate);
@@ -219,6 +228,33 @@ TT_API size_t tt_offline_beat_count(const tt_offline* offline);
  * to free anything.
  */
 TT_API size_t tt_offline_beats(const tt_offline* offline, double* out, size_t capacity);
+
+/*
+ * Bar lines.
+ *
+ * Beats per bar, or 0 when no meter was decided — the track was too short for
+ * any meter to repeat, or bar lines were not asked for. Bar lines themselves
+ * are a subset of the beats, copied out the same way.
+ */
+TT_API int tt_offline_beats_per_bar(const tt_offline* offline);
+TT_API size_t tt_offline_downbeat_count(const tt_offline* offline);
+TT_API size_t tt_offline_downbeats(const tt_offline* offline, double* out, size_t capacity);
+
+/*
+ * How far to trust those bar lines. Both are in standard deviations of the
+ * per-beat cue, and they answer different questions.
+ *
+ * `strength` is how much louder the chosen bar lines are than the beats around
+ * them. Near zero means the audio has no bar-level pattern at all, and the
+ * honest thing to show is no accent.
+ *
+ * `margin` is how far ahead the winning bar line is of the next best place to
+ * put it. A strong pattern with a small margin means the bars are clear but
+ * which beat starts them is a coin toss — and an accent on the wrong beat is
+ * worse than no accent, so this is the one to gate a UI on.
+ */
+TT_API double tt_offline_downbeat_strength(const tt_offline* offline);
+TT_API double tt_offline_downbeat_margin(const tt_offline* offline);
 
 typedef struct tt_tempo_candidate {
     double bpm;
@@ -508,9 +544,11 @@ typedef struct tt_player_config {
     double sample_rate;         /* Must be > 0, and the track's rate.          */
     tt_click_config click;      /* click.sample_rate 0 -> sample_rate.         */
 
-    /* Bars are bookkeeping until Phase 7 detects real downbeats: grid beat
-       `downbeat_offset` is a bar's first beat, and every beats_per_bar-th
-       after it. The offset lets the user shift which beat is "the one". */
+    /* Grid beat `downbeat_offset` is a bar's first beat, and every
+       beats_per_bar-th after it. Both come from the offline analysis —
+       tt_offline_beats_per_bar and the first of tt_offline_downbeats — with
+       the offset left settable so the user can shift which beat is "the one"
+       when the analysis is unsure or simply wrong. */
     int beats_per_bar;          /* 0 -> 4                                      */
     int downbeat_offset;        /* 0-based grid index; negative rejected       */
 

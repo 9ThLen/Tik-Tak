@@ -469,6 +469,56 @@ TEST(OfflineApi, AnalysesAClickTrackEndToEnd) {
     }
 }
 
+TEST(OfflineApi, FindsTheBarLinesOfATrackThatHasThem) {
+    // Two beats of pickup, so this proves the bar line is found rather than
+    // assumed to be at the start of the file.
+    const std::vector<float> audio = tiktak::test::bandTrack(120.0, 8, 4, kOfflineRate, 2);
+
+    Offline offline{offlineDefaults()};
+    ASSERT_NE(offline.handle, nullptr);
+    ASSERT_EQ(tt_offline_feed(offline.handle, audio.data(), audio.size()), TT_OK);
+    ASSERT_EQ(tt_offline_finish(offline.handle), TT_OK);
+
+    EXPECT_EQ(tt_offline_beats_per_bar(offline.handle), 4);
+    EXPECT_GT(tt_offline_downbeat_strength(offline.handle), 0.5);
+    EXPECT_GT(tt_offline_downbeat_margin(offline.handle), 0.3);
+
+    const std::size_t count = tt_offline_downbeat_count(offline.handle);
+    ASSERT_GT(count, 4u);
+    std::vector<double> bars(count);
+    ASSERT_EQ(tt_offline_downbeats(offline.handle, bars.data(), bars.size()), count);
+
+    // A quarter of the beats, and every one of them on a real bar line: at
+    // 120 BPM in four with two beats of pickup, that is every odd second.
+    EXPECT_NEAR(static_cast<double>(count),
+                static_cast<double>(tt_offline_beat_count(offline.handle)) / 4.0, 1.5);
+    for (double t : bars) {
+        const double n = (t - 1.0) / 2.0;
+        EXPECT_LT(std::abs(n - std::round(n)), 0.05) << "bar line at " << t;
+    }
+
+    // The copy respects capacity like every other array out of this API.
+    std::vector<double> two(2);
+    EXPECT_EQ(tt_offline_downbeats(offline.handle, two.data(), 2), 2u);
+    EXPECT_DOUBLE_EQ(two[0], bars[0]);
+}
+
+TEST(OfflineApi, BarLinesCanBeDeclined) {
+    const std::vector<float> audio = tiktak::test::bandTrack(120.0, 8, 4, kOfflineRate);
+
+    tt_offline_config cfg = offlineDefaults();
+    cfg.find_downbeats = -1;
+
+    Offline offline{cfg};
+    ASSERT_NE(offline.handle, nullptr);
+    ASSERT_EQ(tt_offline_feed(offline.handle, audio.data(), audio.size()), TT_OK);
+    ASSERT_EQ(tt_offline_finish(offline.handle), TT_OK);
+
+    EXPECT_GT(tt_offline_beat_count(offline.handle), 0u);
+    EXPECT_EQ(tt_offline_beats_per_bar(offline.handle), 0);
+    EXPECT_EQ(tt_offline_downbeat_count(offline.handle), 0u);
+}
+
 TEST(OfflineApi, ZeroedConfigFallsBackToDefaults) {
     tt_offline_config cfg;
     std::memset(&cfg, 0, sizeof(cfg));
@@ -606,6 +656,11 @@ TEST(OfflineApi, NullHandleIsHarmless) {
     EXPECT_EQ(tt_offline_beats(nullptr, beats, 4), 0u);
     EXPECT_EQ(tt_offline_tempo_candidates(nullptr, candidates, 2), 0u);
     EXPECT_EQ(tt_offline_frame_count(nullptr), 0u);
+    EXPECT_EQ(tt_offline_beats_per_bar(nullptr), 0);
+    EXPECT_EQ(tt_offline_downbeat_count(nullptr), 0u);
+    EXPECT_EQ(tt_offline_downbeats(nullptr, beats, 4), 0u);
+    EXPECT_DOUBLE_EQ(tt_offline_downbeat_strength(nullptr), 0.0);
+    EXPECT_DOUBLE_EQ(tt_offline_downbeat_margin(nullptr), 0.0);
 
     tt_offline_reset(nullptr);
     tt_offline_destroy(nullptr);

@@ -491,3 +491,51 @@ TEST(DecodeAndSyncLive, FallsInWithARealFileAtATempoItIsToldAndRefusesOneItIsNot
     EXPECT_EQ(play(137.0, &none), 1);
     EXPECT_TRUE(none.empty());
 }
+
+// Phase 7 on a real encoded file: the bar lines, not just the beats.
+//
+// The clip was generated in four with the first bar starting at zero, and the
+// pattern that says so — kick on the one, snare on the three — survives an MP3
+// encode. Worth checking here rather than only on synthetic buffers, because
+// the harmony cue is silent on this material and the meter has to come from
+// the drums alone.
+TEST(DecodeAndAnalyse, FindsTheBarLinesOfAnEncodedClickTrack) {
+    Decoder decoder{"click_120.mp3"};
+    ASSERT_NE(decoder.handle, nullptr);
+
+    const tt_audio_info info = tt_decoder_info(decoder.handle);
+    ASSERT_GT(info.sample_rate, 0.0);
+
+    tt_offline_config config;
+    tt_offline_config_defaults(&config, info.sample_rate);
+
+    tt_status status = TT_OK;
+    tt_offline* analysis = tt_offline_create(&config, &status);
+    ASSERT_NE(analysis, nullptr) << tt_status_string(status);
+
+    std::vector<float> block(4096);
+    for (;;) {
+        const std::size_t got = tt_decoder_read(decoder.handle, block.data(), block.size());
+        if (got == 0) break;
+        ASSERT_EQ(tt_offline_feed(analysis, block.data(), got), TT_OK);
+        if (got < block.size()) break;
+    }
+    ASSERT_EQ(tt_offline_finish(analysis), TT_OK);
+
+    EXPECT_EQ(tt_offline_beats_per_bar(analysis), 4);
+    EXPECT_GT(tt_offline_downbeat_strength(analysis), 0.5);
+    EXPECT_GT(tt_offline_downbeat_margin(analysis), 0.25);
+
+    const std::size_t count = tt_offline_downbeat_count(analysis);
+    ASSERT_GE(count, 4u);
+    std::vector<double> bars(count);
+    ASSERT_EQ(tt_offline_downbeats(analysis, bars.data(), bars.size()), count);
+
+    // At 120 BPM in four from zero, every bar line is on an even second.
+    for (double t : bars) {
+        const double n = t / 2.0;
+        EXPECT_LT(std::abs(n - std::round(n)), 0.07) << "bar line at " << t;
+    }
+
+    tt_offline_destroy(analysis);
+}

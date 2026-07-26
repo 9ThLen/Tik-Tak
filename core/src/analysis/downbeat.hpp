@@ -1,0 +1,175 @@
+#pragma once
+
+#include <cstddef>
+#include <vector>
+
+namespace tiktak::analysis {
+
+// What one beat looks like, reduced to the three things that distinguish a bar
+// line from the beats around it.
+//
+// Beat-synchronous by construction: the beat grid is already known when this is
+// built, so a bar is a pattern over *beats* rather than over time. That is the
+// whole reason downbeat detection is a separate stage from beat tracking and
+// not a harder version of it — the hard part, finding the beats, is done.
+struct BeatFeature {
+    double time_sec = 0.0;
+    // Onset energy below OdfConfig::lowBandHz at this beat. The kick drum is
+    // the plainest downbeat marker there is in most popular music.
+    double low = 0.0;
+    // Full-band onset energy: how hard the beat is struck at all.
+    double accent = 0.0;
+    // Cosine distance between this beat's pitch class profile and the previous
+    // beat's, in [0, 1]. Chords change on bar lines.
+    double harmonic_change = 0.0;
+};
+
+struct MeterCandidate {
+    int beats_per_bar = 0;
+    // Multiplies the meter's score. Not a probability — a thumb on the scale
+    // for breaking ties, in the same spirit as the tempo estimator's log-normal
+    // prior over BPM, and for the same reason: the evidence is genuinely
+    // ambiguous between a meter and its divisors, so something has to break it
+    // and a stated prior is better than an accident of arithmetic.
+    double prior = 1.0;
+};
+
+struct DownbeatConfig {
+    // Bar lengths considered, strongest prior first.
+    //
+    // 4, 3 and 2 cover very nearly all of the repertoire this app is for. 6 is
+    // here for 6/8 counted in eighths, and carries the weakest prior because
+    // it is only ever distinguishable from 3 by which of the two accents in the
+    // bar is bigger — a genuinely subtle question that this stage should be
+    // allowed to decline rather than answer badly.
+    //
+    // The priors are ratios against 4/4 and encode how common each meter is,
+    // nothing more. They matter only when the audio is close to a tie.
+    std::vector<MeterCandidate> meters = {{4, 1.0}, {3, 0.9}, {2, 0.75}, {6, 0.6}};
+
+    // Relative weight of each cue in the per-beat score.
+    double low_weight = 1.0;
+
+    // Off by default, and this is the one number here that was decided by
+    // measurement rather than by argument.
+    //
+    // How hard a beat is struck sounds like a downbeat cue and is very nearly
+    // its opposite. In the ordinary rock and pop pattern — kick on one, snare
+    // on the backbeat — the snare is broadband and the kick is not, so the
+    // full-band onset function peaks on beats two and four while the low band
+    // peaks on one. Measured on the reference clip: accent averages 1.2 on the
+    // backbeats against 0.68 on the downbeat, while the low band averages 1.13
+    // on the downbeat against 0.73. The two cues point at different beats, and
+    // the accent points at the wrong one. At a weight of 0.5 it won, and the
+    // analysis confidently accented beat four.
+    //
+    // It is not wrong everywhere — in orchestral or choral music the downbeat
+    // really is the loudest event — so it stays as a parameter for callers who
+    // know their material. It is simply not a safe default.
+    double accent_weight = 0.0;
+
+    // Harmony is *not* standardised before being weighted, unlike the onset
+    // cues, because it does not need to be: a cosine distance between two pitch
+    // class profiles already means something absolute, where an onset value
+    // means nothing until compared with the rest of the piece. Standardising it
+    // would be actively wrong — on a drums-only track the chord "changes" by
+    // 0.01 from beat to beat, pure noise, and forcing that to unit variance
+    // would promote it to an equal vote with the kick drum.
+    double harmony_weight = 1.0;
+
+    // Where a beat's onset energy is collected from, as a fraction of the gap
+    // to the next beat. Slightly before, because the tracker's beat time can
+    // land just after an attack; well short of the next beat, because energy
+    // from the following beat must not count towards this one.
+    double window_before = 0.15;
+    double window_after = 0.45;
+
+    // A meter is only offered if the piece holds at least this many bars of it.
+    // Below that there is no repetition to see and any answer is the first
+    // accident in the audio.
+    int min_bars = 3;
+
+    bool valid() const;
+};
+
+struct MeterScore {
+    int beats_per_bar = 0;
+    int phase = 0;       // index of the first downbeat within the beat list
+    double score = 0.0;  // best contrast for this meter, prior applied
+};
+
+struct DownbeatResult {
+    // Times of the bar lines, a subset of the beats handed in. Empty when no
+    // meter could be decided.
+    std::vector<double> downbeats;
+    // Beats per bar, or 0 when undecided. `phase` is the index into the beat
+    // list of the first downbeat.
+    int beats_per_bar = 0;
+    int phase = 0;
+
+    // How far the winning answer stands above the alternatives, in standard
+    // deviations of the per-beat score. Two separate doubts, kept separate
+    // because the UI should treat them differently:
+    //
+    //   `strength` is the winner's own contrast — how much louder, in the
+    //   combined cue, the chosen bar lines are than everything else. Near zero
+    //   means the audio simply has no bar-level pattern, and the honest display
+    //   is no bar lines at all.
+    //
+    //   `margin` is how far ahead of the runner-up it is. A large strength with
+    //   a small margin means the bars are clear but the *phase* or the meter is
+    //   a coin toss, which is the failure a listener notices immediately —
+    //   a metronome accenting beat 3 is worse than one accenting nothing.
+    double strength = 0.0;
+    double margin = 0.0;
+
+    // Every meter considered, best first, for diagnostics and for a UI that
+    // wants to offer "no, it is a waltz".
+    std::vector<MeterScore> candidates;
+};
+
+// The per-beat cues, gathered from ODF frames and their pitch class profiles.
+//
+// `chroma` is ChromaFilterbank::kBins values per frame, laid out frame-major,
+// or nullptr — in which case harmonic_change comes back zero throughout and the
+// decision rests on rhythm alone.
+struct BeatFeatureInput {
+    const double* frame_times = nullptr;
+    const double* odf_full = nullptr;
+    const double* odf_low = nullptr;
+    const float* chroma = nullptr;
+    std::size_t frame_count = 0;
+
+    const double* beats = nullptr;
+    std::size_t beat_count = 0;
+};
+
+std::vector<BeatFeature> beatFeatures(const BeatFeatureInput& input,
+                                      const DownbeatConfig& config);
+
+// Picks the bar length and where the bar lines fall.
+//
+// There is no dynamic programming here, and that is a finding rather than a
+// shortcut. The plan called for Markov smoothing over a per-beat downbeat
+// probability, so that one loud beat in the wrong place could not move the bar
+// line. But smoothing is only needed because the underlying model is allowed to
+// answer per beat — and a bar length that does not change has exactly one
+// degree of freedom beyond itself, the phase. Fix the meter M and the phase p
+// and every bar line in the piece is determined. So the entire hypothesis space
+// is the handful of (M, p) pairs, each of which can be scored exactly, and the
+// smoothing it would take a Viterbi pass to approximate is already total.
+//
+// The cost of that collapse is stated plainly: a piece that *changes* meter
+// partway cannot be represented, and will come back as whichever meter holds
+// for longer with a poor margin. Bringing back the DP is what that would need,
+// and it should be brought back for that reason and not for smoothing.
+//
+// Scoring is a contrast, not a sum: how far the chosen beats stand above the
+// ones they were chosen out of. A sum would make short bars win automatically
+// by containing more beats.
+//
+// Offline component: allocates, and reads the whole beat list at once.
+DownbeatResult findDownbeats(const std::vector<BeatFeature>& features,
+                             const DownbeatConfig& config);
+
+}  // namespace tiktak::analysis
