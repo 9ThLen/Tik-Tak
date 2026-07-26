@@ -36,6 +36,16 @@ is wrong answers over the clips actually accented: it is what the user
 experiences *when the feature fires*, and a threshold with 10% coverage and 40%
 conditional error is a bad feature even though its wrong rate is only 4%.
 :func:`choose_margins` bounds both.
+
+It bounds them at the *upper end of the confidence interval*, not at the rate
+observed, and that is the least obvious thing in this file. A threshold that
+accented four clips and got none of them wrong has an observed error of zero
+and an interval reaching past a third; treating the first number as the answer
+is how a run reports 0% on validation and then 14% on the material it was held
+out from. Not a regression in the tracker either time — a sample too small to
+resolve what was being read off it. :func:`wilson_upper` is the correction, and
+the price is that small splits calibrate nothing at all, which is the true
+answer to what they can support.
 """
 
 from __future__ import annotations
@@ -58,6 +68,7 @@ __all__ = [
     "choose_margins",
     "evidence_gap",
     "thresholds_from",
+    "wilson_upper",
     "format_scores",
     "format_sweep",
 ]
@@ -203,6 +214,30 @@ def score(reference, estimate, name: str | None = None) -> ClipScore:
     )
 
 
+def wilson_upper(failures: int, trials: int, z: float = 1.96) -> float:
+    """Upper end of the 95% Wilson interval for a failure rate.
+
+    Zero failures out of four is not a four-percent error rate and it is not a
+    zero one; it is no measurement at all, and this is the number that says so
+    — it returns about 0.49 there, and about 0.10 once thirty-five results have
+    come back clean. With no trials at all it returns 1.0: nothing observed
+    rules nothing out.
+
+    Wilson rather than the rule of three because the rule only covers the
+    all-clean case, and a threshold that lets one wrong accent through out of
+    eighty still needs bounding. The two agree in spirit where they overlap.
+    """
+    if trials <= 0:
+        return 1.0
+    p = failures / trials
+    z2 = z * z
+    denominator = 1.0 + z2 / trials
+    center = (p + z2 / (2 * trials)) / denominator
+    half = (z / denominator) * np.sqrt(p * (1 - p) / trials
+                                       + z2 / (4 * trials * trials))
+    return float(min(center + half, 1.0))
+
+
 @dataclass
 class SweepRow:
     min_phase_margin: float
@@ -246,6 +281,18 @@ class SweepRow:
         never the only bound either — the two are bounded together.
         """
         return self.wrong / self.shown if self.shown else float("nan")
+
+    # The two rates above are point estimates, and on a split of this size a
+    # point estimate of zero is mostly a statement about the sample. These are
+    # the same quantities with the sample size taken into account, and they are
+    # what the chooser is actually held to.
+    @property
+    def wrong_rate_upper(self) -> float:
+        return wilson_upper(self.wrong, self.n)
+
+    @property
+    def conditional_error_upper(self) -> float:
+        return wilson_upper(self.wrong, self.shown)
 
 
 def thresholds_from(values: Sequence[float]) -> list[float]:
@@ -318,7 +365,8 @@ def sweep(scores: Sequence[ClipScore],
 
 def choose_margins(rows: Sequence[SweepRow],
                    max_wrong_rate: float = 0.05,
-                   max_conditional_error: float = 0.10) -> SweepRow | None:
+                   max_conditional_error: float = 0.10,
+                   bounded: bool = True) -> SweepRow | None:
     """The threshold pair with the widest coverage inside both error budgets.
 
     Coverage is what is maximised, not accuracy: among pairs that are all
@@ -338,10 +386,24 @@ def choose_margins(rows: Sequence[SweepRow],
     Choose on a validation split and report on a held-out one. A threshold
     picked and reported on the same clips is a description of those clips.
 
-    Meeting a budget is not the same as demonstrating it. On a small split the
-    winning pair regularly reports a wrong rate of zero over a handful of shown
-    results, which the sample is far too small to support — ask
-    ``evidence_gap`` before repeating the number as a property of the app.
+    The budgets are applied to the **upper end** of the confidence interval,
+    not to the rate observed. A pair that showed four accents and got none of
+    them wrong has an observed rate of zero and an upper bound near a half, and
+    it is the bound that decides. This is the whole difference between "no
+    error turned up" and "the error is small", and reading the first as the
+    second is what produced two consecutive runs of 0% on validation followed
+    by 14% held out. Neither was an algorithm regression; both were a sample
+    too small to resolve what was being claimed from it.
+
+    The cost is that on a small split nothing qualifies and this returns None.
+    That is the intended behaviour and not a failure of the run: the frontier
+    is still printed and still worth reading, and ``evidence_gap`` says how
+    much material the budget would need. A threshold shipped on the strength
+    of four clean results is a guess wearing a percentage.
+
+    ``bounded=False`` reverts to the point estimates. It exists so a run can
+    show where the threshold *would* land next to the reason that is not yet an
+    answer — never to ship a number from.
     """
     acceptable = [
         r for r in rows
@@ -350,8 +412,9 @@ def choose_margins(rows: Sequence[SweepRow],
         # a feature that never fires. That is not a calibration, it is the
         # feature being off, and the caller asked what to switch it on at.
         if r.n and r.shown
-        and r.wrong_rate <= max_wrong_rate
-        and r.conditional_error <= max_conditional_error
+        and (r.wrong_rate_upper if bounded else r.wrong_rate) <= max_wrong_rate
+        and (r.conditional_error_upper if bounded
+             else r.conditional_error) <= max_conditional_error
     ]
     if not acceptable:
         return None
@@ -364,31 +427,32 @@ def choose_margins(rows: Sequence[SweepRow],
 def evidence_gap(row: SweepRow,
                  max_wrong_rate: float = 0.05,
                  max_conditional_error: float = 0.10) -> str | None:
-    """Why this row cannot yet demonstrate the budget it satisfies, if it cannot.
+    """How far this row is from carrying the budget, in clips, if it falls short.
 
     A run that observes no wrong accents has not shown the error rate is small;
     it has shown the error rate is smaller than its sample can resolve. By the
     rule of three, zero failures in ``n`` trials puts the 95% upper bound at
-    about ``3/n``, so a claim of ``p`` needs roughly ``3/p`` results before the
-    data can carry it — 60 clips for a 5% wrong rate, 30 shown accents for a
-    10% conditional error.
+    about ``3/n``, so a claim of ``p`` needs roughly ``3/p`` clean results
+    before the data can carry it — 60 clips for a 5% wrong rate, 30-odd shown
+    accents for a 10% conditional error.
 
-    This is the difference between the two numbers the benchmark prints. The
-    chooser answers "where would I put the threshold given what I have"; this
-    answers "may I repeat that as a property of the app", and on any split of
-    the size available so far the answer is no. Returned as a complaint rather
-    than raised, because the exploratory number is still worth seeing — it just
-    must not be seen alone.
+    ``choose_margins`` enforces this through the interval itself and simply
+    declines. This translates the refusal into the quantity that would lift it,
+    so a run says how much more material is wanted rather than only that it has
+    too little. Returned as a complaint rather than raised: it is a report on
+    the dataset, not an error in the run.
     """
     needed_clips = int(np.ceil(3.0 / max_wrong_rate)) if max_wrong_rate > 0 else 0
     needed_shown = (int(np.ceil(3.0 / max_conditional_error))
                     if max_conditional_error > 0 else 0)
     if row.n >= needed_clips and row.shown >= needed_shown:
         return None
-    return (f"chosen, not demonstrated: {row.n} clip(s) and {row.shown} shown "
-            f"accent(s) cannot support {max_wrong_rate:.0%} wrong / "
+    return (f"not demonstrated: {row.n} clip(s) and {row.shown} shown accent(s) "
+            f"cannot support {max_wrong_rate:.0%} wrong / "
             f"{max_conditional_error:.0%} conditional — that needs about "
-            f"{needed_clips} clips and {needed_shown} shown")
+            f"{needed_clips} clips and {needed_shown} shown "
+            f"(upper bounds here: {row.wrong_rate_upper:.0%} and "
+            f"{row.conditional_error_upper:.0%})")
 
 
 def frontier(rows: Sequence[SweepRow]) -> list[SweepRow]:

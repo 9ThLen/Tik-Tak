@@ -12,6 +12,7 @@ from eval.downbeat import (
     score,
     sweep,
     thresholds_from,
+    wilson_upper,
 )
 from eval.downbeat_benchmark import split_of
 
@@ -184,9 +185,12 @@ def test_the_counts_account_for_every_clip():
 def test_the_threshold_is_the_most_generous_one_inside_the_budget():
     # Two thresholds are safe; the useful one is the lower, because among
     # equally safe options the one that answers more often is the better product.
+    # bounded=False because this is about which safe row wins, not about
+    # whether three clips can demonstrate anything. They cannot, and the
+    # bounded chooser correctly says so; see the tests below.
     scores = _scores([(1.0, 0, 4), (0.9, 0, 4), (0.2, 2, 4)])
     rows = sweep(scores, [0.0, 0.5, 0.95], [0.0])
-    chosen = choose_margins(rows, max_wrong_rate=0.0)
+    chosen = choose_margins(rows, max_wrong_rate=0.0, bounded=False)
 
     assert chosen is not None
     assert chosen.min_phase_margin == pytest.approx(0.5)
@@ -278,8 +282,10 @@ def test_the_conditional_error_bound_rejects_a_narrow_but_unreliable_threshold()
 
     assert rows[0].wrong_rate == pytest.approx(0.05)
     assert rows[0].conditional_error == pytest.approx(1.0)
-    assert choose_margins(rows, max_wrong_rate=0.05, max_conditional_error=0.10) is None
-    assert choose_margins(rows, max_wrong_rate=0.05, max_conditional_error=1.0) is not None
+    assert choose_margins(rows, max_wrong_rate=0.05, max_conditional_error=0.10,
+                          bounded=False) is None
+    assert choose_margins(rows, max_wrong_rate=0.05, max_conditional_error=1.0,
+                          bounded=False) is not None
 
 
 # -------------------------------------------------------------- thresholds --
@@ -306,6 +312,42 @@ def _row(n, shown, correct):
     return SweepRow(min_phase_margin=0.0, min_meter_margin=0.3, n=n, shown=shown,
                     correct=correct, wrong_meter=0, wrong_phase=0,
                     withheld=n - shown, no_answer=0)
+
+
+def test_nothing_observed_rules_nothing_out():
+    assert wilson_upper(0, 0) == 1.0
+
+
+def test_a_clean_run_bounds_tighter_the_longer_it_stays_clean():
+    assert wilson_upper(0, 4) == pytest.approx(0.49, abs=0.02)
+    assert wilson_upper(0, 35) == pytest.approx(0.10, abs=0.02)
+    assert wilson_upper(0, 200) < wilson_upper(0, 100) < wilson_upper(0, 35)
+
+
+def test_the_bound_covers_a_run_that_did_see_failures():
+    # The rule of three cannot speak here at all; this is why Wilson.
+    assert wilson_upper(1, 80) > 1 / 80
+    assert wilson_upper(1, 80) < 0.10
+
+
+def test_the_chooser_refuses_the_clean_handful_that_fooled_us_twice():
+    # Six clips, four accented, none wrong — the exact shape that reported a 0%
+    # wrong rate on validation and then missed on the held-out split. The
+    # observed rates pass the budget; the interval does not.
+    scores = _scores([(1.0, 0, 4)] * 4 + [(0.1, 0, 4)] * 2)
+    rows = sweep(scores, [0.5], [0.0])
+
+    assert rows[0].wrong_rate == pytest.approx(0.0)
+    assert choose_margins(rows, bounded=False) is not None
+    assert choose_margins(rows) is None
+
+
+def test_enough_clean_results_do_qualify():
+    # Nothing about the bound makes it unsatisfiable — it asks for material.
+    scores = _scores([(1.0, 0, 4)] * 90 + [(0.1, 0, 4)] * 10)
+    rows = sweep(scores, [0.5], [0.0])
+
+    assert choose_margins(rows) is not None
 
 
 def test_a_clean_sweep_of_a_handful_of_clips_is_not_a_demonstrated_error_rate():

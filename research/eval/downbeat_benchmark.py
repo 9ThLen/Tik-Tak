@@ -218,24 +218,35 @@ def main(argv: list[str] | None = None) -> int:
             chosen = choose_margins(rows, args.max_wrong_rate,
                                     args.max_conditional_error)
             if chosen is None:
-                print(f"\nNo threshold pair keeps the wrong rate at or under "
-                      f"{args.max_wrong_rate:.0%} and the conditional error "
-                      f"under {args.max_conditional_error:.0%}. On this material "
-                      f"the accent should stay off rather than the budget be "
-                      f"raised.")
+                # Two reasons produce the same None and they are not the same
+                # news. Either the cues genuinely cannot separate right from
+                # wrong on this material, or they might and the split is too
+                # small to tell. Saying which is the difference between "leave
+                # the feature off" and "go and record more".
+                unbounded = choose_margins(rows, args.max_wrong_rate,
+                                           args.max_conditional_error,
+                                           bounded=False)
+                if unbounded is None:
+                    print(f"\nNo threshold pair keeps the wrong rate at or under "
+                          f"{args.max_wrong_rate:.0%} and the conditional error "
+                          f"under {args.max_conditional_error:.0%}. On this "
+                          f"material the accent should stay off rather than the "
+                          f"budget be raised.")
+                else:
+                    print(f"\nnothing calibrated on {label}. Where it would land "
+                          f"on the observed rates alone: phase >= "
+                          f"{unbounded.min_phase_margin:.2f}, metre >= "
+                          f"{unbounded.min_meter_margin:.2f} — "
+                          f"{unbounded.shown} shown, {unbounded.wrong} wrong.")
+                    print(evidence_gap(unbounded, args.max_wrong_rate,
+                                       args.max_conditional_error))
             else:
                 print(f"\nchosen on {label}: phase >= {chosen.min_phase_margin:.2f}, "
                       f"metre >= {chosen.min_meter_margin:.2f} — coverage "
                       f"{chosen.coverage:.0%}, wrong rate {chosen.wrong_rate:.0%}, "
-                      f"conditional error {chosen.conditional_error:.0%}")
-                # Printed against the number it qualifies, not in a footnote.
-                # A zero observed on a handful of clips reads as a result, and
-                # the only thing standing between that reading and shipping a
-                # threshold nothing supports is this line.
-                gap = evidence_gap(chosen, args.max_wrong_rate,
-                                   args.max_conditional_error)
-                if gap is not None:
-                    print(gap)
+                      f"conditional error {chosen.conditional_error:.0%} "
+                      f"(upper bounds {chosen.wrong_rate_upper:.0%} / "
+                      f"{chosen.conditional_error_upper:.0%})")
 
     # The one number the whole exercise is for: the chosen thresholds applied
     # once to material they were not chosen on. Reported whatever it says.
