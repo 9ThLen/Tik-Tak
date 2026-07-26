@@ -130,7 +130,7 @@ bool readSalience(const char* path, std::vector<double>& out,
 // throws or silently invents null. Analysis of silence legitimately produces
 // none of these values, so they are reported as 0 with the empty beat list
 // alongside saying why.
-double finite(double value) {
+double finiteOrZero(double value) {
     return std::isfinite(value) ? value : 0.0;
 }
 
@@ -346,12 +346,15 @@ int main(int argc, char** argv) {
                 salience_path.empty() ? "cues" : "file");
     std::printf("  \"sample_rate\": %.17g,\n", rate);
     std::printf("  \"duration_sec\": %.17g,\n", static_cast<double>(samples.size()) / rate);
-    std::printf("  \"bpm\": %.17g,\n", finite(tt_offline_bpm(offline)));
-    std::printf("  \"confidence\": %.17g,\n", finite(tt_offline_confidence(offline)));
+    std::printf("  \"bpm\": %.17g,\n", finiteOrZero(tt_offline_bpm(offline)));
+    std::printf("  \"confidence\": %.17g,\n",
+                finiteOrZero(tt_offline_confidence(offline)));
     std::printf("  \"beats_per_bar\": %d,\n", beats_per_bar);
-    std::printf("  \"downbeat_strength\": %.17g,\n", finite(strength));
-    std::printf("  \"downbeat_phase_margin\": %.17g,\n", finite(phase_margin));
-    std::printf("  \"downbeat_meter_margin\": %.17g,\n", finite(meter_margin));
+    std::printf("  \"downbeat_strength\": %.17g,\n", finiteOrZero(strength));
+    std::printf("  \"downbeat_phase_margin\": %.17g,\n",
+                finiteOrZero(phase_margin));
+    std::printf("  \"downbeat_meter_margin\": %.17g,\n",
+                finiteOrZero(meter_margin));
     std::printf("  \"downbeat_confident\": %s,\n", confident ? "true" : "false");
     printTimes("beats", beats, false);
     printTimes("downbeats", downbeats, true);
