@@ -73,6 +73,9 @@ class Estimate:
     confidence: float = 0.0
     sample_rate: float = 0.0
     duration_sec: float = 0.0
+    # "cues" when the built-in scorer produced the salience, "file" when it was
+    # injected — so a result can always say which backend it is a result *of*.
+    salience_source: str = "cues"
 
     @classmethod
     def from_json(cls, payload: dict) -> "Estimate":
@@ -88,6 +91,7 @@ class Estimate:
             confidence=float(payload.get("confidence", 0.0)),
             sample_rate=float(payload.get("sample_rate", 0.0)),
             duration_sec=float(payload.get("duration_sec", 0.0)),
+            salience_source=str(payload.get("salience_source", "cues")),
         )
 
 
@@ -121,11 +125,21 @@ class Analyser:
             )
         return Estimate.from_json(json.loads(completed.stdout))
 
-    def analyse_file(self, path: pathlib.Path | str) -> Estimate:
-        """Analyses an encoded audio file (WAV, FLAC or MP3)."""
-        return self._run([str(path)])
+    def analyse_file(self, path: pathlib.Path | str,
+                     salience: "np.ndarray | None" = None) -> Estimate:
+        """Analyses an encoded audio file (WAV, FLAC or MP3).
 
-    def analyse_audio(self, audio: np.ndarray, sample_rate: float) -> Estimate:
+        ``salience`` swaps the built-in per-beat scorer for the values given —
+        one per beat of *this file's* grid, so the caller has usually analysed
+        once already to learn the beat times. This is how a model is scored
+        through the shipping resolver before it is ported: sample its activation
+        at the beat times, pass the array here. The count must match the beat
+        count; the tool refuses a mismatch rather than aligning by guesswork.
+        """
+        return self._with_salience([str(path)], salience)
+
+    def analyse_audio(self, audio: np.ndarray, sample_rate: float,
+                      salience: "np.ndarray | None" = None) -> Estimate:
         """Analyses samples already in memory, via a raw float32 temporary.
 
         Raw rather than a WAV: this path exists for the synthetic clips, and
@@ -138,6 +152,20 @@ class Analyser:
         try:
             handle.write(np.asarray(audio, dtype=np.float32).tobytes())
             handle.close()
-            return self._run([handle.name, repr(float(sample_rate))])
+            return self._with_salience([handle.name, repr(float(sample_rate))],
+                                       salience)
+        finally:
+            pathlib.Path(handle.name).unlink(missing_ok=True)
+
+    def _with_salience(self, args: list[str],
+                       salience: "np.ndarray | None") -> Estimate:
+        if salience is None:
+            return self._run(args)
+        handle = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
+        try:
+            handle.write("\n".join(
+                repr(float(v)) for v in np.asarray(salience, dtype=np.float64)))
+            handle.close()
+            return self._run([*args, "--salience", handle.name])
         finally:
             pathlib.Path(handle.name).unlink(missing_ok=True)

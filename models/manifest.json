@@ -1,0 +1,49 @@
+{
+  "_comment": [
+    "Model artifacts the app will eventually carry, with their provenance.",
+    "Licenses and sources were verified in docs/ml-models.md; the sha256",
+    "blocks start null because the development environment has no network",
+    "and a checksum invented offline would be worse than none. fetch.py",
+    "pins the hash on the first successful fetch on a networked machine,",
+    "and verifies against the pin ever after — the pinning commit is the",
+    "provenance record."
+  ],
+  "artifacts": {
+    "beatnet_model_1": {
+      "purpose": "online joint beat/downbeat/meter tracker — the product target",
+      "license": "CC BY 4.0 (verified: LICENSE in the repository)",
+      "source": {
+        "repo": "https://github.com/mjhydri/BeatNet",
+        "path": "src/BeatNet/models/model_1_weights.pt"
+      },
+      "file": "beatnet_model_1_weights.pt",
+      "expected_mb": 1.54,
+      "pinned": null
+    },
+    "beat_this_small": {
+      "purpose": "offline file analysis and pseudo-labelling — MIT covers the weights too",
+      "license": "MIT, code and published weights (verified: repository README)",
+      "source": {
+        "repo": "https://github.com/CPJKU/beat_this",
+        "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+        "path": null,
+        "note": "small0/1/2 checkpoints ~8.1 MB; exact filename inside the share was not recorded — check the repo README when fetching"
+      },
+      "file": "beat_this_small.ckpt",
+      "expected_mb": 8.1,
+      "pinned": null
+    },
+    "beat_this_cpp_onnx": {
+      "purpose": "pre-converted ONNX from the C++ port — proves exportability, desktop experiments only at 97 MB",
+      "license": "MIT (verified: repository)",
+      "source": {
+        "repo": "https://github.com/mosynthkey/beat_this_cpp",
+        "path": null,
+        "note": "path inside the repo was not recorded when the repo was verified"
+      },
+      "file": "beat_this_large.onnx",
+      "expected_mb": 97.0,
+      "pinned": null
+    }
+  }
+}

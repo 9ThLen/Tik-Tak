@@ -12,10 +12,12 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../core ${CMAKE_BINARY_DIR}/core
 
 add_executable(dump_analysis dump_analysis.cpp)
 target_link_libraries(dump_analysis PRIVATE tiktak_core)
+# Internal headers unconditionally: --salience calls resolveMeter directly,
+# with or without a decoder in the build.
+target_include_directories(dump_analysis PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../core/src)
 
 if(TARGET tiktak_decode)
     target_link_libraries(dump_analysis PRIVATE tiktak_decode)
-    target_include_directories(dump_analysis PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../core/src)
     target_compile_definitions(dump_analysis PRIVATE TIKTAK_HAVE_DECODE=1)
 endif()
 

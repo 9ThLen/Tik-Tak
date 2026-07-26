@@ -13,6 +13,7 @@ on:
       - "research/**"
       - "tools/parity/**"
       - "tools/eval/**"
+      - "models/**"
       - "core/**"
       - ".github/workflows/research.yml"
   pull_request:
@@ -20,6 +21,7 @@ on:
       - "research/**"
       - "tools/parity/**"
       - "tools/eval/**"
+      - "models/**"
       - "core/**"
       - ".github/workflows/research.yml"
 
@@ -42,10 +44,6 @@ jobs:
       - name: Install Python dependencies
         run: python -m pip install -e "research[test]"
 
-      - name: Run Python tests
-        working-directory: research
-        run: python -m pytest -q
-
       - name: Install Ninja
         run: sudo apt-get update && sudo apt-get install -y ninja-build
 
@@ -58,9 +56,6 @@ jobs:
       - name: Build parity tools
         run: cmake --build tools/parity/build
 
-      - name: Compare C++ against the Python reference
-        run: python tools/parity/check_parity.py
-
       - name: Configure the analysis dump
         run: >
           cmake -S tools/eval -B tools/eval/build -G Ninja
@@ -69,6 +64,17 @@ jobs:
 
       - name: Build the analysis dump
         run: cmake --build tools/eval/build
+
+      # After the C++ tools, on purpose: the salience-backend tests skip
+      # themselves when dump_analysis is missing, and a test that silently
+      # skips on every CI run is a test that does not exist. Building first
+      # turns the skip into a thing that only happens on a source-only laptop.
+      - name: Run Python tests
+        working-directory: research
+        run: python -m pytest -q
+
+      - name: Compare C++ against the Python reference
+        run: python tools/parity/check_parity.py
 
       # A regression signal on synthetic clips, not a calibration: they have no
       # chord changes, so the harmony cue is not exercised, and the margin

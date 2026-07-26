@@ -1,0 +1,6 @@
+# The artifacts themselves stay out of git — a 97 MB ONNX file in history is
+# forever. What is committed is the manifest with their pinned checksums:
+# the repository records which bytes are trusted, not the bytes.
+*.pt
+*.onnx
+*.ckpt

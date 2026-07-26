@@ -8,10 +8,23 @@
 //
 //   dump_analysis <song.mp3>                 decode WAV, FLAC or MP3
 //   dump_analysis <clip.f32> <sample_rate>   raw 32-bit float mono, native order
+//   dump_analysis <audio> [rate] --salience <file>
+//                                            replace the built-in cues with a
+//                                            per-beat salience read from a file
 //
 // The second form exists so the synthetic clips in research/tiktak/synth.py can
 // be scored without inventing a file format between here and there — they are
 // already float arrays in memory.
+//
+// --salience is the seam in analysis/downbeat.hpp made reachable from outside:
+// one number per beat, whitespace-separated, `#` starts a comment. The beat
+// grid still comes from the core's own tracker, and the bar length and phase
+// still come from the core's own resolver — only the per-beat scorer is
+// swapped. That is exactly the substitution an ONNX model will make, which is
+// what lets a model be *scored* through the shipping resolver before a line of
+// it is ported: run once to get the beats, sample the model's activation at
+// those beat times, run again with the file. The count must match the beat
+// count exactly; a mismatch is an error, not an alignment guess.
 //
 // Output is one JSON object on stdout. Times are printed at full double
 // precision because this is a machine format: a diff between two runs should
@@ -23,11 +36,17 @@
 #include "tiktak/tiktak.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
+
+// Internal, on purpose: resolveMeter is the seam itself, and going through the
+// public C API instead would mean growing that API for a research need. The
+// parity tools set the precedent.
+#include "analysis/downbeat.hpp"
 
 #if defined(TIKTAK_HAVE_DECODE)
 #include "decode/decoder.hpp"
@@ -52,6 +71,40 @@ std::vector<float> readRaw(const char* path) {
     }
     std::fclose(file);
     return samples;
+}
+
+// One value per beat, whitespace-separated, `#` to end of line. Text rather
+// than binary because the writer is a numpy one-liner and the file is worth
+// being able to look at when a result surprises.
+bool readSalience(const char* path, std::vector<double>& out) {
+    std::FILE* file = std::fopen(path, "rb");
+    if (!file) return false;
+
+    std::string text;
+    char block[4096];
+    std::size_t got;
+    while ((got = std::fread(block, 1, sizeof(block), file)) > 0) {
+        text.append(block, got);
+    }
+    std::fclose(file);
+
+    std::size_t i = 0;
+    while (i < text.size()) {
+        const char c = text[i];
+        if (c == '#') {
+            while (i < text.size() && text[i] != '\n') ++i;
+        } else if (std::isspace(static_cast<unsigned char>(c))) {
+            ++i;
+        } else {
+            char* end = nullptr;
+            const double value = std::strtod(text.c_str() + i, &end);
+            const std::size_t consumed = static_cast<std::size_t>(end - (text.c_str() + i));
+            if (consumed == 0) return false;  // something that is not a number
+            out.push_back(value);
+            i += consumed;
+        }
+    }
+    return true;
 }
 
 // JSON has no way to say "not a number", and a reader that meets NaN either
@@ -99,22 +152,36 @@ std::string escape(const std::string& text) {
 }  // namespace
 
 int main(int argc, char** argv) {
-    if (argc < 2 || argc > 3) {
+    std::vector<std::string> positional;
+    std::string salience_path;
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--salience") == 0) {
+            if (i + 1 >= argc) {
+                std::fprintf(stderr, "--salience needs a file\n");
+                return 2;
+            }
+            salience_path = argv[++i];
+        } else {
+            positional.push_back(argv[i]);
+        }
+    }
+
+    if (positional.empty() || positional.size() > 2) {
         std::fprintf(stderr,
-                     "usage: %s <song.mp3|song.wav|song.flac>\n"
-                     "       %s <clip.f32> <sample_rate>\n",
+                     "usage: %s <song.mp3|song.wav|song.flac> [--salience <file>]\n"
+                     "       %s <clip.f32> <sample_rate> [--salience <file>]\n",
                      argv[0], argv[0]);
         return 2;
     }
 
-    const std::string path = argv[1];
-    const bool raw = argc == 3;
+    const std::string path = positional[0];
+    const bool raw = positional.size() == 2;
 
     std::vector<float> samples;
     double rate = 0.0;
 
     if (raw) {
-        rate = std::atof(argv[2]);
+        rate = std::atof(positional[1].c_str());
         if (rate <= 0.0) {
             std::fprintf(stderr, "bad sample rate\n");
             return 2;
@@ -185,21 +252,57 @@ int main(int argc, char** argv) {
     std::vector<double> downbeats(tt_offline_downbeat_count(offline));
     if (!downbeats.empty()) tt_offline_downbeats(offline, downbeats.data(), downbeats.size());
 
+    int beats_per_bar = tt_offline_beats_per_bar(offline);
+    double strength = tt_offline_downbeat_strength(offline);
+    double phase_margin = tt_offline_downbeat_phase_margin(offline);
+    double meter_margin = tt_offline_downbeat_meter_margin(offline);
+    bool confident = tt_offline_downbeat_confident(offline) != 0;
+
+    if (!salience_path.empty()) {
+        std::vector<double> salience;
+        if (!readSalience(salience_path.c_str(), salience)) {
+            std::fprintf(stderr, "cannot read %s as per-beat salience\n",
+                         salience_path.c_str());
+            tt_offline_destroy(offline);
+            return 1;
+        }
+        if (salience.size() != beats.size()) {
+            std::fprintf(stderr,
+                         "%s holds %zu value(s) but the analysis found %zu beat(s) — "
+                         "one number per beat, in beat order\n",
+                         salience_path.c_str(), salience.size(), beats.size());
+            tt_offline_destroy(offline);
+            return 1;
+        }
+        // The C API offers no way to override the downbeat configuration, so
+        // the pipeline runs the C++ defaults — the same DownbeatConfig{} used
+        // here. If that ever stops being true this tool will disagree with the
+        // core visibly, in the numbers, which is the failure mode to want.
+        const tiktak::analysis::DownbeatConfig db_config;
+        const tiktak::analysis::DownbeatResult resolved =
+            tiktak::analysis::resolveMeter(salience, beats, db_config);
+        downbeats = resolved.downbeats;
+        beats_per_bar = resolved.beats_per_bar;
+        strength = resolved.strength;
+        phase_margin = resolved.phase_margin;
+        meter_margin = resolved.meter_margin;
+        confident = resolved.confident(db_config.min_phase_margin,
+                                       db_config.min_meter_margin);
+    }
+
     std::printf("{\n");
     std::printf("  \"path\": \"%s\",\n", escape(path).c_str());
+    std::printf("  \"salience_source\": \"%s\",\n",
+                salience_path.empty() ? "cues" : "file");
     std::printf("  \"sample_rate\": %.17g,\n", rate);
     std::printf("  \"duration_sec\": %.17g,\n", static_cast<double>(samples.size()) / rate);
     std::printf("  \"bpm\": %.17g,\n", finite(tt_offline_bpm(offline)));
     std::printf("  \"confidence\": %.17g,\n", finite(tt_offline_confidence(offline)));
-    std::printf("  \"beats_per_bar\": %d,\n", tt_offline_beats_per_bar(offline));
-    std::printf("  \"downbeat_strength\": %.17g,\n",
-                finite(tt_offline_downbeat_strength(offline)));
-    std::printf("  \"downbeat_phase_margin\": %.17g,\n",
-                finite(tt_offline_downbeat_phase_margin(offline)));
-    std::printf("  \"downbeat_meter_margin\": %.17g,\n",
-                finite(tt_offline_downbeat_meter_margin(offline)));
-    std::printf("  \"downbeat_confident\": %s,\n",
-                tt_offline_downbeat_confident(offline) ? "true" : "false");
+    std::printf("  \"beats_per_bar\": %d,\n", beats_per_bar);
+    std::printf("  \"downbeat_strength\": %.17g,\n", finite(strength));
+    std::printf("  \"downbeat_phase_margin\": %.17g,\n", finite(phase_margin));
+    std::printf("  \"downbeat_meter_margin\": %.17g,\n", finite(meter_margin));
+    std::printf("  \"downbeat_confident\": %s,\n", confident ? "true" : "false");
     printTimes("beats", beats, false);
     printTimes("downbeats", downbeats, true);
     std::printf("}\n");
