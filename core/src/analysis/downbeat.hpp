@@ -287,6 +287,34 @@ std::vector<BeatFeature> beatFeatures(const BeatFeatureInput& input,
 // for longer with a poor margin. Bringing back the DP is what that would need,
 // and it should be brought back for that reason and not for smoothing.
 //
+// **Measured on full-length songs, that reasoning is wrong, and wrong in a way
+// the paragraph above did not anticipate.** It holds for a clip. It fails for a
+// track, and the failure is not the metre changing — it is the *phase*
+// changing while the metre stays put. An inserted or dropped bar at a section
+// boundary shifts every bar line after it, and a single global p can be right
+// on only one side of that shift.
+//
+// The numbers, taken from a reference downbeat grid on five recordings whose
+// bar structure is regular enough to trust:
+//
+//   LUNCH        one phase throughout        a global phase reaches 1.00
+//   makko        74% of bars on one phase                       0.74
+//   東方          45% / 40% split across two                      0.45
+//   Загадай      43% / 39% split                                 0.43
+//   Dopamine     42% / 38% split                                 0.42
+//
+// So on three of the five, **no** method that commits to one phase for the
+// whole song can place even half the bar lines, whatever its cues are. That
+// ceiling is 2 of 5, and a state-of-the-art model's activations run through
+// this resolver score exactly 2 of 5 — it is already at the limit, and the
+// limit is here, not in the scorer.
+//
+// This is the reason to bring the DP back, and it is a much more ordinary
+// reason than a metre change: songs have intros, breaks and half-bar turns,
+// and a Viterbi pass over (M, p) with a small cost for changing p represents
+// them where a single pair cannot. The rest of the paragraph above still holds
+// — smoothing was never the motivation, and is still not.
+//
 // Scoring is a contrast, not a sum: how far the chosen beats stand above the
 // ones they were chosen out of. A sum would make short bars win automatically
 // by containing more beats.
