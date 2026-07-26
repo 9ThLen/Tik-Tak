@@ -51,6 +51,7 @@ import sys
 import numpy as np
 
 from eval.analysis import Analyser, DEFAULT_BINARY
+from eval.backends import Backend, beat_this_backend, cue_backend
 from eval.annotations import Reference, find_pairs
 from eval.downbeat import (
     Verdict,
@@ -198,6 +199,46 @@ def held_out_error_report(wrong: int, total: int, shown: int,
     )
 
 
+def _estimate_audio(analyser: Analyser, backend: Backend,
+                    audio: np.ndarray, rate: float):
+    """One clip through one backend: two passes when a model does the scoring.
+
+    The first pass exists only to learn the beat times, because a model's
+    activation has to be sampled *at* them. Both passes use the same tracker,
+    so the grid is identical and the only thing that differs between backends
+    is the per-beat score.
+    """
+    grid = analyser.analyse_audio(audio, rate)
+    if backend.is_builtin:
+        return grid
+    salience = backend.salience(audio, rate, grid.beats)
+    return analyser.analyse_audio(audio, rate, salience=salience,
+                                  calibration=backend.calibration)
+
+
+def _estimate_file(analyser: Analyser, backend: Backend, path):
+    grid = analyser.analyse_file(path)
+    if backend.is_builtin:
+        return grid
+    audio, rate = _read_audio(path)
+    salience = backend.salience(audio, rate, grid.beats)
+    return analyser.analyse_file(path, salience=salience,
+                                 calibration=backend.calibration)
+
+
+def _read_audio(path):
+    """Samples for a model to look at, decoded the same way the core decodes.
+
+    soundfile rather than the core's decoder because a model needs the audio in
+    Python anyway; the beat grid still comes from the core, so a difference in
+    decoders cannot move a bar line, only what the model hears.
+    """
+    import soundfile
+
+    audio, rate = soundfile.read(str(path), dtype="float32", always_2d=True)
+    return audio.mean(axis=1), float(rate)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -212,6 +253,11 @@ def main(argv: list[str] | None = None) -> int:
         help=f"JSON object mapping clip names to independent group ids; "
              f"defaults to DATASET/{GROUPS_FILENAME} when that file exists",
     )
+    parser.add_argument("--backend", default="cues",
+                        choices=("cues", "beat_this"),
+                        help="which per-beat scorer to score. Verdicts are "
+                             "comparable between backends; the raw margins are "
+                             "not, because each backend's are in its own units")
     parser.add_argument("--binary", type=pathlib.Path, default=DEFAULT_BINARY,
                         help="path to the dump_analysis executable")
     parser.add_argument("--max-wrong-rate", type=float, default=0.05,
@@ -246,6 +292,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"not found: {args.binary}")
         print("Build it first — see eval/analysis.py.")
         return 2
+
+    try:
+        backend = cue_backend() if args.backend == "cues" else beat_this_backend()
+    except (FileNotFoundError, ImportError, NotImplementedError) as error:
+        # Refused rather than quietly falling back to the cues: a run that
+        # scored the built-in backend and printed a model's name at the top
+        # would be indistinguishable from a real comparison.
+        print(f"backend {args.backend!r} is not available here:\n  {error}")
+        return 2
+    print(f"backend: {backend.name}")
 
     scores = []
     group_ids: dict[str, str] = {}
@@ -295,14 +351,14 @@ def main(argv: list[str] | None = None) -> int:
             reference.group_id = group_ids.get(
                 _canonical_id(reference.name), reference.name
             )
-            estimate = analyser.analyse_file(reference.audio_path)
+            estimate = _estimate_file(analyser, backend, reference.audio_path)
             scores.append(score(reference, estimate))
     else:
         print("scoring synthetic clips — a regression signal, not a calibration.")
         print("The harmony cue is untested here: synthetic clips have no chord "
               "changes.\n")
         for reference, audio, rate in synthetic_cases():
-            estimate = analyser.analyse_audio(audio, rate)
+            estimate = _estimate_audio(analyser, backend, audio, rate)
             scores.append(score(reference, estimate))
 
     unscorable = [s for s in scores if not s.scorable]

@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from eval.analysis import Analyser, DEFAULT_BINARY
+from eval.backends import CUE_CALIBRATION, Calibration
 from tiktak.synth import make_clip
 
 pytestmark = pytest.mark.skipif(
@@ -89,11 +90,16 @@ def test_an_external_backend_can_supply_its_own_range_gate(
         analyser, clip, grid):
     salience = np.where(np.arange(len(grid.beats)) % 4 == 0,
                         0.500003, 0.500001)
+    # The range gate is lowered to this backend's scale, but the margins are
+    # still the cue backend's. That combination is exactly what the calibration
+    # object exists to prevent being assembled by accident — here it is built
+    # on purpose, to show what it costs.
     result = analyser.analyse_audio(
         clip.audio,
         clip.sample_rate,
         salience=salience,
-        salience_min_range=1e-7,
+        calibration=Calibration(1e-7, CUE_CALIBRATION.min_phase_margin,
+                                CUE_CALIBRATION.min_meter_margin),
     )
 
     assert result.beats_per_bar == 4
@@ -113,7 +119,7 @@ def test_an_external_range_gate_must_be_non_negative_and_finite(
             clip.audio,
             clip.sample_rate,
             salience=np.ones(len(grid.beats)),
-            salience_min_range=bad,
+            calibration=Calibration(bad, 0.25, 0.40),
         )
 
 

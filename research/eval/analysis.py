@@ -23,6 +23,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from eval.backends import Calibration
+
 __all__ = ["Estimate", "Analyser", "DEFAULT_BINARY"]
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -127,7 +129,7 @@ class Analyser:
 
     def analyse_file(self, path: pathlib.Path | str,
                      salience: "np.ndarray | None" = None,
-                     salience_min_range: "float | None" = None) -> Estimate:
+                     calibration: Calibration | None = None) -> Estimate:
         """Analyses an encoded audio file (WAV, FLAC or MP3).
 
         ``salience`` swaps the built-in per-beat scorer for the values given —
@@ -136,14 +138,17 @@ class Analyser:
         through the shipping resolver before it is ported: sample its activation
         at the beat times, pass the array here. The count must match the beat
         count; the tool refuses a mismatch rather than aligning by guesswork.
-        ``salience_min_range`` is the backend's calibrated evidence gate in its
-        own units; the built-in cue default is used when it is omitted.
+        ``calibration`` carries the backend's three thresholds. It travels as
+        one object because it is one calibration: since the resolver no longer
+        rescales arbitrary backend output, a range gate in a model's units
+        alongside the cue backend's margins would be judged by numbers that
+        belong to neither scorer.
         """
-        return self._with_salience([str(path)], salience, salience_min_range)
+        return self._with_salience([str(path)], salience, calibration)
 
     def analyse_audio(self, audio: np.ndarray, sample_rate: float,
                       salience: "np.ndarray | None" = None,
-                      salience_min_range: "float | None" = None) -> Estimate:
+                      calibration: Calibration | None = None) -> Estimate:
         """Analyses samples already in memory, via a raw float32 temporary.
 
         Raw rather than a WAV: this path exists for the synthetic clips, and
@@ -157,16 +162,16 @@ class Analyser:
             handle.write(np.asarray(audio, dtype=np.float32).tobytes())
             handle.close()
             return self._with_salience([handle.name, repr(float(sample_rate))],
-                                       salience, salience_min_range)
+                                       salience, calibration)
         finally:
             pathlib.Path(handle.name).unlink(missing_ok=True)
 
     def _with_salience(self, args: list[str],
                        salience: "np.ndarray | None",
-                       salience_min_range: "float | None") -> Estimate:
+                       calibration: Calibration | None) -> Estimate:
         if salience is None:
-            if salience_min_range is not None:
-                raise ValueError("salience_min_range requires salience")
+            if calibration is not None:
+                raise ValueError("a calibration only applies with salience")
             return self._run(args)
         handle = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         try:
@@ -174,10 +179,8 @@ class Analyser:
                 repr(float(v)) for v in np.asarray(salience, dtype=np.float64)))
             handle.close()
             command = [*args, "--salience", handle.name]
-            if salience_min_range is not None:
-                command.extend(
-                    ["--salience-min-range", repr(float(salience_min_range))]
-                )
+            if calibration is not None:
+                command.extend(calibration.flags())
             return self._run(command)
         finally:
             pathlib.Path(handle.name).unlink(missing_ok=True)

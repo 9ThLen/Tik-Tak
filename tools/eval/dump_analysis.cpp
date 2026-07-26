@@ -8,8 +8,7 @@
 //
 //   dump_analysis <song.mp3>                 decode WAV, FLAC or MP3
 //   dump_analysis <clip.f32> <sample_rate>   raw 32-bit float mono, native order
-//   dump_analysis <audio> [rate] --salience <file>
-//                    [--salience-min-range <value>]
+//   dump_analysis <audio> [rate] --salience <file> [calibration]
 //                                            replace the built-in cues with a
 //                                            per-beat salience read from a file
 //
@@ -27,9 +26,15 @@
 // through the shipping resolver before a line of it is ported: run once to get
 // the beats, sample the model's activation at those beat times, run again with
 // the file. The count must match the beat count exactly; a mismatch is an
-// error, not an alignment guess. --salience-min-range supplies the evidence
-// gate in that backend's own units; it is part of a backend's calibration and
-// deliberately has no universal model-independent value.
+// error, not an alignment guess.
+//
+// A backend's calibration is three numbers — --salience-min-range,
+// --salience-min-phase-margin, --salience-min-meter-margin — and they are
+// passed together or not at all. Since the resolver no longer rescales
+// arbitrary backend output, all three live in that backend's own units and
+// none of them has a universal model-independent value. Supplying a range gate
+// while inheriting the cue backend's margins would report `downbeat_confident`
+// judged by numbers belonging to a different scorer, so it is refused.
 //
 // Output is one JSON object on stdout. Times are printed at full double
 // precision because this is a machine format: a diff between two runs should
@@ -46,6 +51,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -179,8 +185,25 @@ bool nonnegativeFinite(const char* text, double& value) {
 int main(int argc, char** argv) {
     std::vector<std::string> positional;
     std::string salience_path;
-    double salience_min_range = 0.0;
-    bool salience_min_range_given = false;
+    // The three numbers a backend calibrates as one set. Defaulted from the
+    // built-in cue backend and overridden together — see the loop below for
+    // why passing only some of them is refused.
+    const tiktak::analysis::DownbeatConfig cue_defaults;
+    double salience_min_range = cue_defaults.min_salience_range;
+    double salience_min_phase = cue_defaults.min_phase_margin;
+    double salience_min_meter = cue_defaults.min_meter_margin;
+    int calibration_given = 0;
+
+    struct Threshold {
+        const char* flag;
+        double* target;
+    };
+    const Threshold thresholds[] = {
+        {"--salience-min-range", &salience_min_range},
+        {"--salience-min-phase-margin", &salience_min_phase},
+        {"--salience-min-meter-margin", &salience_min_meter},
+    };
+
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--salience") == 0) {
             if (i + 1 >= argc) {
@@ -188,33 +211,60 @@ int main(int argc, char** argv) {
                 return 2;
             }
             salience_path = argv[++i];
-        } else if (std::strcmp(argv[i], "--salience-min-range") == 0) {
-            if (i + 1 >= argc) {
-                std::fprintf(stderr, "--salience-min-range needs a value\n");
-                return 2;
-            }
-            if (!nonnegativeFinite(argv[++i], salience_min_range)) {
-                std::fprintf(stderr,
-                             "--salience-min-range must be a finite, non-negative number\n");
-                return 2;
-            }
-            salience_min_range_given = true;
-        } else {
-            positional.push_back(argv[i]);
+            continue;
         }
+
+        bool matched = false;
+        for (const Threshold& threshold : thresholds) {
+            if (std::strcmp(argv[i], threshold.flag) != 0) continue;
+            matched = true;
+            if (i + 1 >= argc) {
+                std::fprintf(stderr, "%s needs a value\n", threshold.flag);
+                return 2;
+            }
+            if (!nonnegativeFinite(argv[++i], *threshold.target)) {
+                std::fprintf(stderr,
+                             "%s must be a finite, non-negative number\n",
+                             threshold.flag);
+                return 2;
+            }
+            ++calibration_given;
+            break;
+        }
+        if (!matched) positional.push_back(argv[i]);
     }
 
-    if (salience_min_range_given && salience_path.empty()) {
-        std::fprintf(stderr, "--salience-min-range only applies with --salience\n");
+    const int kCalibrationSize = static_cast<int>(std::size(thresholds));
+
+    if (calibration_given > 0 && salience_path.empty()) {
+        std::fprintf(stderr,
+                     "the calibration flags only apply with --salience\n");
+        return 2;
+    }
+    // All three or none. They are one calibration: a backend that supplied a
+    // range gate in its own units while silently inheriting the cue backend's
+    // margins would be judged confident by numbers belonging to a different
+    // scorer, and `downbeat_confident` would be a claim about nothing. Half a
+    // calibration is the failure this refuses to let anyone make quietly.
+    if (calibration_given > 0 && calibration_given < kCalibrationSize) {
+        std::fprintf(stderr,
+                     "a backend calibration is all %d of --salience-min-range, "
+                     "--salience-min-phase-margin and --salience-min-meter-margin, "
+                     "or none of them — %d given\n",
+                     kCalibrationSize, calibration_given);
         return 2;
     }
 
     if (positional.empty() || positional.size() > 2) {
         std::fprintf(stderr,
-                     "usage: %s <song.mp3|song.wav|song.flac> "
-                     "[--salience <file> [--salience-min-range <value>]]\n"
-                     "       %s <clip.f32> <sample_rate> "
-                     "[--salience <file> [--salience-min-range <value>]]\n",
+                     "usage: %s <song.mp3|song.wav|song.flac> [--salience <file>"
+                     " [calibration]]\n"
+                     "       %s <clip.f32> <sample_rate> [--salience <file>"
+                     " [calibration]]\n"
+                     "  calibration: --salience-min-range <v> "
+                     "--salience-min-phase-margin <v> "
+                     "--salience-min-meter-margin <v>\n"
+                     "               (all three together, in the backend's own units)\n",
                      argv[0], argv[0]);
         return 2;
     }
@@ -321,14 +371,15 @@ int main(int argc, char** argv) {
             return 1;
         }
         // The C API offers no way to override the downbeat configuration, so
-        // this research seam reaches the resolver directly. The range gate is
-        // backend-specific and can be supplied explicitly; the margin values
-        // remain in the same backend's units and must be calibrated with it
-        // before downbeat_confident is a product claim.
+        // this research seam reaches the resolver directly. All three
+        // calibration numbers travel together: the resolver no longer rescales
+        // arbitrary backend output, so margins are in the backend's own units
+        // and `downbeat_confident` means nothing unless judged by that
+        // backend's own thresholds.
         tiktak::analysis::DownbeatConfig db_config;
-        if (salience_min_range_given) {
-            db_config.min_salience_range = salience_min_range;
-        }
+        db_config.min_salience_range = salience_min_range;
+        db_config.min_phase_margin = salience_min_phase;
+        db_config.min_meter_margin = salience_min_meter;
         const tiktak::analysis::DownbeatResult resolved =
             tiktak::analysis::resolveMeter(salience, beats, db_config);
         downbeats = resolved.downbeats;
