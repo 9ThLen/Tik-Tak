@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -295,8 +296,6 @@ TEST(BeatFeatures, IgnoresNothing) {
     EXPECT_TRUE(beatFeatures(BeatFeatureInput{}, DownbeatConfig{}).empty());
 }
 
-}  // namespace
-
 // -------------------------------------------------------------- two doubts --
 
 // The failure the meter margin exists to catch, and the reason it cannot be
@@ -372,3 +371,110 @@ TEST(Downbeat, MusicWithNoBarLineIsConfidentAboutNothing) {
     }
     EXPECT_FALSE(findDownbeats(noise, DownbeatConfig{}).confident());
 }
+
+// ----------------------------------------------------------------- the seam --
+//
+// The resolver takes a per-beat salience and nothing else, which is what makes
+// a learned scorer droppable in later. These tests reach it directly, without
+// going through the cues, because that is exactly what a second backend will
+// do — and because a seam nothing crosses in a test is a seam that has not been
+// shown to hold.
+
+using tiktak::analysis::cueSalience;
+using tiktak::analysis::resolveMeter;
+
+// Per-beat salience with every `per_bar`-th value raised, and beat times to go
+// with it. No cues, no features — the resolver's whole input.
+std::pair<std::vector<double>, std::vector<double>> salienceBars(
+        int per_bar, int phase, int count, double strong = 1.0, double weak = 0.0) {
+    std::vector<double> salience(static_cast<std::size_t>(count));
+    std::vector<double> times(static_cast<std::size_t>(count));
+    for (int i = 0; i < count; ++i) {
+        const bool down = ((i - phase) % per_bar + per_bar) % per_bar == 0;
+        salience[static_cast<std::size_t>(i)] = down ? strong : weak;
+        times[static_cast<std::size_t>(i)] = i * kBeat;
+    }
+    return {salience, times};
+}
+
+TEST(Resolver, CountsBarsFromASalienceItDidNotProduce) {
+    const auto [salience, times] = salienceBars(3, 1, 30);
+    const auto result = resolveMeter(salience, times, DownbeatConfig{});
+
+    EXPECT_EQ(result.beats_per_bar, 3);
+    EXPECT_EQ(result.phase, 1);
+    EXPECT_TRUE(result.confident());
+    ASSERT_FALSE(result.downbeats.empty());
+    EXPECT_NEAR(result.downbeats.front(), kBeat, 1e-12);
+}
+
+TEST(Resolver, TheMarginsDoNotDependOnTheScaleOfTheSalience) {
+    // The point of standardising inside the resolver rather than in each
+    // scorer: a model emitting probabilities in [0, 1] and cues emitting
+    // arbitrary weighted sums must land on the same margins, or every threshold
+    // has to be recalibrated the day the scorer changes.
+    const auto [unit, times] = salienceBars(4, 0, 32, 1.0, 0.0);
+    std::vector<double> loud(unit.size());
+    for (std::size_t i = 0; i < unit.size(); ++i) loud[i] = unit[i] * 250.0 - 7.0;
+
+    const auto a = resolveMeter(unit, times, DownbeatConfig{});
+    const auto b = resolveMeter(loud, times, DownbeatConfig{});
+
+    EXPECT_EQ(a.beats_per_bar, b.beats_per_bar);
+    EXPECT_EQ(a.phase, b.phase);
+    EXPECT_NEAR(a.strength, b.strength, 1e-9);
+    EXPECT_NEAR(a.phase_margin, b.phase_margin, 1e-9);
+    EXPECT_NEAR(a.meter_margin, b.meter_margin, 1e-9);
+}
+
+TEST(Resolver, MismatchedLengthsAreRefusedRatherThanGuessedAt) {
+    const auto [salience, times] = salienceBars(4, 0, 32);
+    std::vector<double> short_times(times.begin(), times.end() - 1);
+
+    const auto result = resolveMeter(salience, short_times, DownbeatConfig{});
+    EXPECT_EQ(result.beats_per_bar, 0);
+    EXPECT_TRUE(result.downbeats.empty());
+}
+
+TEST(Resolver, TheBarLinesAreTheTimesHandedInAndNotAReconstruction) {
+    // A resolver that recomputed times from an assumed tempo would pass every
+    // test above and be wrong on any recording that drifts. The times are data.
+    auto [salience, times] = salienceBars(4, 0, 32);
+    for (std::size_t i = 0; i < times.size(); ++i) times[i] += 0.004 * i * i;
+
+    const auto result = resolveMeter(salience, times, DownbeatConfig{});
+    ASSERT_EQ(result.beats_per_bar, 4);
+    ASSERT_GE(result.downbeats.size(), 3u);
+    EXPECT_NEAR(result.downbeats[1], times[4], 1e-12);
+    EXPECT_NEAR(result.downbeats[2], times[8], 1e-12);
+}
+
+TEST(Resolver, TheSplitIsBehaviourPreserving) {
+    // findDownbeats must remain exactly the two halves composed, or the seam
+    // has quietly become a second implementation of the same thing.
+    const DownbeatConfig config;
+    const auto features = bars(4, 2, 40, Cue::kLow);
+
+    std::vector<double> times(features.size());
+    for (std::size_t i = 0; i < features.size(); ++i) times[i] = features[i].time_sec;
+
+    const auto whole = findDownbeats(features, config);
+    const auto halves = resolveMeter(cueSalience(features, config), times, config);
+
+    EXPECT_EQ(whole.beats_per_bar, halves.beats_per_bar);
+    EXPECT_EQ(whole.phase, halves.phase);
+    EXPECT_DOUBLE_EQ(whole.strength, halves.strength);
+    EXPECT_DOUBLE_EQ(whole.phase_margin, halves.phase_margin);
+    EXPECT_DOUBLE_EQ(whole.meter_margin, halves.meter_margin);
+    EXPECT_EQ(whole.downbeats, halves.downbeats);
+}
+
+TEST(Resolver, AFlatSalienceDecidesNothingHoweverLargeItIs) {
+    std::vector<double> flat(48, 5.0);
+    std::vector<double> times(48);
+    for (std::size_t i = 0; i < times.size(); ++i) times[i] = static_cast<double>(i) * kBeat;
+
+    EXPECT_FALSE(resolveMeter(flat, times, DownbeatConfig{}).confident());
+}
+
+}  // namespace

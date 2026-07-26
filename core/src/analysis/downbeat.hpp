@@ -220,4 +220,51 @@ std::vector<BeatFeature> beatFeatures(const BeatFeatureInput& input,
 DownbeatResult findDownbeats(const std::vector<BeatFeature>& features,
                              const DownbeatConfig& config);
 
+// ------------------------------------------------------------------ the seam
+//
+// findDownbeats is these two steps, and they are separable because they answer
+// unrelated questions. The first asks how much each beat *looks* like a bar
+// line; the second asks which bar length and phase that pattern implies. Only
+// the first is a perception problem, and only the first is what a learned model
+// would replace — Beat This! and BeatNet both emit a per-beat (or per-frame)
+// downbeat activation and leave the counting to something else.
+//
+// The seam is therefore a plain `std::vector<double>`, one value per beat, and
+// not an abstract class. A backend has to produce that vector from whatever it
+// likes — these cues, an ONNX session, a file of activations dumped by a Python
+// experiment — and nothing in the resolver knows or asks which. A virtual
+// interface would add a vtable and a factory in exchange for nothing that a
+// free function taking a vector does not already give, and would have to be
+// designed now against a model that cannot even be downloaded in this
+// environment. When a second backend exists and the shape of its needs is
+// known, an interface can be introduced over two working implementations
+// instead of one imagined one.
+
+// Per-beat downbeat salience from the built-in cues.
+//
+// The onset cues are standardised here because their units are arbitrary and
+// cue-specific; harmony is not, because a chroma distance already means
+// something absolute. Both are decisions about *these* cues and belong on this
+// side of the seam. What comes out is not normalised and need not be — see
+// resolveMeter.
+std::vector<double> cueSalience(const std::vector<BeatFeature>& features,
+                                const DownbeatConfig& config);
+
+// Bar length and phase from any per-beat salience, whatever produced it.
+//
+// `salience` and `beat_times` must be the same length; a mismatch returns an
+// empty result rather than guessing which is right.
+//
+// Standardising the salience is done *here*, deliberately, and it is the reason
+// a threshold calibrated on one backend means anything on another. The margins
+// this returns are quoted in standard deviations of the incoming salience, so a
+// model emitting probabilities in [0, 1] and these cues emitting arbitrary
+// weighted sums land on the same scale, and `min_meter_margin` does not have to
+// be recalibrated from scratch the day the scorer changes. It would still be
+// worth re-checking — the *shape* of a distribution is not fixed by its mean and
+// spread — but it starts from a comparable number rather than an unrelated one.
+DownbeatResult resolveMeter(const std::vector<double>& salience,
+                            const std::vector<double>& beat_times,
+                            const DownbeatConfig& config);
+
 }  // namespace tiktak::analysis

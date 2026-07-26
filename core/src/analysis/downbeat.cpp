@@ -120,11 +120,10 @@ std::vector<BeatFeature> beatFeatures(const BeatFeatureInput& input,
     return out;
 }
 
-DownbeatResult findDownbeats(const std::vector<BeatFeature>& features,
-                             const DownbeatConfig& config) {
-    DownbeatResult result;
+std::vector<double> cueSalience(const std::vector<BeatFeature>& features,
+                                const DownbeatConfig& config) {
     const std::size_t n = features.size();
-    if (n == 0 || !config.valid()) return result;
+    if (n == 0 || !config.valid()) return {};
 
     std::vector<double> low(n);
     std::vector<double> accent(n);
@@ -140,14 +139,36 @@ DownbeatResult findDownbeats(const std::vector<BeatFeature>& features,
     standardise(low);
     standardise(accent);
 
-    std::vector<double> weight(n);
+    std::vector<double> salience(n);
     for (std::size_t i = 0; i < n; ++i) {
-        weight[i] = config.low_weight * low[i] + config.accent_weight * accent[i] +
-                    config.harmony_weight * harmony[i];
+        salience[i] = config.low_weight * low[i] + config.accent_weight * accent[i] +
+                      config.harmony_weight * harmony[i];
     }
-    // Standardised again so that a contrast is measured in standard deviations
-    // of the combined cue. Without this the numbers would depend on how the
-    // weights happen to add up and would not compare between pieces.
+    // Left unstandardised on purpose: putting the salience on a common scale is
+    // the resolver's job, so that every backend is normalised by the same code
+    // and not each in its own way. See the seam comment in the header.
+    return salience;
+}
+
+DownbeatResult findDownbeats(const std::vector<BeatFeature>& features,
+                             const DownbeatConfig& config) {
+    std::vector<double> times(features.size());
+    for (std::size_t i = 0; i < features.size(); ++i) times[i] = features[i].time_sec;
+    return resolveMeter(cueSalience(features, config), times, config);
+}
+
+DownbeatResult resolveMeter(const std::vector<double>& salience,
+                            const std::vector<double>& beat_times,
+                            const DownbeatConfig& config) {
+    DownbeatResult result;
+    const std::size_t n = salience.size();
+    if (n == 0 || n != beat_times.size() || !config.valid()) return result;
+
+    // Standardised so that a contrast is measured in standard deviations of the
+    // salience. Without this the numbers would depend on whatever scale the
+    // scorer happened to emit, and no threshold would survive a change of
+    // backend — or even a change of cue weights.
+    std::vector<double> weight = salience;
     standardise(weight);
 
     double best_score = 0.0;
@@ -252,7 +273,7 @@ DownbeatResult findDownbeats(const std::vector<BeatFeature>& features,
 
     for (std::size_t i = static_cast<std::size_t>(result.phase); i < n;
          i += static_cast<std::size_t>(result.beats_per_bar)) {
-        result.downbeats.push_back(features[i].time_sec);
+        result.downbeats.push_back(beat_times[i]);
     }
     return result;
 }
