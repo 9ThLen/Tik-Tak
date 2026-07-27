@@ -346,6 +346,35 @@ std::vector<BeatFeature> beatFeatures(const BeatFeatureInput& input,
 // them where a single pair cannot. The rest of the paragraph above still holds
 // — smoothing was never the motivation, and is still not.
 //
+// That pass has since been prototyped outside the core and measured on
+// twenty-six recordings across eight releases, and the result carries one
+// condition that has to travel with the recommendation:
+//
+//   salience fed in            single global p      Viterbi over (M, p)
+//   the built-in cues              F 0.415              F 0.423
+//   a learned activation           F 0.772              F 0.933
+//
+// The decoder is worth roughly nothing on the cues this file computes, and a
+// great deal on a good activation. Both numbers come from the same grid and
+// the same reference, so the difference is the salience, not the decoding.
+// Ordering therefore matters: build the DP against the current cues and it
+// will look like the idea failed, when what failed was the evidence handed to
+// it. Activations first, decoder second, and the two are not separable pieces
+// of work.
+//
+// The obvious objection — that a decoder free to move the phase simply drifts
+// until it matches anything — was tested and does not hold. On the eleven
+// tracks whose reference bar spacing is regular it changes phase 0.5 to 1.4
+// times per track across the whole range of switch costs, against 42 to 63 on
+// the irregular ones. It switches where there is something to switch on.
+//
+// The absolute F values are inflated: the reference is the same model's own
+// peak picking, so anything built on that activation is being marked by a
+// relative. What survives is the comparison down each column, and the
+// discrimination test above, neither of which depends on the reference being
+// right in absolute terms. Ranking these cues against a learned activation
+// fairly still needs human annotation.
+//
 // Scoring is a contrast, not a sum: how far the chosen beats stand above the
 // ones they were chosen out of. A sum would make short bars win automatically
 // by containing more beats.
