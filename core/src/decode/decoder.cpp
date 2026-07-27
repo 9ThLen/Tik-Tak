@@ -41,6 +41,27 @@ bool startsWith(const unsigned char* data, std::size_t bytes, const char* magic,
     return std::memcmp(data + at, magic, length) == 0;
 }
 
+// Total length of a leading ID3v2 tag, or 0 if there is not a valid one.
+//
+// The header is ten bytes: "ID3", two version bytes, flags, and a four-byte
+// size that is *syncsafe* — seven bits per byte, so the high bit is always
+// clear and the pattern can never be mistaken for an MP3 sync word. Checking
+// those four high bits is what separates a real tag from three bytes that
+// happen to spell ID3. Version 2.4 may repeat the header as a footer, which
+// bit 4 of the flags announces.
+std::size_t id3TagLength(const unsigned char* data, std::size_t bytes) {
+    if (!startsWith(data, bytes, "ID3") || bytes < 10) return 0;
+    if (data[3] == 0xFF || data[4] == 0xFF) return 0;   // reserved versions
+
+    std::size_t size = 0;
+    for (std::size_t i = 6; i < 10; ++i) {
+        if ((data[i] & 0x80) != 0) return 0;            // not syncsafe
+        size = (size << 7) | data[i];
+    }
+    const std::size_t footer = (data[5] & 0x10) != 0 ? 10u : 0u;
+    return 10 + size + footer;
+}
+
 }  // namespace
 
 const char* formatName(Format format) {
@@ -90,7 +111,22 @@ Format Decoder::sniff(const void* data, std::size_t bytes) {
     // sync word is eleven set bits. Checking the layer and bitrate nibbles too,
     // because eleven set bits alone appear in plenty of binary files and the
     // MP3 decoder will gladly turn any of them into noise.
-    if (startsWith(bytes_in, bytes, "ID3")) return Format::Mp3;
+    // A tagger will put an ID3 tag on anything it can write metadata to, FLAC
+    // included, so an ID3 tag on its own does not mean MP3. Look underneath it
+    // for a real magic number first. Skipping this is precisely the failure the
+    // paragraph above warns about, reached from the other side: the MP3 decoder
+    // gets handed FLAC data, and either refuses a perfectly good file or turns
+    // it into noise.
+    if (startsWith(bytes_in, bytes, "ID3")) {
+        if (const std::size_t skip = id3TagLength(bytes_in, bytes)) {
+            if (startsWith(bytes_in, bytes, "fLaC", skip)) return Format::Flac;
+            if (startsWith(bytes_in, bytes, "RIFF", skip) &&
+                startsWith(bytes_in, bytes, "WAVE", skip + 8)) {
+                return Format::Wav;
+            }
+        }
+        return Format::Mp3;
+    }
     if (bytes >= 4 && bytes_in[0] == 0xFF && (bytes_in[1] & 0xE0) == 0xE0) {
         const unsigned layer = (bytes_in[1] >> 1) & 0x03;
         const unsigned bitrate = (bytes_in[2] >> 4) & 0x0F;
@@ -109,9 +145,24 @@ std::unique_ptr<Decoder> Decoder::openMemory(const void* data, std::size_t bytes
     Impl& impl = *decoder->impl_;
     impl.format = format;
 
+    // The WAV and FLAC decoders expect their own magic at byte zero and will
+    // refuse a buffer that opens with an ID3 tag, so the tag is stepped over
+    // here. The MP3 decoder handles tags itself and is left alone. The pointer
+    // aims into the caller's buffer, which the path overload keeps alive by
+    // moving it into the decoder afterwards — moving a vector does not move
+    // its heap storage, so the offset stays valid.
+    std::size_t offset = 0;
+    if (format != Format::Mp3) {
+        const std::size_t skip =
+            id3TagLength(static_cast<const unsigned char*>(data), bytes);
+        if (skip > 0 && skip < bytes) offset = skip;
+    }
+    const void* payload = static_cast<const unsigned char*>(data) + offset;
+    const std::size_t payload_bytes = bytes - offset;
+
     switch (format) {
         case Format::Wav:
-            if (!drwav_init_memory(&impl.wav, data, bytes, nullptr)) return nullptr;
+            if (!drwav_init_memory(&impl.wav, payload, payload_bytes, nullptr)) return nullptr;
             impl.initialised = true;
             decoder->info_.sample_rate = impl.wav.sampleRate;
             decoder->info_.channels = impl.wav.channels;
@@ -119,7 +170,7 @@ std::unique_ptr<Decoder> Decoder::openMemory(const void* data, std::size_t bytes
             break;
 
         case Format::Flac:
-            impl.flac = drflac_open_memory(data, bytes, nullptr);
+            impl.flac = drflac_open_memory(payload, payload_bytes, nullptr);
             if (impl.flac == nullptr) return nullptr;
             impl.initialised = true;
             decoder->info_.sample_rate = impl.flac->sampleRate;
