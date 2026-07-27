@@ -221,19 +221,20 @@ struct DownbeatResult {
     //   failure a listener notices immediately, since a metronome accenting
     //   beat 3 is worse than one accenting nothing.
     //
-    //   Read that literally and no further. On synthetic clips a large phase
-    //   margin does go with a right answer, which is where the number and its
-    //   threshold came from. On twenty-six real recordings across eight
-    //   releases, whose beat grids agree with a Beat This! reference, it does
-    //   not: the margin's AUC for predicting agreement is 0.562, where 0.5 is
-    //   a coin toss. The two largest margins in the set, 1.782 and 1.768, are
-    //   an agreement and a disagreement respectively.
+    //   It does carry information about correctness, but less than a
+    //   threshold on it suggests, and the amount depends on the material.
+    //   Measured against a Beat This! reference, its AUC for predicting
+    //   agreement is 0.690 over sixty-five recordings; the two halves of that
+    //   set gave 0.562 and 0.777, so a single number for how much to trust it
+    //   would itself be misleading. Large margins on individual tracks are
+    //   routinely wrong: on the first half the two largest in the set, 1.782
+    //   and 1.768, were an agreement and a disagreement.
     //
-    //   The quantity is real and the resolver computes it correctly. It means
-    //   "this phase won its own contest by this much", not "this phase is
-    //   probably right" — because what the contest measures is how far the
-    //   *mixture* won by, which says nothing when one cue dominates the
-    //   mixture and is wrong. See research/eval/README.md.
+    //   The quantity is real and the resolver computes it correctly. What it
+    //   measures is how far the *mixture* won by, which is weak evidence when
+    //   one cue dominates the mixture and is wrong. See research/eval/README.md,
+    //   including how the first half of that material produced a confident and
+    //   wrong reading of this same number.
     //
     //   `meter_margin` is how far ahead of the best *other meter* it is. This
     //   is a genuinely different question, and conflating the two was a real
@@ -259,22 +260,27 @@ struct DownbeatResult {
     // caller's. Both default to placeholders rather than calibrated numbers —
     // see research/eval/README.md, which is what will replace them.
     //
-    // Measured on real music, this does not yet earn an accent. Over
-    // twenty-six recordings it returned true on eight and agreed with the
-    // reference phase on four of those — and on nine of the other eighteen,
-    // which is the same 50%. It partitions the material into two halves of
-    // equal accuracy, so no threshold on these two margins recovers it: the
-    // inputs carry the information, not the gate over them. A caller deciding
-    // whether to accent should treat true as "a meter was decided", and until
-    // that changes should not turn the accent on by default.
+    // Measured against a Beat This! reference on sixty-five recordings, this
+    // does separate: where it returns true the reference agreed 23 times in
+    // 30, and where it returns false, 22 in 35 — about fourteen points of
+    // lift. Useful, and a long way from good enough to accent on silently.
     //
-    // What did separate, on that set, was agreement between cues rather than
-    // the margin of their sum: where the low-band and harmony cues pick the
-    // same phase the reference agreed 9 times in 11, and where they disagree,
-    // 4 in 15. It is not implemented here on purpose — the criterion was
-    // chosen after seeing those numbers, and validating it needs material
-    // collected afterwards. beat_features on OfflineResult is what makes
-    // trying it possible from outside the core.
+    // An earlier version of this comment said the opposite, that the gate
+    // "partitions the material into two halves of equal accuracy". That was
+    // measured on the first twenty-six of those recordings, which came from
+    // only eight releases and leaned heavily on one drone-heavy session, and
+    // it did not survive thirty-five more releases. The lesson is recorded
+    // because it will otherwise be repeated: the sample size that matters
+    // here is the number of independent releases, not the number of tracks,
+    // and twenty-six tracks over eight releases was enough to produce a
+    // confident and wrong recommendation. See research/eval/README.md.
+    //
+    // Agreement between the cues, rather than the margin of their sum, is
+    // still the better-looking signal — but its measured effect shrank from
+    // 55 points to 19 when it was tested on material collected after it was
+    // proposed, which is under the bar its own pre-registration set. It is
+    // not implemented here for that reason. beat_features on OfflineResult is
+    // what makes trying it possible from outside the core.
     bool confident(double min_phase_margin = 0.25,
                    double min_meter_margin = 0.40) const {
         return beats_per_bar > 0 && !downbeats.empty() &&
