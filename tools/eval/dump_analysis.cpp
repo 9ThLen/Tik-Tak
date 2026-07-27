@@ -210,6 +210,11 @@ int main(int argc, char** argv) {
     double salience_min_phase = cue_defaults.min_phase_margin;
     double salience_min_meter = cue_defaults.min_meter_margin;
     int calibration_given = 0;
+    // Fixes the tempo instead of estimating it, so an evaluation can separate
+    // "the tempo hypothesis was wrong" from "the phase drifted at the right
+    // tempo" — two failures that look identical in a beat grid and need
+    // opposite fixes.
+    double bpm_hint = 0.0;
 
     struct Threshold {
         const char* flag;
@@ -228,6 +233,18 @@ int main(int argc, char** argv) {
                 return 2;
             }
             salience_path = argv[++i];
+            continue;
+        }
+        if (std::strcmp(argv[i], "--bpm") == 0) {
+            if (i + 1 >= argc) {
+                std::fprintf(stderr, "--bpm needs a value\n");
+                return 2;
+            }
+            bpm_hint = std::atof(argv[++i]);
+            if (!(bpm_hint > 0.0)) {
+                std::fprintf(stderr, "--bpm needs a positive value\n");
+                return 2;
+            }
             continue;
         }
         if (std::strcmp(argv[i], "--beats") == 0) {
@@ -297,6 +314,7 @@ int main(int argc, char** argv) {
                      " [calibration]]\n"
                      "       %s <clip.f32> <sample_rate> [--salience <file>"
                      " [calibration]]\n"
+                     "  --bpm <value>      track at this tempo instead of estimating it\n"
                      "  calibration: --salience-min-range <v> "
                      "--salience-min-phase-margin <v> "
                      "--salience-min-meter-margin <v>\n"
@@ -361,6 +379,7 @@ int main(int argc, char** argv) {
     // measuring a configuration that never ships.
     config.odf.melMaxHz = std::min(16000.0, rate * 0.5);
     config.find_downbeats = true;
+    config.bpm_hint = bpm_hint;
     tiktak::analysis::OfflineAnalyzer analyzer(config);
 
     // Fed in blocks that are not a multiple of the hop, for the same reason
