@@ -221,20 +221,19 @@ struct DownbeatResult {
     //   failure a listener notices immediately, since a metronome accenting
     //   beat 3 is worse than one accenting nothing.
     //
-    //   It does carry information about correctness, but less than a
-    //   threshold on it suggests, and the amount depends on the material.
-    //   Measured against a Beat This! reference, its AUC for predicting
-    //   agreement is 0.690 over sixty-five recordings; the two halves of that
-    //   set gave 0.562 and 0.777, so a single number for how much to trust it
-    //   would itself be misleading. Large margins on individual tracks are
-    //   routinely wrong: on the first half the two largest in the set, 1.782
-    //   and 1.768, were an agreement and a disagreement.
+    //   It does carry information about correctness. Measured against a Beat
+    //   This! reference over eighty-one recordings from fifty-five releases,
+    //   its AUC for predicting agreement is 0.713 — and 0.792 if the one batch
+    //   that came from only eight releases is set aside, which the three
+    //   batches taken in order argue for: 0.562 on eight groups, then 0.777 on
+    //   thirty-five and 0.821 on twelve. The low reading is the outlier, and it
+    //   is the underpowered one.
     //
-    //   The quantity is real and the resolver computes it correctly. What it
-    //   measures is how far the *mixture* won by, which is weak evidence when
-    //   one cue dominates the mixture and is wrong. See research/eval/README.md,
-    //   including how the first half of that material produced a confident and
-    //   wrong reading of this same number.
+    //   That still does not make a large margin on any individual track mean
+    //   much. On the eight-group batch the two largest margins in the set,
+    //   1.782 and 1.768, were an agreement and a disagreement. What the
+    //   quantity measures is how far the *mixture* won by, which is weak
+    //   evidence when one cue dominates the mixture and is wrong.
     //
     //   `meter_margin` is how far ahead of the best *other meter* it is. This
     //   is a genuinely different question, and conflating the two was a real
@@ -260,27 +259,32 @@ struct DownbeatResult {
     // caller's. Both default to placeholders rather than calibrated numbers —
     // see research/eval/README.md, which is what will replace them.
     //
-    // Measured against a Beat This! reference on sixty-five recordings, this
-    // does separate: where it returns true the reference agreed 23 times in
-    // 30, and where it returns false, 22 in 35 — about fourteen points of
-    // lift. Useful, and a long way from good enough to accent on silently.
+    // Measured against a Beat This! reference on eighty-one recordings from
+    // fifty-five releases, this does separate: where it returns true the
+    // reference agreed 29 times in 36, and where it returns false, 30 in 45 —
+    // about fourteen points of lift, and twelve on the two better-grouped
+    // batches alone. Useful, and a long way from good enough to accent on
+    // silently.
     //
     // An earlier version of this comment said the opposite, that the gate
     // "partitions the material into two halves of equal accuracy". That was
-    // measured on the first twenty-six of those recordings, which came from
-    // only eight releases and leaned heavily on one drone-heavy session, and
-    // it did not survive thirty-five more releases. The lesson is recorded
-    // because it will otherwise be repeated: the sample size that matters
-    // here is the number of independent releases, not the number of tracks,
-    // and twenty-six tracks over eight releases was enough to produce a
-    // confident and wrong recommendation. See research/eval/README.md.
+    // measured on twenty-six recordings from only eight releases, leaning
+    // heavily on one drone-heavy session, and it did not survive the next
+    // forty-seven releases. The lesson is recorded because it will otherwise
+    // be repeated: the sample size that matters is the number of independent
+    // releases, not the number of tracks.
     //
-    // Agreement between the cues, rather than the margin of their sum, is
-    // still the better-looking signal — but its measured effect shrank from
-    // 55 points to 19 when it was tested on material collected after it was
-    // proposed, which is under the bar its own pre-registration set. It is
-    // not implemented here for that reason. beat_features on OfflineResult is
-    // what makes trying it possible from outside the core.
+    // The same comment also proposed agreement between the cues as a better
+    // signal than the margin of their sum, on a measured 55-point gap. That
+    // is now withdrawn. Tested on two batches gathered after it was proposed,
+    // the gap fell to 19 points and then to *minus* 20 — on the third batch
+    // the tracks whose cues disagreed were the ones the reference agreed
+    // with, every one of them. Pooling all three still shows 29 points, but
+    // that number is made entirely by the eight-release batch and drops to 7
+    // without it, with confidence intervals that then almost entirely
+    // overlap. An effect whose sign depends on the batch is not an effect
+    // yet. beat_features on OfflineResult is still what makes trying such
+    // things possible from outside the core.
     bool confident(double min_phase_margin = 0.25,
                    double min_meter_margin = 0.40) const {
         return beats_per_bar > 0 && !downbeats.empty() &&
