@@ -155,6 +155,145 @@
         },
         "date": "2026-07-26"
       }
+    },
+    "beat_this_small_onnx": {
+      "purpose": "offline downbeat activations, exported here rather than taken pre-converted; the product candidate",
+      "license": "MIT, code and published weights (verified: repository README)",
+      "source": {
+        "repo": "https://github.com/CPJKU/beat_this",
+        "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+        "tag": "v1.1.0",
+        "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/small0.ckpt",
+        "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+        "path": "small0.ckpt",
+        "note": "exported locally from the pinned beat_this_small checkpoint"
+      },
+      "conversion": {
+        "model_variant": "small0",
+        "source_weights_sha256": "6074be2c4d490c5f6101fcc374a1ec72ae93456e23bb6019783b849f5dc7d47b",
+        "exporter": {
+          "repo": "this repository",
+          "revision": null,
+          "version": "models/export_beat_this.py, torch.onnx dynamo path"
+        },
+        "onnx_opset": 18,
+        "preprocessing": {
+          "sample_rate": 22050,
+          "n_fft": 1024,
+          "hop_length": 441,
+          "f_min": 30,
+          "f_max": 11000,
+          "n_mels": 128,
+          "mel_scale": "slaney",
+          "normalized": "frame_length",
+          "power": 1,
+          "compression": "log1p(1000*x)"
+        },
+        "io_contract": {
+          "input": {
+            "name": "input_spectrogram",
+            "shape": [
+              "batch",
+              "time",
+              128
+            ],
+            "dynamic_axes": [
+              "time"
+            ]
+          },
+          "outputs": [
+            "beat",
+            "downbeat"
+          ]
+        },
+        "verified_against_pytorch_max_abs_diff": 3.1e-06
+      },
+      "file": "small0.onnx",
+      "expected_mb": 11.5,
+      "pinned": {
+        "sha256": "375885ffbe000c0c721624241f09037cd19463e36b970e75c40c455f51539e54",
+        "bytes": 11477858,
+        "provenance": {
+          "source": {
+            "repo": "https://github.com/CPJKU/beat_this",
+            "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+            "tag": "v1.1.0",
+            "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/small0.ckpt",
+            "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+            "path": "small0.ckpt"
+          }
+        },
+        "date": "2026-07-27"
+      }
+    },
+    "beat_this_small_onnx_int8": {
+      "purpose": "int8 dynamic quantisation of beat_this_small_onnx; 5.1 MB, RTF 0.065, F 0.943 against 0.947",
+      "license": "MIT, code and published weights (verified: repository README)",
+      "source": {
+        "repo": "https://github.com/CPJKU/beat_this",
+        "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+        "tag": "v1.1.0",
+        "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/small0.ckpt",
+        "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+        "path": "small0.ckpt",
+        "note": "quantised locally from beat_this_small_onnx"
+      },
+      "conversion": {
+        "model_variant": "small0",
+        "source_weights_sha256": "375885ffbe000c0c721624241f09037cd19463e36b970e75c40c455f51539e54",
+        "exporter": {
+          "repo": "this repository",
+          "revision": null,
+          "version": "models/quantise.py, onnxruntime quantize_dynamic QInt8"
+        },
+        "onnx_opset": 18,
+        "preprocessing": {
+          "sample_rate": 22050,
+          "n_fft": 1024,
+          "hop_length": 441,
+          "f_min": 30,
+          "f_max": 11000,
+          "n_mels": 128,
+          "mel_scale": "slaney",
+          "normalized": "frame_length",
+          "power": 1,
+          "compression": "log1p(1000*x)"
+        },
+        "io_contract": {
+          "input": {
+            "name": "input_spectrogram",
+            "shape": [
+              "batch",
+              "time",
+              128
+            ],
+            "dynamic_axes": [
+              "time"
+            ]
+          },
+          "outputs": [
+            "beat",
+            "downbeat"
+          ]
+        }
+      },
+      "file": "small0_int8.onnx",
+      "expected_mb": 5.1,
+      "pinned": {
+        "sha256": "0bba99415d50340e8d9e2540644ec0a8f0a4de700ee24cb4b8df8121a0834335",
+        "bytes": 5105313,
+        "provenance": {
+          "source": {
+            "repo": "https://github.com/CPJKU/beat_this",
+            "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+            "tag": "v1.1.0",
+            "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/small0.ckpt",
+            "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+            "path": "small0.ckpt"
+          }
+        },
+        "date": "2026-07-27"
+      }
     }
   }
 }

@@ -94,13 +94,15 @@ def main(argv: list[str] | None = None) -> int:
           f"{source.stat().st_size/1e6:.1f} MB -> {entry['bytes']/1e6:.1f} MB "
           f"({ratio:.1f}x smaller)")
     print(json.dumps(entry, indent=2))
-    if args.print_only:
-        return 0
-
-    manifest = json.loads(MANIFEST.read_text()) if MANIFEST.is_file() else {}
-    manifest.setdefault("artifacts", {})[target.stem] = entry
-    MANIFEST.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
-    print(f"pinned in {MANIFEST.name}")
+    # Deliberately not written to the manifest here. An artifact entry needs a
+    # licence, a canonical source and a conversion record, and this script
+    # knows none of them — an earlier version wrote what it did know and was
+    # caught by the provenance test, which is the right outcome but a poor
+    # place to find out. Print it and let the caller place it beside the rest
+    # of the provenance the entry needs.
+    print("\nadd this under the artifact's conversion record in "
+          f"{MANIFEST.name}; licence and source have to come from the entry "
+          "it is derived from.")
     return 0
 
 
