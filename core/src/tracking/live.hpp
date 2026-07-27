@@ -88,6 +88,25 @@ public:
     // same clock the shell schedules output in.
     void process(double stream_time_sec, const float* samples, std::size_t n);
 
+    // Feeds one already-computed observation instead of audio, at a time in
+    // the same clock: how much this instant looks like a beat, 0 to 1.
+    //
+    // This is the seam a learned front end arrives through, and it is here
+    // rather than in the research harness because that is where the front end
+    // is going. The built-in onset function is spectral flux, and measured
+    // against a reference on 106 produced recordings it does not concentrate
+    // on the beat: the filter's own coincidence term sat at 0.226 where
+    // perfect tracking of that same evidence could only have reached 0.39, so
+    // the gate stayed shut on the material the product exists for. Fed a
+    // causal model's activation instead — same filter, same recordings — that
+    // term reaches 0.535 and the lock rate goes from 1% of tracks to 45%.
+    //
+    // Everything downstream is unchanged and deliberately so: gating, level
+    // normalisation and the publishing hysteresis are the tracker's, and only
+    // the evidence is swapped. Callers use one of process() or observe(), not
+    // both — mixing them feeds the filter two clocks and two scales.
+    void observe(double time_sec, double activation);
+
     // Tells the tracker when its own click will reach the microphone — that is
     // the moment the click is *heard*, output latency and room delay already
     // added by the caller. The core cannot compute it: only the shell knows

@@ -140,6 +140,33 @@ void LiveTracker::process(double stream_time_sec, const float* samples, std::siz
     consumed_ += n;
 }
 
+void LiveTracker::observe(double time_sec, double activation) {
+    ++stats_.frames;
+
+    // Gated exactly as an ODF frame is: a learned front end hears our own
+    // click too, and rather better than spectral flux does.
+    if (gatedAt(time_sec)) {
+        ++stats_.gated;
+        return;
+    }
+
+    // No peak follower. An activation already answers "how much does this look
+    // like a beat" on its own scale, and dividing it by a running maximum
+    // would undo that — a quiet passage the model correctly reports as
+    // uncertain would be renormalised back up into confidence.
+    const double normalised = std::min(1.0, std::max(0.0, activation));
+
+    if (manual_bpm_ > 0.0) {
+        sync_.observe(time_sec, normalised);
+        if (!acquired_ && sync_.ready()) {
+            filter_.seedPhase(sync_.nextBeat(time_sec));
+            acquired_ = true;
+        }
+    }
+
+    filter_.observe(time_sec, normalised);
+}
+
 bool LiveTracker::takeBeat(double now_sec, double lookahead_sec, double* beat_sec) {
     const BeatEstimate current = filter_.estimate(now_sec);
 

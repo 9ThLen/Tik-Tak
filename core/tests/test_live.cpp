@@ -408,3 +408,61 @@ TEST(LiveTracker, ManualModeFollowsAPlayerDriftingInsideItsPullIn) {
         EXPECT_LT(offGrid(beats[i], 121.0, 1.0), 0.06) << "beat " << i << " at " << beats[i];
     }
 }
+
+// The seam a learned front end arrives through. What matters is that swapping
+// the evidence changes only the evidence: the gating, the hysteresis and the
+// publishing rules have to behave identically, or a measurement taken through
+// observe() would not describe the tracker that ships.
+TEST(LiveTracker, TracksAnActivationHandedToItDirectly) {
+    LiveTracker tracker{tiktak::tracking::liveConfigFor(48000.0)};
+
+    // A model's output for a 120 BPM piece: near one on the beat, near zero
+    // between. No level normalisation is applied to this, and none is needed —
+    // it is already a probability.
+    constexpr double kFps = 50.0;
+    constexpr double kPeriod = 0.5;
+    double now = 0.0;
+    for (int i = 0; i < static_cast<int>(20.0 * kFps); ++i) {
+        now = i / kFps;
+        const double since = now - std::round(now / kPeriod) * kPeriod;
+        tracker.observe(now, std::fabs(since) < 0.011 ? 0.95 : 0.02);
+    }
+
+    const tiktak::tracking::BeatEstimate estimate = tracker.estimate(now);
+    EXPECT_NEAR(estimate.bpm, 120.0, 3.0);
+    EXPECT_GT(estimate.confidence, 0.5);
+}
+
+TEST(LiveTracker, GatesAnActivationTheSameWayItGatesAudio) {
+    // A learned front end hears our own click too, and rather better than
+    // spectral flux does, so the gate has to apply to it as well. Without
+    // this the tracker would lock onto itself through the new seam while
+    // remaining safe through the old one.
+    LiveTracker tracker{tiktak::tracking::liveConfigFor(48000.0)};
+    tracker.gateClick(1.0);
+
+    for (int i = 0; i < 100; ++i) tracker.observe(i / 50.0, 1.0);
+    EXPECT_GT(tracker.stats().gated, 0u);
+}
+
+TEST(LiveTracker, AnActivationIsNotRenormalisedByItsOwnLoudest) {
+    // The difference from process(), and the reason observe() is not simply a
+    // shortcut into it. A quiet stretch that the model correctly reports as
+    // uncertain must stay uncertain: dividing by a running peak would scale
+    // that doubt back up into confidence, which is exactly what the ODF path
+    // has to do and a probability must not.
+    LiveTracker loud{tiktak::tracking::liveConfigFor(48000.0)};
+    LiveTracker quiet{tiktak::tracking::liveConfigFor(48000.0)};
+
+    constexpr double kFps = 50.0;
+    double now = 0.0;
+    for (int i = 0; i < static_cast<int>(20.0 * kFps); ++i) {
+        now = i / kFps;
+        const double since = now - std::round(now / 0.5) * 0.5;
+        const bool on_beat = std::fabs(since) < 0.011;
+        loud.observe(now, on_beat ? 0.95 : 0.02);
+        quiet.observe(now, on_beat ? 0.20 : 0.02);   // the model is unsure
+    }
+
+    EXPECT_GT(loud.estimate(now).confidence, quiet.estimate(now).confidence);
+}

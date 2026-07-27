@@ -466,48 +466,18 @@ int main(int argc, char** argv) {
     double live_confidence = 0.0;
     std::vector<double> live_share, live_agreement, live_coincidence;
 
-    // The particle filter alone, fed an activation from outside. No hysteresis
-    // and no click gating: what is being asked is whether the evidence can
-    // support a lock at all, and the publishing rules on top of it were
-    // already measured to be honest about evidence that cannot.
+    // The whole live path, driven by an activation from outside instead of by
+    // the built-in onset function. The same tracker, the same hysteresis and
+    // the same publishing rules — only the evidence differs, so the grids that
+    // come out are comparable with --live's.
+    std::vector<double> activation;
     if (!activation_path.empty()) {
-        std::vector<double> activation;
         std::string complaint;
         if (!readSalience(activation_path.c_str(), activation, complaint)) {
             std::fprintf(stderr, "%s\n", complaint.c_str());
             return 1;
         }
-        tiktak::tracking::BeatParticleFilter filter{tiktak::tracking::ParticleFilterConfig{}};
-        double next_report = 1.0;
-        for (std::size_t i = 0; i < activation.size(); ++i) {
-            const double t = static_cast<double>(i) / activation_fps;
-            filter.observe(t, activation[i]);
-            if (t >= next_report) {
-                const tiktak::tracking::BeatEstimate e = filter.estimate(t);
-                live_share.push_back(e.cluster_share);
-                live_agreement.push_back(e.phase_agreement);
-                live_coincidence.push_back(e.onset_coincidence);
-                next_report += 1.0;
-            }
-        }
-        const double end = activation.empty()
-            ? 0.0 : static_cast<double>(activation.size() - 1) / activation_fps;
-        const tiktak::tracking::BeatEstimate e = filter.estimate(end);
-        live_confidence = e.confidence;
-        std::printf("{\n  \"activation_driven\": true,\n");
-        std::printf("  \"bpm\": %.9g,\n", finiteOrZero(e.bpm));
-        std::printf("  \"live_confidence\": %.9g,\n", finiteOrZero(live_confidence));
-        const auto column = [](const char* name, const std::vector<double>& values) {
-            std::printf("  \"%s\": [", name);
-            for (std::size_t i = 0; i < values.size(); ++i) {
-                std::printf("%s%.4g", i == 0 ? "" : ",", values[i]);
-            }
-            std::printf("]");
-        };
-        column("live_share", live_share); std::printf(",\n");
-        column("live_agreement", live_agreement); std::printf(",\n");
-        column("live_coincidence", live_coincidence); std::printf("\n}\n");
-        return 0;
+        live = true;
     }
     if (live) {
         tiktak::tracking::LiveConfig live_config;
@@ -529,10 +499,7 @@ int main(int argc, char** argv) {
         constexpr double kLookahead = 0.05;
         double now = 0.0;
         double next_sample = 1.0;
-        for (std::size_t pos = 0; pos < samples.size(); pos += kLiveBlock) {
-            const std::size_t take = std::min(kLiveBlock, samples.size() - pos);
-            tracker.process(now, samples.data() + pos, take);
-            now += static_cast<double>(take) / rate;
+        const auto poll = [&]() {
             double beat = 0.0;
             while (tracker.takeBeat(now, kLookahead, &beat)) live_beats.push_back(beat);
             if (now >= next_sample) {
@@ -543,6 +510,29 @@ int main(int argc, char** argv) {
                 live_agreement.push_back(e.phase_agreement);
                 live_coincidence.push_back(e.onset_coincidence);
                 next_sample += 1.0;
+            }
+        };
+
+        if (!activation.empty()) {
+            // One frame at a time, polling at the same rate a device would,
+            // so a beat is never handed out later than the shell would ask.
+            const double frame_sec = 1.0 / activation_fps;
+            double next_poll = 0.0;
+            for (std::size_t i = 0; i < activation.size(); ++i) {
+                const double t = static_cast<double>(i) * frame_sec;
+                tracker.observe(t, activation[i]);
+                now = t;
+                if (t >= next_poll) {
+                    poll();
+                    next_poll += static_cast<double>(kLiveBlock) / rate;
+                }
+            }
+        } else {
+            for (std::size_t pos = 0; pos < samples.size(); pos += kLiveBlock) {
+                const std::size_t take = std::min(kLiveBlock, samples.size() - pos);
+                tracker.process(now, samples.data() + pos, take);
+                now += static_cast<double>(take) / rate;
+                poll();
             }
         }
         live_confidence = tracker.estimate(now).confidence;
