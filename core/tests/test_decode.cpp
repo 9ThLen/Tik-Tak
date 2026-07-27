@@ -285,6 +285,18 @@ TEST(Decode, RefusesUnsupportedInput) {
     EXPECT_EQ(tt_decoder_open_memory(text, sizeof(text), nullptr), nullptr);
 }
 
+// A directory is not a missing path and not a corrupt file, and it is what a
+// file picker hands over when someone selects a folder. On glibc it opens
+// successfully and reports LONG_MAX bytes, which the decoder used to turn
+// straight into an allocation — so this refusal used to be a std::bad_alloc
+// escaping open() and terminating the process. Refusing is the contract; the
+// value of this test is that it fails by aborting rather than by comparing.
+TEST(Decode, RefusesADirectory) {
+    tt_status status = TT_OK;
+    EXPECT_EQ(tt_decoder_open_file(TIKTAK_TEST_DATA_DIR, &status), nullptr);
+    EXPECT_EQ(status, TT_ERR_UNSUPPORTED);
+}
+
 // A truncated file is the common real-world corruption: an interrupted download
 // or a copy that ran out of disk. It must not read past the end of the buffer,
 // which is what the sanitizer build is checking here.

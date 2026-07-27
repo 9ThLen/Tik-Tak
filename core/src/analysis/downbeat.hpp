@@ -221,6 +221,18 @@ struct DownbeatResult {
     //   failure a listener notices immediately, since a metronome accenting
     //   beat 3 is worse than one accenting nothing.
     //
+    //   Read that literally and no further. On synthetic clips a large phase
+    //   margin does go with a right answer, which is where the number and its
+    //   threshold came from. On seven real recordings whose beat grids agree
+    //   with a Beat This! reference, it does not: the phase margins where the
+    //   two agree were 0.19, 0.47 and 0.55, and where they disagree 0.18,
+    //   0.26, 0.32 and 1.26 — overlapping, with the single largest margin in
+    //   the whole set sitting on a disagreement. The quantity is real and the
+    //   resolver computes it correctly; what is missing is evidence that it
+    //   ranks correctness on music. Seven tracks cannot establish that it is
+    //   anti-correlated either. It means "this phase won its own contest by
+    //   this much", not "this phase is probably right".
+    //
     //   `meter_margin` is how far ahead of the best *other meter* it is. This
     //   is a genuinely different question, and conflating the two was a real
     //   bug: a piece scored in three can be perfectly unambiguous about which
