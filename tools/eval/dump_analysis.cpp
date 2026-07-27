@@ -475,6 +475,8 @@ int main(int argc, char** argv) {
     std::printf("  \"bpm\": %.17g,\n", finiteOrZero(analysis.bpm));
     std::printf("  \"confidence\": %.17g,\n",
                 finiteOrZero(analysis.tempo_confidence));
+    std::printf("  \"beat_objective_per_beat\": %.9g,\n",
+                finiteOrZero(analysis.beat_objective_per_beat));
     std::printf("  \"beats_per_bar\": %d,\n", beats_per_bar);
     std::printf("  \"downbeat_strength\": %.17g,\n", finiteOrZero(strength));
     std::printf("  \"downbeat_phase_margin\": %.17g,\n",

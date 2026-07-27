@@ -24,6 +24,19 @@ struct BeatResult {
     std::vector<std::size_t> frames;   // ODF frame index of each beat
     double bpm = 0.0;                  // period the tracker was run at
     double tempo_confidence = 0.0;
+
+    // What the dynamic programme actually achieved: the value of the objective
+    // below at the winning sequence, divided by the number of beats in it.
+    //
+    // Per beat rather than in total, because the total is not comparable
+    // between tempi — a period half as long fits twice as many beats and
+    // collects roughly twice the score for doing nothing better. Per beat is
+    // not neutral either (a slow grid can sit on the loudest onsets only and
+    // score well), so this is evidence for a caller weighing tempo hypotheses
+    // against a tempo prior, not a number to maximise on its own.
+    //
+    // Zero when no beats were found.
+    double objective_per_beat = 0.0;
 };
 
 // Offline beat tracking by dynamic programming (Ellis, 2007).

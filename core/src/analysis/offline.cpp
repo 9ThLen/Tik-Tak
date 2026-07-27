@@ -1,5 +1,9 @@
 #include "analysis/offline.hpp"
 
+#include <algorithm>
+#include <cmath>
+#include <utility>
+
 namespace tiktak::analysis {
 
 // Bar lines need harmony, and harmony needs the front end to produce it. Rather
@@ -37,6 +41,52 @@ void OfflineAnalyzer::feed(const float* samples, std::size_t n) {
     });
 }
 
+// Tracks each of the leading tempo candidates and keeps the grid that best
+// combines the estimator's confidence in the tempo with how well the grid it
+// produces actually fits the onsets.
+//
+// The two have to be multiplied rather than either used alone. Strength alone
+// is what the tracker did before, and it cannot tell a plausible tempo from a
+// plausible tempo the music is not actually at. Fit alone is worse still: the
+// objective is a per-beat mean, so a grid at half speed raises it simply by
+// visiting only the strongest onsets, which is the octave error the prior was
+// added to prevent. See OfflineConfig::tempo_fit_weight.
+BeatResult OfflineAnalyzer::trackBestHypothesis(double fps, double fallback_bpm) {
+    const int wanted = std::max(1, config_.tempo_hypotheses);
+    std::vector<TempoCandidate> candidates(static_cast<std::size_t>(wanted));
+    const std::size_t found =
+        tempo_.topCandidates(candidates.data(), candidates.size());
+
+    BeatResult best;
+    double best_score = 0.0;
+    bool have_best = false;
+
+    for (std::size_t i = 0; i < found; ++i) {
+        const TempoCandidate& candidate = candidates[i];
+        if (!(candidate.bpm > 0.0) || !(candidate.strength > 0.0)) continue;
+
+        BeatResult grid = tracker_.track(odf_values_.data(), frame_times_.data(),
+                                         odf_values_.size(), fps, candidate.bpm);
+        if (grid.beats.empty()) continue;
+
+        const double score = std::pow(candidate.strength, config_.tempo_fit_weight) *
+                             grid.objective_per_beat;
+        // Strictly greater, so a tie leaves the estimator's own ranking in
+        // charge and the same audio always produces the same grid.
+        if (!have_best || score > best_score) {
+            have_best = true;
+            best_score = score;
+            best = std::move(grid);
+        }
+    }
+
+    if (have_best) return best;
+    // No candidate produced a grid — fall back to the single estimate, which
+    // keeps the failure identical to what it was before this existed.
+    return tracker_.track(odf_values_.data(), frame_times_.data(),
+                          odf_values_.size(), fps, fallback_bpm);
+}
+
 OfflineResult OfflineAnalyzer::finish() {
     OfflineResult result;
     result.frame_count = odf_values_.size();
@@ -50,12 +100,19 @@ OfflineResult OfflineAnalyzer::finish() {
     const TempoEstimate estimate = tempo_.estimate(odf_values_.data(), odf_values_.size(), fps);
     result.estimated_bpm = estimate.bpm;
 
-    const double bpm = config_.bpm_hint > 0.0 ? config_.bpm_hint : estimate.bpm;
-    const BeatResult tracked = tracker_.track(odf_values_.data(), frame_times_.data(),
-                                              odf_values_.size(), fps, bpm);
+    BeatResult tracked;
+    if (config_.bpm_hint > 0.0) {
+        // A hint is an instruction, not a hypothesis. Searching around it would
+        // be overriding the caller.
+        tracked = tracker_.track(odf_values_.data(), frame_times_.data(),
+                                 odf_values_.size(), fps, config_.bpm_hint);
+    } else {
+        tracked = trackBestHypothesis(fps, estimate.bpm);
+    }
 
     result.beats = tracked.beats;
     result.bpm = tracked.bpm;
+    result.beat_objective_per_beat = tracked.objective_per_beat;
     // A hint is the caller's assertion, so it carries their certainty, not ours.
     result.tempo_confidence = config_.bpm_hint > 0.0 ? 1.0 : estimate.confidence;
 
