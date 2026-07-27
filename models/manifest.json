@@ -20,7 +20,34 @@
       },
       "file": "beatnet_model_1_weights.pt",
       "expected_mb": 1.54,
-      "pinned": null
+      "pinned": {
+        "sha256": "619091bc317ca3e83b45591d46f6de3d5a41588bcb39fe9fe7be30cffa6aca84",
+        "bytes": 1612179,
+        "provenance": {
+          "source": {
+            "repo": "https://github.com/mjhydri/BeatNet",
+            "revision": "81cedd4beeb7235262db80969a0c9ce9a48a0ed4",
+            "url": "https://raw.githubusercontent.com/mjhydri/BeatNet/81cedd4beeb7235262db80969a0c9ce9a48a0ed4/src/BeatNet/models/model_1_weights.pt",
+            "path": "src/BeatNet/models/model_1_weights.pt"
+          }
+        },
+        "date": "2026-07-27"
+      },
+      "attribution": {
+        "work": "BeatNet",
+        "creators": [
+          "Mojtaba Heydari",
+          "Frank Cwitkowitz",
+          "Zhiyao Duan"
+        ],
+        "copyright": "Mojtaba Heydari and contributors",
+        "license_id": "CC-BY-4.0",
+        "license_uri": "https://creativecommons.org/licenses/by/4.0/",
+        "license_text": "licenses/CC-BY-4.0-BeatNet.txt",
+        "source_uri": "https://github.com/mjhydri/BeatNet",
+        "citation": "Mojtaba Heydari, Frank Cwitkowitz and Zhiyao Duan. \"BeatNet: CRNN and Particle Filtering for Online Joint Beat, Downbeat and Meter Tracking.\" 22nd International Society for Music Information Retrieval Conference (ISMIR), 2021.",
+        "modifications": null
+      }
     },
     "beat_this_small": {
       "purpose": "offline file analysis and pseudo-labelling — MIT covers the weights too",
@@ -49,6 +76,21 @@
           }
         },
         "date": "2026-07-26"
+      },
+      "attribution": {
+        "work": "Beat This!",
+        "creators": [
+          "Francesco Foscarin",
+          "Jan Schlüter",
+          "Gerhard Widmer"
+        ],
+        "copyright": "Copyright (c) 2024 Institute of Computational Perception, JKU Linz, Austria",
+        "license_id": "MIT",
+        "license_uri": "https://github.com/CPJKU/beat_this/blob/main/LICENSE",
+        "license_text": "licenses/MIT-beat_this.txt",
+        "source_uri": "https://github.com/CPJKU/beat_this",
+        "citation": "Francesco Foscarin, Jan Schlüter and Gerhard Widmer. \"Beat this! Accurate beat tracking without DBN postprocessing.\" Proceedings of the 25th International Society for Music Information Retrieval Conference (ISMIR), San Francisco, CA, November 2024.",
+        "modifications": null
       }
     },
     "beat_this_cpp_onnx": {
@@ -154,6 +196,21 @@
           }
         },
         "date": "2026-07-26"
+      },
+      "attribution": {
+        "work": "Beat This!",
+        "creators": [
+          "Francesco Foscarin",
+          "Jan Schlüter",
+          "Gerhard Widmer"
+        ],
+        "copyright": "Copyright (c) 2024 Institute of Computational Perception, JKU Linz, Austria",
+        "license_id": "MIT",
+        "license_uri": "https://github.com/CPJKU/beat_this/blob/main/LICENSE",
+        "license_text": "licenses/MIT-beat_this.txt",
+        "source_uri": "https://github.com/CPJKU/beat_this",
+        "citation": "Francesco Foscarin, Jan Schlüter and Gerhard Widmer. \"Beat this! Accurate beat tracking without DBN postprocessing.\" Proceedings of the 25th International Society for Music Information Retrieval Conference (ISMIR), San Francisco, CA, November 2024.",
+        "modifications": "converted to ONNX by a third party (mosynthkey/beat_this_cpp, MIT); weights not retrained"
       }
     },
     "beat_this_small_onnx": {
@@ -224,6 +281,21 @@
           }
         },
         "date": "2026-07-27"
+      },
+      "attribution": {
+        "work": "Beat This!",
+        "creators": [
+          "Francesco Foscarin",
+          "Jan Schlüter",
+          "Gerhard Widmer"
+        ],
+        "copyright": "Copyright (c) 2024 Institute of Computational Perception, JKU Linz, Austria",
+        "license_id": "MIT",
+        "license_uri": "https://github.com/CPJKU/beat_this/blob/main/LICENSE",
+        "license_text": "licenses/MIT-beat_this.txt",
+        "source_uri": "https://github.com/CPJKU/beat_this",
+        "citation": "Francesco Foscarin, Jan Schlüter and Gerhard Widmer. \"Beat this! Accurate beat tracking without DBN postprocessing.\" Proceedings of the 25th International Society for Music Information Retrieval Conference (ISMIR), San Francisco, CA, November 2024.",
+        "modifications": "exported from the published small0 checkpoint to ONNX by models/export_beat_this.py; weights not retrained"
       }
     },
     "beat_this_small_onnx_int8": {
@@ -293,6 +365,21 @@
           }
         },
         "date": "2026-07-27"
+      },
+      "attribution": {
+        "work": "Beat This!",
+        "creators": [
+          "Francesco Foscarin",
+          "Jan Schlüter",
+          "Gerhard Widmer"
+        ],
+        "copyright": "Copyright (c) 2024 Institute of Computational Perception, JKU Linz, Austria",
+        "license_id": "MIT",
+        "license_uri": "https://github.com/CPJKU/beat_this/blob/main/LICENSE",
+        "license_text": "licenses/MIT-beat_this.txt",
+        "source_uri": "https://github.com/CPJKU/beat_this",
+        "citation": "Francesco Foscarin, Jan Schlüter and Gerhard Widmer. \"Beat this! Accurate beat tracking without DBN postprocessing.\" Proceedings of the 25th International Society for Music Information Retrieval Conference (ISMIR), San Francisco, CA, November 2024.",
+        "modifications": "exported to ONNX, then weights quantised to int8 by models/quantise.py; weights not retrained"
       }
     }
   }

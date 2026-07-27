@@ -61,6 +61,7 @@
 #include "analysis/downbeat.hpp"
 #include "analysis/offline.hpp"
 #include "tracking/live.hpp"
+#include "tracking/particle.hpp"
 
 #if defined(TIKTAK_HAVE_DECODE)
 #include "decode/decoder.hpp"
@@ -234,6 +235,13 @@ int main(int argc, char** argv) {
     // can be chosen on one batch and validated on another without a rebuild.
     double live_lock = 0.0;
     double live_release = 0.0;
+    // Drives the particle filter from an activation computed elsewhere instead
+    // of from the built-in onset function. The same seam as --salience on the
+    // offline resolver, and for the same reason: the observation model is what
+    // the live path's confidence was measured down to, and swapping it is the
+    // only way to find out whether that diagnosis was right.
+    std::string activation_path;
+    double activation_fps = 50.0;
 
     struct Threshold {
         const char* flag;
@@ -260,6 +268,16 @@ int main(int argc, char** argv) {
         }
         if (std::strcmp(argv[i], "--live") == 0) {
             live = true;
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-activation") == 0) {
+            if (i + 1 >= argc) { std::fprintf(stderr, "--live-activation needs a file\n"); return 2; }
+            activation_path = argv[++i];
+            continue;
+        }
+        if (std::strcmp(argv[i], "--activation-fps") == 0) {
+            if (i + 1 >= argc) { std::fprintf(stderr, "--activation-fps needs a value\n"); return 2; }
+            activation_fps = std::atof(argv[++i]);
             continue;
         }
         if (std::strcmp(argv[i], "--live-lock") == 0) {
@@ -359,6 +377,8 @@ int main(int argc, char** argv) {
                      "  --bpm <value>      track at this tempo instead of estimating it\n"
                      "  --live             use the causal microphone tracker, not the offline one\n"
                      "  --live-seeded      the same, seeded with the offline tempo\n"
+                     "  --live-activation <file> [--activation-fps N]\n"
+                     "                     drive the particle filter from this activation\n"
                      "  calibration: --salience-min-range <v> "
                      "--salience-min-phase-margin <v> "
                      "--salience-min-meter-margin <v>\n"
@@ -445,6 +465,50 @@ int main(int argc, char** argv) {
     std::vector<double> live_beats;
     double live_confidence = 0.0;
     std::vector<double> live_share, live_agreement, live_coincidence;
+
+    // The particle filter alone, fed an activation from outside. No hysteresis
+    // and no click gating: what is being asked is whether the evidence can
+    // support a lock at all, and the publishing rules on top of it were
+    // already measured to be honest about evidence that cannot.
+    if (!activation_path.empty()) {
+        std::vector<double> activation;
+        std::string complaint;
+        if (!readSalience(activation_path.c_str(), activation, complaint)) {
+            std::fprintf(stderr, "%s\n", complaint.c_str());
+            return 1;
+        }
+        tiktak::tracking::BeatParticleFilter filter{tiktak::tracking::ParticleFilterConfig{}};
+        double next_report = 1.0;
+        for (std::size_t i = 0; i < activation.size(); ++i) {
+            const double t = static_cast<double>(i) / activation_fps;
+            filter.observe(t, activation[i]);
+            if (t >= next_report) {
+                const tiktak::tracking::BeatEstimate e = filter.estimate(t);
+                live_share.push_back(e.cluster_share);
+                live_agreement.push_back(e.phase_agreement);
+                live_coincidence.push_back(e.onset_coincidence);
+                next_report += 1.0;
+            }
+        }
+        const double end = activation.empty()
+            ? 0.0 : static_cast<double>(activation.size() - 1) / activation_fps;
+        const tiktak::tracking::BeatEstimate e = filter.estimate(end);
+        live_confidence = e.confidence;
+        std::printf("{\n  \"activation_driven\": true,\n");
+        std::printf("  \"bpm\": %.9g,\n", finiteOrZero(e.bpm));
+        std::printf("  \"live_confidence\": %.9g,\n", finiteOrZero(live_confidence));
+        const auto column = [](const char* name, const std::vector<double>& values) {
+            std::printf("  \"%s\": [", name);
+            for (std::size_t i = 0; i < values.size(); ++i) {
+                std::printf("%s%.4g", i == 0 ? "" : ",", values[i]);
+            }
+            std::printf("]");
+        };
+        column("live_share", live_share); std::printf(",\n");
+        column("live_agreement", live_agreement); std::printf(",\n");
+        column("live_coincidence", live_coincidence); std::printf("\n}\n");
+        return 0;
+    }
     if (live) {
         tiktak::tracking::LiveConfig live_config;
         live_config.odf = config.odf;
