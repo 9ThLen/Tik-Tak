@@ -221,6 +221,11 @@ int main(int argc, char** argv) {
     // one ships in the microphone mode and had never been scored on real music
     // at all, which this exists to fix.
     bool live = false;
+    // Seeds the causal tracker with the tempo the offline analyser found, which
+    // is what the backing-track case can actually do: the app is playing the
+    // file, so it has already analysed it and the microphone does not have to
+    // rediscover the tempo from a dense mix.
+    bool live_seed = false;
 
     struct Threshold {
         const char* flag;
@@ -243,6 +248,11 @@ int main(int argc, char** argv) {
         }
         if (std::strcmp(argv[i], "--live") == 0) {
             live = true;
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-seeded") == 0) {
+            live = true;
+            live_seed = true;
             continue;
         }
         if (std::strcmp(argv[i], "--bpm") == 0) {
@@ -326,6 +336,7 @@ int main(int argc, char** argv) {
                      " [calibration]]\n"
                      "  --bpm <value>      track at this tempo instead of estimating it\n"
                      "  --live             use the causal microphone tracker, not the offline one\n"
+                     "  --live-seeded      the same, seeded with the offline tempo\n"
                      "  calibration: --salience-min-range <v> "
                      "--salience-min-phase-margin <v> "
                      "--salience-min-meter-margin <v>\n"
@@ -415,6 +426,9 @@ int main(int argc, char** argv) {
         tiktak::tracking::LiveConfig live_config;
         live_config.odf = config.odf;
         tiktak::tracking::LiveTracker tracker(live_config);
+        if (live_seed && analysis.bpm > 0.0) {
+            tracker.seedTempo(analysis.bpm);
+        }
 
         // A device-sized buffer, not the odd block above. takeBeat only hands
         // over a beat once it is within the lookahead of now, so the polling
@@ -523,6 +537,7 @@ int main(int argc, char** argv) {
     std::printf("  \"beats_causal\": %s,\n", live ? "true" : "false");
     if (live) {
         std::printf("  \"live_confidence\": %.9g,\n", finiteOrZero(live_confidence));
+        std::printf("  \"live_seeded\": %s,\n", live_seed ? "true" : "false");
     }
     std::printf("  \"beats_per_bar\": %d,\n", beats_per_bar);
     std::printf("  \"downbeat_strength\": %.17g,\n", finiteOrZero(strength));
