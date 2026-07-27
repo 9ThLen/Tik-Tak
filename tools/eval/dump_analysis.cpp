@@ -60,6 +60,7 @@
 // parity tools set the precedent.
 #include "analysis/downbeat.hpp"
 #include "analysis/offline.hpp"
+#include "tracking/live.hpp"
 
 #if defined(TIKTAK_HAVE_DECODE)
 #include "decode/decoder.hpp"
@@ -215,6 +216,11 @@ int main(int argc, char** argv) {
     // tempo" — two failures that look identical in a beat grid and need
     // opposite fixes.
     double bpm_hint = 0.0;
+    // Runs the causal microphone tracker over the file instead of the offline
+    // analyser. Everything measured so far has been the offline path; the live
+    // one ships in the microphone mode and had never been scored on real music
+    // at all, which this exists to fix.
+    bool live = false;
 
     struct Threshold {
         const char* flag;
@@ -233,6 +239,10 @@ int main(int argc, char** argv) {
                 return 2;
             }
             salience_path = argv[++i];
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live") == 0) {
+            live = true;
             continue;
         }
         if (std::strcmp(argv[i], "--bpm") == 0) {
@@ -315,6 +325,7 @@ int main(int argc, char** argv) {
                      "       %s <clip.f32> <sample_rate> [--salience <file>"
                      " [calibration]]\n"
                      "  --bpm <value>      track at this tempo instead of estimating it\n"
+                     "  --live             use the causal microphone tracker, not the offline one\n"
                      "  calibration: --salience-min-range <v> "
                      "--salience-min-phase-margin <v> "
                      "--salience-min-meter-margin <v>\n"
@@ -392,6 +403,38 @@ int main(int argc, char** argv) {
     }
     const tiktak::analysis::OfflineResult analysis = analyzer.finish();
     std::vector<double> beats = analysis.beats;
+
+    // The causal path, driven over the same file. Fed in the same odd-sized
+    // blocks, and read the way the shell reads it: ask for the next beat as
+    // soon as it comes within the lookahead, and never revise one already
+    // handed out. Scoring anything else would be scoring a tracker that does
+    // not exist.
+    std::vector<double> live_beats;
+    double live_confidence = 0.0;
+    if (live) {
+        tiktak::tracking::LiveConfig live_config;
+        live_config.odf = config.odf;
+        tiktak::tracking::LiveTracker tracker(live_config);
+
+        // A device-sized buffer, not the odd block above. takeBeat only hands
+        // over a beat once it is within the lookahead of now, so the polling
+        // rate is part of the algorithm: poll every 4099 samples and most
+        // beats fall between checks and are simply never played. A real shell
+        // polls once per audio callback, and scoring anything slower would be
+        // measuring the harness rather than the tracker.
+        constexpr std::size_t kLiveBlock = 512;
+        constexpr double kLookahead = 0.05;
+        double now = 0.0;
+        for (std::size_t pos = 0; pos < samples.size(); pos += kLiveBlock) {
+            const std::size_t take = std::min(kLiveBlock, samples.size() - pos);
+            tracker.process(now, samples.data() + pos, take);
+            now += static_cast<double>(take) / rate;
+            double beat = 0.0;
+            while (tracker.takeBeat(now, kLookahead, &beat)) live_beats.push_back(beat);
+        }
+        live_confidence = tracker.estimate(now).confidence;
+        beats = live_beats;
+    }
 
     bool beats_replaced = false;
     if (!beats_path.empty()) {
@@ -477,6 +520,10 @@ int main(int argc, char** argv) {
                 finiteOrZero(analysis.tempo_confidence));
     std::printf("  \"beat_objective_per_beat\": %.9g,\n",
                 finiteOrZero(analysis.beat_objective_per_beat));
+    std::printf("  \"beats_causal\": %s,\n", live ? "true" : "false");
+    if (live) {
+        std::printf("  \"live_confidence\": %.9g,\n", finiteOrZero(live_confidence));
+    }
     std::printf("  \"beats_per_bar\": %d,\n", beats_per_bar);
     std::printf("  \"downbeat_strength\": %.17g,\n", finiteOrZero(strength));
     std::printf("  \"downbeat_phase_margin\": %.17g,\n",
