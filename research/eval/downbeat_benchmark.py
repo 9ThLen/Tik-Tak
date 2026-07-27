@@ -50,6 +50,15 @@ import sys
 
 import numpy as np
 
+
+# Runnable as `python <path>/eval/xxx.py` from anywhere, not only as
+# `python -m eval.xxx` with research/ as the working directory. The second form
+# is what a developer in the repo uses; the first is what someone handed a
+# checkout and a folder of recordings will try, and failing there with
+# ModuleNotFoundError teaches nothing about what went wrong.
+if __package__ in (None, ""):  # pragma: no cover - import-time path setup
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+
 from eval.analysis import Analyser, DEFAULT_BINARY
 from eval.backends import Backend, beat_this_backend, cue_backend
 from eval.annotations import Reference, find_pairs

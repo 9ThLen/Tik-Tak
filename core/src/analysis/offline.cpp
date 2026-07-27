@@ -69,8 +69,9 @@ OfflineResult OfflineAnalyzer::finish() {
         input.beats = result.beats.data();
         input.beat_count = result.beats.size();
 
+        result.beat_features = beatFeatures(input, config_.downbeat);
         const DownbeatResult bars =
-            findDownbeats(beatFeatures(input, config_.downbeat), config_.downbeat);
+            findDownbeats(result.beat_features, config_.downbeat);
         result.downbeats = bars.downbeats;
         result.beats_per_bar = bars.beats_per_bar;
         result.downbeat_strength = bars.strength;

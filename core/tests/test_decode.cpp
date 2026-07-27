@@ -110,6 +110,50 @@ TEST(Sniff, IdentifiesEachSupportedFormat) {
     }
 }
 
+// An ID3 tag says a tagger has been here, not that the audio is MP3. Taggers
+// write them onto FLAC and WAV too, and a real one turned up in the pilot set:
+// a valid FLAC album track that the decoder refused outright, because ID3 was
+// read as MP3 and the MP3 decoder cannot open FLAC. Refusing is the lucky
+// outcome — the unlucky one is the MP3 decoder accepting it and producing
+// noise, which is the failure the sniffer exists to prevent.
+TEST(Sniff, LooksUnderneathAnID3TagBeforeCallingItMp3) {
+    // A minimal, valid ID3v2 tag: header, syncsafe size, then that many bytes.
+    const std::size_t payload = 300;
+    auto tagged = [&](const char* name) {
+        std::vector<unsigned char> out = {'I', 'D', '3', 3, 0, 0,
+                                          static_cast<unsigned char>((payload >> 21) & 0x7F),
+                                          static_cast<unsigned char>((payload >> 14) & 0x7F),
+                                          static_cast<unsigned char>((payload >> 7) & 0x7F),
+                                          static_cast<unsigned char>(payload & 0x7F)};
+        out.resize(10 + payload, 0);
+        const std::vector<unsigned char> audio = readFile(name);
+        out.insert(out.end(), audio.begin(), audio.end());
+        return out;
+    };
+
+    for (const auto& [name, expected] : {std::pair{"tone_mono.flac", TT_FORMAT_FLAC},
+                                         std::pair{"tone_mono.wav", TT_FORMAT_WAV}}) {
+        const std::vector<unsigned char> bytes = tagged(name);
+        ASSERT_GT(bytes.size(), 10 + payload) << name;
+        EXPECT_EQ(tt_sniff_format(bytes.data(), bytes.size()), expected) << name;
+
+        // Sniffing right is only half of it: the decoder has to step over the
+        // tag too, because neither dr_wav nor dr_flac will.
+        Decoder decoder{bytes.data(), bytes.size()};
+        ASSERT_NE(decoder.handle, nullptr) << name;
+        Decoder plain{name};
+        ASSERT_NE(plain.handle, nullptr) << name;
+        EXPECT_EQ(decodeAll(decoder.handle), decodeAll(plain.handle)) << name;
+    }
+
+    // An ID3 tag on an actual MP3 still means MP3, and a tag whose size field
+    // is not syncsafe is not a tag at all — both fall back rather than refuse.
+    EXPECT_EQ(tt_sniff_format(tagged("tone_mono.mp3").data(),
+                              tagged("tone_mono.mp3").size()), TT_FORMAT_MP3);
+    const unsigned char bad_size[16] = {'I', 'D', '3', 3, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF};
+    EXPECT_EQ(tt_sniff_format(bad_size, sizeof(bad_size)), TT_FORMAT_MP3);
+}
+
 // Refusing is the correct answer, not a failure to try harder: handed arbitrary
 // bytes, an MP3 decoder produces noise rather than an error, and silently
 // analysing noise is worse than reporting an unsupported file.
@@ -283,6 +327,18 @@ TEST(Decode, RefusesUnsupportedInput) {
 
     // A null status out-parameter must be as usable as a real one.
     EXPECT_EQ(tt_decoder_open_memory(text, sizeof(text), nullptr), nullptr);
+}
+
+// A directory is not a missing path and not a corrupt file, and it is what a
+// file picker hands over when someone selects a folder. On glibc it opens
+// successfully and reports LONG_MAX bytes, which the decoder used to turn
+// straight into an allocation — so this refusal used to be a std::bad_alloc
+// escaping open() and terminating the process. Refusing is the contract; the
+// value of this test is that it fails by aborting rather than by comparing.
+TEST(Decode, RefusesADirectory) {
+    tt_status status = TT_OK;
+    EXPECT_EQ(tt_decoder_open_file(TIKTAK_TEST_DATA_DIR, &status), nullptr);
+    EXPECT_EQ(status, TT_ERR_UNSUPPORTED);
 }
 
 // A truncated file is the common real-world corruption: an interrupted download

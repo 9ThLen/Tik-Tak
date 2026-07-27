@@ -72,7 +72,7 @@ def test_a_recording_that_changes_metre_says_so():
     [
         ("nonsense 1\n", "not a time"),
         ("0.5 first\n", "not a beat number"),
-        ("-1.0 1\n", "usable beat time"),
+        ("nan 1\n", "usable beat time"),
         ("0.5 0\n", "count from 1"),
     ],
 )
@@ -154,3 +154,29 @@ def test_loads_from_a_path(tmp_path):
     assert reference.name == "clip"
     assert reference.beats_per_bar == 3
     assert reference.has_downbeats
+
+
+def test_a_beat_annotated_just_before_zero_is_dropped_not_refused():
+    # Seven of the 911 Harmonix annotations open like this: the annotator's
+    # grid extrapolated back past the start of the file. Refusing the file
+    # would have thrown away seven real recordings over a beat no estimate
+    # could have matched anyway, because the audio starts at zero.
+    beats, downbeats, bpb, _ = parse_annotation(
+        "-0.019183673\t4\n0.5\t1\n1.0\t2\n1.5\t3\n2.0\t4\n2.5\t1\n")
+
+    assert beats[0] == pytest.approx(0.5)
+    assert len(beats) == 5
+    assert downbeats[0] == pytest.approx(0.5)
+    assert bpb == 4
+
+
+def test_an_annotation_entirely_before_zero_yields_nothing_rather_than_lying():
+    beats, downbeats, bpb, lengths = parse_annotation("-2.0\t1\n-1.0\t2\n")
+
+    assert len(beats) == 0 and len(downbeats) == 0
+    assert bpb == 0 and lengths == ()
+
+
+def test_a_time_that_is_not_a_number_at_all_is_still_refused():
+    with pytest.raises(ValueError, match="not a usable beat time"):
+        parse_annotation("nan\t1\n")

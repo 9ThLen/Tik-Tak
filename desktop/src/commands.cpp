@@ -10,6 +10,8 @@
 #include <vector>
 
 #include "device.hpp"
+#include "dsp/matched.hpp"
+#include "render/click.hpp"
 #include "render/metronome.hpp"
 #include "render/live_metronome.hpp"
 #include "render/player.hpp"
@@ -190,28 +192,50 @@ void measureCallback(void* user, double stream_time_sec, const float* input, flo
 // known burst in a short window around a time we already know, and a
 // purpose-built detector that can be reasoned about is worth more here than a
 // general one whose failures would be mistaken for jitter.
-std::ptrdiff_t findClick(const float* window, std::size_t frames, double rate) {
-    if (frames == 0) return -1;
-
-    (void)rate;
-
-    double peak = 0.0;
-    for (std::size_t i = 0; i < frames; ++i) {
-        peak = std::max(peak, std::fabs(static_cast<double>(window[i])));
+// The clicks this run is playing, rendered once so the recording can be
+// correlated against the actual waveform rather than against a guess at it.
+// One per kind, because the three differ in pitch and length and the wrong one
+// correlates weakly enough to be refused.
+std::vector<std::vector<float>> clickTemplates(const render::ClickConfig& config) {
+    std::vector<std::vector<float>> out;
+    for (schedule::BeatKind kind : {schedule::BeatKind::Downbeat, schedule::BeatKind::Beat,
+                                    schedule::BeatKind::Subdivision}) {
+        render::ClickRenderer renderer(config);
+        if (!renderer.schedule(0.0, kind)) continue;
+        // Long enough for the longest tone to decay by 60 dB, which is what
+        // ClickTone::length_sec is defined as.
+        std::vector<float> buffer(static_cast<std::size_t>(config.sample_rate * 0.4), 0.0f);
+        renderer.mix(0.0, buffer.data(), buffer.size());
+        out.push_back(std::move(buffer));
     }
-    if (peak < 1e-3) return -1;   // nothing arrived at all: no click, not a quiet one
+    return out;
+}
 
-    // Relative to this window's own peak, so it neither needs a calibrated
-    // input level nor fires on room noise. A click reaches a third of its peak
-    // within two samples of starting, which is forty microseconds — three
-    // orders of magnitude under the jitter being measured.
-    const double threshold = 0.3 * peak;
-    for (std::size_t i = 0; i < frames; ++i) {
-        if (std::fabs(static_cast<double>(window[i])) > threshold) {
-            return static_cast<std::ptrdiff_t>(i);
+// Where a click starts inside `window`, in samples, or -1.
+//
+// Correlation against the known click rather than a level test. The rule this
+// replaced took the first sample above thirty per cent of the window's own
+// peak, which is exact down a loopback cable and unusable in a room: once the
+// click is no longer the loudest thing in its window, the peak is set by
+// whatever else is and the first crossing lands on that instead. Measured on
+// synthetic mixtures at 0 dB SNR, the old rule landed within five milliseconds
+// on at most 3 windows in 20 and this lands within five on at least 19.
+//
+// See dsp/matched.hpp for what this does not fix — in a live room the
+// correlation peak sits late by an amount the room decides.
+double findClick(const float* window, std::size_t frames,
+                 const std::vector<std::vector<float>>& templates) {
+    double best_offset = -1.0;
+    double best_strength = 0.0;
+    for (const std::vector<float>& tmpl : templates) {
+        const dsp::MatchResult match =
+            dsp::findKnownSignal(window, frames, tmpl.data(), tmpl.size());
+        if (match.found() && match.strength > best_strength) {
+            best_strength = match.strength;
+            best_offset = match.offset_samples;
         }
     }
-    return -1;
+    return best_offset;
 }
 
 // Which beat of the grid a bar line falls on. The downbeats are a subset of the
@@ -601,15 +625,17 @@ int cmdMeasure(const Options& options) {
     const double beat_sec = 60.0 / (options.bpm * options.subdivisions);
     const auto window_frames = static_cast<std::size_t>(std::min(0.5, beat_sec * 0.9) * rate);
 
+    const std::vector<std::vector<float>> templates = clickTemplates(cfg.click);
+
     std::vector<double> offsets;
     for (int k = 0;; ++k) {
         const double submitted = kStartDelaySec + beat_sec * k;
         const auto at = static_cast<std::size_t>(submitted * rate);
         if (at + window_frames >= recorded) break;
 
-        const std::ptrdiff_t found = findClick(recording.data() + at, window_frames, rate);
-        if (found < 0) continue;
-        offsets.push_back(static_cast<double>(found) / rate);
+        const double found = findClick(recording.data() + at, window_frames, templates);
+        if (found < 0.0) continue;
+        offsets.push_back(found / rate);
     }
 
     if (offsets.size() < 4) {

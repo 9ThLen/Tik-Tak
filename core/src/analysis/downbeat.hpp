@@ -51,6 +51,31 @@ struct DownbeatConfig {
     std::vector<MeterCandidate> meters = {{4, 1.0}, {3, 0.9}, {2, 0.75}, {6, 0.6}};
 
     // Relative weight of each cue in the per-beat score.
+    //
+    // **The two onset cues and harmony answer different questions**, which is
+    // the thing measurement showed and argument had not. On real recordings the
+    // low band gets the bar *length* right and the bar *line* wrong: a kick
+    // pattern repeats every N beats whether or not the kick is on the one, so
+    // it establishes N and says little about the phase. A chord change is the
+    // opposite — it is weak evidence about the length and strong evidence about
+    // where the bar starts.
+    //
+    // Measured over five recordings whose reference bar grid is regular enough
+    // to trust: with the low band dominant the metre came back right four times
+    // out of five and the phase zero times out of five. Shifting the balance
+    // towards harmony kept the metre at four and took the phase to two — and
+    // broke the percussion-only reference clip completely, where harmony is
+    // nothing but noise and the low band is the only cue there is.
+    //
+    // So the weight stays where it was, and that is a report of a dead end
+    // rather than a result. **No single fixed mixture serves both**: the useful
+    // conclusion is that these are not interchangeable evidence for one
+    // question and should not be blended into one number at all. Scoring the
+    // metre from the onset cues and the phase from harmony, with a fallback to
+    // the onsets when harmony has nothing to say, is the change this points to.
+    // It is a change to the resolver rather than to a constant, five recordings
+    // do not justify making it, and pretending a reweighting solved it would
+    // have buried the finding under a number that did nothing.
     double low_weight = 1.0;
 
     // Off by default, and this is the one number here that was decided by
@@ -78,6 +103,33 @@ struct DownbeatConfig {
     // would be actively wrong — on a drums-only track the chord "changes" by
     // 0.01 from beat to beat, pure noise, and forcing that to unit variance
     // would promote it to an equal vote with the kick drum.
+    //
+    // That reasoning is right and it hid a plain bug. A standardised onset cue
+    // has a spread of exactly 1 by construction; a chroma distance, measured
+    // across real recordings, has a spread of about 0.086. So the two weights
+    // were multiplying quantities an order of magnitude apart, and
+    // `harmony_weight = 1.0` was really 0.086 — the harmony cue could be given
+    // a nominal weight of sixteen and still lose to the low band. The weights
+    // were not describing the mixture they produced.
+    //
+    // kHarmonyScale fixes that without standardising: a **fixed** factor, not
+    // one derived from the piece, so a drums-only track's chroma noise is
+    // magnified by the same constant as a real chord change instead of being
+    // stretched to fill the range. What it buys is that the weights above now
+    // mean what they say.
+    static constexpr double kHarmonyScale = 12.0;
+
+    // Below this much movement, a chroma distance is measurement noise and is
+    // discarded rather than scaled up with everything else. An absolute floor,
+    // which is only defensible because the quantity is absolute — the whole
+    // reason harmony is not standardised in the first place.
+    //
+    // Measured: the percussion-only reference clip, which has no chord changes
+    // at all, never exceeds 0.043 and averages 0.010. The weakest real
+    // recording to hand peaks at 0.165 and the rest reach 0.35 to 0.64. The
+    // floor sits in that gap, so silence from the harmony cue on drum-only
+    // material is a statement rather than an accident.
+    static constexpr double kHarmonyFloor = 0.05;
     double harmony_weight = 1.0;
 
     // Where a beat's onset energy is collected from, as a fraction of the gap
@@ -169,6 +221,20 @@ struct DownbeatResult {
     //   failure a listener notices immediately, since a metronome accenting
     //   beat 3 is worse than one accenting nothing.
     //
+    //   It does carry information about correctness. Measured against a Beat
+    //   This! reference over eighty-one recordings from fifty-five releases,
+    //   its AUC for predicting agreement is 0.713 — and 0.792 if the one batch
+    //   that came from only eight releases is set aside, which the three
+    //   batches taken in order argue for: 0.562 on eight groups, then 0.777 on
+    //   thirty-five and 0.821 on twelve. The low reading is the outlier, and it
+    //   is the underpowered one.
+    //
+    //   That still does not make a large margin on any individual track mean
+    //   much. On the eight-group batch the two largest margins in the set,
+    //   1.782 and 1.768, were an agreement and a disagreement. What the
+    //   quantity measures is how far the *mixture* won by, which is weak
+    //   evidence when one cue dominates the mixture and is wrong.
+    //
     //   `meter_margin` is how far ahead of the best *other meter* it is. This
     //   is a genuinely different question, and conflating the two was a real
     //   bug: a piece scored in three can be perfectly unambiguous about which
@@ -192,6 +258,33 @@ struct DownbeatResult {
     // The thresholds are the caller's, because the cost of being wrong is the
     // caller's. Both default to placeholders rather than calibrated numbers —
     // see research/eval/README.md, which is what will replace them.
+    //
+    // Measured against a Beat This! reference on eighty-one recordings from
+    // fifty-five releases, this does separate: where it returns true the
+    // reference agreed 29 times in 36, and where it returns false, 30 in 45 —
+    // about fourteen points of lift, and twelve on the two better-grouped
+    // batches alone. Useful, and a long way from good enough to accent on
+    // silently.
+    //
+    // An earlier version of this comment said the opposite, that the gate
+    // "partitions the material into two halves of equal accuracy". That was
+    // measured on twenty-six recordings from only eight releases, leaning
+    // heavily on one drone-heavy session, and it did not survive the next
+    // forty-seven releases. The lesson is recorded because it will otherwise
+    // be repeated: the sample size that matters is the number of independent
+    // releases, not the number of tracks.
+    //
+    // The same comment also proposed agreement between the cues as a better
+    // signal than the margin of their sum, on a measured 55-point gap. That
+    // is now withdrawn. Tested on two batches gathered after it was proposed,
+    // the gap fell to 19 points and then to *minus* 20 — on the third batch
+    // the tracks whose cues disagreed were the ones the reference agreed
+    // with, every one of them. Pooling all three still shows 29 points, but
+    // that number is made entirely by the eight-release batch and drops to 7
+    // without it, with confidence intervals that then almost entirely
+    // overlap. An effect whose sign depends on the batch is not an effect
+    // yet. beat_features on OfflineResult is still what makes trying such
+    // things possible from outside the core.
     bool confident(double min_phase_margin = 0.25,
                    double min_meter_margin = 0.40) const {
         return beats_per_bar > 0 && !downbeats.empty() &&
@@ -234,6 +327,63 @@ std::vector<BeatFeature> beatFeatures(const BeatFeatureInput& input,
 // partway cannot be represented, and will come back as whichever meter holds
 // for longer with a poor margin. Bringing back the DP is what that would need,
 // and it should be brought back for that reason and not for smoothing.
+//
+// **Measured on full-length songs, that reasoning is wrong, and wrong in a way
+// the paragraph above did not anticipate.** It holds for a clip. It fails for a
+// track, and the failure is not the metre changing — it is the *phase*
+// changing while the metre stays put. An inserted or dropped bar at a section
+// boundary shifts every bar line after it, and a single global p can be right
+// on only one side of that shift.
+//
+// The numbers, taken from a reference downbeat grid on five recordings whose
+// bar structure is regular enough to trust:
+//
+//   LUNCH        one phase throughout        a global phase reaches 1.00
+//   makko        74% of bars on one phase                       0.74
+//   東方          45% / 40% split across two                      0.45
+//   Загадай      43% / 39% split                                 0.43
+//   Dopamine     42% / 38% split                                 0.42
+//
+// So on three of the five, **no** method that commits to one phase for the
+// whole song can place even half the bar lines, whatever its cues are. That
+// ceiling is 2 of 5, and a state-of-the-art model's activations run through
+// this resolver score exactly 2 of 5 — it is already at the limit, and the
+// limit is here, not in the scorer.
+//
+// This is the reason to bring the DP back, and it is a much more ordinary
+// reason than a metre change: songs have intros, breaks and half-bar turns,
+// and a Viterbi pass over (M, p) with a small cost for changing p represents
+// them where a single pair cannot. The rest of the paragraph above still holds
+// — smoothing was never the motivation, and is still not.
+//
+// That pass has since been prototyped outside the core and measured on
+// twenty-six recordings across eight releases, and the result carries one
+// condition that has to travel with the recommendation:
+//
+//   salience fed in            single global p      Viterbi over (M, p)
+//   the built-in cues              F 0.415              F 0.423
+//   a learned activation           F 0.772              F 0.933
+//
+// The decoder is worth roughly nothing on the cues this file computes, and a
+// great deal on a good activation. Both numbers come from the same grid and
+// the same reference, so the difference is the salience, not the decoding.
+// Ordering therefore matters: build the DP against the current cues and it
+// will look like the idea failed, when what failed was the evidence handed to
+// it. Activations first, decoder second, and the two are not separable pieces
+// of work.
+//
+// The obvious objection — that a decoder free to move the phase simply drifts
+// until it matches anything — was tested and does not hold. On the eleven
+// tracks whose reference bar spacing is regular it changes phase 0.5 to 1.4
+// times per track across the whole range of switch costs, against 42 to 63 on
+// the irregular ones. It switches where there is something to switch on.
+//
+// The absolute F values are inflated: the reference is the same model's own
+// peak picking, so anything built on that activation is being marked by a
+// relative. What survives is the comparison down each column, and the
+// discrimination test above, neither of which depends on the reference being
+// right in absolute terms. Ranking these cues against a learned activation
+// fairly still needs human annotation.
 //
 // Scoring is a contrast, not a sum: how far the chosen beats stand above the
 // ones they were chosen out of. A sum would make short bars win automatically
