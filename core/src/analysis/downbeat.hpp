@@ -223,15 +223,17 @@ struct DownbeatResult {
     //
     //   Read that literally and no further. On synthetic clips a large phase
     //   margin does go with a right answer, which is where the number and its
-    //   threshold came from. On seven real recordings whose beat grids agree
-    //   with a Beat This! reference, it does not: the phase margins where the
-    //   two agree were 0.19, 0.47 and 0.55, and where they disagree 0.18,
-    //   0.26, 0.32 and 1.26 — overlapping, with the single largest margin in
-    //   the whole set sitting on a disagreement. The quantity is real and the
-    //   resolver computes it correctly; what is missing is evidence that it
-    //   ranks correctness on music. Seven tracks cannot establish that it is
-    //   anti-correlated either. It means "this phase won its own contest by
-    //   this much", not "this phase is probably right".
+    //   threshold came from. On twenty-six real recordings across eight
+    //   releases, whose beat grids agree with a Beat This! reference, it does
+    //   not: the margin's AUC for predicting agreement is 0.562, where 0.5 is
+    //   a coin toss. The two largest margins in the set, 1.782 and 1.768, are
+    //   an agreement and a disagreement respectively.
+    //
+    //   The quantity is real and the resolver computes it correctly. It means
+    //   "this phase won its own contest by this much", not "this phase is
+    //   probably right" — because what the contest measures is how far the
+    //   *mixture* won by, which says nothing when one cue dominates the
+    //   mixture and is wrong. See research/eval/README.md.
     //
     //   `meter_margin` is how far ahead of the best *other meter* it is. This
     //   is a genuinely different question, and conflating the two was a real
@@ -256,6 +258,23 @@ struct DownbeatResult {
     // The thresholds are the caller's, because the cost of being wrong is the
     // caller's. Both default to placeholders rather than calibrated numbers —
     // see research/eval/README.md, which is what will replace them.
+    //
+    // Measured on real music, this does not yet earn an accent. Over
+    // twenty-six recordings it returned true on eight and agreed with the
+    // reference phase on four of those — and on nine of the other eighteen,
+    // which is the same 50%. It partitions the material into two halves of
+    // equal accuracy, so no threshold on these two margins recovers it: the
+    // inputs carry the information, not the gate over them. A caller deciding
+    // whether to accent should treat true as "a meter was decided", and until
+    // that changes should not turn the accent on by default.
+    //
+    // What did separate, on that set, was agreement between cues rather than
+    // the margin of their sum: where the low-band and harmony cues pick the
+    // same phase the reference agreed 9 times in 11, and where they disagree,
+    // 4 in 15. It is not implemented here on purpose — the criterion was
+    // chosen after seeing those numbers, and validating it needs material
+    // collected afterwards. beat_features on OfflineResult is what makes
+    // trying it possible from outside the core.
     bool confident(double min_phase_margin = 0.25,
                    double min_meter_margin = 0.40) const {
         return beats_per_bar > 0 && !downbeats.empty() &&
