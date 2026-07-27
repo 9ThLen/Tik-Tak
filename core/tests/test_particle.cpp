@@ -359,3 +359,73 @@ TEST(ParticleFilter, UnpinningLetsItLookAgain) {
     const double now = feedSteady(filter, 100.0, 14.0, 4.0);
     EXPECT_NEAR(filter.estimate(now).bpm, 100.0, 3.0);
 }
+
+// The case the confidence statistic was rebuilt for. A produced mix carries
+// onsets between every beat — hats, vocals, guitars — and the old statistic
+// (the *share* of onset energy landing on the prediction) sat near chance on
+// such material even for perfect tracking: evaluated with reference beats on
+// 106 real recordings its median was 0.137 against a lock threshold of 0.35.
+// The contrast form asks whether there is *more* onset on the claimed beats
+// than between them, which dense-but-periodic material can actually answer.
+TEST(ParticleFilter, StaysConfidentWhenEveryOffbeatCarriesEnergyToo) {
+    BeatParticleFilter filter{ParticleFilterConfig{}};
+
+    // Beats at 120 with a hat between every pair at 40% strength — through
+    // onset_exponent=2 that is 0.16 of a beat's evidence on every half-beat —
+    // plus a floor of broadband activity on every frame. Subordinate offbeats,
+    // not rival ones: an offbeat at 60% is genuinely ambiguous between the
+    // beat and its double, and no confidence statistic should be forced to
+    // call ambiguity certain.
+    const double period = 60.0 / 120.0;
+    const auto frames = static_cast<std::size_t>(16.0 * kFps);
+    double now = 0.0;
+    for (std::size_t i = 0; i < frames; ++i) {
+        now = static_cast<double>(i) / kFps;
+        const double to_beat = std::fabs(now - std::round(now / period) * period);
+        const double to_off =
+            std::fabs(now - period / 2.0 - std::round((now - period / 2.0) / period) * period);
+        double onset = 0.05;                       // the mix never goes quiet
+        if (to_beat < 0.5 / kFps) onset = 1.0;
+        else if (to_off < 0.5 / kFps) onset = 0.4;
+        filter.observe(now, onset);
+    }
+
+    const BeatEstimate estimate = filter.estimate(now);
+    // Half-time (60 BPM) is also a defensible reading of this pattern; what is
+    // not acceptable is refusing to lock on material this periodic.
+    EXPECT_GT(estimate.confidence, 0.35);
+    const double bpm = estimate.bpm;
+    EXPECT_TRUE(std::fabs(bpm - 120.0) < 6.0 || std::fabs(bpm - 60.0) < 3.0) << bpm;
+}
+
+TEST(ParticleFilter, AUniformLevelEarnsNoConfidence) {
+    // The property the rescaling exists for, restated for the contrast form:
+    // energy with no periodic structure must read as zero evidence, or noise
+    // and sustained pads would buy a lock.
+    BeatParticleFilter filter{ParticleFilterConfig{}};
+    const auto frames = static_cast<std::size_t>(12.0 * kFps);
+    double now = 0.0;
+    for (std::size_t i = 0; i < frames; ++i) {
+        now = static_cast<double>(i) / kFps;
+        filter.observe(now, 0.5);
+    }
+    EXPECT_LT(filter.estimate(now).confidence, 0.15);
+}
+
+TEST(ParticleFilter, SaysNothingBeforeItsEvidenceHasConverged) {
+    // The ratio of two exponential averages a fraction of their time constant
+    // old is noise pretending to be a measurement. Fed white noise, the first
+    // reported second used to reach 0.64 — nearly twice the lock threshold —
+    // which is a metronome clicking along to a fan because the app just
+    // started. Confidence must stay silent for the warm-up, however exciting
+    // the first seconds look.
+    BeatParticleFilter filter{ParticleFilterConfig{}};
+    Rng noise(42);
+    const auto frames = static_cast<std::size_t>(3.0 * kFps);   // < warmup
+    double now = 0.0;
+    for (std::size_t i = 0; i < frames; ++i) {
+        now = static_cast<double>(i) / kFps;
+        filter.observe(now, noise.uniform());
+    }
+    EXPECT_EQ(filter.estimate(now).confidence, 0.0);
+}

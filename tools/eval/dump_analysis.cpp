@@ -226,6 +226,14 @@ int main(int argc, char** argv) {
     // file, so it has already analysed it and the microphone does not have to
     // rediscover the tempo from a dense mix.
     bool live_seed = false;
+    // Prints the onset function itself, for experiments on the statistics the
+    // live tracker derives from it — measuring a proposed confidence change in
+    // Python first is a rebuild per idea cheaper.
+    bool dump_odf = false;
+    // Overrides for the live tracker's lock/release hysteresis, so a threshold
+    // can be chosen on one batch and validated on another without a rebuild.
+    double live_lock = 0.0;
+    double live_release = 0.0;
 
     struct Threshold {
         const char* flag;
@@ -246,8 +254,22 @@ int main(int argc, char** argv) {
             salience_path = argv[++i];
             continue;
         }
+        if (std::strcmp(argv[i], "--dump-odf") == 0) {
+            dump_odf = true;
+            continue;
+        }
         if (std::strcmp(argv[i], "--live") == 0) {
             live = true;
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-lock") == 0) {
+            if (i + 1 >= argc) { std::fprintf(stderr, "--live-lock needs a value\n"); return 2; }
+            live_lock = std::atof(argv[++i]);
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-release") == 0) {
+            if (i + 1 >= argc) { std::fprintf(stderr, "--live-release needs a value\n"); return 2; }
+            live_release = std::atof(argv[++i]);
             continue;
         }
         if (std::strcmp(argv[i], "--live-seeded") == 0) {
@@ -422,9 +444,12 @@ int main(int argc, char** argv) {
     // not exist.
     std::vector<double> live_beats;
     double live_confidence = 0.0;
+    std::vector<double> live_share, live_agreement, live_coincidence;
     if (live) {
         tiktak::tracking::LiveConfig live_config;
         live_config.odf = config.odf;
+        if (live_lock > 0.0) live_config.lock_confidence = live_lock;
+        if (live_release > 0.0) live_config.release_confidence = live_release;
         tiktak::tracking::LiveTracker tracker(live_config);
         if (live_seed && analysis.bpm > 0.0) {
             tracker.seedTempo(analysis.bpm);
@@ -439,12 +464,22 @@ int main(int argc, char** argv) {
         constexpr std::size_t kLiveBlock = 512;
         constexpr double kLookahead = 0.05;
         double now = 0.0;
+        double next_sample = 1.0;
         for (std::size_t pos = 0; pos < samples.size(); pos += kLiveBlock) {
             const std::size_t take = std::min(kLiveBlock, samples.size() - pos);
             tracker.process(now, samples.data() + pos, take);
             now += static_cast<double>(take) / rate;
             double beat = 0.0;
             while (tracker.takeBeat(now, kLookahead, &beat)) live_beats.push_back(beat);
+            if (now >= next_sample) {
+                // Once a second: which of confidence's three factors is low is
+                // the diagnosis, and the product alone cannot say.
+                const tiktak::tracking::BeatEstimate e = tracker.estimate(now);
+                live_share.push_back(e.cluster_share);
+                live_agreement.push_back(e.phase_agreement);
+                live_coincidence.push_back(e.onset_coincidence);
+                next_sample += 1.0;
+            }
         }
         live_confidence = tracker.estimate(now).confidence;
         beats = live_beats;
@@ -535,9 +570,32 @@ int main(int argc, char** argv) {
     std::printf("  \"beat_objective_per_beat\": %.9g,\n",
                 finiteOrZero(analysis.beat_objective_per_beat));
     std::printf("  \"beats_causal\": %s,\n", live ? "true" : "false");
+    if (dump_odf) {
+        const std::vector<double>& odf_values = analyzer.odfValues();
+        const std::vector<double>& odf_times = analyzer.frameTimes();
+        std::printf("  \"odf\": [");
+        for (std::size_t i = 0; i < odf_values.size(); ++i) {
+            std::printf("%s%.6g", i == 0 ? "" : ",", odf_values[i]);
+        }
+        std::printf("],\n  \"odf_times\": [");
+        for (std::size_t i = 0; i < odf_times.size(); ++i) {
+            std::printf("%s%.6f", i == 0 ? "" : ",", odf_times[i]);
+        }
+        std::printf("],\n");
+    }
     if (live) {
         std::printf("  \"live_confidence\": %.9g,\n", finiteOrZero(live_confidence));
         std::printf("  \"live_seeded\": %s,\n", live_seed ? "true" : "false");
+        const auto column = [](const char* name, const std::vector<double>& values) {
+            std::printf("  \"%s\": [", name);
+            for (std::size_t i = 0; i < values.size(); ++i) {
+                std::printf("%s%.4g", i == 0 ? "" : ",", values[i]);
+            }
+            std::printf("],\n");
+        };
+        column("live_share", live_share);
+        column("live_agreement", live_agreement);
+        column("live_coincidence", live_coincidence);
     }
     std::printf("  \"beats_per_bar\": %d,\n", beats_per_bar);
     std::printf("  \"downbeat_strength\": %.17g,\n", finiteOrZero(strength));

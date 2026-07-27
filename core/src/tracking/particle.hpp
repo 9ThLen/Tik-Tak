@@ -116,6 +116,15 @@ struct ParticleFilterConfig {
     // flicker with one loud snare.
     double evidence_tau_sec = 2.0;
 
+    // How much audio the coincidence measure has to have seen before it says
+    // anything. An exponential average a fraction of its time constant old is
+    // mostly its first few samples, and the ratio of two such averages is
+    // noise pretending to be a measurement: fed white noise, the first
+    // reported second reached 0.64 — nearly twice the lock threshold — and
+    // decayed to a steady 0.00 by the sixth. Confidence has no business
+    // reporting before its own estimator has converged.
+    double evidence_warmup_sec = 4.0;
+
     // Spread added to the period of every resampled particle, in octaves.
     // Resampling copies survivors, and copies are not hypotheses: without
     // roughening a cloud that has agreed once can never change its mind, which
@@ -165,6 +174,14 @@ struct BeatEstimate {
     // Spread of the cloud in tempo, octaves. Large means the period itself is
     // still undecided, which is a different failure from a lost phase.
     double tempo_spread_octaves = 0.0;
+
+    // The three factors confidence is the product of, reported separately so a
+    // low number can be diagnosed instead of guessed at: which one is limiting
+    // decides whether the fix is tempo-side, phase-side, or in the evidence —
+    // three different pieces of work. Guessing got it wrong once already.
+    double cluster_share = 0.0;      // weight of the winning tempo cluster
+    double phase_agreement = 0.0;    // its resultant length in phase
+    double onset_coincidence = 0.0;  // on-beat against off-beat onset contrast
 };
 
 // Online beat tracking by particle filter. State per particle: a period and the
@@ -269,7 +286,9 @@ private:
     double charge_ema_ = 0.0;    // running onset, fast, scales the beat charge
     double onset_ema_ = 0.0;     // running onset per frame
     double on_beat_ema_ = 0.0;   // running onset that landed on the prediction
-    double coincidence_ = 0.0;   // the two above, as a share above chance
+    double window_ema_ = 0.0;    // running mass of the prediction window itself
+    double evidence_age_sec_ = 0.0;  // how long the EMAs above have been fed
+    double coincidence_ = 0.0;   // on-beat against off-beat onset, as a contrast
 
     Stats stats_;
 };
