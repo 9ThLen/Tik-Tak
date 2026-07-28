@@ -13,6 +13,9 @@
 
 namespace {
 
+// Spelled out rather than M_PI: that one is POSIX, not standard C++, and MSVC
+// does not define it without a feature macro.
+constexpr double kPi = 3.14159265358979323846;
 constexpr double kToneHz = 440.0;
 constexpr unsigned kRate = 22050;
 constexpr unsigned long long kFrames = 11025;   // half a second
@@ -79,7 +82,7 @@ double rms(const std::vector<float>& values) {
 double toneFraction(const std::vector<float>& values, double hz, double rate) {
     if (values.size() < 64) return 0.0;
 
-    const double omega = 2.0 * M_PI * hz / rate;
+    const double omega = 2.0 * kPi * hz / rate;
     const double coeff = 2.0 * std::cos(omega);
     double s1 = 0.0;
     double s2 = 0.0;

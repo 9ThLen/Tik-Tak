@@ -86,7 +86,7 @@ TEST(Offline, LocksOntoMusicThatStartsAfterSomeSilence) {
 
     // No clicking through the silence before the first hit.
     const auto early = std::count_if(result.beats.begin(), result.beats.end(),
-                                     [](double t) { return t < kLead - 0.1; });
+                                     [kLead](double t) { return t < kLead - 0.1; });
     EXPECT_LE(early, 1);
 }
 

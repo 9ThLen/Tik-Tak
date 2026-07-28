@@ -11,6 +11,10 @@ using tiktak::dsp::findKnownSignal;
 namespace {
 
 constexpr double kRate = 48000.0;
+// Spelled out rather than M_PI: that one is POSIX, not standard C++, and MSVC
+// does not define it without a feature macro. The core's own sources already
+// carry this constant for the same reason.
+constexpr double kPi = 3.14159265358979323846;
 
 // The metronome's beat click: a decaying sine, which is what the calibration
 // screen actually plays.
@@ -19,7 +23,7 @@ std::vector<float> click(double freq = 1046.5, double decay = 0.060) {
     std::vector<float> out(n);
     for (std::size_t i = 0; i < n; ++i) {
         const double t = static_cast<double>(i) / kRate;
-        out[i] = static_cast<float>(std::sin(2.0 * M_PI * freq * t) * std::exp(-t / decay));
+        out[i] = static_cast<float>(std::sin(2.0 * kPi * freq * t) * std::exp(-t / decay));
     }
     return out;
 }

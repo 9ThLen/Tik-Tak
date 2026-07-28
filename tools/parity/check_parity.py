@@ -19,6 +19,8 @@ rather than growing into a difference in behaviour.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import os
 import pathlib
 import subprocess
 import sys
@@ -55,13 +57,28 @@ BEAT_THIS_TOLERANCE = 1e-4
 TOLERANCE = 2e-4
 
 
-def run_cpp(binary: pathlib.Path, audio: np.ndarray, sample_rate: int, block: int):
-    with tempfile.NamedTemporaryFile(suffix=".f32") as handle:
-        handle.write(np.asarray(audio, dtype=np.float32).tobytes())
-        handle.flush()
+@contextlib.contextmanager
+def audio_file(audio: np.ndarray):
+    """The audio on disk, at a path a child process can actually open.
 
+    delete=False and then unlink, rather than a plain NamedTemporaryFile: on
+    Windows a temporary file still open here cannot be opened by the child at
+    all, so every one of these runs fails with "cannot open". This is the same
+    spelling research/eval/analysis.py already uses, for the same reason.
+    """
+    handle = tempfile.NamedTemporaryFile(suffix=".f32", delete=False)
+    try:
+        handle.write(np.asarray(audio, dtype=np.float32).tobytes())
+        handle.close()
+        yield handle.name
+    finally:
+        os.unlink(handle.name)
+
+
+def run_cpp(binary: pathlib.Path, audio: np.ndarray, sample_rate: int, block: int):
+    with audio_file(audio) as path:
         completed = subprocess.run(
-            [str(binary), handle.name, str(sample_rate), str(block)],
+            [str(binary), path, str(sample_rate), str(block)],
             capture_output=True,
             text=True,
             check=True,
@@ -106,12 +123,9 @@ def compare(name: str, clip, binary: pathlib.Path, block: int) -> bool:
 
 def run_cpp_beats(binary: pathlib.Path, audio: np.ndarray, sample_rate: int, block: int,
                   bpm_hint: float = 0.0):
-    with tempfile.NamedTemporaryFile(suffix=".f32") as handle:
-        handle.write(np.asarray(audio, dtype=np.float32).tobytes())
-        handle.flush()
-
+    with audio_file(audio) as path:
         completed = subprocess.run(
-            [str(binary), handle.name, str(sample_rate), str(block), str(bpm_hint)],
+            [str(binary), path, str(sample_rate), str(block), str(bpm_hint)],
             capture_output=True,
             text=True,
             check=True,
@@ -173,11 +187,8 @@ def compare_beats(name: str, clip, binary: pathlib.Path, block: int, bpm_hint: f
 
 def run_cpp_beatnet(binary: pathlib.Path, audio: np.ndarray, sample_rate: int,
                     block: int, features: bool):
-    with tempfile.NamedTemporaryFile(suffix=".f32") as handle:
-        handle.write(np.asarray(audio, dtype=np.float32).tobytes())
-        handle.flush()
-
-        command = [str(binary), handle.name, str(sample_rate), str(WEIGHTS), str(block)]
+    with audio_file(audio) as path:
+        command = [str(binary), path, str(sample_rate), str(WEIGHTS), str(block)]
         if features:
             command.append("--features")
         completed = subprocess.run(command, capture_output=True, text=True, check=True)
@@ -270,10 +281,8 @@ def check_beatnet(binary: pathlib.Path) -> bool | None:
 
 
 def run_cpp_beat_this(binary: pathlib.Path, audio: np.ndarray):
-    with tempfile.NamedTemporaryFile(suffix=".f32") as handle:
-        handle.write(np.asarray(audio, dtype=np.float32).tobytes())
-        handle.flush()
-        completed = subprocess.run([str(binary), handle.name],
+    with audio_file(audio) as path:
+        completed = subprocess.run([str(binary), path],
                                    capture_output=True, text=True, check=True)
     body = completed.stdout.strip().splitlines()
     if not body:
@@ -319,11 +328,9 @@ def check_beat_this_end_to_end(binary: pathlib.Path) -> bool | None:
     ok = True
     for name, clip in cases:
         audio = np.asarray(clip.audio, dtype=np.float32)
-        with tempfile.NamedTemporaryFile(suffix=".f32") as handle:
-            handle.write(audio.tobytes())
-            handle.flush()
+        with audio_file(audio) as path:
             completed = subprocess.run(
-                [str(binary), handle.name, str(MODEL_PATH), "--beats"],
+                [str(binary), path, str(MODEL_PATH), "--beats"],
                 capture_output=True, text=True, check=True)
 
         head, _, tail = completed.stdout.partition("\ndownbeats\n")

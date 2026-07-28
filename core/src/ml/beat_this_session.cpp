@@ -6,6 +6,7 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
 #include <limits>
 
 namespace tiktak::ml {
@@ -28,8 +29,14 @@ bool BeatThisSession::open(const std::string& model_path) {
     reason_.clear();
     impl_->session.reset();
     try {
+        // ONNX Runtime takes the platform's native path type — wchar_t on
+        // Windows, char everywhere else — and std::filesystem::path is the one
+        // conversion that is both. It also widens through the same narrow
+        // encoding the path arrived in, which hand-rolled UTF-8 widening would
+        // get wrong for a non-ASCII path off the command line.
+        const std::filesystem::path native_path(model_path);
         impl_->session = std::make_unique<Ort::Session>(
-            impl_->env, model_path.c_str(), impl_->options);
+            impl_->env, native_path.c_str(), impl_->options);
     } catch (const Ort::Exception& error) {
         // Ordinary, not exceptional: the model is fetched separately and is
         // deliberately absent from a fresh checkout.
