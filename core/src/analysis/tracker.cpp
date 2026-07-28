@@ -185,6 +185,14 @@ BeatResult BeatTracker::track(const double* odf, const double* times, std::size_
     result.frames = frames_;
     result.beats.reserve(frames_.size());
     for (std::size_t frame : frames_) result.beats.push_back(times[frame]);
+
+    // Read off the sequence that was kept, not off the whole array: trim() may
+    // have dropped beats from either end, and the cumulative score at the last
+    // surviving frame still includes everything the backtrace passed through.
+    if (!frames_.empty()) {
+        result.objective_per_beat =
+            cumulative_[frames_.back()] / static_cast<double>(frames_.size());
+    }
     return result;
 }
 

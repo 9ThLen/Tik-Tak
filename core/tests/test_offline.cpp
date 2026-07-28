@@ -280,3 +280,68 @@ TEST(Offline, TheDrumsAloneFindTheBarWithNoHarmonyToHelp) {
         EXPECT_LT(std::abs(bars - std::round(bars)), 0.05) << "bar line at " << t;
     }
 }
+
+// The tempo the estimator ranks first is not always the one the music is at,
+// and an ablation against a reference put the cost of taking it on faith at 21
+// points of CMLt across 106 recordings. These pin the mechanism that closes
+// part of that gap — see OfflineConfig::tempo_hypotheses.
+
+TEST(Offline, OneHypothesisIsTheOldSingleEstimatePath) {
+    // The escape hatch has to be exact, not approximate: it is what a caller
+    // reaches for to rule this out as the cause of a change in behaviour.
+    const std::vector<float> audio = clickTrack(132.0, 20.0, kSampleRate);
+
+    OfflineConfig one = testConfig();
+    one.tempo_hypotheses = 1;
+    const OfflineResult single = analyseOffline(audio.data(), audio.size(), one);
+
+    OfflineConfig cfg = testConfig();
+    cfg.bpm_hint = single.estimated_bpm;
+    const OfflineResult hinted = analyseOffline(audio.data(), audio.size(), cfg);
+
+    ASSERT_EQ(single.beats.size(), hinted.beats.size());
+    for (std::size_t i = 0; i < single.beats.size(); ++i) {
+        EXPECT_DOUBLE_EQ(single.beats[i], hinted.beats[i]) << i;
+    }
+}
+
+TEST(Offline, AHintIsObeyedRatherThanSearchedAround) {
+    // A hint is the caller's instruction. Treating it as one more hypothesis
+    // and then overruling it would make manual mode silently not manual.
+    const std::vector<float> audio = clickTrack(120.0, 20.0, kSampleRate);
+
+    OfflineConfig cfg = testConfig();
+    cfg.bpm_hint = 90.0;                 // deliberately not what the audio is
+    const OfflineResult result = analyseOffline(audio.data(), audio.size(), cfg);
+
+    EXPECT_DOUBLE_EQ(result.bpm, 90.0);
+    // And the estimate is still reported, so the caller can see the two
+    // disagree rather than being told nothing.
+    EXPECT_NEAR(result.estimated_bpm, 120.0, 120.0 * 0.05);
+}
+
+TEST(Offline, SearchingHypothesesDoesNotDisturbAnUnambiguousTrack) {
+    // Where the estimator is already right, running the alternatives must not
+    // talk it out of the answer — the change is worth nothing if it trades
+    // clear cases for ambiguous ones.
+    for (double bpm : {90.0, 120.0, 150.0}) {
+        const std::vector<float> audio = clickTrack(bpm, 20.0, kSampleRate);
+        const OfflineResult result = analyseOffline(audio.data(), audio.size(), testConfig());
+        EXPECT_NEAR(result.bpm, bpm, bpm * 0.03) << bpm;
+        EXPECT_GT(recall(beatTimes(bpm, 20.0), result.beats), 0.9) << bpm;
+    }
+}
+
+TEST(Offline, TheObjectiveIsReportedAndIsPositiveWhenBeatsWereFound) {
+    // The number the hypotheses are compared on. Silence has to leave it at
+    // zero rather than at whatever the uninitialised path would give, or a
+    // caller comparing two analyses could prefer the one that found nothing.
+    const std::vector<float> audio = clickTrack(120.0, 20.0, kSampleRate);
+    const OfflineResult found = analyseOffline(audio.data(), audio.size(), testConfig());
+    EXPECT_GT(found.beat_objective_per_beat, 0.0);
+
+    const std::vector<float> silence(static_cast<std::size_t>(kSampleRate * 5.0), 0.0f);
+    const OfflineResult none = analyseOffline(silence.data(), silence.size(), testConfig());
+    EXPECT_TRUE(none.beats.empty());
+    EXPECT_DOUBLE_EQ(none.beat_objective_per_beat, 0.0);
+}

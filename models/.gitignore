@@ -4,6 +4,7 @@
 *.pt
 *.onnx
 *.ckpt
+*.ttw
 
 # Interrupted atomic pin/save operations may leave recovery files behind.
 .*.tmp

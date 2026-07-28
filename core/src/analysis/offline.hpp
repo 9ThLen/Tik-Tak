@@ -26,6 +26,41 @@ struct OfflineConfig {
     // Off is a real option, not a debugging one: a caller that only wants a
     // click on every beat has no use for bar lines and should not pay for them.
     bool find_downbeats = true;
+
+    // How many tempo hypotheses to actually track before choosing between
+    // them. 1 keeps the old behaviour — take the estimator's first choice and
+    // track it once.
+    //
+    // The estimator already produces ranked candidates and already applies a
+    // log-normal prior to rank them, but a prior cannot see how well a grid
+    // would *fit*: it only knows which tempo is a priori more plausible.
+    // Measured against a Beat This! reference on 106 recordings, the right
+    // tempo is nearly always somewhere in this list and simply not first —
+    // an oracle picking the best of these candidates reaches CMLt 0.704
+    // against 0.488 for the first choice, and 0.695 for handing the tracker
+    // the reference tempo outright. The evidence to break the tie is the
+    // objective the tracker maximises anyway, so it costs one extra run per
+    // candidate and nothing else.
+    //
+    // Four rather than all eight: the tail of the candidate list is where the
+    // implausible octaves live, and every extra hypothesis is another full
+    // dynamic-programming pass over the file.
+    int tempo_hypotheses = 4;
+
+    // How much the estimator's ranking counts against how well the grid fits,
+    // as the exponent on candidate strength in `strength^w * objective`.
+    //
+    // Zero would trust the fit alone, which is much worse than the current
+    // behaviour rather than better: the objective is a mean over beats and a
+    // half-speed grid raises it by sitting only on the loudest onsets, so fit
+    // alone chases exactly the octave error the prior exists to prevent.
+    //
+    // 1.5 was chosen by holding out each batch of the evaluation set and
+    // fitting on the rest; both batches picked the same value and both gained
+    // on material they had not been fitted to, 8 and 10 points of CMLt. The
+    // optimum is broad — anything from 0.75 to 2.0 lands within 3 points —
+    // which is the reason to believe it at all.
+    double tempo_fit_weight = 1.5;
 };
 
 struct OfflineResult {
@@ -39,6 +74,12 @@ struct OfflineResult {
     // silently tracking badly.
     double estimated_bpm = 0.0;
     std::size_t frame_count = 0;
+
+    // How well the beat grid fits the onset function, per beat — see
+    // BeatResult. Exposed so an evaluation can compare the grids produced at
+    // different tempo hypotheses, which is what deciding between them needs
+    // and what the single estimate above cannot express.
+    double beat_objective_per_beat = 0.0;
 
     // Bar lines, a subset of `beats`. Empty when they were not asked for, the
     // track was too short for a repeated meter, or the scorer supplied too
@@ -120,6 +161,10 @@ public:
 
 private:
     static OfflineConfig prepare(OfflineConfig config);
+
+    // Runs the tracker at each leading tempo candidate and returns the grid
+    // that wins on prior-weighted fit. See OfflineConfig::tempo_hypotheses.
+    BeatResult trackBestHypothesis(double fps, double fallback_bpm);
 
     OfflineConfig config_;
     dsp::Odf odf_;

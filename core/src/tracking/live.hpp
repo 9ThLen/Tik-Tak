@@ -2,8 +2,11 @@
 
 #include <array>
 #include <cstddef>
+#include <limits>
+#include <optional>
 
 #include "dsp/odf.hpp"
+#include "ml/beatnet.hpp"
 #include "tracking/particle.hpp"
 #include "tracking/sync.hpp"
 
@@ -82,11 +85,53 @@ class LiveTracker {
 public:
     explicit LiveTracker(const LiveConfig& config);
 
+    // With a learned front end instead of spectral flux.
+    //
+    // `weights` must be valid() and must outlive the tracker; the shell owns
+    // the bytes, because the core does no I/O. Everything else about the
+    // tracker is the same object it was — the same filter, the same gating, the
+    // same publishing thresholds — and only the evidence differs. That is not
+    // a coincidence of the implementation, it is the point: it is what makes
+    // the measured before and after comparable.
+    //
+    // Measured on 107 produced recordings against reference beats, the causal
+    // tracker's CMLt went from 0.087 to 0.437 and the share of reference beats
+    // it dares emit from 18% to 83%, with no threshold touched. See
+    // research/eval/README.md and ml/beatnet.hpp.
+    //
+    // Not the default. Spectral flux costs a few hundred kFLOP a second and
+    // this costs tens of MFLOP plus 1.6 MB of weights, and which of those a
+    // given device should spend is a decision that needs measurements from that
+    // device, not from a workstation.
+    LiveTracker(const LiveConfig& config, const ml::BeatNetWeights& weights);
+
     const LiveConfig& config() const { return config_; }
+
+    // True when the learned front end is the one feeding the filter.
+    bool usingModel() const { return model_.has_value(); }
 
     // Feeds captured audio. `stream_time_sec` is the time of samples[0], in the
     // same clock the shell schedules output in.
     void process(double stream_time_sec, const float* samples, std::size_t n);
+
+    // Feeds one already-computed observation instead of audio, at a time in
+    // the same clock: how much this instant looks like a beat, 0 to 1.
+    //
+    // This is the seam a learned front end arrives through, and it is here
+    // rather than in the research harness because that is where the front end
+    // is going. The built-in onset function is spectral flux, and measured
+    // against a reference on 106 produced recordings it does not concentrate
+    // on the beat: the filter's own coincidence term sat at 0.226 where
+    // perfect tracking of that same evidence could only have reached 0.39, so
+    // the gate stayed shut on the material the product exists for. Fed a
+    // causal model's activation instead — same filter, same recordings — that
+    // term reaches 0.535 and the lock rate goes from 1% of tracks to 45%.
+    //
+    // Everything downstream is unchanged and deliberately so: gating, level
+    // normalisation and the publishing hysteresis are the tracker's, and only
+    // the evidence is swapped. Callers use one of process() or observe(), not
+    // both — mixing them feeds the filter two clocks and two scales.
+    void observe(double time_sec, double activation);
 
     // Tells the tracker when its own click will reach the microphone — that is
     // the moment the click is *heard*, output latency and room delay already
@@ -161,10 +206,26 @@ private:
 
     bool gatedAt(double frame_time_sec) const;
 
+    // Feeds one already-normalised observation to the filter and, in manual
+    // mode, to the phase correlator. What process() and observe() share once
+    // each has produced a number the filter can use.
+    void submit(double time_sec, double normalised);
+
     LiveConfig config_;
     dsp::Odf odf_;
     BeatParticleFilter filter_;
     PhaseSync sync_;
+
+    // Engaged only by the constructor that was handed weights. Held by value
+    // rather than behind a pointer so that the audio path has no indirection
+    // and no chance of a null to check.
+    std::optional<ml::BeatNetActivation> model_;
+
+    // Half the width of one evidence window, for gating. The two front ends
+    // disagree about it — the ODF's frame is the configured one, the model's is
+    // a fixed 64 ms — and a gate measured against the wrong one either lets the
+    // click through or blinds the tracker either side of it.
+    double evidence_half_sec_ = 0.0;
 
     double manual_bpm_ = 0.0;
     bool acquired_ = false;
@@ -184,7 +245,9 @@ private:
 
     bool locked_ = false;
     bool published_ = false;
-    double last_beat_sec_ = 0.0;
+    // Far enough back that the first beat of a stream is never mistaken for a
+    // repeat of one that was never handed out.
+    double last_beat_sec_ = -std::numeric_limits<double>::infinity();
     double held_period_sec_ = 0.5;
 
     Stats stats_;

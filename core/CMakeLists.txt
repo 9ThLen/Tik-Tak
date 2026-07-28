@@ -21,6 +21,11 @@ add_library(tiktak_core STATIC
     src/dsp/mel.cpp
     src/dsp/chroma.cpp
     src/dsp/stft.cpp
+    src/dsp/dft.cpp
+    src/dsp/logfilt.cpp
+    src/dsp/resample.cpp
+    src/ml/beatnet.cpp
+    src/ml/beat_this.cpp
     src/schedule/scheduler.cpp
     src/dsp/matched.cpp
     src/dsp/odf.cpp
@@ -125,6 +130,88 @@ if(TIKTAK_BUILD_DECODE)
     endif()
 
     set_target_properties(tiktak_decode PROPERTIES
+        POSITION_INDEPENDENT_CODE ON
+        CXX_VISIBILITY_PRESET hidden
+        VISIBILITY_INLINES_HIDDEN ON
+    )
+endif()
+
+# ----------------------------------------------------------------- inference --
+#
+# Another separate target, for the same reason decoding is one. tiktak_core has
+# no third-party dependencies and that is what lets the analysis cross-compile
+# anywhere; an inference runtime cannot have that property, so Beat This! runs
+# beside the core rather than inside it.
+#
+# Note the asymmetry with src/ml/beatnet, which *is* in the core. That model is
+# 0.40 M parameters at 20 MMAC/s — smaller than the runtime that would host it,
+# so the core carries the forward pass itself. This one is a transformer run
+# once over a whole file off the audio thread, where a runtime is a fair trade.
+# The rule is the size of the model against the size of the runtime, not a
+# preference for one style; see docs/adr/0001-portable-cpp-core.md.
+
+option(TIKTAK_BUILD_ML "Build the ONNX inference library" OFF)
+
+if(TIKTAK_BUILD_ML)
+    include(FetchContent)
+
+    # Pinned by URL and hash, all three verified by downloading the archives
+    # and hashing them rather than by copying numbers from a page.
+    set(TIKTAK_ORT_VERSION "1.22.0")
+    if(WIN32)
+        set(TIKTAK_ORT_ARCHIVE "onnxruntime-win-x64-${TIKTAK_ORT_VERSION}.zip")
+        set(TIKTAK_ORT_HASH "SHA256=174c616efc0271194488642a72f1a514e01487da4dfe84c49296d66e40ebe0da")
+    elseif(APPLE)
+        set(TIKTAK_ORT_ARCHIVE "onnxruntime-osx-universal2-${TIKTAK_ORT_VERSION}.tgz")
+        set(TIKTAK_ORT_HASH "SHA256=cfa6f6584d87555ed9f6e7e8a000d3947554d589efe3723b8bfa358cd263d03c")
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        set(TIKTAK_ORT_ARCHIVE "onnxruntime-linux-x64-${TIKTAK_ORT_VERSION}.tgz")
+        set(TIKTAK_ORT_HASH "SHA256=8344d55f93d5bc5021ce342db50f62079daf39aaafb5d311a451846228be49b3")
+    else()
+        message(FATAL_ERROR "TIKTAK_BUILD_ML: no ONNX Runtime archive is pinned for ${CMAKE_SYSTEM_NAME}")
+    endif()
+    set(TIKTAK_ORT_URL "https://github.com/microsoft/onnxruntime/releases/download/v${TIKTAK_ORT_VERSION}/${TIKTAK_ORT_ARCHIVE}")
+
+    FetchContent_Declare(onnxruntime URL "${TIKTAK_ORT_URL}" URL_HASH "${TIKTAK_ORT_HASH}")
+    FetchContent_MakeAvailable(onnxruntime)
+
+    add_library(tiktak_ml STATIC src/ml/beat_this_session.cpp)
+    target_link_libraries(tiktak_ml PUBLIC tiktak_core)
+    target_include_directories(tiktak_ml PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    # SYSTEM, so the runtime's own headers are not held to this project's
+    # warning bar. They shadow locals in several places; patching a vendored
+    # header on every update would be worse than exempting it, which is the
+    # same call already made for dr_libs.
+    target_include_directories(tiktak_ml SYSTEM PUBLIC ${onnxruntime_SOURCE_DIR}/include)
+    find_library(TIKTAK_ORT_LIB onnxruntime
+                 PATHS ${onnxruntime_SOURCE_DIR}/lib NO_DEFAULT_PATH REQUIRED)
+    target_link_libraries(tiktak_ml PUBLIC ${TIKTAK_ORT_LIB})
+
+    # Windows links against an import library and loads the DLL at run time, so
+    # the DLL has to sit beside whatever executable ends up linking this. Told
+    # to consumers rather than assumed: TIKTAK_ORT_RUNTIME_FILES is the list to
+    # copy, and tools/eval and tools/parity both do.
+    if(WIN32)
+        file(GLOB TIKTAK_ORT_RUNTIME_FILES "${onnxruntime_SOURCE_DIR}/lib/*.dll")
+    else()
+        set(TIKTAK_ORT_RUNTIME_FILES "")
+    endif()
+    set(TIKTAK_ORT_RUNTIME_FILES "${TIKTAK_ORT_RUNTIME_FILES}" CACHE INTERNAL
+        "ONNX Runtime shared libraries that must sit beside the executable")
+
+    if(MSVC)
+        target_compile_options(tiktak_ml PRIVATE /W4)
+        if(TIKTAK_WERROR)
+            target_compile_options(tiktak_ml PRIVATE /WX)
+        endif()
+    else()
+        target_compile_options(tiktak_ml PRIVATE -Wall -Wextra -Wpedantic -Wshadow)
+        if(TIKTAK_WERROR)
+            target_compile_options(tiktak_ml PRIVATE -Werror)
+        endif()
+    endif()
+
+    set_target_properties(tiktak_ml PROPERTIES
         POSITION_INDEPENDENT_CODE ON
         CXX_VISIBILITY_PRESET hidden
         VISIBILITY_INLINES_HIDDEN ON

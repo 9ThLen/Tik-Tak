@@ -54,6 +54,7 @@ std::vector<double> run(LiveMetronome& metronome, const std::vector<float>& room
 
         time += static_cast<double>(kBlock) / kRate;
     }
+
     return clicks;
 }
 
@@ -69,7 +70,14 @@ TEST(LiveMetronome, ClicksOnTheBeatsItHearsInTheRoom) {
     LiveMetronome metronome{config()};
     metronome.start();
 
-    const auto room = tiktak::test::clickTrack(120.0, 16.0, kRate, 1.0);
+    // Padded with silence, because the assertion below holds every beat handed
+    // out to an audible click. A beat handed out inside the last lookahead has
+    // its click scheduled but not yet rendered when the stream ends — a real
+    // device keeps running, so the room gets a tail for the click to sound in.
+    // The tracker coasts through the tail, and any beat it hands out there is
+    // heard and counted on both sides alike.
+    auto room = tiktak::test::clickTrack(120.0, 16.0, kRate, 1.0);
+    room.resize(room.size() + static_cast<std::size_t>(0.4 * kRate), 0.0f);
     const std::vector<double> clicks = run(metronome, room);
 
     ASSERT_GT(clicks.size(), 12u);

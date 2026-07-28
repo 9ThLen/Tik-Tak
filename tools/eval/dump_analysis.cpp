@@ -59,7 +59,15 @@
 // public C API instead would mean growing that API for a research need. The
 // parity tools set the precedent.
 #include "analysis/downbeat.hpp"
+#include "dsp/resample.hpp"
+#include "ml/beatnet.hpp"
+#if TIKTAK_HAVE_ML
+#include "ml/beat_this.hpp"
+#include "ml/beat_this_session.hpp"
+#endif
 #include "analysis/offline.hpp"
+#include "tracking/live.hpp"
+#include "tracking/particle.hpp"
 
 #if defined(TIKTAK_HAVE_DECODE)
 #include "decode/decoder.hpp"
@@ -89,6 +97,19 @@ std::vector<float> readRaw(const char* path) {
 // One value per beat, whitespace-separated, `#` to end of line. Text rather
 // than binary because the writer is a numpy one-liner and the file is worth
 // being able to look at when a result surprises.
+// The model's weights, as bytes. The core does no I/O and takes the blob.
+bool readBytes(const char* path, std::vector<unsigned char>& out) {
+    std::FILE* file = std::fopen(path, "rb");
+    if (!file) return false;
+    std::fseek(file, 0, SEEK_END);
+    const long bytes = std::ftell(file);
+    std::fseek(file, 0, SEEK_SET);
+    out.resize(static_cast<std::size_t>(bytes));
+    const bool ok = std::fread(out.data(), 1, out.size(), file) == out.size();
+    std::fclose(file);
+    return ok;
+}
+
 bool readSalience(const char* path, std::vector<double>& out,
                   std::string& error) {
     std::FILE* file = std::fopen(path, "rb");
@@ -215,6 +236,41 @@ int main(int argc, char** argv) {
     // tempo" — two failures that look identical in a beat grid and need
     // opposite fixes.
     double bpm_hint = 0.0;
+    // Runs the causal microphone tracker over the file instead of the offline
+    // analyser. Everything measured so far has been the offline path; the live
+    // one ships in the microphone mode and had never been scored on real music
+    // at all, which this exists to fix.
+    bool live = false;
+    // Seeds the causal tracker with the tempo the offline analyser found, which
+    // is what the backing-track case can actually do: the app is playing the
+    // file, so it has already analysed it and the microphone does not have to
+    // rediscover the tempo from a dense mix.
+    bool live_seed = false;
+    // Prints the onset function itself, for experiments on the statistics the
+    // live tracker derives from it — measuring a proposed confidence change in
+    // Python first is a rebuild per idea cheaper.
+    bool dump_odf = false;
+    // Overrides for the live tracker's lock/release hysteresis, so a threshold
+    // can be chosen on one batch and validated on another without a rebuild.
+    double live_lock = 0.0;
+    double live_release = 0.0;
+    // Drives the particle filter from an activation computed elsewhere instead
+    // of from the built-in onset function. The same seam as --salience on the
+    // offline resolver, and for the same reason: the observation model is what
+    // the live path's confidence was measured down to, and swapping it is the
+    // only way to find out whether that diagnosis was right.
+    std::string activation_path;
+    double activation_fps = 50.0;
+    // The same swap, but made by the core itself rather than handed to it: the
+    // tracker computes the activation from the audio through its own front end.
+    // --live-activation answers "would a better observation help"; this answers
+    // "does the thing we would ship actually do it", which is a different
+    // question and the one that matters now.
+    std::string model_path;
+    // The offline path's replacement for a beat tracker from 2007. Decodes,
+    // resamples to the model's rate, runs the network and picks the peaks —
+    // the same code an app would run, not a research approximation of it.
+    std::string beat_this_path;
 
     struct Threshold {
         const char* flag;
@@ -233,6 +289,49 @@ int main(int argc, char** argv) {
                 return 2;
             }
             salience_path = argv[++i];
+            continue;
+        }
+        if (std::strcmp(argv[i], "--dump-odf") == 0) {
+            dump_odf = true;
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live") == 0) {
+            live = true;
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-activation") == 0) {
+            if (i + 1 >= argc) { std::fprintf(stderr, "--live-activation needs a file\n"); return 2; }
+            activation_path = argv[++i];
+            continue;
+        }
+        if (std::strcmp(argv[i], "--beat-this") == 0) {
+            if (i + 1 >= argc) { std::fprintf(stderr, "--beat-this needs a model\n"); return 2; }
+            beat_this_path = argv[++i];
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-model") == 0) {
+            if (i + 1 >= argc) { std::fprintf(stderr, "--live-model needs a file\n"); return 2; }
+            model_path = argv[++i];
+            continue;
+        }
+        if (std::strcmp(argv[i], "--activation-fps") == 0) {
+            if (i + 1 >= argc) { std::fprintf(stderr, "--activation-fps needs a value\n"); return 2; }
+            activation_fps = std::atof(argv[++i]);
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-lock") == 0) {
+            if (i + 1 >= argc) { std::fprintf(stderr, "--live-lock needs a value\n"); return 2; }
+            live_lock = std::atof(argv[++i]);
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-release") == 0) {
+            if (i + 1 >= argc) { std::fprintf(stderr, "--live-release needs a value\n"); return 2; }
+            live_release = std::atof(argv[++i]);
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-seeded") == 0) {
+            live = true;
+            live_seed = true;
             continue;
         }
         if (std::strcmp(argv[i], "--bpm") == 0) {
@@ -315,6 +414,10 @@ int main(int argc, char** argv) {
                      "       %s <clip.f32> <sample_rate> [--salience <file>"
                      " [calibration]]\n"
                      "  --bpm <value>      track at this tempo instead of estimating it\n"
+                     "  --live             use the causal microphone tracker, not the offline one\n"
+                     "  --live-seeded      the same, seeded with the offline tempo\n"
+                     "  --live-activation <file> [--activation-fps N]\n"
+                     "                     drive the particle filter from this activation\n"
                      "  calibration: --salience-min-range <v> "
                      "--salience-min-phase-margin <v> "
                      "--salience-min-meter-margin <v>\n"
@@ -393,7 +496,157 @@ int main(int argc, char** argv) {
     const tiktak::analysis::OfflineResult analysis = analyzer.finish();
     std::vector<double> beats = analysis.beats;
 
+    // The causal path, driven over the same file. Fed in the same odd-sized
+    // blocks, and read the way the shell reads it: ask for the next beat as
+    // soon as it comes within the lookahead, and never revise one already
+    // handed out. Scoring anything else would be scoring a tracker that does
+    // not exist.
+    std::vector<double> live_beats;
+    double live_confidence = 0.0;
+    tiktak::tracking::LiveTracker::Stats live_stats;
+    std::vector<double> live_share, live_agreement, live_coincidence;
+
+    // The whole live path, driven by an activation from outside instead of by
+    // the built-in onset function. The same tracker, the same hysteresis and
+    // the same publishing rules — only the evidence differs, so the grids that
+    // come out are comparable with --live's.
+    std::vector<double> activation;
+    if (!activation_path.empty()) {
+        std::string complaint;
+        if (!readSalience(activation_path.c_str(), activation, complaint)) {
+            std::fprintf(stderr, "%s\n", complaint.c_str());
+            return 1;
+        }
+        live = true;
+    }
+    std::vector<double> model_downbeats;
+    tiktak::ml::BeatNetWeights model_weights;
+    if (!model_path.empty()) {
+        std::vector<unsigned char> blob;
+        if (!readBytes(model_path.c_str(), blob)) {
+            std::fprintf(stderr, "cannot read %s\n", model_path.c_str());
+            return 1;
+        }
+        if (!model_weights.load(blob.data(), blob.size())) {
+            std::fprintf(stderr, "%s is not a weight file this build can run\n",
+                         model_path.c_str());
+            return 1;
+        }
+        live = true;
+    }
+    if (live) {
+        tiktak::tracking::LiveConfig live_config;
+        live_config.odf = config.odf;
+        if (live_lock > 0.0) live_config.lock_confidence = live_lock;
+        if (live_release > 0.0) live_config.release_confidence = live_release;
+        tiktak::tracking::LiveTracker tracker =
+            model_weights.valid()
+                ? tiktak::tracking::LiveTracker(live_config, model_weights)
+                : tiktak::tracking::LiveTracker(live_config);
+        if (live_seed && analysis.bpm > 0.0) {
+            tracker.seedTempo(analysis.bpm);
+        }
+
+        // A device-sized buffer, not the odd block above. takeBeat only hands
+        // over a beat once it is within the lookahead of now, so the polling
+        // rate is part of the algorithm: poll every 4099 samples and most
+        // beats fall between checks and are simply never played. A real shell
+        // polls once per audio callback, and scoring anything slower would be
+        // measuring the harness rather than the tracker.
+        constexpr std::size_t kLiveBlock = 512;
+        constexpr double kLookahead = 0.05;
+        double now = 0.0;
+        double next_sample = 1.0;
+        const auto poll = [&]() {
+            double beat = 0.0;
+            while (tracker.takeBeat(now, kLookahead, &beat)) live_beats.push_back(beat);
+            if (now >= next_sample) {
+                // Once a second: which of confidence's three factors is low is
+                // the diagnosis, and the product alone cannot say.
+                const tiktak::tracking::BeatEstimate e = tracker.estimate(now);
+                live_share.push_back(e.cluster_share);
+                live_agreement.push_back(e.phase_agreement);
+                live_coincidence.push_back(e.onset_coincidence);
+                next_sample += 1.0;
+            }
+        };
+
+        if (!activation.empty()) {
+            // Driven by a block clock, not by the frame index, so that this
+            // path and the audio path below ask takeBeat the same question at
+            // the same moments and differ only in where the evidence came from.
+            //
+            // The first version of this loop polled once per activation frame
+            // and let `now` jump a frame at a time. That is a different
+            // cadence from a device's, and takeBeat is sensitive to it: while
+            // coasting it hands out one beat per call until it catches up with
+            // now + lookahead, so a coarser clock flushes out several beats
+            // where a device would have taken one. It inflated the beat count
+            // roughly threefold — visible afterwards as beats 50 ms apart,
+            // which is the lookahead, not a tempo — without much changing
+            // which beats were right. The accuracy measured through it stands;
+            // the count of beats emitted through it did not.
+            const double frame_sec = 1.0 / activation_fps;
+            const double block_sec = static_cast<double>(kLiveBlock) / rate;
+            const double last_sec = static_cast<double>(activation.size()) * frame_sec;
+            std::size_t next_frame = 0;
+            for (double clock = 0.0; clock < last_sec; clock += block_sec) {
+                while (next_frame < activation.size() &&
+                       static_cast<double>(next_frame) * frame_sec <= clock) {
+                    tracker.observe(static_cast<double>(next_frame) * frame_sec,
+                                    activation[next_frame]);
+                    ++next_frame;
+                }
+                now = clock;
+                poll();
+            }
+        } else {
+            for (std::size_t pos = 0; pos < samples.size(); pos += kLiveBlock) {
+                const std::size_t take = std::min(kLiveBlock, samples.size() - pos);
+                tracker.process(now, samples.data() + pos, take);
+                now += static_cast<double>(take) / rate;
+                poll();
+            }
+        }
+        live_confidence = tracker.estimate(now).confidence;
+        live_stats = tracker.stats();
+        beats = live_beats;
+    }
+
     bool beats_replaced = false;
+    const char* beats_source = "tracker";
+
+#if TIKTAK_HAVE_ML
+    if (!beat_this_path.empty()) {
+        tiktak::ml::BeatThisSession session;
+        if (!session.open(beat_this_path)) {
+            std::fprintf(stderr, "%s\n", session.reason().c_str());
+            return 1;
+        }
+
+        const tiktak::dsp::Resampler resampler(rate, tiktak::ml::BeatThisFeatures::kModelRate);
+        const std::vector<float> model_audio = resampler.apply(samples.data(), samples.size());
+
+        tiktak::ml::BeatThisFeatures features;
+        const std::vector<float> mel =
+            features.compute(model_audio.data(), model_audio.size());
+        const std::size_t mels = tiktak::ml::BeatThisFeatures::kMels;
+        const auto activations = session.run(mel.data(), mel.size() / mels, mels);
+        const auto grid = tiktak::ml::pickBeats(activations.beat.data(),
+                                                activations.downbeat.data(),
+                                                activations.beat.size());
+        if (grid.beats.size() < 2) {
+            std::fprintf(stderr, "the model found %zu beat(s); a grid needs at least 2\n",
+                         grid.beats.size());
+            return 1;
+        }
+        beats = grid.beats;
+        model_downbeats = grid.downbeats;
+        beats_replaced = true;
+        beats_source = "beat_this";
+    }
+#endif
+
     if (!beats_path.empty()) {
         std::vector<double> supplied;
         std::string complaint;
@@ -419,9 +672,15 @@ int main(int argc, char** argv) {
         }
         beats = supplied;
         beats_replaced = true;
+        beats_source = "file";
     }
 
     std::vector<double> downbeats = analysis.downbeats;
+    // The model has its own opinion about bar lines, and when it was the one
+    // that found the beats it is the one to ask. The resolver still runs — its
+    // metre and margins are what the rest of this tool reports — but the bar
+    // lines themselves come from the head that was trained to find them.
+    if (!model_downbeats.empty()) downbeats = model_downbeats;
     int beats_per_bar = analysis.beats_per_bar;
     double strength = analysis.downbeat_strength;
     double phase_margin = analysis.downbeat_phase_margin;
@@ -469,12 +728,50 @@ int main(int argc, char** argv) {
     std::printf("  \"salience_source\": \"%s\",\n",
                 salience_path.empty() ? "cues" : "file");
     std::printf("  \"beats_source\": \"%s\",\n",
-                beats_replaced ? "file" : "tracker");
+                beats_source);
     std::printf("  \"sample_rate\": %.17g,\n", rate);
     std::printf("  \"duration_sec\": %.17g,\n", static_cast<double>(samples.size()) / rate);
     std::printf("  \"bpm\": %.17g,\n", finiteOrZero(analysis.bpm));
     std::printf("  \"confidence\": %.17g,\n",
                 finiteOrZero(analysis.tempo_confidence));
+    std::printf("  \"beat_objective_per_beat\": %.9g,\n",
+                finiteOrZero(analysis.beat_objective_per_beat));
+    std::printf("  \"beats_causal\": %s,\n", live ? "true" : "false");
+    if (dump_odf) {
+        const std::vector<double>& odf_values = analyzer.odfValues();
+        const std::vector<double>& odf_times = analyzer.frameTimes();
+        std::printf("  \"odf\": [");
+        for (std::size_t i = 0; i < odf_values.size(); ++i) {
+            std::printf("%s%.6g", i == 0 ? "" : ",", odf_values[i]);
+        }
+        std::printf("],\n  \"odf_times\": [");
+        for (std::size_t i = 0; i < odf_times.size(); ++i) {
+            std::printf("%s%.6f", i == 0 ? "" : ",", odf_times[i]);
+        }
+        std::printf("],\n");
+    }
+    if (live) {
+        std::printf("  \"live_confidence\": %.9g,\n", finiteOrZero(live_confidence));
+        // Beats the tracker decided on but could not play, because by the time
+        // it was asked the beat was already behind the clock. Free to report
+        // and the only way to tell a tracker that lost the grid from one that
+        // found it too late — which look identical in the beat list.
+        std::printf("  \"live_frames\": %zu,\n", live_stats.frames);
+        std::printf("  \"live_gated\": %zu,\n", live_stats.gated);
+        std::printf("  \"live_beats\": %zu,\n", live_stats.beats);
+        std::printf("  \"live_beats_late\": %zu,\n", live_stats.beats_late);
+        std::printf("  \"live_seeded\": %s,\n", live_seed ? "true" : "false");
+        const auto column = [](const char* name, const std::vector<double>& values) {
+            std::printf("  \"%s\": [", name);
+            for (std::size_t i = 0; i < values.size(); ++i) {
+                std::printf("%s%.4g", i == 0 ? "" : ",", values[i]);
+            }
+            std::printf("],\n");
+        };
+        column("live_share", live_share);
+        column("live_agreement", live_agreement);
+        column("live_coincidence", live_coincidence);
+    }
     std::printf("  \"beats_per_bar\": %d,\n", beats_per_bar);
     std::printf("  \"downbeat_strength\": %.17g,\n", finiteOrZero(strength));
     std::printf("  \"downbeat_phase_margin\": %.17g,\n",

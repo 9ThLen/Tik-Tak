@@ -108,6 +108,8 @@ void BeatParticleFilter::reset() {
     charge_ema_ = 0.0;
     onset_ema_ = 0.0;
     on_beat_ema_ = 0.0;
+    window_ema_ = 0.0;
+    evidence_age_sec_ = 0.0;
     coincidence_ = 0.0;
     stats_ = Stats{};
     rng_.reseed(config_.seed);
@@ -289,12 +291,37 @@ void BeatParticleFilter::observe(double time_sec, double onset) {
     const double decay = std::exp(-dt / config_.evidence_tau_sec);
     onset_ema_ = decay * onset_ema_ + (1.0 - decay) * level;
     on_beat_ema_ = decay * on_beat_ema_ + (1.0 - decay) * level * predicted_on_beat;
-    if (onset_ema_ > 1e-6) {
-        // The share of onset energy that lands on the predicted beat, rescaled
-        // so that chance reads as zero: a cloud spread over every phase catches
-        // window_mean of it no matter what the audio does.
-        const double share = on_beat_ema_ / onset_ema_;
-        coincidence_ = std::min(1.0, std::max(0.0, (share - window_mean_) / (1.0 - window_mean_)));
+    window_ema_ = decay * window_ema_ + (1.0 - decay) * predicted_on_beat;
+    evidence_age_sec_ += dt;
+    if (evidence_age_sec_ >= config_.evidence_warmup_sec &&
+        onset_ema_ > 1e-6 && window_ema_ > 1e-6 && window_ema_ < 1.0 - 1e-6) {
+        // On-beat onset density against off-beat onset density, as a contrast.
+        //
+        // This used to be the share of onset energy landing on the prediction,
+        // rescaled so chance read zero. That statistic answers "is most of the
+        // energy on the beat?", and on a produced mix the answer is no for
+        // every possible tracker: evaluated with the reference beats
+        // themselves — tracking that cannot be improved on — its median over
+        // 106 real recordings was 0.137 against a lock threshold of 0.35, so
+        // the gate was unpassable by construction and the metronome stayed
+        // silent on material the product exists for. A confidence gate is
+        // entitled to measure the tracker; it is not entitled to fail the
+        // material.
+        //
+        // The contrast asks the question the filter's own weights ask — is
+        // there *more* onset where the beats are claimed than between them —
+        // and normalising each side by its own time makes it indifferent to
+        // how much off-beat activity the arrangement carries. Perfect
+        // prediction on the same recordings scores a median of 0.39, the same
+        // prediction pushed half a beat off scores 0.175, silence changes
+        // nothing (the guard holds the last value), and a uniform level leaves
+        // it at zero exactly as before.
+        const double on_mean = on_beat_ema_ / window_ema_;
+        const double off_mean = (onset_ema_ - on_beat_ema_) / (1.0 - window_ema_);
+        const double total = on_mean + off_mean;
+        if (total > 0.0) {
+            coincidence_ = std::min(1.0, std::max(0.0, (on_mean - off_mean) / total));
+        }
     }
 
     const double ess = 1.0 / sum_squares;
@@ -440,15 +467,48 @@ BeatEstimate BeatParticleFilter::estimate(double now_sec) const {
     const double variance = std::max(0.0, log_sq_sum / share - mean_log * mean_log);
     out.tempo_spread_octaves = std::sqrt(variance) / kLn2;
 
-    // Three things, and all of them have to hold: the winning hypothesis holds
-    // most of the cloud, its particles agree on the phase, and the onsets keep
-    // arriving where they say they will.
     const double agreement = std::sqrt(x * x + y * y) / share;
-    out.confidence = std::min(1.0, share * agreement * coincidence_);
 
     double fraction = std::atan2(y, x) / kTwoPi;
     if (fraction < 0.0) fraction += 1.0;
-    out.next_beat_sec = now_sec + fraction * period;
+    const double next_beat = now_sec + fraction * period;
+    out.next_beat_sec = next_beat;
+
+    // A particle outside the winning tempo band whose own beat grid passes
+    // through the winner's next beat is agreeing about the one thing that gets
+    // played, and counts for the winner rather than against it.
+    //
+    // This is not a courtesy. On produced music the cloud legitimately holds
+    // the beat at more than one metrical level at once — measured over 106
+    // real recordings the winning band held a median 33% of the cloud while
+    // the phase resultant stood at 0.93, so the confidence was reporting the
+    // cloud's structure as doubt about the beat. Multiple related hypotheses
+    // are the filter behaving well; a half-tempo particle predicts a click on
+    // this very beat, and only a particle whose grid *misses* the click is
+    // evidence against it. The alignment test is in absolute time against the
+    // winner's own window, so a subharmonic's sparser grid is not penalised
+    // for its sparseness.
+    double corroborating = 0.0;
+    const double align_window = config_.beat_window * period;
+    for (std::size_t i = 0; i < n; ++i) {
+        auto bin = static_cast<std::size_t>((std::log2(period_[i]) - low) * scale);
+        if (bin >= kBins) bin = kBins - 1;
+        if (bin >= first && bin <= last) continue;   // already in the share
+
+        const double along = next_beat - next_beat_[i];
+        const double miss =
+            std::fabs(along - std::round(along / period_[i]) * period_[i]);
+        if (miss <= align_window) corroborating += weight_[i];
+    }
+
+    // Three things, and all of them have to hold: the beat that will be
+    // played is believed across the cloud, the winning band agrees on its
+    // phase, and the onsets keep arriving where the cloud says they will.
+    out.confidence =
+        std::min(1.0, (share + corroborating) * agreement * coincidence_);
+    out.cluster_share = std::min(1.0, share + corroborating);
+    out.phase_agreement = agreement;
+    out.onset_coincidence = coincidence_;
     return out;
 }
 

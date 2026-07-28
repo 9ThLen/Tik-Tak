@@ -312,14 +312,22 @@ def test_the_real_manifest_records_reproducible_provenance():
         assert entry["license"], name
         assert entry["source"], name
         if "conversion" in entry:
+            conversion = entry["conversion"]
             assert {
                 "model_variant",
                 "source_weights_sha256",
                 "exporter",
-                "onnx_opset",
                 "preprocessing",
                 "io_contract",
-            } <= set(entry["conversion"]), name
+            } <= set(conversion), name
+            # Which format, stated somehow. This used to demand onnx_opset from
+            # everything, on the assumption that converting a model means
+            # exporting it to ONNX. It does not: BeatNet is 0.40 M parameters
+            # and the core runs its forward pass directly, so its conversion is
+            # a flat weight file with a version of its own and no opset to
+            # record. What every conversion does owe the reader is enough to
+            # rebuild the same bytes, and for that the format has to be named.
+            assert {"onnx_opset", "format"} & set(conversion), name
         # Nothing may carry a pin that was not made by an actual fetch. Entries
         # not obtained yet remain null; obtained entries carry bytes, hash and
         # canonical provenance rather than a local delivery path.
@@ -327,3 +335,87 @@ def test_the_real_manifest_records_reproducible_provenance():
             assert {"sha256", "bytes", "date"} <= set(entry["pinned"])
             assert "origin" not in entry["pinned"]
             assert entry["pinned"]["provenance"]["source"]
+
+
+# ----------------------------------------------------------- attribution ----
+#
+# Using these models is conditional on crediting their authors, and the way
+# that condition gets broken is never a decision — it is a model added later
+# whose entry nobody copied into a hand-written notice. So the notice is
+# generated, and these hold it to the manifest.
+
+def _notice():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "tiktak_notice", fetch.MANIFEST.parent / "notice.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_every_artifact_credits_its_authors():
+    manifest = fetch.load(fetch.MANIFEST)
+    for name, entry in manifest["artifacts"].items():
+        attribution = entry.get("attribution")
+        assert attribution, name
+        for field in ("work", "creators", "license_id", "license_uri",
+                      "source_uri", "citation"):
+            assert attribution.get(field), f"{name} is missing {field}"
+        assert isinstance(attribution["creators"], list)
+        assert all(attribution["creators"]), name
+        # A licence has to be named as an identifier, not described. "MIT-ish"
+        # or "open source" is what a hurried entry looks like.
+        assert attribution["license_id"] in {"MIT", "CC-BY-4.0"}, name
+        assert attribution["license_uri"].startswith("https://"), name
+        # Present but null means "unmodified"; absent means nobody considered
+        # the question, and CC BY 4.0 requires that modifications be indicated.
+        assert "modifications" in attribution, name
+
+
+def test_the_licence_texts_are_in_the_repository():
+    # MIT requires its text to travel with the work. A link is not a copy, and
+    # the link is to someone else's branch, which can move.
+    manifest = fetch.load(fetch.MANIFEST)
+    for name, entry in manifest["artifacts"].items():
+        relative = entry["attribution"].get("license_text")
+        assert relative, name
+        path = fetch.MANIFEST.parent / relative
+        assert path.is_file(), f"{name}: {path} is missing"
+        assert len(path.read_text(encoding="utf-8").strip()) > 200, name
+
+
+def test_the_notice_is_regenerated_from_the_manifest():
+    # The check that makes the rest of this enforceable rather than advisory.
+    notice = _notice()
+    manifest = fetch.load(fetch.MANIFEST)
+    rendered = notice.render(manifest)
+    assert notice.NOTICE.is_file(), "NOTICE.md is missing"
+    assert notice.NOTICE.read_text(encoding="utf-8") == rendered, (
+        "NOTICE.md is out of date — run: python models/notice.py")
+
+
+def test_the_notice_names_every_creator_and_licence():
+    notice = _notice()
+    manifest = fetch.load(fetch.MANIFEST)
+    rendered = notice.render(manifest)
+    for entry in manifest["artifacts"].values():
+        attribution = entry["attribution"]
+        for creator in attribution["creators"]:
+            assert creator in rendered, creator
+        assert attribution["license_uri"] in rendered
+        assert attribution["source_uri"] in rendered
+        # And what we did to it, which is the CC BY 4.0 obligation that a
+        # generic notice would silently drop.
+        if attribution["modifications"]:
+            assert attribution["modifications"] in rendered, entry["file"]
+
+
+def test_an_artifact_without_attribution_is_refused():
+    # The failure mode this exists for, exercised rather than assumed: the
+    # generator must stop, not skip the entry and produce a notice that looks
+    # complete.
+    notice = _notice()
+    manifest = fetch.load(fetch.MANIFEST)
+    manifest["artifacts"]["nameless_model"] = {"file": "x.onnx", "pinned": None}
+    with pytest.raises(SystemExit):
+        notice.render(manifest)
