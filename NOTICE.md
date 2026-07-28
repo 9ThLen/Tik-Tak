@@ -18,7 +18,7 @@ retrained: every modification is a format conversion or a numeric one.
 
 **Artifacts in this repository, and how each was changed:**
 
-- `beat_this_large.onnx` — converted to ONNX by a third party (mosynthkey/beat_this_cpp, MIT); weights not retrained
+- `beat_this.onnx` — converted to ONNX by a third party (mosynthkey/beat_this_cpp, MIT); weights not retrained
 - `beat_this_small.ckpt` — unmodified, as published
 - `small0.onnx` — exported from the published small0 checkpoint to ONNX by models/export_beat_this.py; weights not retrained
 - `small0_int8.onnx` — exported to ONNX, then weights quantised to int8 by models/quantise.py; weights not retrained

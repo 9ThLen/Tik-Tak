@@ -264,7 +264,7 @@
         },
         "note": "Populate source_weights_sha256 and exporter version before treating this ONNX as release-ready."
       },
-      "file": "beat_this_large.onnx",
+      "file": "beat_this.onnx",
       "expected_mb": 79.2,
       "pinned": {
         "sha256": "c5c1466e08abdb03fdeb50668a06f244b787d564c212490482231a9cfbe9ccbd",
