@@ -107,7 +107,10 @@ def test_a_backend_can_be_injected_so_the_rest_can_be_tested_without_weights():
 
     backend = beat_this_backend(loader=loader)
     assert not backend.is_builtin
-    assert backend.name == "beat_this_small"
+    # Names the artifact, not the family: `final0` is trained on the full
+    # corpus, so a column headed with it has to be read differently from one
+    # headed with a fold checkpoint.
+    assert backend.name == "beat_this_final0_onnx"
 
 
 def test_a_calibration_is_three_flags_and_never_a_subset():

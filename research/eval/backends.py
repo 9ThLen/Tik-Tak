@@ -153,8 +153,15 @@ def sample_at_beats(activation: np.ndarray, frame_times: np.ndarray,
 # turns into a bar length and a phase. See models/README.md for the pinned
 # checkpoint and docs/ml-models.md for the licence check.
 
+# The exported graph, not the checkpoint: see _load_beat_this for why this route
+# and not torch. This is the `final0` variant — which matters when reading any
+# number it produces, because Beat This!'s `final*` checkpoints are trained on
+# the full corpus, and that corpus includes Ballroom and GTZAN. Scoring either
+# with this is measuring recall of the training set as much as accuracy. The
+# fold checkpoints exist for the clean comparison; annotations/ballroom already
+# carries the matching 8-folds.split.
 BEAT_THIS_CHECKPOINT = (
-    pathlib.Path(__file__).resolve().parents[2] / "models" / "beat_this_small.ckpt"
+    pathlib.Path(__file__).resolve().parents[2] / "models" / "beat_this.onnx"
 )
 
 # Placeholder, and labelled as one. The cue numbers are the wrong units for a
@@ -182,43 +189,45 @@ def beat_this_backend(
     """
     path = pathlib.Path(checkpoint) if checkpoint else BEAT_THIS_CHECKPOINT
     build = loader or _load_beat_this
-    return Backend(name="beat_this_small",
+    return Backend(name="beat_this_final0_onnx",
                    calibration=calibration,
                    salience=build(path))
 
 
-def _load_beat_this(checkpoint: pathlib.Path) -> SalienceSource:
-    """Load the checkpoint and return a per-beat salience function.
+def _load_beat_this(model: pathlib.Path) -> SalienceSource:
+    """Load the exported model and return a per-beat salience function.
 
-    **Unverified.** This environment has no network, no torch and no weights,
-    so this function has never run. Everything around it — the sampling, the
-    calibration plumbing, the resolver seam — is tested with a stand-in
-    backend; this is the seam where a real model plugs in, and the first person
-    with the artifact should expect to correct the details here rather than
-    trust them. It is written out instead of left as a TODO so that what needs
-    checking is concrete: the activation's frame rate, which output channel is
-    the downbeat, and whether the checkpoint stores a bare state dict.
+    Goes through eval/beat_this_onnx.py rather than torch and the checkpoint.
+    That path is the one tools/parity/check_parity.py holds the C++ core to, and
+    on the run that first exercised it end to end the two agreed exactly — same
+    beats, same downbeats, on every clip. A second, torch-shaped route to the
+    same activation would be a second thing to trust for no gain.
+
+    The three details the previous note asked whoever had the artifact to check,
+    now that it is here: the frame rate is FPS in that module and comes back as
+    ``Activations.frame_times``; the downbeat head is its own output, not a
+    channel to be guessed at; and no state dict is involved, because the graph
+    is exported. What is fed to sample_at_beats is the probability rather than
+    the logit, so the calibration's units are bounded and a threshold on them
+    means the same thing from one recording to the next.
     """
-    if not checkpoint.is_file():
+    if not model.is_file():
         raise FileNotFoundError(
-            f"{checkpoint} is missing. It is deliberately not in git — pin and "
+            f"{model} is missing. It is deliberately not in git — pin and "
             f"fetch it with:\n"
-            f"  python models/fetch.py pin beat_this_small <url-or-path>\n"
+            f"  python models/fetch.py pin beat_this_cpp_onnx <url-or-path>\n"
             f"See models/README.md."
         )
-    try:
-        import torch  # noqa: F401
-    except ImportError as error:  # pragma: no cover - depends on the machine
-        raise ImportError(
-            "Beat This! needs torch, which the research environment does not "
-            "install by default. This backend runs where the weights and torch "
-            "are available; the cue backend needs neither."
-        ) from error
 
-    raise NotImplementedError(  # pragma: no cover - reached only with weights
-        "the Beat This! forward pass is not written: this environment cannot "
-        "run it, and code that has never been executed must not be presented "
-        "as working. What is needed here is the model's per-frame downbeat "
-        "activation and its frame times; feed both to sample_at_beats, which "
-        "is written and tested."
-    )
+    from eval.beat_this_onnx import BeatThisOnnx
+
+    # Once, not per recording: the session build dominates a 30 second clip.
+    session = BeatThisOnnx(model)
+
+    def salience(audio: np.ndarray, sample_rate: float,
+                 beat_times: np.ndarray) -> np.ndarray:
+        activations = session.activations(audio, sample_rate)
+        return sample_at_beats(activations.downbeat_probability(),
+                               activations.frame_times, beat_times)
+
+    return salience
