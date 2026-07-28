@@ -14,3 +14,11 @@ target_link_libraries(dump_odf PRIVATE tiktak_core)
 
 add_executable(dump_beats dump_beats.cpp)
 target_link_libraries(dump_beats PRIVATE tiktak_core)
+
+# The exception to the paragraph above: BeatNet is not in the C API, because
+# nothing outside the core wants the model on its own — the shells reach it
+# through the live tracker. Diffing it against the reference still has to be
+# possible, so this one tool sees the private headers.
+add_executable(dump_beatnet dump_beatnet.cpp)
+target_link_libraries(dump_beatnet PRIVATE tiktak_core)
+target_include_directories(dump_beatnet PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../core/src)

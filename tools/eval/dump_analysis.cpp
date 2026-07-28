@@ -59,6 +59,7 @@
 // public C API instead would mean growing that API for a research need. The
 // parity tools set the precedent.
 #include "analysis/downbeat.hpp"
+#include "ml/beatnet.hpp"
 #include "analysis/offline.hpp"
 #include "tracking/live.hpp"
 #include "tracking/particle.hpp"
@@ -91,6 +92,19 @@ std::vector<float> readRaw(const char* path) {
 // One value per beat, whitespace-separated, `#` to end of line. Text rather
 // than binary because the writer is a numpy one-liner and the file is worth
 // being able to look at when a result surprises.
+// The model's weights, as bytes. The core does no I/O and takes the blob.
+bool readBytes(const char* path, std::vector<unsigned char>& out) {
+    std::FILE* file = std::fopen(path, "rb");
+    if (!file) return false;
+    std::fseek(file, 0, SEEK_END);
+    const long bytes = std::ftell(file);
+    std::fseek(file, 0, SEEK_SET);
+    out.resize(static_cast<std::size_t>(bytes));
+    const bool ok = std::fread(out.data(), 1, out.size(), file) == out.size();
+    std::fclose(file);
+    return ok;
+}
+
 bool readSalience(const char* path, std::vector<double>& out,
                   std::string& error) {
     std::FILE* file = std::fopen(path, "rb");
@@ -242,6 +256,12 @@ int main(int argc, char** argv) {
     // only way to find out whether that diagnosis was right.
     std::string activation_path;
     double activation_fps = 50.0;
+    // The same swap, but made by the core itself rather than handed to it: the
+    // tracker computes the activation from the audio through its own front end.
+    // --live-activation answers "would a better observation help"; this answers
+    // "does the thing we would ship actually do it", which is a different
+    // question and the one that matters now.
+    std::string model_path;
 
     struct Threshold {
         const char* flag;
@@ -273,6 +293,11 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--live-activation") == 0) {
             if (i + 1 >= argc) { std::fprintf(stderr, "--live-activation needs a file\n"); return 2; }
             activation_path = argv[++i];
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-model") == 0) {
+            if (i + 1 >= argc) { std::fprintf(stderr, "--live-model needs a file\n"); return 2; }
+            model_path = argv[++i];
             continue;
         }
         if (std::strcmp(argv[i], "--activation-fps") == 0) {
@@ -464,6 +489,7 @@ int main(int argc, char** argv) {
     // not exist.
     std::vector<double> live_beats;
     double live_confidence = 0.0;
+    tiktak::tracking::LiveTracker::Stats live_stats;
     std::vector<double> live_share, live_agreement, live_coincidence;
 
     // The whole live path, driven by an activation from outside instead of by
@@ -479,12 +505,29 @@ int main(int argc, char** argv) {
         }
         live = true;
     }
+    tiktak::ml::BeatNetWeights model_weights;
+    if (!model_path.empty()) {
+        std::vector<unsigned char> blob;
+        if (!readBytes(model_path.c_str(), blob)) {
+            std::fprintf(stderr, "cannot read %s\n", model_path.c_str());
+            return 1;
+        }
+        if (!model_weights.load(blob.data(), blob.size())) {
+            std::fprintf(stderr, "%s is not a weight file this build can run\n",
+                         model_path.c_str());
+            return 1;
+        }
+        live = true;
+    }
     if (live) {
         tiktak::tracking::LiveConfig live_config;
         live_config.odf = config.odf;
         if (live_lock > 0.0) live_config.lock_confidence = live_lock;
         if (live_release > 0.0) live_config.release_confidence = live_release;
-        tiktak::tracking::LiveTracker tracker(live_config);
+        tiktak::tracking::LiveTracker tracker =
+            model_weights.valid()
+                ? tiktak::tracking::LiveTracker(live_config, model_weights)
+                : tiktak::tracking::LiveTracker(live_config);
         if (live_seed && analysis.bpm > 0.0) {
             tracker.seedTempo(analysis.bpm);
         }
@@ -514,18 +557,33 @@ int main(int argc, char** argv) {
         };
 
         if (!activation.empty()) {
-            // One frame at a time, polling at the same rate a device would,
-            // so a beat is never handed out later than the shell would ask.
+            // Driven by a block clock, not by the frame index, so that this
+            // path and the audio path below ask takeBeat the same question at
+            // the same moments and differ only in where the evidence came from.
+            //
+            // The first version of this loop polled once per activation frame
+            // and let `now` jump a frame at a time. That is a different
+            // cadence from a device's, and takeBeat is sensitive to it: while
+            // coasting it hands out one beat per call until it catches up with
+            // now + lookahead, so a coarser clock flushes out several beats
+            // where a device would have taken one. It inflated the beat count
+            // roughly threefold — visible afterwards as beats 50 ms apart,
+            // which is the lookahead, not a tempo — without much changing
+            // which beats were right. The accuracy measured through it stands;
+            // the count of beats emitted through it did not.
             const double frame_sec = 1.0 / activation_fps;
-            double next_poll = 0.0;
-            for (std::size_t i = 0; i < activation.size(); ++i) {
-                const double t = static_cast<double>(i) * frame_sec;
-                tracker.observe(t, activation[i]);
-                now = t;
-                if (t >= next_poll) {
-                    poll();
-                    next_poll += static_cast<double>(kLiveBlock) / rate;
+            const double block_sec = static_cast<double>(kLiveBlock) / rate;
+            const double last_sec = static_cast<double>(activation.size()) * frame_sec;
+            std::size_t next_frame = 0;
+            for (double clock = 0.0; clock < last_sec; clock += block_sec) {
+                while (next_frame < activation.size() &&
+                       static_cast<double>(next_frame) * frame_sec <= clock) {
+                    tracker.observe(static_cast<double>(next_frame) * frame_sec,
+                                    activation[next_frame]);
+                    ++next_frame;
                 }
+                now = clock;
+                poll();
             }
         } else {
             for (std::size_t pos = 0; pos < samples.size(); pos += kLiveBlock) {
@@ -536,6 +594,7 @@ int main(int argc, char** argv) {
             }
         }
         live_confidence = tracker.estimate(now).confidence;
+        live_stats = tracker.stats();
         beats = live_beats;
     }
 
@@ -639,6 +698,14 @@ int main(int argc, char** argv) {
     }
     if (live) {
         std::printf("  \"live_confidence\": %.9g,\n", finiteOrZero(live_confidence));
+        // Beats the tracker decided on but could not play, because by the time
+        // it was asked the beat was already behind the clock. Free to report
+        // and the only way to tell a tracker that lost the grid from one that
+        // found it too late — which look identical in the beat list.
+        std::printf("  \"live_frames\": %zu,\n", live_stats.frames);
+        std::printf("  \"live_gated\": %zu,\n", live_stats.gated);
+        std::printf("  \"live_beats\": %zu,\n", live_stats.beats);
+        std::printf("  \"live_beats_late\": %zu,\n", live_stats.beats_late);
         std::printf("  \"live_seeded\": %s,\n", live_seed ? "true" : "false");
         const auto column = [](const char* name, const std::vector<double>& values) {
             std::printf("  \"%s\": [", name);

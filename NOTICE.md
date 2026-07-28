@@ -62,6 +62,7 @@ SOFTWARE.
 **Artifacts in this repository, and how each was changed:**
 
 - `beatnet_model_1_weights.pt` — unmodified, as published
+- `beatnet_model_1.ttw` — rewritten from the published torch state dict into a flat little-endian float32 weight file by models/export_beatnet.py; weights not retrained, not quantised and not reordered within any tensor
 
 The full licence text is at `models/licenses/CC-BY-4.0-BeatNet.txt` and at https://creativecommons.org/licenses/by/4.0/.
 

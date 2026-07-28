@@ -312,14 +312,22 @@ def test_the_real_manifest_records_reproducible_provenance():
         assert entry["license"], name
         assert entry["source"], name
         if "conversion" in entry:
+            conversion = entry["conversion"]
             assert {
                 "model_variant",
                 "source_weights_sha256",
                 "exporter",
-                "onnx_opset",
                 "preprocessing",
                 "io_contract",
-            } <= set(entry["conversion"]), name
+            } <= set(conversion), name
+            # Which format, stated somehow. This used to demand onnx_opset from
+            # everything, on the assumption that converting a model means
+            # exporting it to ONNX. It does not: BeatNet is 0.40 M parameters
+            # and the core runs its forward pass directly, so its conversion is
+            # a flat weight file with a version of its own and no opset to
+            # record. What every conversion does owe the reader is enough to
+            # rebuild the same bytes, and for that the format has to be named.
+            assert {"onnx_opset", "format"} & set(conversion), name
         # Nothing may carry a pin that was not made by an actual fetch. Entries
         # not obtained yet remain null; obtained entries carry bytes, hash and
         # canonical provenance rather than a local delivery path.

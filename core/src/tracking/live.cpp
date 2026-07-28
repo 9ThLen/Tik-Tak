@@ -48,9 +48,19 @@ ParticleFilterConfig LiveTracker::resolveFilter(const LiveConfig& config) {
 }
 
 LiveTracker::LiveTracker(const LiveConfig& config)
-    : config_(config), odf_(config.odf), filter_(resolveFilter(config)), sync_(config.sync) {
+    : config_(config), odf_(config.odf), filter_(resolveFilter(config)), sync_(config.sync),
+      evidence_half_sec_(0.5 * static_cast<double>(config.odf.frameSize) /
+                         config.odf.sampleRate) {
     gate_start_.fill(std::numeric_limits<double>::infinity());
     gate_end_.fill(-std::numeric_limits<double>::infinity());
+}
+
+LiveTracker::LiveTracker(const LiveConfig& config, const ml::BeatNetWeights& weights)
+    : LiveTracker(config) {
+    if (!weights.valid()) return;
+    model_.emplace(config.odf.sampleRate, weights);
+    evidence_half_sec_ = 0.5 * static_cast<double>(ml::BeatNetFeatures::kFrameSize) /
+                         ml::BeatNetFeatures::kModelRate;
 }
 
 void LiveTracker::gateClick(double heard_time_sec) {
@@ -63,9 +73,8 @@ bool LiveTracker::gatedAt(double frame_time_sec) const {
     // A frame is not a moment: it is a window, and a click anywhere inside it
     // colours the whole thing. The comparison is therefore window against
     // window, not centre against window.
-    const double half = 0.5 * static_cast<double>(config_.odf.frameSize) / config_.odf.sampleRate;
-    const double start = frame_time_sec - half;
-    const double end = frame_time_sec + half;
+    const double start = frame_time_sec - evidence_half_sec_;
+    const double end = frame_time_sec + evidence_half_sec_;
     for (std::size_t i = 0; i < kGates; ++i) {
         if (end > gate_start_[i] && start < gate_end_[i]) return true;
     }
@@ -94,6 +103,33 @@ void LiveTracker::process(double stream_time_sec, const float* samples, std::siz
         }
     }
 
+    if (model_) {
+        // The learned front end replaces spectral flux and nothing else. Note
+        // what does *not* happen here: no peak follower, because an activation
+        // already answers the question on its own scale, and no separate
+        // clock, because the model reports frames from its own zero exactly as
+        // the ODF does and the origin correction above applies to both.
+        //
+        // One honest asymmetry. Gating drops the click's frames before the
+        // filter sees them, as it does for the ODF — but spectral flux is
+        // computed frame by frame with no memory, while an LSTM has already
+        // taken the click into its state by the time the frame is dropped.
+        // What the gate can still prevent is the click moving the filter,
+        // which is the failure that matters: a tracker that locks onto itself.
+        // What it cannot prevent is the model having heard it.
+        model_->process(samples, n, [&](double frame_sec, double beat, double) {
+            ++stats_.frames;
+            const double time_sec = origin_sec_ + frame_sec;
+            if (gatedAt(time_sec)) {
+                ++stats_.gated;
+                return;
+            }
+            submit(time_sec, std::min(1.0, std::max(0.0, beat)));
+        });
+        consumed_ += n;
+        return;
+    }
+
     const double hop_sec = static_cast<double>(config_.odf.hopSize) / sample_rate;
     const double decay = std::exp(-hop_sec / config_.onset_peak_tau_sec);
 
@@ -119,25 +155,27 @@ void LiveTracker::process(double stream_time_sec, const float* samples, std::siz
         // The epsilon is what keeps digital silence and room hiss from being
         // divided up into full-scale onsets.
         const double normalised = std::min(1.0, value / (onset_peak_ + 1e-6));
-
-        if (manual_bpm_ > 0.0) {
-            sync_.observe(time_sec, normalised);
-            // Acquisition happens once. Handing the filter a fresh phase every
-            // frame would keep flattening the cloud it has been building, and
-            // the correlation is the coarser of the two answers — it is a mean
-            // over the last few seconds, so a syncopated bar drags it, whereas
-            // the filter's window is local and merely lowers the particles the
-            // stray hit missed.
-            if (!acquired_ && sync_.ready()) {
-                filter_.seedPhase(sync_.nextBeat(time_sec));
-                acquired_ = true;
-            }
-        }
-
-        filter_.observe(time_sec, normalised);
+        submit(time_sec, normalised);
     });
 
     consumed_ += n;
+}
+
+void LiveTracker::submit(double time_sec, double normalised) {
+    if (manual_bpm_ > 0.0) {
+        sync_.observe(time_sec, normalised);
+        // Acquisition happens once. Handing the filter a fresh phase every
+        // frame would keep flattening the cloud it has been building, and the
+        // correlation is the coarser of the two answers — it is a mean over the
+        // last few seconds, so a syncopated bar drags it, whereas the filter's
+        // window is local and merely lowers the particles the stray hit missed.
+        if (!acquired_ && sync_.ready()) {
+            filter_.seedPhase(sync_.nextBeat(time_sec));
+            acquired_ = true;
+        }
+    }
+
+    filter_.observe(time_sec, normalised);
 }
 
 void LiveTracker::observe(double time_sec, double activation) {
@@ -154,17 +192,7 @@ void LiveTracker::observe(double time_sec, double activation) {
     // like a beat" on its own scale, and dividing it by a running maximum
     // would undo that — a quiet passage the model correctly reports as
     // uncertain would be renormalised back up into confidence.
-    const double normalised = std::min(1.0, std::max(0.0, activation));
-
-    if (manual_bpm_ > 0.0) {
-        sync_.observe(time_sec, normalised);
-        if (!acquired_ && sync_.ready()) {
-            filter_.seedPhase(sync_.nextBeat(time_sec));
-            acquired_ = true;
-        }
-    }
-
-    filter_.observe(time_sec, normalised);
+    submit(time_sec, std::min(1.0, std::max(0.0, activation)));
 }
 
 bool LiveTracker::takeBeat(double now_sec, double lookahead_sec, double* beat_sec) {
@@ -224,7 +252,17 @@ bool LiveTracker::takeBeat(double now_sec, double lookahead_sec, double* beat_se
     // One beat is handed out once. Between publishing a beat and that beat
     // arriving, the estimate keeps naming it; without this guard every callback
     // in that window would schedule another click on top of the same beat.
-    if (published_ && candidate < last_beat_sec_ + 0.5 * held_period_sec_) return false;
+    //
+    // Deliberately not conditioned on `published_`, which is where this used to
+    // go wrong. A confidence dip below the release threshold clears that flag,
+    // so a tracker flickering across the threshold — which is exactly what a
+    // hard passage looks like — skipped the guard every time it came back and
+    // handed out a beat however close it fell to the last one. On a piece with
+    // a 0.9 s beat that produced clicks 30 ms apart: not a fast tempo, a
+    // stutter. Nothing here needs the flag, because a genuine restart after a
+    // long silence leaves last_beat_sec_ far enough back that the comparison
+    // passes on its own.
+    if (candidate < last_beat_sec_ + 0.5 * held_period_sec_) return false;
 
     if (candidate > now_sec + lookahead_sec) return false;
     if (candidate < now_sec) {
@@ -286,6 +324,9 @@ void LiveTracker::setManualTempo(double bpm) {
 
 void LiveTracker::reset() {
     odf_.reset();
+    // Carrying an LSTM across a reset is carrying a memory of music that is no
+    // longer playing, and it would take several seconds to fade on its own.
+    if (model_) model_->reset();
     filter_.reset();  // keeps the pin: a reset forgets audio, not the user
     sync_.reset();
     acquired_ = false;
@@ -298,7 +339,7 @@ void LiveTracker::reset() {
     gate_next_ = 0;
     locked_ = false;
     published_ = false;
-    last_beat_sec_ = 0.0;
+    last_beat_sec_ = -std::numeric_limits<double>::infinity();
     held_period_sec_ = 0.5;
     stats_ = Stats{};
 }

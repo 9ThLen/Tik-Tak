@@ -21,6 +21,9 @@ add_library(tiktak_core STATIC
     src/dsp/mel.cpp
     src/dsp/chroma.cpp
     src/dsp/stft.cpp
+    src/dsp/dft.cpp
+    src/dsp/logfilt.cpp
+    src/ml/beatnet.cpp
     src/schedule/scheduler.cpp
     src/dsp/matched.cpp
     src/dsp/odf.cpp

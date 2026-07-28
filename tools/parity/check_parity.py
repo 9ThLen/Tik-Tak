@@ -34,6 +34,16 @@ from tiktak.synth import make_clip  # noqa: E402
 from tiktak.tempo import estimate_tempo  # noqa: E402
 from tiktak.tracker import track_beats  # noqa: E402
 
+WEIGHTS = ROOT / "models" / "beatnet_model_1.ttw"
+
+# The network's own tolerance, and it needs a different number from the ODF's.
+# Two layers of LSTM carry state from the first frame to the last, so a float32
+# rounding difference in frame 0 is still present, slightly rearranged, in frame
+# 15000 — there is no averaging to hide behind. A few times 1e-6 on a
+# probability that sums to one with two others is float32; 1e-3 is a different
+# function.
+BEATNET_TOLERANCE = 5e-5
+
 # float32 spectral flux accumulated over 81 mel bands: a few times the float32
 # epsilon per operation is expected. An order of magnitude above this means the
 # two implementations disagree about something real.
@@ -156,6 +166,104 @@ def compare_beats(name: str, clip, binary: pathlib.Path, block: int, bpm_hint: f
     return ok
 
 
+def run_cpp_beatnet(binary: pathlib.Path, audio: np.ndarray, sample_rate: int,
+                    block: int, features: bool):
+    with tempfile.NamedTemporaryFile(suffix=".f32") as handle:
+        handle.write(np.asarray(audio, dtype=np.float32).tobytes())
+        handle.flush()
+
+        command = [str(binary), handle.name, str(sample_rate), str(WEIGHTS), str(block)]
+        if features:
+            command.append("--features")
+        completed = subprocess.run(command, capture_output=True, text=True, check=True)
+
+    body = completed.stdout.strip().splitlines()
+    if not features:
+        body = body[1:]
+    return np.array([line.split(",") for line in body], dtype=np.float64)
+
+
+def compare_beatnet(name: str, clip, binary: pathlib.Path, block: int, network) -> bool:
+    from eval.beatnet_onnx import log_filtered_spectrogram, resample_to_model_rate
+
+    cpp_features = run_cpp_beatnet(binary, clip.audio, clip.sample_rate, block, True)
+    reference_features = log_filtered_spectrogram(
+        resample_to_model_rate(clip.audio, clip.sample_rate))
+
+    # The streaming implementation is one frame shorter, and should be. The
+    # reference zero-pads the end of the file and computes a final frame that is
+    # mostly padding; a tracker running live has no such file to pad, and
+    # inventing that frame would be inventing 32 ms of future.
+    shortfall = len(reference_features) - len(cpp_features)
+    ok = shortfall in (0, 1)
+    if not ok:
+        print(f"  {name}: FRAME COUNT differs by {shortfall} — C++ {len(cpp_features)}, "
+              f"Python {len(reference_features)}")
+
+    count = min(len(cpp_features), len(reference_features))
+    notes = []
+
+    times = cpp_features[:count, 0]
+    expected_times = np.arange(count) * 441.0 / 22050.0
+    time_error = np.max(np.abs(times - expected_times)) if count else 0.0
+    notes.append(f"t {time_error:.1e}")
+    if time_error > 1e-9:
+        ok = False
+
+    feature_error = np.max(np.abs(cpp_features[:count, 1:] - reference_features[:count]))
+    notes.append(f"features {feature_error:.1e}")
+    if feature_error > BEATNET_TOLERANCE:
+        ok = False
+
+    cpp_activation = run_cpp_beatnet(binary, clip.audio, clip.sample_rate, block, False)
+    probabilities = network.activations(clip.audio, clip.sample_rate)
+    count = min(len(cpp_activation), len(probabilities))
+
+    beat_error = np.max(np.abs(cpp_activation[:count, 1]
+                               - (probabilities[:count, 0] + probabilities[:count, 1])))
+    downbeat_error = np.max(np.abs(cpp_activation[:count, 2] - probabilities[:count, 1]))
+    notes.append(f"beat {beat_error:.1e}, downbeat {downbeat_error:.1e}")
+    if max(beat_error, downbeat_error) > BEATNET_TOLERANCE:
+        ok = False
+
+    print(f"  {name:22} frames {count:5d}  {', '.join(notes)}  {'ok' if ok else 'FAIL'}")
+    return ok
+
+
+def check_beatnet(binary: pathlib.Path) -> bool | None:
+    """None when the weights are absent — a missing artifact is not a failure."""
+    if not binary.exists() or not WEIGHTS.exists():
+        print(f"\nskipping BeatNet: need {binary.name} and {WEIGHTS.name}")
+        print("  research/.venv/bin/python models/export_beatnet.py "
+              "models/beatnet_model_1_weights.pt models/beatnet_model_1.ttw")
+        return None
+
+    from eval.beatnet_onnx import WEIGHTS_PATH, BeatNet
+
+    if not WEIGHTS_PATH.is_file():
+        print(f"\nskipping BeatNet: the reference needs {WEIGHTS_PATH.name}")
+        return None
+
+    print(f"\ncomparing {binary} against research/eval/beatnet_onnx.py")
+    print(f"tolerance: {BEATNET_TOLERANCE:.0e} absolute\n")
+    network = BeatNet(WEIGHTS_PATH)
+
+    # Different capture rates on purpose: 48 kHz and 44.1 kHz resample to the
+    # model's 22050 by different ratios, and 22050 itself takes the path where
+    # no resampling happens at all.
+    cases = [
+        ("48k, block 137", make_clip(bpm=120, duration_sec=6, seed=1), 48000, 137),
+        ("48k, block 1024", make_clip(bpm=120, duration_sec=6, seed=1), 48000, 1024),
+        ("44.1k sparse", make_clip(bpm=100, duration_sec=6, sparse=True, seed=3,
+                                   sample_rate=44100), 44100, 512),
+        ("22.05k, no resample", make_clip(bpm=140, duration_sec=6, seed=4,
+                                          sample_rate=22050), 22050, 441),
+        ("noisy 48k", make_clip(bpm=120, duration_sec=6, noise_db=6.0, seed=5), 48000, 137),
+    ]
+    return all(compare_beatnet(name, clip, binary, block, network)
+               for name, clip, _rate, block in cases)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -169,6 +277,12 @@ def main() -> int:
         type=pathlib.Path,
         default=ROOT / "tools" / "parity" / "build" / "dump_beats",
         help="path to the dump_beats executable",
+    )
+    parser.add_argument(
+        "--beatnet-binary",
+        type=pathlib.Path,
+        default=ROOT / "tools" / "parity" / "build" / "dump_beatnet",
+        help="path to the dump_beatnet executable",
     )
     args = parser.parse_args()
 
@@ -200,9 +314,15 @@ def main() -> int:
     beats_ok = all(compare_beats(name, clip, args.beats_binary, block, hint)
                    for name, clip, block, hint in beat_cases)
 
+    beatnet_ok = check_beatnet(args.beatnet_binary)
+
     print()
-    if odf_ok and beats_ok:
-        print("PARITY OK — the core and the reference agree to float32 precision.")
+    if odf_ok and beats_ok and beatnet_ok is not False:
+        if beatnet_ok is None:
+            print("PARITY OK — the core and the reference agree to float32 precision "
+                  "(BeatNet not checked).")
+        else:
+            print("PARITY OK — the core and the reference agree to float32 precision.")
         return 0
     print("PARITY FAILED — the implementations have diverged. Fix before trusting any metric.")
     return 1

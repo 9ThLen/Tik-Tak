@@ -4,7 +4,13 @@ Portable C++17 analysis core, shared by the iOS and Android apps.
 See [`docs/adr/0001-portable-cpp-core.md`](../docs/adr/0001-portable-cpp-core.md)
 for why this is not Swift.
 
-`tiktak_core` has no platform SDK dependencies and no third-party dependencies.
+`tiktak_core` has no platform SDK dependencies and no third-party dependencies —
+including for the neural network it runs. BeatNet is 0.40 M parameters and
+20 MMAC/s, so `src/ml/beatnet` carries the forward pass rather than linking an
+inference runtime several times the model's own size; the weights are a blob the
+shell hands in, because the core does no I/O. Beat This! keeps its ONNX export,
+which is a different job under different constraints — see
+[`models/export_beatnet.py`](../models/export_beatnet.py).
 It is consumed through the flat C API in
 [`include/tiktak/tiktak.h`](include/tiktak/tiktak.h).
 
@@ -41,6 +47,9 @@ all.
 | `src/dsp/mel` | triangular mel filterbank, sparse |
 | `src/dsp/chroma` | twelve pitch classes from a spectrum — the harmony cue |
 | `src/dsp/stft` | streaming STFT, allocation-free, block-size agnostic |
+| `src/dsp/dft` | magnitude spectrum at any length, including the ones radix-2 cannot do |
+| `src/dsp/logfilt` | logarithmic filterbank, area-normalised — the network's front end |
+| `src/ml/beatnet` | BeatNet: a causal beat/downbeat network, weights and forward pass |
 | `src/dsp/odf` | onset detection function — full / low / high bands |
 | `src/analysis/tempo` | tempo from the ODF: autocorrelation + log-normal prior |
 | `src/analysis/tracker` | offline beat tracking by dynamic programming (Ellis 2007) |

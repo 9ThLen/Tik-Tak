@@ -126,10 +126,13 @@ def _frames(audio: np.ndarray) -> np.ndarray:
     half = FRAME_SIZE // 2
     padded = np.concatenate([np.zeros(half), audio, np.zeros(FRAME_SIZE)])
     count = int(np.ceil(len(audio) / HOP))
-    out = np.empty((count, FRAME_SIZE))
-    for i in range(count):
-        out[i] = padded[i * HOP:i * HOP + FRAME_SIZE]
-    return out
+    # A strided view rather than a loop of slices. Not a micro-optimisation: a
+    # five-minute track is fifteen thousand frames of 1411 samples, and copying
+    # them one at a time cost more than the FFTs that follow — enough to make a
+    # corpus-wide run impractical rather than merely slow.
+    return np.lib.stride_tricks.as_strided(
+        padded, shape=(count, FRAME_SIZE),
+        strides=(padded.strides[0] * HOP, padded.strides[0]), writeable=False)
 
 
 def log_filtered_spectrogram(audio: np.ndarray) -> np.ndarray:
@@ -180,6 +183,17 @@ class BeatNet:
         self._torch = torch
         self.state = {k: v.double() for k, v in state.items()}
 
+        # Built once here rather than per call. The functional LSTM's signature
+        # is a private detail that has changed between torch releases, so this
+        # goes through the module; rebuilding and reloading the module for every
+        # track was pure waste.
+        self._lstm = torch.nn.LSTM(input_size=150, hidden_size=150, num_layers=2,
+                                   batch_first=True, bidirectional=False).double()
+        self._lstm.load_state_dict({k[len("lstm."):]: v
+                                    for k, v in self.state.items()
+                                    if k.startswith("lstm.")})
+        self._lstm.eval()
+
     def activations(self, audio: np.ndarray, sample_rate: float) -> np.ndarray:
         """(frames, 3): probabilities of beat, downbeat and neither, in that order.
 
@@ -208,16 +222,7 @@ class BeatNet:
             x = x.reshape(len(features), -1)
             x = torch.nn.functional.linear(x, self.state["linear0.weight"],
                                            self.state["linear0.bias"])
-            # Built as a module rather than called through the functional
-            # LSTM: the latter's signature is a private detail that has changed
-            # between torch releases, and this has to keep working.
-            lstm = torch.nn.LSTM(input_size=150, hidden_size=150, num_layers=2,
-                                 batch_first=True, bidirectional=False).double()
-            lstm.load_state_dict({k[len("lstm."):]: v
-                                  for k, v in self.state.items()
-                                  if k.startswith("lstm.")})
-            lstm.eval()
-            out, _ = lstm(x.unsqueeze(0))
+            out, _ = self._lstm(x.unsqueeze(0))
             logits = torch.nn.functional.linear(out.squeeze(0),
                                                 self.state["linear.weight"],
                                                 self.state["linear.bias"])

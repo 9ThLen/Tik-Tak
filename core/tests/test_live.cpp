@@ -466,3 +466,185 @@ TEST(LiveTracker, AnActivationIsNotRenormalisedByItsOwnLoudest) {
 
     EXPECT_GT(loud.estimate(now).confidence, quiet.estimate(now).confidence);
 }
+
+// -------------------------------------------- the learned front end, wired --
+//
+// The seam above proved the filter can be driven by an activation. These prove
+// the tracker can produce one itself, from audio, through the same process()
+// call a shell already makes — which is what "in the product" means.
+//
+// The weights are made up, as in test_beatnet.cpp: what the published numbers
+// produce is a question for tools/parity, where the real ones are. What is
+// checked here is the wiring, and wiring is exactly what a synthetic model
+// still exercises.
+namespace {
+
+std::vector<unsigned char> stubWeightFile() {
+    using tiktak::ml::BeatNetWeights;
+    std::vector<unsigned char> out(BeatNetWeights::kFileBytes);
+    std::memcpy(out.data(), "TTBN", 4);
+
+    const std::uint32_t header[7] = {
+        1, BeatNetWeights::kFeatures, BeatNetWeights::kConvChannels,
+        BeatNetWeights::kKernel, BeatNetWeights::kHidden, BeatNetWeights::kLayers,
+        BeatNetWeights::kClasses,
+    };
+    for (std::size_t i = 0; i < 7; ++i) {
+        for (std::size_t b = 0; b < 4; ++b) {
+            out[4 + i * 4 + b] = static_cast<unsigned char>((header[i] >> (8 * b)) & 0xFF);
+        }
+    }
+    for (std::size_t i = 0; i < BeatNetWeights::kParameters; ++i) {
+        const float value = 0.05f * std::sin(0.7 * static_cast<double>(i));
+        std::uint32_t bits;
+        std::memcpy(&bits, &value, sizeof(bits));
+        for (std::size_t b = 0; b < 4; ++b) {
+            out[BeatNetWeights::kHeaderBytes + i * 4 + b] =
+                static_cast<unsigned char>((bits >> (8 * b)) & 0xFF);
+        }
+    }
+    return out;
+}
+
+}  // namespace
+
+TEST(LiveTracker, RunsTheModelFromTheSameProcessCall) {
+    const auto blob = stubWeightFile();
+    tiktak::ml::BeatNetWeights weights;
+    ASSERT_TRUE(weights.load(blob.data(), blob.size()));
+
+    LiveTracker tracker{liveConfig(), weights};
+    EXPECT_TRUE(tracker.usingModel());
+
+    const auto audio = tiktak::test::clickTrack(120.0, 4.0, kRate);
+    feed(tracker, audio);
+
+    // Fifty a second, not the ODF's rate: the model's front end has replaced
+    // spectral flux rather than running alongside it.
+    EXPECT_NEAR(static_cast<double>(tracker.stats().frames), 200.0, 3.0);
+}
+
+TEST(LiveTracker, WithoutWeightsItIsTheTrackerItAlwaysWas) {
+    // The default has not moved. Spectral flux costs a few hundred kFLOP a
+    // second and the model tens of MFLOP plus 1.6 MB of weights, and which of
+    // those a device should spend is not a question a workstation can answer.
+    LiveTracker tracker{liveConfig()};
+    EXPECT_FALSE(tracker.usingModel());
+
+    tiktak::ml::BeatNetWeights empty;
+    LiveTracker refused{liveConfig(), empty};
+    EXPECT_FALSE(refused.usingModel()) << "weights that never loaded must not engage";
+}
+
+TEST(LiveTracker, GatesItsOwnClickThroughTheModelToo) {
+    const auto blob = stubWeightFile();
+    tiktak::ml::BeatNetWeights weights;
+    ASSERT_TRUE(weights.load(blob.data(), blob.size()));
+
+    LiveTracker tracker{liveConfig(), weights};
+    for (double t = 0.5; t < 3.0; t += 0.5) tracker.gateClick(t);
+
+    const auto audio = tiktak::test::clickTrack(120.0, 3.0, kRate);
+    feed(tracker, audio);
+
+    // The gate is measured against the model's own 64 ms window, not the ODF's
+    // frame — the two differ, and a gate sized for the wrong one either lets
+    // the click through or blinds the tracker either side of it.
+    EXPECT_GT(tracker.stats().gated, 0u);
+    EXPECT_LT(tracker.stats().gated, tracker.stats().frames);
+}
+
+TEST(LiveTracker, ResettingForgetsWhatTheModelHeard) {
+    const auto blob = stubWeightFile();
+    tiktak::ml::BeatNetWeights weights;
+    ASSERT_TRUE(weights.load(blob.data(), blob.size()));
+
+    LiveTracker tracker{liveConfig(), weights};
+    const auto audio = tiktak::test::clickTrack(120.0, 2.0, kRate);
+
+    std::vector<double> first;
+    feed(tracker, audio);
+    const auto before = tracker.stats().frames;
+
+    tracker.reset();
+    feed(tracker, audio);
+
+    // Same audio from a clean start gives the same frame count, and would not
+    // if the recurrent state had survived the reset with the frame clock.
+    EXPECT_EQ(tracker.stats().frames, before);
+}
+
+TEST(LiveTracker, TheModelPathIsBlockSizeAgnostic) {
+    const auto blob = stubWeightFile();
+    tiktak::ml::BeatNetWeights weights;
+    ASSERT_TRUE(weights.load(blob.data(), blob.size()));
+
+    const auto audio = tiktak::test::clickTrack(120.0, 3.0, kRate);
+
+    auto run = [&](std::size_t block) {
+        LiveTracker tracker{liveConfig(), weights};
+        double time = 0.0;
+        for (std::size_t i = 0; i < audio.size(); i += block) {
+            const std::size_t n = std::min(block, audio.size() - i);
+            tracker.process(time, audio.data() + i, n);
+            time += static_cast<double>(n) / kRate;
+        }
+        return tracker.estimate(time);
+    };
+
+    const BeatEstimate reference = run(512);
+    for (std::size_t block : {64u, 137u, 1024u}) {
+        const BeatEstimate other = run(block);
+        EXPECT_NEAR(other.bpm, reference.bpm, 1e-6) << "block " << block;
+    }
+}
+
+TEST(LiveTracker, ADipInConfidenceDoesNotLetTwoBeatsOutTogether) {
+    // Found by porting the model and then comparing the ported path against the
+    // research harness that had measured it. The guard against handing the same
+    // beat out twice used to be skipped whenever confidence had dipped below
+    // the release threshold — and a dip is not rare, it is what a hard passage
+    // looks like. Every time the tracker came back it was free to place a beat
+    // however close to the last one it liked, which on a piece with a 0.9 s
+    // beat produced clicks 30 ms apart. Not a fast tempo: a stutter.
+    LiveTracker tracker{liveConfig()};
+
+    constexpr double kFps = 50.0;
+    constexpr double kPeriod = 0.5;
+    double now = 0.0;
+    std::vector<double> beats;
+
+    const auto pump = [&](double from, double to, bool musical) {
+        for (double t = from; t < to; t += 1.0 / kFps) {
+            const double since = t - std::round(t / kPeriod) * kPeriod;
+            // Noise rather than silence during the gap: silence moves no
+            // weights at all, and what has to be reproduced is a confidence
+            // that falls and recovers, not a filter that pauses.
+            const double level = musical
+                                     ? (std::fabs(since) < 0.011 ? 0.95 : 0.02)
+                                     : (0.3 + 0.2 * std::sin(37.0 * t));
+            tracker.observe(t, level);
+            now = t;
+            double beat = 0.0;
+            while (tracker.takeBeat(now, 0.05, &beat)) beats.push_back(beat);
+        }
+    };
+
+    // Lock, lose it, get it back — twice, so a single recovery cannot pass by
+    // luck.
+    pump(0.0, 20.0, true);
+    pump(20.0, 26.0, false);
+    pump(26.0, 40.0, true);
+    pump(40.0, 46.0, false);
+    pump(46.0, 60.0, true);
+
+    ASSERT_GT(beats.size(), 20u);
+    double closest = 1e9;
+    for (std::size_t i = 1; i < beats.size(); ++i) {
+        closest = std::min(closest, beats[i] - beats[i - 1]);
+    }
+    // Half a beat is the floor the guard promises. Anything under it is two
+    // clicks where the user asked for one.
+    EXPECT_GT(closest, 0.5 * kPeriod * 0.99)
+        << "closest pair of beats was " << closest << " s apart";
+}
