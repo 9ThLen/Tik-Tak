@@ -36,4 +36,9 @@ if(TARGET tiktak_ml)
     add_executable(dump_beat_this dump_beat_this.cpp)
     target_link_libraries(dump_beat_this PRIVATE tiktak_ml)
     target_include_directories(dump_beat_this PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../core/src)
+    foreach(runtime IN LISTS TIKTAK_ORT_RUNTIME_FILES)
+        add_custom_command(TARGET dump_beat_this POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${runtime}" "$<TARGET_FILE_DIR:dump_beat_this>")
+    endforeach()
 endif()

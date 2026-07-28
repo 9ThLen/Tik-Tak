@@ -155,22 +155,22 @@ option(TIKTAK_BUILD_ML "Build the ONNX inference library" OFF)
 if(TIKTAK_BUILD_ML)
     include(FetchContent)
 
-    # Pinned by URL and hash. Only the Linux x64 archive is verified here,
-    # because it is the only one this environment can run; the others are
-    # declared from the same release so a desktop build has something to try,
-    # and are unverified until somebody builds on that platform and says so.
-    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-        set(TIKTAK_ORT_URL "https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-linux-x64-1.22.0.tgz")
-        set(TIKTAK_ORT_HASH "SHA256=8344d55f93d5bc5021ce342db50f62079daf39aaafb5d311a451846228be49b3")
+    # Pinned by URL and hash, all three verified by downloading the archives
+    # and hashing them rather than by copying numbers from a page.
+    set(TIKTAK_ORT_VERSION "1.22.0")
+    if(WIN32)
+        set(TIKTAK_ORT_ARCHIVE "onnxruntime-win-x64-${TIKTAK_ORT_VERSION}.zip")
+        set(TIKTAK_ORT_HASH "SHA256=174c616efc0271194488642a72f1a514e01487da4dfe84c49296d66e40ebe0da")
     elseif(APPLE)
-        set(TIKTAK_ORT_URL "https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-osx-universal2-1.22.0.tgz")
-        set(TIKTAK_ORT_HASH "")
-    elseif(WIN32)
-        set(TIKTAK_ORT_URL "https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-win-x64-1.22.0.zip")
-        set(TIKTAK_ORT_HASH "")
+        set(TIKTAK_ORT_ARCHIVE "onnxruntime-osx-universal2-${TIKTAK_ORT_VERSION}.tgz")
+        set(TIKTAK_ORT_HASH "SHA256=cfa6f6584d87555ed9f6e7e8a000d3947554d589efe3723b8bfa358cd263d03c")
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        set(TIKTAK_ORT_ARCHIVE "onnxruntime-linux-x64-${TIKTAK_ORT_VERSION}.tgz")
+        set(TIKTAK_ORT_HASH "SHA256=8344d55f93d5bc5021ce342db50f62079daf39aaafb5d311a451846228be49b3")
     else()
         message(FATAL_ERROR "TIKTAK_BUILD_ML: no ONNX Runtime archive is pinned for ${CMAKE_SYSTEM_NAME}")
     endif()
+    set(TIKTAK_ORT_URL "https://github.com/microsoft/onnxruntime/releases/download/v${TIKTAK_ORT_VERSION}/${TIKTAK_ORT_ARCHIVE}")
 
     FetchContent_Declare(onnxruntime URL "${TIKTAK_ORT_URL}" URL_HASH "${TIKTAK_ORT_HASH}")
     FetchContent_MakeAvailable(onnxruntime)
@@ -186,6 +186,18 @@ if(TIKTAK_BUILD_ML)
     find_library(TIKTAK_ORT_LIB onnxruntime
                  PATHS ${onnxruntime_SOURCE_DIR}/lib NO_DEFAULT_PATH REQUIRED)
     target_link_libraries(tiktak_ml PUBLIC ${TIKTAK_ORT_LIB})
+
+    # Windows links against an import library and loads the DLL at run time, so
+    # the DLL has to sit beside whatever executable ends up linking this. Told
+    # to consumers rather than assumed: TIKTAK_ORT_RUNTIME_FILES is the list to
+    # copy, and tools/eval and tools/parity both do.
+    if(WIN32)
+        file(GLOB TIKTAK_ORT_RUNTIME_FILES "${onnxruntime_SOURCE_DIR}/lib/*.dll")
+    else()
+        set(TIKTAK_ORT_RUNTIME_FILES "")
+    endif()
+    set(TIKTAK_ORT_RUNTIME_FILES "${TIKTAK_ORT_RUNTIME_FILES}" CACHE INTERNAL
+        "ONNX Runtime shared libraries that must sit beside the executable")
 
     if(MSVC)
         target_compile_options(tiktak_ml PRIVATE /W4)

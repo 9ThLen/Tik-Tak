@@ -59,7 +59,12 @@
 // public C API instead would mean growing that API for a research need. The
 // parity tools set the precedent.
 #include "analysis/downbeat.hpp"
+#include "dsp/resample.hpp"
 #include "ml/beatnet.hpp"
+#if TIKTAK_HAVE_ML
+#include "ml/beat_this.hpp"
+#include "ml/beat_this_session.hpp"
+#endif
 #include "analysis/offline.hpp"
 #include "tracking/live.hpp"
 #include "tracking/particle.hpp"
@@ -262,6 +267,10 @@ int main(int argc, char** argv) {
     // "does the thing we would ship actually do it", which is a different
     // question and the one that matters now.
     std::string model_path;
+    // The offline path's replacement for a beat tracker from 2007. Decodes,
+    // resamples to the model's rate, runs the network and picks the peaks —
+    // the same code an app would run, not a research approximation of it.
+    std::string beat_this_path;
 
     struct Threshold {
         const char* flag;
@@ -293,6 +302,11 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--live-activation") == 0) {
             if (i + 1 >= argc) { std::fprintf(stderr, "--live-activation needs a file\n"); return 2; }
             activation_path = argv[++i];
+            continue;
+        }
+        if (std::strcmp(argv[i], "--beat-this") == 0) {
+            if (i + 1 >= argc) { std::fprintf(stderr, "--beat-this needs a model\n"); return 2; }
+            beat_this_path = argv[++i];
             continue;
         }
         if (std::strcmp(argv[i], "--live-model") == 0) {
@@ -505,6 +519,7 @@ int main(int argc, char** argv) {
         }
         live = true;
     }
+    std::vector<double> model_downbeats;
     tiktak::ml::BeatNetWeights model_weights;
     if (!model_path.empty()) {
         std::vector<unsigned char> blob;
@@ -599,6 +614,39 @@ int main(int argc, char** argv) {
     }
 
     bool beats_replaced = false;
+    const char* beats_source = "tracker";
+
+#if TIKTAK_HAVE_ML
+    if (!beat_this_path.empty()) {
+        tiktak::ml::BeatThisSession session;
+        if (!session.open(beat_this_path)) {
+            std::fprintf(stderr, "%s\n", session.reason().c_str());
+            return 1;
+        }
+
+        const tiktak::dsp::Resampler resampler(rate, tiktak::ml::BeatThisFeatures::kModelRate);
+        const std::vector<float> model_audio = resampler.apply(samples.data(), samples.size());
+
+        tiktak::ml::BeatThisFeatures features;
+        const std::vector<float> mel =
+            features.compute(model_audio.data(), model_audio.size());
+        const std::size_t mels = tiktak::ml::BeatThisFeatures::kMels;
+        const auto activations = session.run(mel.data(), mel.size() / mels, mels);
+        const auto grid = tiktak::ml::pickBeats(activations.beat.data(),
+                                                activations.downbeat.data(),
+                                                activations.beat.size());
+        if (grid.beats.size() < 2) {
+            std::fprintf(stderr, "the model found %zu beat(s); a grid needs at least 2\n",
+                         grid.beats.size());
+            return 1;
+        }
+        beats = grid.beats;
+        model_downbeats = grid.downbeats;
+        beats_replaced = true;
+        beats_source = "beat_this";
+    }
+#endif
+
     if (!beats_path.empty()) {
         std::vector<double> supplied;
         std::string complaint;
@@ -624,9 +672,15 @@ int main(int argc, char** argv) {
         }
         beats = supplied;
         beats_replaced = true;
+        beats_source = "file";
     }
 
     std::vector<double> downbeats = analysis.downbeats;
+    // The model has its own opinion about bar lines, and when it was the one
+    // that found the beats it is the one to ask. The resolver still runs — its
+    // metre and margins are what the rest of this tool reports — but the bar
+    // lines themselves come from the head that was trained to find them.
+    if (!model_downbeats.empty()) downbeats = model_downbeats;
     int beats_per_bar = analysis.beats_per_bar;
     double strength = analysis.downbeat_strength;
     double phase_margin = analysis.downbeat_phase_margin;
@@ -674,7 +728,7 @@ int main(int argc, char** argv) {
     std::printf("  \"salience_source\": \"%s\",\n",
                 salience_path.empty() ? "cues" : "file");
     std::printf("  \"beats_source\": \"%s\",\n",
-                beats_replaced ? "file" : "tracker");
+                beats_source);
     std::printf("  \"sample_rate\": %.17g,\n", rate);
     std::printf("  \"duration_sec\": %.17g,\n", static_cast<double>(samples.size()) / rate);
     std::printf("  \"bpm\": %.17g,\n", finiteOrZero(analysis.bpm));
