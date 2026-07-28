@@ -178,7 +178,8 @@ tiktak::analysis::OfflineConfig resolve(const tt_offline_config& in) {
 
     out.tempo.min_bpm = in.min_bpm > 0.0 ? in.min_bpm : 40.0;
     out.tempo.max_bpm = in.max_bpm > 0.0 ? in.max_bpm : 220.0;
-    out.tempo.prior_centre_bpm = in.prior_centre_bpm > 0.0 ? in.prior_centre_bpm : 120.0;
+    // 140 rather than 120; the evidence is on TempoConfig::prior_centre_bpm.
+    out.tempo.prior_centre_bpm = in.prior_centre_bpm > 0.0 ? in.prior_centre_bpm : 140.0;
     out.tempo.prior_width_octaves =
         in.prior_width_octaves > 0.0 ? in.prior_width_octaves : 0.7;
     out.tempo.grid_size = in.tempo_grid_size > 0 ? in.tempo_grid_size : 512;
@@ -207,7 +208,7 @@ void tt_offline_config_defaults(tt_offline_config* cfg, double sample_rate) {
     tt_odf_config_defaults(&cfg->odf, sample_rate);
     cfg->min_bpm = 40.0;
     cfg->max_bpm = 220.0;
-    cfg->prior_centre_bpm = 120.0;
+    cfg->prior_centre_bpm = 140.0;
     cfg->prior_width_octaves = 0.7;
     cfg->tempo_grid_size = 512;
     cfg->comb_harmonics = 1;

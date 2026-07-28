@@ -223,7 +223,9 @@ TEST(Tracker, ReturnsNothingRatherThanGuessingOnSilence) {
     const BeatResult result = tracker.track(odf.data(), times.data(), kFrames, kFps);
 
     EXPECT_TRUE(result.beats.empty());
-    EXPECT_DOUBLE_EQ(result.bpm, 120.0);          // the prior centre, not a claim
+    // The prior centre, not a claim — read from the default rather than written
+    // out, so moving the centre does not read as a regression here.
+    EXPECT_DOUBLE_EQ(result.bpm, TempoConfig{}.prior_centre_bpm);
     EXPECT_DOUBLE_EQ(result.tempo_confidence, 0.0);
 }
 

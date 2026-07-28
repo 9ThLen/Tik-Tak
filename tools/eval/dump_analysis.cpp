@@ -271,6 +271,15 @@ int main(int argc, char** argv) {
     // resamples to the model's rate, runs the network and picks the peaks —
     // the same code an app would run, not a research approximation of it.
     std::string beat_this_path;
+    // The tempo posterior's shape, so the octave choice can be swept over a real
+    // annotated corpus without a rebuild per point. Zero means "leave the
+    // shipped default alone", the same convention --live-lock already uses.
+    // Deliberately not part of the calibration table below: those three are one
+    // indivisible backend calibration, and these are independent knobs.
+    double tempo_prior_centre = 0.0;
+    double tempo_prior_width = 0.0;
+    double tempo_comb_harmonics = 0.0;
+    double tempo_comb_decay = 0.0;
 
     struct Threshold {
         const char* flag;
@@ -280,6 +289,12 @@ int main(int argc, char** argv) {
         {"--salience-min-range", &salience_min_range},
         {"--salience-min-phase-margin", &salience_min_phase},
         {"--salience-min-meter-margin", &salience_min_meter},
+    };
+    const Threshold tempo_knobs[] = {
+        {"--tempo-prior-centre", &tempo_prior_centre},
+        {"--tempo-prior-width", &tempo_prior_width},
+        {"--tempo-comb-harmonics", &tempo_comb_harmonics},
+        {"--tempo-comb-decay", &tempo_comb_decay},
     };
 
     for (int i = 1; i < argc; ++i) {
@@ -354,6 +369,23 @@ int main(int argc, char** argv) {
             beats_path = argv[++i];
             continue;
         }
+
+        bool tempo_matched = false;
+        for (const Threshold& knob : tempo_knobs) {
+            if (std::strcmp(argv[i], knob.flag) != 0) continue;
+            tempo_matched = true;
+            if (i + 1 >= argc) {
+                std::fprintf(stderr, "%s needs a value\n", knob.flag);
+                return 2;
+            }
+            if (!nonnegativeFinite(argv[++i], *knob.target)) {
+                std::fprintf(stderr, "%s must be a finite, non-negative number\n",
+                             knob.flag);
+                return 2;
+            }
+            break;
+        }
+        if (tempo_matched) continue;
 
         bool matched = false;
         for (const Threshold& threshold : thresholds) {
@@ -483,6 +515,12 @@ int main(int argc, char** argv) {
     config.odf.melMaxHz = std::min(16000.0, rate * 0.5);
     config.find_downbeats = true;
     config.bpm_hint = bpm_hint;
+    if (tempo_prior_centre > 0.0) config.tempo.prior_centre_bpm = tempo_prior_centre;
+    if (tempo_prior_width > 0.0) config.tempo.prior_width_octaves = tempo_prior_width;
+    if (tempo_comb_harmonics > 0.0) {
+        config.tempo.comb_harmonics = static_cast<int>(tempo_comb_harmonics);
+    }
+    if (tempo_comb_decay > 0.0) config.tempo.comb_weight_decay = tempo_comb_decay;
     tiktak::analysis::OfflineAnalyzer analyzer(config);
 
     // Fed in blocks that are not a multiple of the hop, for the same reason
