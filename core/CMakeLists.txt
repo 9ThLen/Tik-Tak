@@ -23,6 +23,7 @@ add_library(tiktak_core STATIC
     src/dsp/stft.cpp
     src/dsp/dft.cpp
     src/dsp/logfilt.cpp
+    src/dsp/resample.cpp
     src/ml/beatnet.cpp
     src/ml/beat_this.cpp
     src/schedule/scheduler.cpp

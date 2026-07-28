@@ -18,6 +18,7 @@ add_executable(tiktak_core_tests
     test_stft.cpp
     test_dft.cpp
     test_logfilt.cpp
+    test_resample.cpp
     test_beatnet.cpp
     test_beat_this.cpp
     test_matched.cpp
