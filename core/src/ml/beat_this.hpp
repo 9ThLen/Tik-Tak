@@ -63,4 +63,28 @@ private:
     std::vector<float> spectrum_;
 };
 
+// Beat and downbeat times, in seconds, from the model's per-frame logits.
+//
+// Transcribed from the reference port rather than invented, because a different
+// peak picker changes every number downstream and makes any comparison with
+// published results meaningless. Three steps, each of which matters:
+//
+//   * A frame is a peak if it equals the maximum over a seven-frame window
+//     centred on it — 140 ms, comfortably under any beat period.
+//   * And if its logit is above zero, which is to say a probability above a
+//     half. This is the only threshold, and it is the model's own.
+//   * Peaks one frame apart are collapsed to the first. Two beats 20 ms apart
+//     is not a tempo, it is a plateau the pooling could not separate.
+//
+// Downbeats are snapped onto the beat nearest each downbeat peak. The two heads
+// are independent, so a downbeat can land a frame off its own beat; leaving it
+// there would put a bar line between two beats, where no bar line can be.
+struct BeatGrid {
+    std::vector<double> beats;
+    std::vector<double> downbeats;
+};
+
+BeatGrid pickBeats(const float* beat_logits, const float* downbeat_logits,
+                   std::size_t frames, double frameRate = BeatThisFeatures::kFrameRate);
+
 }  // namespace tiktak::ml

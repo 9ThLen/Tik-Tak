@@ -281,6 +281,71 @@ def run_cpp_beat_this(binary: pathlib.Path, audio: np.ndarray):
     return np.array([line.split(",") for line in body], dtype=np.float64)
 
 
+def check_beat_this_end_to_end(binary: pathlib.Path) -> bool | None:
+    """The whole offline path: our front end, the runtime, our peak picker.
+
+    Off by default and skipped here unless both the tool and the model exist.
+    The tool needs -DTIKTAK_BUILD_ML=ON, which downloads ONNX Runtime, and the
+    model is fetched separately — neither belongs in a CI job that could not
+    run the check anyway.
+    """
+    from eval.beat_this_onnx import MODEL_PATH, SAMPLE_RATE
+
+    if not binary.exists() or not MODEL_PATH.is_file():
+        print(f"\nskipping Beat This! end to end: need {binary.name} "
+              f"(-DTIKTAK_BUILD_ML=ON) and {MODEL_PATH.name}")
+        return None
+
+    from eval.beat_this_onnx import BeatThisOnnx, beats_and_downbeats
+
+    print(f"\ncomparing {binary} against research/eval/beat_this_onnx.py")
+    print("beats and downbeats must agree exactly — they are frame indices, "
+          "not measurements\n")
+
+    network = BeatThisOnnx()
+    cases = [
+        ("click 120", make_clip(bpm=120, duration_sec=40, seed=1, sample_rate=SAMPLE_RATE)),
+        ("sparse 100", make_clip(bpm=100, duration_sec=40, sparse=True, seed=3,
+                                 sample_rate=SAMPLE_RATE)),
+        ("noisy", make_clip(bpm=120, duration_sec=40, noise_db=6.0, seed=4,
+                            sample_rate=SAMPLE_RATE)),
+        ("drift 120->140", make_clip(bpm=120, duration_sec=40, tempo_drift=20, seed=7,
+                                     sample_rate=SAMPLE_RATE)),
+        ("silence lead", make_clip(bpm=120, duration_sec=40, silence_lead=3.0, seed=5,
+                                   sample_rate=SAMPLE_RATE)),
+        ("fast 180", make_clip(bpm=180, duration_sec=40, seed=2, sample_rate=SAMPLE_RATE)),
+    ]
+
+    ok = True
+    for name, clip in cases:
+        audio = np.asarray(clip.audio, dtype=np.float32)
+        with tempfile.NamedTemporaryFile(suffix=".f32") as handle:
+            handle.write(audio.tobytes())
+            handle.flush()
+            completed = subprocess.run(
+                [str(binary), handle.name, str(MODEL_PATH), "--beats"],
+                capture_output=True, text=True, check=True)
+
+        head, _, tail = completed.stdout.partition("\ndownbeats\n")
+        cpp_beats = np.array([float(x) for x in head.strip().splitlines()[1:]])
+        cpp_downbeats = np.array([float(x) for x in tail.strip().splitlines()]
+                                 or [], dtype=np.float64)
+
+        reference_beats, reference_downbeats = beats_and_downbeats(
+            network.activations(audio.astype(np.float64), SAMPLE_RATE))
+
+        def agree(a, b):
+            return len(a) == len(b) and (len(a) == 0 or float(np.max(np.abs(a - b))) < 1e-9)
+
+        beats_ok = agree(cpp_beats, reference_beats)
+        downbeats_ok = agree(cpp_downbeats, reference_downbeats)
+        ok = ok and beats_ok and downbeats_ok
+        print(f"  {name:16} beats {len(cpp_beats):4d} vs {len(reference_beats):4d} "
+              f"{'ok' if beats_ok else 'FAIL'}   downbeats {len(cpp_downbeats):3d} vs "
+              f"{len(reference_downbeats):3d} {'ok' if downbeats_ok else 'FAIL'}")
+    return ok
+
+
 def check_beat_this(binary: pathlib.Path) -> bool | None:
     """The mel front end Beat This! expects, which the exported graph omits.
 
@@ -355,6 +420,12 @@ def main() -> int:
         default=ROOT / "tools" / "parity" / "build" / "dump_beat_this_features",
         help="path to the dump_beat_this_features executable",
     )
+    parser.add_argument(
+        "--beat-this-model-binary",
+        type=pathlib.Path,
+        default=ROOT / "tools" / "parity" / "build" / "dump_beat_this",
+        help="path to the dump_beat_this executable (needs -DTIKTAK_BUILD_ML=ON)",
+    )
     args = parser.parse_args()
 
     missing = [p for p in (args.binary, args.beats_binary) if not p.exists()]
@@ -387,9 +458,11 @@ def main() -> int:
 
     beatnet_ok = check_beatnet(args.beatnet_binary)
     beat_this_ok = check_beat_this(args.beat_this_binary)
+    end_to_end_ok = check_beat_this_end_to_end(args.beat_this_model_binary)
 
     print()
-    if odf_ok and beats_ok and beatnet_ok is not False and beat_this_ok is not False:
+    if (odf_ok and beats_ok and beatnet_ok is not False
+            and beat_this_ok is not False and end_to_end_ok is not False):
         if beatnet_ok is None:
             print("PARITY OK — the core and the reference agree to float32 precision "
                   "(BeatNet not checked).")

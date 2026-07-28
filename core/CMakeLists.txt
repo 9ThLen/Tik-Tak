@@ -135,6 +135,76 @@ if(TIKTAK_BUILD_DECODE)
     )
 endif()
 
+# ----------------------------------------------------------------- inference --
+#
+# Another separate target, for the same reason decoding is one. tiktak_core has
+# no third-party dependencies and that is what lets the analysis cross-compile
+# anywhere; an inference runtime cannot have that property, so Beat This! runs
+# beside the core rather than inside it.
+#
+# Note the asymmetry with src/ml/beatnet, which *is* in the core. That model is
+# 0.40 M parameters at 20 MMAC/s — smaller than the runtime that would host it,
+# so the core carries the forward pass itself. This one is a transformer run
+# once over a whole file off the audio thread, where a runtime is a fair trade.
+# The rule is the size of the model against the size of the runtime, not a
+# preference for one style; see docs/adr/0001-portable-cpp-core.md.
+
+option(TIKTAK_BUILD_ML "Build the ONNX inference library" OFF)
+
+if(TIKTAK_BUILD_ML)
+    include(FetchContent)
+
+    # Pinned by URL and hash. Only the Linux x64 archive is verified here,
+    # because it is the only one this environment can run; the others are
+    # declared from the same release so a desktop build has something to try,
+    # and are unverified until somebody builds on that platform and says so.
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        set(TIKTAK_ORT_URL "https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-linux-x64-1.22.0.tgz")
+        set(TIKTAK_ORT_HASH "SHA256=8344d55f93d5bc5021ce342db50f62079daf39aaafb5d311a451846228be49b3")
+    elseif(APPLE)
+        set(TIKTAK_ORT_URL "https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-osx-universal2-1.22.0.tgz")
+        set(TIKTAK_ORT_HASH "")
+    elseif(WIN32)
+        set(TIKTAK_ORT_URL "https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-win-x64-1.22.0.zip")
+        set(TIKTAK_ORT_HASH "")
+    else()
+        message(FATAL_ERROR "TIKTAK_BUILD_ML: no ONNX Runtime archive is pinned for ${CMAKE_SYSTEM_NAME}")
+    endif()
+
+    FetchContent_Declare(onnxruntime URL "${TIKTAK_ORT_URL}" URL_HASH "${TIKTAK_ORT_HASH}")
+    FetchContent_MakeAvailable(onnxruntime)
+
+    add_library(tiktak_ml STATIC src/ml/beat_this_session.cpp)
+    target_link_libraries(tiktak_ml PUBLIC tiktak_core)
+    target_include_directories(tiktak_ml PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    # SYSTEM, so the runtime's own headers are not held to this project's
+    # warning bar. They shadow locals in several places; patching a vendored
+    # header on every update would be worse than exempting it, which is the
+    # same call already made for dr_libs.
+    target_include_directories(tiktak_ml SYSTEM PUBLIC ${onnxruntime_SOURCE_DIR}/include)
+    find_library(TIKTAK_ORT_LIB onnxruntime
+                 PATHS ${onnxruntime_SOURCE_DIR}/lib NO_DEFAULT_PATH REQUIRED)
+    target_link_libraries(tiktak_ml PUBLIC ${TIKTAK_ORT_LIB})
+
+    if(MSVC)
+        target_compile_options(tiktak_ml PRIVATE /W4)
+        if(TIKTAK_WERROR)
+            target_compile_options(tiktak_ml PRIVATE /WX)
+        endif()
+    else()
+        target_compile_options(tiktak_ml PRIVATE -Wall -Wextra -Wpedantic -Wshadow)
+        if(TIKTAK_WERROR)
+            target_compile_options(tiktak_ml PRIVATE -Werror)
+        endif()
+    endif()
+
+    set_target_properties(tiktak_ml PROPERTIES
+        POSITION_INDEPENDENT_CODE ON
+        CXX_VISIBILITY_PRESET hidden
+        VISIBILITY_INLINES_HIDDEN ON
+    )
+endif()
+
 if(TIKTAK_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
