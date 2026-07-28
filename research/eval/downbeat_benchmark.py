@@ -60,7 +60,8 @@ if __package__ in (None, ""):  # pragma: no cover - import-time path setup
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from eval.analysis import Analyser, DEFAULT_BINARY
-from eval.backends import Backend, beat_this_backend, cue_backend
+from eval.backends import (Backend, am_hierarchy_backend, beat_this_backend,
+                           cue_backend)
 from eval.annotations import Reference, find_pairs
 from eval.downbeat import (
     Verdict,
@@ -263,7 +264,7 @@ def main(argv: list[str] | None = None) -> int:
              f"defaults to DATASET/{GROUPS_FILENAME} when that file exists",
     )
     parser.add_argument("--backend", default="cues",
-                        choices=("cues", "beat_this"),
+                        choices=("cues", "beat_this", "am_hierarchy"),
                         help="which per-beat scorer to score. Verdicts are "
                              "comparable between backends; the raw margins are "
                              "not, because each backend's are in its own units")
@@ -302,8 +303,13 @@ def main(argv: list[str] | None = None) -> int:
         print("Build it first — see eval/analysis.py.")
         return 2
 
+    builders = {
+        "cues": cue_backend,
+        "beat_this": beat_this_backend,
+        "am_hierarchy": am_hierarchy_backend,
+    }
     try:
-        backend = cue_backend() if args.backend == "cues" else beat_this_backend()
+        backend = builders[args.backend]()
     except (FileNotFoundError, ImportError, NotImplementedError) as error:
         # Refused rather than quietly falling back to the cues: a run that
         # scored the built-in backend and printed a model's name at the top

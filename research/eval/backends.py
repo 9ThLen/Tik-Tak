@@ -98,6 +98,32 @@ def cue_backend() -> Backend:
     return Backend(name="cues", calibration=CUE_CALIBRATION, salience=None)
 
 
+# Same placeholder status as the model's, and for the same reason: these are
+# the cue backend's numbers in a unit that is not the cue backend's. The
+# benchmark sweeps thresholds anyway, so what is quoted here only decides the
+# "at the shipped thresholds" line and never the sweep.
+AM_CALIBRATION = CUE_CALIBRATION
+
+
+def am_hierarchy_backend(config=None) -> Backend:
+    """Bar-rate amplitude modulation as a salience source.
+
+    Needs no model and no weights, which is the whole point of trying it: if the
+    bar line is carried by the envelope's slow modulation then it is reachable
+    without a network. See eval/am_hierarchy.py.
+    """
+    from eval.am_hierarchy import AmConfig, bar_salience
+
+    settings = config or AmConfig()
+
+    def salience(audio: np.ndarray, sample_rate: float,
+                 beat_times: np.ndarray) -> np.ndarray:
+        return bar_salience(audio, sample_rate, beat_times, settings)
+
+    return Backend(name="am_hierarchy", calibration=AM_CALIBRATION,
+                   salience=salience)
+
+
 def sample_at_beats(activation: np.ndarray, frame_times: np.ndarray,
                     beat_times: np.ndarray, window_sec: float = 0.07) -> np.ndarray:
     """Reduce a frame-wise activation to one value per beat.
