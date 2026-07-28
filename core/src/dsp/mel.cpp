@@ -6,13 +6,37 @@
 
 namespace tiktak::dsp {
 
-// Natural-log form of the usual 2595*log10(1 + f/700) mel scale.
-double hzToMel(double hz) { return 1127.0 * std::log(1.0 + hz / 700.0); }
+namespace {
 
-double melToHz(double mel) { return 700.0 * (std::exp(mel / 1127.0) - 1.0); }
+// Slaney's constants, as they appear in the Auditory Toolbox and in librosa:
+// 3 mel per 20 Hz below 1 kHz, then a logarithm chosen to meet it smoothly at
+// 1 kHz and cover 6.4 octaves in 27 further steps.
+constexpr double kSlaneyFSp = 200.0 / 3.0;
+constexpr double kSlaneyBreakHz = 1000.0;
+const double kSlaneyBreakMel = kSlaneyBreakHz / kSlaneyFSp;
+const double kSlaneyLogStep = std::log(6.4) / 27.0;
+
+}  // namespace
+
+// Natural-log form of the usual 2595*log10(1 + f/700) mel scale.
+double hzToMel(double hz, MelScale scale) {
+    if (scale == MelScale::Slaney) {
+        if (hz < kSlaneyBreakHz) return hz / kSlaneyFSp;
+        return kSlaneyBreakMel + std::log(hz / kSlaneyBreakHz) / kSlaneyLogStep;
+    }
+    return 1127.0 * std::log(1.0 + hz / 700.0);
+}
+
+double melToHz(double mel, MelScale scale) {
+    if (scale == MelScale::Slaney) {
+        if (mel < kSlaneyBreakMel) return kSlaneyFSp * mel;
+        return kSlaneyBreakHz * std::exp(kSlaneyLogStep * (mel - kSlaneyBreakMel));
+    }
+    return 700.0 * (std::exp(mel / 1127.0) - 1.0);
+}
 
 MelFilterbank::MelFilterbank(std::size_t fftSize, double sampleRate, std::size_t bands,
-                             double minHz, double maxHz)
+                             double minHz, double maxHz, MelScale scale)
     : fftSize_(fftSize), bands_(bands) {
     assert(fftSize >= 2 && bands >= 1 && sampleRate > 0.0);
 
@@ -23,12 +47,12 @@ MelFilterbank::MelFilterbank(std::size_t fftSize, double sampleRate, std::size_t
 
     // bands + 2 edges: each filter spans [edge[i], edge[i+2]] with its peak at
     // edge[i+1], so neighbouring triangles overlap by half.
-    const double melMin = hzToMel(minHz);
-    const double melMax = hzToMel(maxHz);
+    const double melMin = hzToMel(minHz, scale);
+    const double melMax = hzToMel(maxHz, scale);
     std::vector<double> edges(bands_ + 2);
     for (std::size_t i = 0; i < edges.size(); ++i) {
         const double t = static_cast<double>(i) / static_cast<double>(bands_ + 1);
-        edges[i] = melToHz(melMin + t * (melMax - melMin));
+        edges[i] = melToHz(melMin + t * (melMax - melMin), scale);
     }
 
     centres_.resize(bands_);

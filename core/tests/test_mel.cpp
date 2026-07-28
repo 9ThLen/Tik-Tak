@@ -13,6 +13,7 @@ using tiktak::dsp::Fft;
 using tiktak::dsp::hzToMel;
 using tiktak::dsp::melToHz;
 using tiktak::dsp::MelFilterbank;
+using tiktak::dsp::MelScale;
 
 TEST(MelScale, RoundTrips) {
     for (double hz : {0.0, 27.5, 100.0, 440.0, 1000.0, 4000.0, 16000.0}) {
@@ -153,5 +154,75 @@ TEST_F(MelFilterbankTest, IsLinearInTheInput) {
 
     for (std::size_t b = 0; b < once.size(); ++b) {
         EXPECT_NEAR(thrice[b], once[b] * 3.0f, 1e-3f) << "at band " << b;
+    }
+}
+
+// ------------------------------------------------------------ Slaney scale --
+//
+// A second mel curve, because a trained model is only worth its weights if the
+// bands it receives are the bands it was fitted to. Beat This! was trained
+// through Slaney's; the ODF has always used the 1127*ln form. Both stay.
+
+TEST(SlaneyMelScale, RoundTrips) {
+    for (double hz : {0.0, 27.5, 100.0, 440.0, 999.0, 1000.0, 4000.0, 11000.0}) {
+        EXPECT_NEAR(melToHz(hzToMel(hz, MelScale::Slaney), MelScale::Slaney), hz, 1e-9)
+            << "at " << hz << " Hz";
+    }
+}
+
+TEST(SlaneyMelScale, IsLinearBelowOneKilohertzAndLogAbove) {
+    // The defining property: 200/3 Hz per mel up to 1 kHz, then a logarithm.
+    // Below the break, equal Hz steps are equal mel steps.
+    const double a = hzToMel(200.0, MelScale::Slaney) - hzToMel(100.0, MelScale::Slaney);
+    const double b = hzToMel(900.0, MelScale::Slaney) - hzToMel(800.0, MelScale::Slaney);
+    EXPECT_NEAR(a, b, 1e-12);
+    EXPECT_NEAR(a, 100.0 * 3.0 / 200.0, 1e-12);
+
+    // Above it, equal *ratios* are equal mel steps instead.
+    const double c = hzToMel(4000.0, MelScale::Slaney) - hzToMel(2000.0, MelScale::Slaney);
+    const double d = hzToMel(8000.0, MelScale::Slaney) - hzToMel(4000.0, MelScale::Slaney);
+    EXPECT_NEAR(c, d, 1e-9);
+}
+
+TEST(SlaneyMelScale, MeetsItselfAtTheBreakpoint) {
+    // A discontinuity here would be a filterbank with a seam in it, and the
+    // seam would sit at 1 kHz where most of the music is.
+    const double below = hzToMel(1000.0 - 1e-6, MelScale::Slaney);
+    const double above = hzToMel(1000.0 + 1e-6, MelScale::Slaney);
+    EXPECT_NEAR(below, above, 1e-6);
+}
+
+TEST(SlaneyMelScale, IsNotTheOtherOne) {
+    // Guards against the two silently becoming aliases. They differ most in the
+    // middle of the range, which is exactly where it would not be noticed.
+    const double slaney = hzToMel(4000.0, MelScale::Slaney);
+    const double htk = hzToMel(4000.0, MelScale::Htk);
+    EXPECT_GT(std::fabs(slaney - htk) / htk, 0.1);
+}
+
+TEST(MelFilterbank, TheScaleChangesWhereTheBandsSit) {
+    const MelFilterbank htk(1024, 22050.0, 128, 30.0, 11000.0, MelScale::Htk);
+    const MelFilterbank slaney(1024, 22050.0, 128, 30.0, 11000.0, MelScale::Slaney);
+    ASSERT_EQ(htk.bands(), slaney.bands());
+
+    // Same count, different placement — and by enough that feeding one to a
+    // model trained on the other is a real error rather than a rounding one.
+    std::size_t moved = 0;
+    for (std::size_t b = 0; b < htk.bands(); ++b) {
+        const double a = htk.centreFrequencies()[b];
+        const double c = slaney.centreFrequencies()[b];
+        if (std::fabs(a - c) > 0.05 * std::max(a, c)) ++moved;
+    }
+    EXPECT_GT(moved, htk.bands() / 4);
+}
+
+TEST(MelFilterbank, DefaultsToTheScaleTheOdfAlwaysUsed) {
+    // Adding an option must not move the existing front end.
+    const MelFilterbank implicitScale(2048, 48000.0, 81, 30.0, 17000.0);
+    const MelFilterbank explicitHtk(2048, 48000.0, 81, 30.0, 17000.0, MelScale::Htk);
+    ASSERT_EQ(implicitScale.bands(), explicitHtk.bands());
+    for (std::size_t b = 0; b < implicitScale.bands(); ++b) {
+        EXPECT_DOUBLE_EQ(implicitScale.centreFrequencies()[b],
+                         explicitHtk.centreFrequencies()[b]);
     }
 }

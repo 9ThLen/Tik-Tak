@@ -19,6 +19,7 @@ add_executable(tiktak_core_tests
     test_dft.cpp
     test_logfilt.cpp
     test_beatnet.cpp
+    test_beat_this.cpp
     test_matched.cpp
     test_odf.cpp
     test_scheduler.cpp

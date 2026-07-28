@@ -5,8 +5,20 @@
 
 namespace tiktak::dsp {
 
-double hzToMel(double hz);
-double melToHz(double mel);
+// Which mel curve. The two disagree by enough to matter — around 4 kHz they are
+// most of a filter apart — so a bank built on the wrong one hands a trained
+// model bands that are not the bands it was fitted to. That failure is silent:
+// the spectrogram still looks like a spectrogram.
+enum class MelScale {
+    // 1127*ln(1 + f/700), the usual closed form. What the ODF has always used.
+    Htk,
+    // Slaney's: linear to 1 kHz, logarithmic above. What librosa calls
+    // htk=False and what Beat This! was trained through.
+    Slaney,
+};
+
+double hzToMel(double hz, MelScale scale = MelScale::Htk);
+double melToHz(double mel, MelScale scale = MelScale::Htk);
 
 // Triangular mel filterbank over a real FFT magnitude spectrum.
 //
@@ -25,7 +37,7 @@ public:
     // fftSize/2 + 1 bins. `minHz`/`maxHz` bound the filterbank; maxHz is clamped
     // to Nyquist.
     MelFilterbank(std::size_t fftSize, double sampleRate, std::size_t bands,
-                  double minHz, double maxHz);
+                  double minHz, double maxHz, MelScale scale = MelScale::Htk);
 
     std::size_t bands() const { return bands_; }
     std::size_t spectrumSize() const { return fftSize_ / 2 + 1; }

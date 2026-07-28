@@ -44,6 +44,11 @@ WEIGHTS = ROOT / "models" / "beatnet_model_1.ttw"
 # function.
 BEATNET_TOLERANCE = 5e-5
 
+# The core computes this spectrogram in float32 and the reference in float64,
+# over a 1024-point transform and 128 triangles. A few times 1e-6 relative is
+# that difference; 1e-3 is a different front end.
+BEAT_THIS_TOLERANCE = 1e-4
+
 # float32 spectral flux accumulated over 81 mel bands: a few times the float32
 # epsilon per operation is expected. An order of magnitude above this means the
 # two implementations disagree about something real.
@@ -264,6 +269,66 @@ def check_beatnet(binary: pathlib.Path) -> bool | None:
                for name, clip, _rate, block in cases)
 
 
+def run_cpp_beat_this(binary: pathlib.Path, audio: np.ndarray):
+    with tempfile.NamedTemporaryFile(suffix=".f32") as handle:
+        handle.write(np.asarray(audio, dtype=np.float32).tobytes())
+        handle.flush()
+        completed = subprocess.run([str(binary), handle.name],
+                                   capture_output=True, text=True, check=True)
+    body = completed.stdout.strip().splitlines()
+    if not body:
+        return np.zeros((0, 128))
+    return np.array([line.split(",") for line in body], dtype=np.float64)
+
+
+def check_beat_this(binary: pathlib.Path) -> bool | None:
+    """The mel front end Beat This! expects, which the exported graph omits.
+
+    Only the spectrogram: the network itself is the ONNX, and comparing that
+    against itself would prove nothing. What can go wrong is entirely here — a
+    symmetric window, the wrong mel curve, a power spectrum where an amplitude
+    was wanted — and all of it produces something that still looks like a
+    spectrogram.
+    """
+    if not binary.exists():
+        print(f"\nskipping Beat This! features: {binary.name} is not built")
+        return None
+
+    from eval.beat_this_onnx import SAMPLE_RATE, log_mel_spectrogram
+
+    print(f"\ncomparing {binary} against research/eval/beat_this_onnx.py")
+    print(f"tolerance: {BEAT_THIS_TOLERANCE:.0e} relative to the peak value\n")
+
+    cases = [
+        ("click 120", make_clip(bpm=120, duration_sec=8, seed=1, sample_rate=SAMPLE_RATE)),
+        ("sparse 100", make_clip(bpm=100, duration_sec=8, sparse=True, seed=3,
+                                 sample_rate=SAMPLE_RATE)),
+        ("noisy 120", make_clip(bpm=120, duration_sec=8, noise_db=6.0, seed=4,
+                                sample_rate=SAMPLE_RATE)),
+        ("silence lead", make_clip(bpm=120, duration_sec=8, silence_lead=3.0, seed=5,
+                                   sample_rate=SAMPLE_RATE)),
+    ]
+
+    ok = True
+    for name, clip in cases:
+        audio = np.asarray(clip.audio, dtype=np.float32)
+        cpp = run_cpp_beat_this(binary, audio)
+        reference = log_mel_spectrogram(audio.astype(np.float64))
+
+        if len(cpp) != len(reference):
+            print(f"  {name}: FRAME COUNT differs — C++ {len(cpp)}, Python {len(reference)}")
+            ok = False
+            continue
+
+        scale = max(float(reference.max()), 1e-12)
+        error = float(np.max(np.abs(cpp - reference))) / scale if len(cpp) else 0.0
+        good = error <= BEAT_THIS_TOLERANCE
+        ok = ok and good
+        print(f"  {name:22} frames {len(reference):5d}  max rel err {error:.2e}"
+              f"  {'ok' if good else 'FAIL'}")
+    return ok
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -283,6 +348,12 @@ def main() -> int:
         type=pathlib.Path,
         default=ROOT / "tools" / "parity" / "build" / "dump_beatnet",
         help="path to the dump_beatnet executable",
+    )
+    parser.add_argument(
+        "--beat-this-binary",
+        type=pathlib.Path,
+        default=ROOT / "tools" / "parity" / "build" / "dump_beat_this_features",
+        help="path to the dump_beat_this_features executable",
     )
     args = parser.parse_args()
 
@@ -315,9 +386,10 @@ def main() -> int:
                    for name, clip, block, hint in beat_cases)
 
     beatnet_ok = check_beatnet(args.beatnet_binary)
+    beat_this_ok = check_beat_this(args.beat_this_binary)
 
     print()
-    if odf_ok and beats_ok and beatnet_ok is not False:
+    if odf_ok and beats_ok and beatnet_ok is not False and beat_this_ok is not False:
         if beatnet_ok is None:
             print("PARITY OK — the core and the reference agree to float32 precision "
                   "(BeatNet not checked).")

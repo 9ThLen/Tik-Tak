@@ -22,3 +22,8 @@ target_link_libraries(dump_beats PRIVATE tiktak_core)
 add_executable(dump_beatnet dump_beatnet.cpp)
 target_link_libraries(dump_beatnet PRIVATE tiktak_core)
 target_include_directories(dump_beatnet PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../core/src)
+
+add_executable(dump_beat_this_features dump_beat_this_features.cpp)
+target_link_libraries(dump_beat_this_features PRIVATE tiktak_core)
+target_include_directories(dump_beat_this_features
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../core/src)
