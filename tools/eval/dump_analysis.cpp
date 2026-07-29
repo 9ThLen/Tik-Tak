@@ -286,6 +286,14 @@ int main(int argc, char** argv) {
     // both at once could not say which one paid.
     double live_prior_centre = 0.0;
     double live_prior_width = 0.0;
+    // The filter's observation constants. They were calibrated against spectral
+    // flux, in units where "a beat is worth about one"; BeatNet hands it a
+    // probability instead, which is a different distribution with the same
+    // nominal scale, and nothing re-derived these when the model arrived.
+    double live_prior_rate = 0.0;
+    double live_observation_gain = 0.0;
+    double live_onset_exponent = 0.0;
+    double live_beat_gain = 0.0;
 
     struct Threshold {
         const char* flag;
@@ -303,6 +311,10 @@ int main(int argc, char** argv) {
         {"--tempo-comb-decay", &tempo_comb_decay},
         {"--live-prior-centre", &live_prior_centre},
         {"--live-prior-width", &live_prior_width},
+        {"--live-prior-rate", &live_prior_rate},
+        {"--live-observation-gain", &live_observation_gain},
+        {"--live-onset-exponent", &live_onset_exponent},
+        {"--live-beat-gain", &live_beat_gain},
     };
 
     for (int i = 1; i < argc; ++i) {
@@ -591,6 +603,14 @@ int main(int argc, char** argv) {
         if (live_prior_width > 0.0) {
             live_config.filter.prior_width_octaves = live_prior_width;
         }
+        if (live_prior_rate > 0.0) live_config.filter.prior_rate = live_prior_rate;
+        if (live_observation_gain > 0.0) {
+            live_config.filter.observation_gain = live_observation_gain;
+        }
+        if (live_onset_exponent > 0.0) {
+            live_config.filter.onset_exponent = live_onset_exponent;
+        }
+        if (live_beat_gain > 0.0) live_config.filter.beat_gain = live_beat_gain;
         tiktak::tracking::LiveTracker tracker =
             model_weights.valid()
                 ? tiktak::tracking::LiveTracker(live_config, model_weights)

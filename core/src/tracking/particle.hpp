@@ -109,7 +109,28 @@ struct ParticleFilterConfig {
     // — and the tracker flickers between them. Squaring makes that hi-hat worth
     // a ninth instead, which is the difference between "quieter" and "not a
     // beat".
-    double onset_exponent = 2.0;
+    //
+    // 3.0, not 2.0. The argument above had the direction right and the amount
+    // short. Measured on GTZAN with BeatNet driving the observation, one knob
+    // at a time from what shipped:
+    //
+    //     onset_exponent    F      CMLt
+    //     1.0               0.412  0.270
+    //     2.0               0.536  0.400
+    //     3.0               0.610  0.479
+    //     5.0               0.657  0.528
+    //
+    // At a third the level a hi-hat buys a ninth of a beat's belief at 2.0 and
+    // a 27th at 3.0, which is the difference between "quieter" and "not a beat"
+    // on material that actually has hi-hats.
+    //
+    // The corpus wanted 5.0 and a test refused it. Above 3.0,
+    // LiveMetronome.ClicksOnTheBeatsItHearsInTheRoom fails — bisected, 3.0
+    // passes and 3.5 does not — because sharpening the evidence that far starts
+    // costing the period its discipline, and the click then walks off a clean
+    // 120 BPM grid a few milliseconds further every beat. A 70 ms matching
+    // tolerance hides that on a corpus. A user playing along with it cannot.
+    double onset_exponent = 3.0;
 
     // What a particle pays for each beat it predicts. Without this term nothing
     // at all opposes double tempo: a particle beating twice as fast is right on
@@ -123,6 +144,32 @@ struct ParticleFilterConfig {
     // keeps it comparable to the reward and makes silence free: with nothing to
     // be right about there is nothing to pay either, so a quiet passage does
     // not slowly drag the tempo down.
+    //
+    // 1.5, not 3.0. The charge was set high enough to be doing the opposite job
+    // as well — suppressing beats the tracker had correctly found, not only the
+    // ones it invented. Measured with everything else at what shipped:
+    //
+    //     beat_gain   GTZAN F   CMLt   beats per annotated beat
+    //     0.5           0.676  0.482            0.97
+    //     1.0           0.671  0.504            0.92
+    //     1.5           0.661  0.510            0.87
+    //     2.0           0.635  0.500            0.83
+    //     3.0           0.536  0.400            0.72
+    //     6.0           0.292  0.111            0.62
+    //
+    // It still has to oppose double tempo, and 6.0 shows the cliff on the other
+    // side is real and near.
+    //
+    // **Left at 3.0 all the same**, and the corpus does not get to decide this
+    // one. Lowering it to 1.5 is worth another 0.043 F and 0.012 CMLt on GTZAN
+    // on top of the exponent below, and it costs the tempo its discipline:
+    // ClicksOnTheBeatsItHearsInTheRoom and FollowsAnEncodedClickTrackThrough-
+    // TheMicrophonePath both fail, with the click drifting off a clean 120 BPM
+    // grid by a further 4.3 ms every beat — a 0.9% tempo error that a 70 ms
+    // matching tolerance hides on real music and a metronome cannot hide from a
+    // user at all. This is the term that holds the period; halving it buys
+    // recall by letting the period wander, which is the wrong trade for a
+    // product whose whole job is to click in time.
     double beat_gain = 3.0;
 
     // Time constant of the running onset rate the charge is scaled by. It has
