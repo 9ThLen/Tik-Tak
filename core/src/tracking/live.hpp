@@ -36,8 +36,40 @@ struct LiveConfig {
     // follows the cloud; below `release_confidence` it stops handing out beats
     // altogether; in between it coasts at the last tempo it was sure of, which
     // is what a musician does when the band drops out for a bar.
-    double lock_confidence = 0.35;
-    double release_confidence = 0.15;
+    //
+    // 0.25 / 0.02, not the 0.35 / 0.15 this carried before. The old band was
+    // chosen without a public corpus behind it, and measured against one it was
+    // withholding most of the track: driven by BeatNet it emitted 0.48 beats
+    // for every annotated one on GTZAN and said nothing at all on 2.1% of
+    // recordings. Both corpora, prior held at what it shipped:
+    //
+    //     lock/release    GTZAN F   CMLt   beats/ref   silent
+    //     0.45 / 0.15       0.408  0.322      0.42       8.0%
+    //     0.35 / 0.15       0.486  0.362      0.48       2.1%
+    //     0.25 / 0.02       0.513  0.376      0.60       0.9%
+    //     0.15 / 0.02       0.522  0.375      0.65       0.2%
+    //
+    // The sweep wanted to keep going, and it is stopped at 0.25 by a test
+    // rather than by a preference. Below it, ADipInConfidenceDoesNotLetTwo-
+    // BeatsOutTogether fails: at 0.20 the tracker publishes two beats 0.163 s
+    // apart on a half-second pulse, which is the stutter that test was written
+    // for after it had already shipped once. Bisected, and the boundary is the
+    // lock alone: 0.25 passes and 0.20 does not, at every release from 0.10
+    // down to 0.01. An F-measure has no column for "clicked twice", so the
+    // invariant decides here and the corpus does not get a vote.
+    //
+    // Giving up that last 0.01 F costs nothing anyway. With the prior re-aimed
+    // as well, 0.25 beats 0.15 on CMLt on both corpora, 0.428 against 0.413 and
+    // 0.495 against 0.484. The safe point is also the better one.
+    //
+    // What the band cannot do is improve the beats it lets through: CMLt moves
+    // 0.014 across the whole sweep at a fixed prior. The withheld beats were not
+    // being kept from a tracker that knew where they were, so opening the gate
+    // lets out more of the same. Where they land is the prior's job, and see
+    // ParticleFilterConfig::prior_centre_bpm for it: that is the larger of the
+    // two changes by some way.
+    double lock_confidence = 0.25;
+    double release_confidence = 0.02;
 
     // A stream time this far from where the sample count says it should be
     // means the device dropped or repeated a buffer.

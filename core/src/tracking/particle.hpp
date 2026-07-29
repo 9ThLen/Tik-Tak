@@ -42,7 +42,28 @@ struct ParticleFilterConfig {
     // prior over tempo is what breaks that tie.
     double min_bpm = 40.0;
     double max_bpm = 220.0;
-    double prior_centre_bpm = 120.0;
+    // 150, and the causal path wants it higher than the offline path's 140.
+    // Same mechanism as there — a log-normal prior centred at c prefers t/2
+    // over t above c*sqrt(2) — but a much larger effect here, because the
+    // particle cloud carries the prior continuously rather than applying it
+    // once to a posterior. This was the biggest single number found in the
+    // live path. Gate already at 0.15 / 0.02, BeatNet driving the observation:
+    //
+    //              GTZAN (999)              Ballroom (698)
+    //     centre   F      CMLt  beats/ref   F      CMLt  beats/ref
+    //     120      0.522  0.375    0.65     0.587  0.427    0.66
+    //     140      0.551  0.407    0.74     0.622  0.473    0.73
+    //     150      0.560  0.413    0.79     0.636  0.484    0.77
+    //     180      0.566  0.391    0.93     0.665  0.502    0.89
+    //     200      0.565  0.357    1.01     0.667  0.482    0.98
+    //
+    // Chosen on CMLt rather than F, and the two disagree past 150 for a reason
+    // worth stating: F keeps creeping up while CMLt falls and beats/ref climbs
+    // through 1.0, which is the tracker drifting into double time. The extra
+    // beats hit enough annotated ones to flatter F and are on the wrong
+    // metrical level. 150 is GTZAN's CMLt peak and within 0.02 of Ballroom's,
+    // so it is the one point that is not a corpus's preference.
+    double prior_centre_bpm = 150.0;
     double prior_width_octaves = 0.7;
 
     // How fast the prior is applied, in nats per second at one width from the

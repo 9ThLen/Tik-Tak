@@ -280,6 +280,12 @@ int main(int argc, char** argv) {
     double tempo_prior_width = 0.0;
     double tempo_comb_harmonics = 0.0;
     double tempo_comb_decay = 0.0;
+    // The same two numbers for the causal path, which carries its own copy of
+    // the belief in ParticleFilterConfig. They are separate flags rather than
+    // one, because the two paths were calibrated apart and a sweep that moved
+    // both at once could not say which one paid.
+    double live_prior_centre = 0.0;
+    double live_prior_width = 0.0;
 
     struct Threshold {
         const char* flag;
@@ -295,6 +301,8 @@ int main(int argc, char** argv) {
         {"--tempo-prior-width", &tempo_prior_width},
         {"--tempo-comb-harmonics", &tempo_comb_harmonics},
         {"--tempo-comb-decay", &tempo_comb_decay},
+        {"--live-prior-centre", &live_prior_centre},
+        {"--live-prior-width", &live_prior_width},
     };
 
     for (int i = 1; i < argc; ++i) {
@@ -577,6 +585,12 @@ int main(int argc, char** argv) {
         live_config.odf = config.odf;
         if (live_lock > 0.0) live_config.lock_confidence = live_lock;
         if (live_release > 0.0) live_config.release_confidence = live_release;
+        if (live_prior_centre > 0.0) {
+            live_config.filter.prior_centre_bpm = live_prior_centre;
+        }
+        if (live_prior_width > 0.0) {
+            live_config.filter.prior_width_octaves = live_prior_width;
+        }
         tiktak::tracking::LiveTracker tracker =
             model_weights.valid()
                 ? tiktak::tracking::LiveTracker(live_config, model_weights)
