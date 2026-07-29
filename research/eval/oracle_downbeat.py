@@ -42,7 +42,27 @@ cannot be shown to be held out); GTZAN is 992 of 999.
       end_to_end      0.892  0.799  0.903  0.787   0.878    0.091  0.101   12.1%
 
     GTZAN, held out from small0  AUPRC 0.856   phase chosen correctly 84.8%
+      ceiling         1.000  1.000  1.000  0.995   0.997    0.000  0.000    0.0%
+      phase_scored    1.000  1.000  1.000  0.844   0.920    0.000  0.000    0.0%
+      grid_ceiling    0.784  0.653  0.849  0.729   0.919    0.190  0.207   19.7%
       end_to_end      0.886  0.791  0.894  0.772   0.868    0.097  0.106   12.6%
+
+`grid_ceiling` comes out identical in the two GTZAN tables, as it must: that row
+uses no model at all. It is the cheapest available check that the columns have
+not been crossed.
+
+**small0 is the default here, not the library's final0**, because small0 is the
+model this project intends to ship and a default that measures something else
+is how a project ends up with numbers for a model it does not use. Ten times
+smaller costs 1.5 points of downbeat F end to end — 0.772 against 0.787 — on the
+same held-out corpus.
+
+Note what cannot be done, so it is not attempted later and mistaken for an
+oversight: CPJKU publish fold checkpoints for the full model only, so Ballroom
+out of fold exists for `final*` and not for `small*`. Their README puts the
+limit plainly — an evaluation with `final*` or `small*` is fair on GTZAN and
+nowhere else they trained on. GTZAN is therefore the only corpus on which the
+shipping candidate can be scored honestly at all.
 
 Three readings, none of which is visible in a single F-measure.
 
@@ -398,8 +418,10 @@ def _report(rows: list[dict], title: str) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("dataset", type=pathlib.Path)
-    parser.add_argument("--checkpoint", default="final0",
-                        help="a Beat This! checkpoint name, or 'fold-matched'")
+    parser.add_argument("--checkpoint", default="small0",
+                        help="a Beat This! checkpoint name, or 'fold-matched'. "
+                             "Defaults to small0, the model this project intends "
+                             "to ship, rather than to the library's own final0")
     parser.add_argument("--folds", type=pathlib.Path, default=None,
                         help="split file, required by 'fold-matched'")
     parser.add_argument("--skip-unsplit", action="store_true",
