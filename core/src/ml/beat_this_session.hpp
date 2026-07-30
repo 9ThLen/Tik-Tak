@@ -21,7 +21,7 @@ namespace tiktak::ml {
 // that would host it. This one is a transformer of tens of millions of
 // parameters run once over a whole file off the audio thread. Same project,
 // opposite answers, and the size of the model against the size of the runtime
-// is what decides it — see docs/adr/0001-portable-cpp-core.md.
+// is what decides it.
 //
 // The work is Francesco Foscarin, Jan Schlüter and Gerhard Widmer's, MIT
 // licensed; see NOTICE.md. Nothing here is retrained.

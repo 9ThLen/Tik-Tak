@@ -4,7 +4,6 @@
  * The boundary between the portable analysis core and the platform shells is a
  * flat C API on purpose: Swift calls it directly through a module map (no
  * Objective-C++ shim needed) and JNI binds to C signatures naturally.
- * See docs/adr/0001-portable-cpp-core.md.
  *
  * Threading: every object is single-threaded. Create it on whichever thread will
  * use it and do not share it. tt_odf_process is real-time safe — it allocates

@@ -31,8 +31,7 @@ struct OdfConfig {
     // balance between bands, and the low/high outputs exist precisely to carry
     // it. 0.0 disables normalisation and lets absolute level back in.
     //
-    // The default splits the difference. Phase 2 tunes it against mir_eval
-    // rather than intuition; see docs/PLAN.md.
+    // The default splits the difference and is intentionally conservative.
     double whiteningStrength = 0.5;
 
     // Whitening floor, relative to the loudest mel band seen recently. Bands

@@ -10,8 +10,8 @@ namespace {
 //
 // Written out here rather than pulled in as a dependency because tiktak_core
 // having no third-party dependencies is the property that lets it build for
-// any platform without a vendoring discussion — see docs/PLAN.md §3. FIPS
-// 180-4, pinned by a known-answer test in the suite.
+// any platform without a vendoring discussion. This is FIPS 180-4, pinned by a
+// known-answer test in the suite.
 
 struct Sha256 {
     std::uint32_t state[8] = {0x6a09e667u, 0xbb67ae85u, 0x3c6ef372u, 0xa54ff53au,

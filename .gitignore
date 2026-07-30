@@ -19,28 +19,28 @@ android/local.properties
 android/**/build/
 *.iml
 
-# Python research environment
-research/.venv/
+# Generated language/tooling output
 **/__pycache__/
 **/*.py[cod]
 *.egg-info/
 .pytest_cache/
 .ipynb_checkpoints/
 
-# Datasets and analysis artefacts are large and often licence-restricted —
-# never commit them. See docs/PLAN.md section 10.
-research/data/
-research/eval/results/
-models/*.onnx
-models/*.mlpackage
-models/*.tflite
-
 # OS noise
 .DS_Store
 Thumbs.db
-desktop/build/
 .tiktak/
 
-# Corpora live beside the repo and carry their own .git — never gitlinks.
-/annotations
-/music
+# Private/local workspaces. The public repository contains only the portable
+# core; keep corpora, research, model tooling, development hosts and internal
+# documentation out of Git.
+/.claude/
+/.github/workflows/desktop.yml
+/.github/workflows/research.yml
+/annotations/
+/desktop/
+/docs/
+/models/
+/music/
+/research/
+/tools/

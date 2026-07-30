@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Regenerates the decoder test fixtures.
 
-    research/.venv/bin/python core/tests/data/generate.py
+    python core/tests/data/generate.py
 
 The files are committed rather than generated at build time on purpose. They
 have to be produced by a real encoder — the delay MP3 adds, the block structure

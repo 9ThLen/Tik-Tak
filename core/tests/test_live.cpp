@@ -473,10 +473,8 @@ TEST(LiveTracker, AnActivationIsNotRenormalisedByItsOwnLoudest) {
 // the tracker can produce one itself, from audio, through the same process()
 // call a shell already makes — which is what "in the product" means.
 //
-// The weights are made up, as in test_beatnet.cpp: what the published numbers
-// produce is a question for tools/parity, where the real ones are. What is
-// checked here is the wiring, and wiring is exactly what a synthetic model
-// still exercises.
+// The weights are made up, as in test_beatnet.cpp. What is checked here is the
+// wiring, and wiring is exactly what a synthetic model still exercises.
 namespace {
 
 std::vector<unsigned char> stubWeightFile() {

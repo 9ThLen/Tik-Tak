@@ -18,8 +18,8 @@ namespace tiktak::ml {
 // begins at `input_spectrogram`: the mel front end was never part of the model,
 // so somebody has to compute it, and it may as well be the code that already
 // owns an FFT and a filterbank. That also means this file is the one place a
-// transcription error can hide, which is why every constant below is checked
-// against the reference in tools/parity rather than trusted.
+// transcription error can hide, which is why every constant below is pinned
+// by reference tests rather than trusted.
 //
 // The awkward details, each of which is silently wrong-looking-right if missed:
 //

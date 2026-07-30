@@ -22,10 +22,9 @@ namespace {
 // A weight file with the published shapes and made-up numbers.
 //
 // The real weights are 1.6 MB that git does not carry and CI does not have, so
-// everything here that is about *structure* — the loader, the state, the
-// arithmetic's shape — is tested against a blob built on the spot. What the
-// numbers themselves produce is checked in tools/parity, against the reference
-// implementation, where the real weights are.
+// everything here that is about *structure* — the loader, the state, and the
+// arithmetic's shape — is tested against a blob built on the spot. Reference
+// behavior with production weights is verified separately.
 std::vector<unsigned char> makeWeightFile(std::uint32_t version = 1,
                                           std::uint32_t features = BeatNetWeights::kFeatures) {
     std::vector<unsigned char> out(BeatNetWeights::kFileBytes);

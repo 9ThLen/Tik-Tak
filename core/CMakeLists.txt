@@ -60,8 +60,8 @@ else()
     endif()
 endif()
 
-# The core must stay free of platform SDK dependencies so it cross-compiles to
-# both iOS and Android unchanged — see docs/adr/0001-portable-cpp-core.md.
+# The core stays free of platform SDK dependencies so the same source
+# cross-compiles to iOS and Android unchanged.
 set_target_properties(tiktak_core PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     CXX_VISIBILITY_PRESET hidden
@@ -148,7 +148,7 @@ endif()
 # so the core carries the forward pass itself. This one is a transformer run
 # once over a whole file off the audio thread, where a runtime is a fair trade.
 # The rule is the size of the model against the size of the runtime, not a
-# preference for one style; see docs/adr/0001-portable-cpp-core.md.
+# preference for one style.
 
 option(TIKTAK_BUILD_ML "Build the ONNX inference library" OFF)
 
@@ -190,7 +190,7 @@ if(TIKTAK_BUILD_ML)
     # Windows links against an import library and loads the DLL at run time, so
     # the DLL has to sit beside whatever executable ends up linking this. Told
     # to consumers rather than assumed: TIKTAK_ORT_RUNTIME_FILES is the list to
-    # copy, and tools/eval and tools/parity both do.
+    # copy.
     if(WIN32)
         file(GLOB TIKTAK_ORT_RUNTIME_FILES "${onnxruntime_SOURCE_DIR}/lib/*.dll")
     else()

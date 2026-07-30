@@ -127,9 +127,8 @@ public:
     // the measured before and after comparable.
     //
     // Measured on 107 produced recordings against reference beats, the causal
-    // tracker's CMLt went from 0.087 to 0.437 and the share of reference beats
-    // it dares emit from 18% to 83%, with no threshold touched. See
-    // research/eval/README.md and ml/beatnet.hpp.
+    // tracker's accuracy and coverage improve materially without changing its
+    // thresholds. See ml/beatnet.hpp.
     //
     // Not the default. Spectral flux costs a few hundred kFLOP a second and
     // this costs tens of MFLOP plus 1.6 MB of weights, and which of those a

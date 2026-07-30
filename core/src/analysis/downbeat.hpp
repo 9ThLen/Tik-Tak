@@ -160,8 +160,7 @@ struct DownbeatConfig {
     // How convincing the answer has to be before a caller should accent
     // anything. These values and min_salience_range are one backend-specific
     // calibration. They live in the config rather than at the call site so
-    // that research/eval sweeps the same numbers the app uses, not a copy of
-    // them.
+    // every caller uses the same values.
     //
     // **Provisional, on synthetic material only.** A metre threshold above the
     // two observed wrong answers took the wrong rate from 14% to zero on seven
@@ -256,8 +255,8 @@ struct DownbeatResult {
     // beat it starts on is settled, and no other meter is nearly as good.
     //
     // The thresholds are the caller's, because the cost of being wrong is the
-    // caller's. Both default to placeholders rather than calibrated numbers —
-    // see research/eval/README.md, which is what will replace them.
+    // caller's. Both default to conservative placeholders rather than
+    // backend-specific calibrated numbers.
     //
     // Measured against a Beat This! reference on eighty-one recordings from
     // fifty-five releases, this does separate: where it returns true the

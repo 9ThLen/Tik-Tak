@@ -42,8 +42,8 @@ TEST(LogFilterbank, EveryFilterHasUnitArea) {
 }
 
 TEST(LogFilterbank, PutsAToneInTheBandTheReferenceDoes) {
-    // Pinned against research/eval/beatnet_onnx.py rather than derived, because
-    // the obvious derivation is wrong. Twenty-four bands an octave off 440 Hz
+    // Pinned against the reference implementation rather than derived,
+    // because the obvious derivation is wrong. Twenty-four bands an octave off 440 Hz
     // would put 110 Hz in band 44 — but down there the requested centres are
     // under a hertz apart while the transform's bins are 15.6 Hz apart, so
     // whole octaves of centres round to the same bin and collapse into one

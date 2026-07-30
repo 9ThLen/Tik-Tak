@@ -51,9 +51,9 @@ bool BeatNetWeights::load(const void* data, std::size_t bytes) {
         storage_[i] = readF32(payload + i * sizeof(float));
     }
 
-    // The order is models/export_beatnet.py's, and neither side looks anything
-    // up by name: a file that disagrees is a wrong file, caught by the size and
-    // the shape header above rather than negotiated with here.
+    // The export order is fixed, and neither side looks anything up by name: a
+    // file that disagrees is a wrong file, caught by the size and shape header
+    // above rather than negotiated with here.
     const float* p = storage_.data();
     auto take = [&p](std::size_t count) {
         const float* here = p;

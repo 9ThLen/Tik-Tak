@@ -12,9 +12,8 @@ namespace tiktak::ml {
 // BeatNet — a causal beat/downbeat network, running in the core.
 //
 // The work is Mojtaba Heydari, Frank Cwitkowitz and Zhiyao Duan's, published
-// under CC BY 4.0; see NOTICE.md, which the build regenerates and CI checks.
-// The weights here are theirs unchanged: nothing is retrained or quantised,
-// only rewritten into a flat float32 file by models/export_beatnet.py.
+// under CC BY 4.0; see NOTICE.md. The weights are unchanged: nothing is
+// retrained or quantised, only rewritten into a flat float32 file.
 //
 // **Why it is here.** The live tracker's silence on real music was taken apart
 // layer by layer and what remained was the evidence itself. Spectral flux does
@@ -24,10 +23,8 @@ namespace tiktak::ml {
 // product exists for — a singer practising against a backing track playing from
 // another device, which cannot be analysed in advance and must be followed as
 // it arrives. Swapping in this network's activation, with the filter, the
-// gating and the thresholds all untouched, took the causal tracker's CMLt from
-// 0.087 to 0.437 and the share of reference beats it dares emit from 18% to
-// 83%. That measurement is in research/eval/README.md; this is the port of the
-// thing that was measured.
+// gating and thresholds untouched, materially improves the causal tracker's
+// accuracy and coverage. This is the implementation that was evaluated.
 //
 // **Why the forward pass is written out rather than run through ONNX.** The
 // network is 402,325 parameters: one 1-D convolution, two linear layers and a
