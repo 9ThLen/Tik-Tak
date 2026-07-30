@@ -29,6 +29,7 @@ add_executable(tiktak_core_tests
     test_player.cpp
     test_live_metronome.cpp
     test_particle.cpp
+    test_activation_tempo.cpp
     test_live.cpp
     test_sync.cpp
     test_tempo.cpp
