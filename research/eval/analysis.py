@@ -19,7 +19,7 @@ import json
 import pathlib
 import subprocess
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -75,6 +75,16 @@ class Estimate:
     confidence: float = 0.0
     sample_rate: float = 0.0
     duration_sec: float = 0.0
+    live_bpm: float = 0.0
+    live_confidence: float = 0.0
+    live_tempo_spread_octaves: float = 0.0
+    live_beats_late: int = 0
+    live_times: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=np.float64))
+    live_bpms: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=np.float64))
+    live_confidences: np.ndarray = field(
+        default_factory=lambda: np.zeros(0, dtype=np.float64))
+    live_tempo_spreads_octaves: np.ndarray = field(
+        default_factory=lambda: np.zeros(0, dtype=np.float64))
     # "cues" when the built-in scorer produced the salience, "file" when it was
     # injected — so a result can always say which backend it is a result *of*.
     salience_source: str = "cues"
@@ -93,6 +103,17 @@ class Estimate:
             confidence=float(payload.get("confidence", 0.0)),
             sample_rate=float(payload.get("sample_rate", 0.0)),
             duration_sec=float(payload.get("duration_sec", 0.0)),
+            live_bpm=float(payload.get("live_bpm", 0.0)),
+            live_confidence=float(payload.get("live_confidence", 0.0)),
+            live_tempo_spread_octaves=float(
+                payload.get("live_tempo_spread_octaves", 0.0)),
+            live_beats_late=int(payload.get("live_beats_late", 0)),
+            live_times=np.asarray(payload.get("live_times", []), dtype=np.float64),
+            live_bpms=np.asarray(payload.get("live_bpms", []), dtype=np.float64),
+            live_confidences=np.asarray(
+                payload.get("live_confidences", []), dtype=np.float64),
+            live_tempo_spreads_octaves=np.asarray(
+                payload.get("live_tempo_spreads_octaves", []), dtype=np.float64),
             salience_source=str(payload.get("salience_source", "cues")),
         )
 
@@ -146,6 +167,21 @@ class Analyser:
         """
         return self._with_salience([str(path)], salience, calibration)
 
+    def analyse_live_file(
+        self,
+        path: pathlib.Path | str,
+        *,
+        model: pathlib.Path | str | None = None,
+        manual_bpm: float | None = None,
+    ) -> Estimate:
+        """Runs the causal tracker and returns its live state over time."""
+        args = [str(path), "--live"]
+        if model is not None:
+            args.extend(["--live-model", str(model)])
+        if manual_bpm is not None:
+            args.extend(["--live-manual-bpm", repr(float(manual_bpm))])
+        return self._run(args)
+
     def analyse_audio(self, audio: np.ndarray, sample_rate: float,
                       salience: "np.ndarray | None" = None,
                       calibration: Calibration | None = None) -> Estimate:
@@ -163,6 +199,28 @@ class Analyser:
             handle.close()
             return self._with_salience([handle.name, repr(float(sample_rate))],
                                        salience, calibration)
+        finally:
+            pathlib.Path(handle.name).unlink(missing_ok=True)
+
+    def analyse_live_audio(
+        self,
+        audio: np.ndarray,
+        sample_rate: float,
+        *,
+        model: pathlib.Path | str | None = None,
+        manual_bpm: float | None = None,
+    ) -> Estimate:
+        """Runs the causal tracker over samples already in memory."""
+        handle = tempfile.NamedTemporaryFile(suffix=".f32", delete=False)
+        try:
+            handle.write(np.asarray(audio, dtype=np.float32).tobytes())
+            handle.close()
+            args = [handle.name, repr(float(sample_rate)), "--live"]
+            if model is not None:
+                args.extend(["--live-model", str(model)])
+            if manual_bpm is not None:
+                args.extend(["--live-manual-bpm", repr(float(manual_bpm))])
+            return self._run(args)
         finally:
             pathlib.Path(handle.name).unlink(missing_ok=True)
 

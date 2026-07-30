@@ -567,8 +567,12 @@ int main(int argc, char** argv) {
     // handed out. Scoring anything else would be scoring a tracker that does
     // not exist.
     std::vector<double> live_beats;
+    double live_bpm = 0.0;
     double live_confidence = 0.0;
+    double live_tempo_spread_octaves = 0.0;
     tiktak::tracking::LiveTracker::Stats live_stats;
+    std::vector<double> live_times, live_bpms, live_confidences;
+    std::vector<double> live_tempo_spreads_octaves;
     std::vector<double> live_share, live_agreement, live_coincidence;
 
     // The whole live path, driven by an activation from outside instead of by
@@ -647,6 +651,10 @@ int main(int argc, char** argv) {
                 // Once a second: which of confidence's three factors is low is
                 // the diagnosis, and the product alone cannot say.
                 const tiktak::tracking::BeatEstimate e = tracker.estimate(now);
+                live_times.push_back(now);
+                live_bpms.push_back(e.bpm);
+                live_confidences.push_back(e.confidence);
+                live_tempo_spreads_octaves.push_back(e.tempo_spread_octaves);
                 live_share.push_back(e.cluster_share);
                 live_agreement.push_back(e.phase_agreement);
                 live_coincidence.push_back(e.onset_coincidence);
@@ -691,7 +699,10 @@ int main(int argc, char** argv) {
                 poll();
             }
         }
-        live_confidence = tracker.estimate(now).confidence;
+        const tiktak::tracking::BeatEstimate final = tracker.estimate(now);
+        live_bpm = final.bpm;
+        live_confidence = final.confidence;
+        live_tempo_spread_octaves = final.tempo_spread_octaves;
         live_stats = tracker.stats();
         beats = live_beats;
     }
@@ -834,7 +845,10 @@ int main(int argc, char** argv) {
         std::printf("],\n");
     }
     if (live) {
+        std::printf("  \"live_bpm\": %.17g,\n", finiteOrZero(live_bpm));
         std::printf("  \"live_confidence\": %.9g,\n", finiteOrZero(live_confidence));
+        std::printf("  \"live_tempo_spread_octaves\": %.9g,\n",
+                    finiteOrZero(live_tempo_spread_octaves));
         // Beats the tracker decided on but could not play, because by the time
         // it was asked the beat was already behind the clock. Free to report
         // and the only way to tell a tracker that lost the grid from one that
@@ -851,6 +865,10 @@ int main(int argc, char** argv) {
             }
             std::printf("],\n");
         };
+        column("live_times", live_times);
+        column("live_bpms", live_bpms);
+        column("live_confidences", live_confidences);
+        column("live_tempo_spreads_octaves", live_tempo_spreads_octaves);
         column("live_share", live_share);
         column("live_agreement", live_agreement);
         column("live_coincidence", live_coincidence);
