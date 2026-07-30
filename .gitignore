@@ -40,3 +40,7 @@ models/*.tflite
 Thumbs.db
 desktop/build/
 .tiktak/
+
+# Corpora live beside the repo and carry their own .git — never gitlinks.
+/annotations
+/music
