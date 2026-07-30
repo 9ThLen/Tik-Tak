@@ -646,3 +646,106 @@ TEST(LiveTracker, ADipInConfidenceDoesNotLetTwoBeatsOutTogether) {
     EXPECT_GT(closest, 0.5 * kPeriod * 0.99)
         << "closest pair of beats was " << closest << " s apart";
 }
+
+// --------------------------------------------------------- octave anchoring
+//
+// The corpora cannot decide how tightly the anchor should hold. Ballroom and
+// GTZAN are steady-tempo music, so on them a held metrical level and a held
+// period are indistinguishable, and the sweep simply rewards whichever holds
+// harder — over all 698 and 999 recordings, F against anchor width:
+//
+//     width      ballroom          GTZAN
+//     free       0.700  0.584      0.632  0.508
+//     0.20       0.737  0.633      0.648  0.531
+//     0.10       0.757  0.653      0.658  0.544
+//     0.05       0.772  0.671      0.666  0.552
+//     hard pin   0.778  0.782      0.697  0.637
+//
+// Monotone the whole way to a pin, on both. Every point on that curve is a
+// corpus asking for the one thing it is constitutionally unable to be charged
+// for, and the tests below are the bill.
+
+TEST(LiveTracker, AnAnchoredTrackerAlwaysFollowsARealTempoChangeEventually) {
+    // The anchor is re-measured from a sliding window rather than fixed once,
+    // which is the whole difference between it and pinPeriod: a pinned period
+    // is wrong until the recording ends, an anchored one is wrong until the
+    // window turns over. So the tracker always gets there. How long it takes
+    // is the open question, and it is not settled by a width.
+    //
+    // Over six tempo changes, seconds until the estimate is within 3% of the
+    // new tempo -- mean, and worst of the six:
+    //
+    //     window   width 0.05     width 0.10     width 0.20
+    //     10 s     6.5 /  9.6     6.4 / 10.4     3.5 /  6.6
+    //     15 s     9.3 / 13.2     5.2 / 10.7     3.8 / 15.4
+    //     20 s    11.5 / 17.4     6.0 / 15.3     3.5 / 13.6
+    //     30 s    16.2 / 24.4     6.9 / 20.6     5.1 / 23.1
+    //
+    // Read down the columns, not across: the window bounds the worst case and
+    // the width barely does. A single tempo change is not evidence about
+    // either -- the first pair measured at 30 s / 0.20 came back at 0.6 s and
+    // the worst of the same six is 23.1 s.
+    //
+    // The corpora want the opposite of what this does: ballroom F rises from
+    // 0.737 at width 0.20 to 0.772 at 0.05, GTZAN from 0.648 to 0.666, because
+    // neither corpus changes tempo and so neither is ever billed. Which is why
+    // the anchor is off, and why the number to settle is the window on
+    // material that does change tempo -- not the width on material that does
+    // not.
+    constexpr double kFps = 50.0;
+    const double pairs[][2] = {{100, 132}, {120, 90}, {84, 112},
+                               {150, 108}, {96, 144}, {132, 100}};
+
+    for (const auto& pair : pairs) {
+        LiveConfig config = liveConfig();
+        config.anchor_tempo = true;
+        LiveTracker tracker{config};
+
+        double now = 0.0;
+        double phase = 0.0;
+        double lag_sec = -1.0;
+        const auto play = [&](double bpm, double seconds, bool watch) {
+            const double period = 60.0 / bpm;
+            for (int i = 0; i < static_cast<int>(seconds * kFps); ++i) {
+                now += 1.0 / kFps;
+                phase += 1.0 / kFps;
+                double activation = 0.02;
+                if (phase >= period) {
+                    phase -= period;
+                    activation = 0.95;
+                }
+                tracker.observe(now, activation);
+                if (watch && lag_sec < 0.0 &&
+                    std::fabs(tracker.estimate(now).bpm - bpm) < 0.03 * bpm) {
+                    lag_sec = static_cast<double>(i) / kFps;
+                }
+            }
+        };
+
+        play(pair[0], 45.0, false);
+        ASSERT_NEAR(tracker.estimate(now).bpm, pair[0], 0.05 * pair[0])
+            << "did not settle on " << pair[0] << " at all";
+
+        play(pair[1], 60.0, true);
+        EXPECT_GE(lag_sec, 0.0)
+            << "never followed " << pair[0] << " -> " << pair[1]
+            << ": the anchor is behaving as a pin";
+        // Deliberately loose, and named for what it is: this asserts that the
+        // anchor is leaveable, not that it is left quickly. A tight bound here
+        // would be asserting the lucky pair.
+        EXPECT_LT(lag_sec, 30.0)
+            << pair[0] << " -> " << pair[1] << " took " << lag_sec << " s";
+    }
+}
+
+TEST(LiveTracker, TheAnchorIsOffUntilTheCorpusThatCanJudgeItExists) {
+    // Not a preference, and the reason is written down so that turning it on
+    // later is a decision someone makes rather than a default someone
+    // inherits. The estimator behind the anchor is measured and better at the
+    // octave than the filter is; the soft *use* of it is measured only on
+    // material that cannot distinguish it from the hard use, which is
+    // separately measured and rejected.
+    EXPECT_FALSE(liveConfig().anchor_tempo);
+    EXPECT_TRUE(liveConfig().valid());
+}
+

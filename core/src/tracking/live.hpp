@@ -7,6 +7,7 @@
 
 #include "dsp/odf.hpp"
 #include "ml/beatnet.hpp"
+#include "tracking/activation_tempo.hpp"
 #include "tracking/particle.hpp"
 #include "tracking/sync.hpp"
 
@@ -70,6 +71,63 @@ struct LiveConfig {
     // two changes by some way.
     double lock_confidence = 0.25;
     double release_confidence = 0.02;
+
+    // Tempo measured from the activation history, used to aim the filter's
+    // prior at the metrical level the recording is actually in.
+    ActivationTempoConfig activation_tempo;
+
+    // Off by default, and this is the switch that turns the whole thing on.
+    //
+    // The estimator behind it is measured and clearly better at the octave
+    // than the filter is — 81.7% against 66.6% on ballroom at fifteen seconds,
+    // 69.1% against 58.5% on GTZAN. What is not yet measured is this softer
+    // way of using it, as against holding the period outright, and the two
+    // corpora cannot settle that: both are steady-tempo music, where a held
+    // period and a held metrical level behave identically. The difference only
+    // appears on material that changes tempo, which is the material the
+    // product is for. Defaulting to on before that measurement exists would be
+    // shipping the untested half of the idea.
+    bool anchor_tempo = false;
+
+    // How much room the anchored tempo is left, in octaves. A fifth of an
+    // octave is about 15% either way, so half and double sit four widths out
+    // and are outvoted, while a singer drifting a few percent is followed
+    // rather than fought.
+    //
+    // The corpus wants this narrower all the way down to a pin, and does not
+    // get it: ballroom F rises from 0.737 here to 0.772 at 0.05, GTZAN from
+    // 0.648 to 0.666, because neither corpus changes tempo and so neither is
+    // ever billed for the one thing tightening costs.
+    //
+    // What tightening costs is time spent on a stale measurement after a real
+    // tempo change. Over six changes it is 5.1 seconds on average here and
+    // 16.2 at 0.05 — but the worst of the six is 23.1 and 24.4, which is to
+    // say the width does not really bound it at all. The estimator's window
+    // does: at a ten-second window the worst case falls to 6.6 seconds.
+    //
+    // So 0.2 is a compromise chosen against a weak lever, not a settled
+    // number, and the setting that would actually settle it — a short window —
+    // has never been scored on a corpus. See AnAnchoredTrackerAlwaysFollows-
+    // ARealTempoChangeEventually for the table and for why one tempo change is
+    // not evidence about any of this.
+    double anchor_width_octaves = 0.2;
+
+    // How decided the estimator has to be before its answer is used, as the
+    // gap to the best rival at another metrical level.
+    //
+    // Zero, meaning "use it whenever there is one", and that is a measured
+    // result rather than an omission. Gating looked obviously right — a
+    // half-certain octave is exactly what one would not want to hold — and on
+    // 120 ballroom recordings it is worse at every setting tried: F 0.752 with
+    // no gate, 0.738 at 0.15, 0.714 at 0.30. The reason it does not help is
+    // that a tie in the estimator is not a coin toss downstream. Both rivals
+    // are metrical relatives of each other, so anchoring the wrong one still
+    // puts the filter on a grid the right beats fall on, whereas refusing to
+    // anchor leaves it with the fixed prior, which is worse than either.
+    //
+    // Kept as a parameter rather than deleted because the question is a real
+    // one and the answer may not survive a corpus that is not ballroom.
+    double anchor_octave_margin = 0.0;
 
     // A stream time this far from where the sample count says it should be
     // means the device dropped or repeated a buffer.
@@ -172,6 +230,16 @@ public:
 
     BeatEstimate estimate(double now_sec) const { return filter_.estimate(now_sec); }
 
+    // What the autocorrelation over the activation history currently makes of
+    // the tempo, whether or not it is being used. Reported separately from
+    // estimate() because it answers a different question — which metrical
+    // level the recording is in, rather than where the next beat falls — and
+    // because a bench that cannot see both cannot tell which of the two is
+    // wrong when the beats are.
+    ActivationTempoEstimate tempoFromActivation() const {
+        return activation_tempo_.estimate();
+    }
+
     // Hands out the next beat to play, once, when it comes within
     // `lookahead_sec` of now. True when `beat_sec` was written.
     //
@@ -246,6 +314,7 @@ private:
     dsp::Odf odf_;
     BeatParticleFilter filter_;
     PhaseSync sync_;
+    ActivationTempo activation_tempo_;
 
     // Engaged only by the constructor that was handed weights. Held by value
     // rather than behind a pointer so that the audio path has no indirection

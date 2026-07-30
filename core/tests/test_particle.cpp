@@ -429,3 +429,76 @@ TEST(ParticleFilter, SaysNothingBeforeItsEvidenceHasConverged) {
     }
     EXPECT_EQ(filter.estimate(now).confidence, 0.0);
 }
+
+TEST(ParticleFilter, AnAnchorDecidesTheOctaveAnUnaccentedPulseCannot) {
+    // Identical beats repeat just as exactly at half the tempo — and at a
+    // third, and a quarter, because every one of those predicts beats that
+    // land on real pulses. The octave is genuinely not in the signal, so
+    // something has to choose it. Without an anchor that is the configured
+    // prior; with one it is the measurement.
+    //
+    // Direction is asserted, not a number. The per-beat charge prefers the
+    // slowest supported period and pulls against the anchor the whole time, so
+    // a filter anchored low settles below its anchor rather than on it.
+    // Demanding it land exactly would be demanding the anchor win outright,
+    // which is what pinPeriod does and what the corpus rejected.
+    const double bpm = 180.0;
+
+    BeatParticleFilter fast{ParticleFilterConfig{}};
+    fast.anchorTempo(bpm, 0.2);
+    double now = feedSteady(fast, bpm, 25.0);
+    const double fast_bpm = fast.estimate(now).bpm;
+    EXPECT_NEAR(fast_bpm, bpm, 0.08 * bpm);
+
+    BeatParticleFilter slow{ParticleFilterConfig{}};
+    slow.anchorTempo(bpm / 2.0, 0.2);
+    now = feedSteady(slow, bpm, 25.0);
+
+    EXPECT_LT(slow.estimate(now).bpm, 0.75 * fast_bpm)
+        << "the same audio and a lower anchor did not give a lower tempo";
+}
+
+TEST(ParticleFilter, AnAnchorIsAPullAndNotAPin) {
+    // The whole reason to anchor rather than pin. A pinned period cannot be
+    // wrong-then-corrected: it is held until the recording ends, which is why
+    // holding a 60%-accurate estimate lost to not holding one at all. An
+    // anchor has to be leaveable, so an anchor a full octave from what the
+    // room is plainly doing must not survive the room.
+    BeatParticleFilter filter{ParticleFilterConfig{}};
+    filter.anchorTempo(60.0, 0.2);
+    const double now = feedSteady(filter, 120.0, 40.0);
+
+    EXPECT_GT(filter.estimate(now).bpm, 90.0)
+        << "the anchor held a tempo the evidence contradicted";
+    EXPECT_FALSE(filter.pinned());
+}
+
+TEST(ParticleFilter, ClearingTheAnchorGivesTheConfiguredPriorBack) {
+    BeatParticleFilter filter{ParticleFilterConfig{}};
+    filter.anchorTempo(100.0, 0.2);
+    EXPECT_DOUBLE_EQ(filter.anchoredTempo(), 100.0);
+
+    filter.clearAnchor();
+    EXPECT_DOUBLE_EQ(filter.anchoredTempo(), 0.0);
+
+    // Nonsense is a clear rather than a state to be honoured: a width of zero
+    // would divide by zero in the weight update.
+    filter.anchorTempo(100.0, 0.0);
+    EXPECT_DOUBLE_EQ(filter.anchoredTempo(), 0.0);
+    filter.anchorTempo(-5.0, 0.2);
+    EXPECT_DOUBLE_EQ(filter.anchoredTempo(), 0.0);
+}
+
+TEST(ParticleFilter, ResetForgetsTheAnchorAndKeepsThePin) {
+    // Two opposite rules in one place, because the difference is the point: a
+    // pin was typed by the user and a reset does not forget users, while an
+    // anchor was concluded from the audio a reset is forgetting.
+    BeatParticleFilter filter{ParticleFilterConfig{}};
+    filter.anchorTempo(100.0, 0.2);
+    filter.pinPeriod(60.0 / 128.0);
+
+    filter.reset();
+
+    EXPECT_DOUBLE_EQ(filter.anchoredTempo(), 0.0);
+    EXPECT_TRUE(filter.pinned());
+}

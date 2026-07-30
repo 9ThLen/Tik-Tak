@@ -10,7 +10,9 @@ bool LiveConfig::valid() const {
     return odf.valid() && filter.valid() && sync.valid() && onset_peak_tau_sec > 0.0 &&
            gate_before_sec >= 0.0 && gate_after_sec >= 0.0 && lock_confidence > 0.0 &&
            lock_confidence <= 1.0 && release_confidence >= 0.0 &&
-           release_confidence < lock_confidence && discontinuity_tolerance_sec > 0.0;
+           release_confidence < lock_confidence && discontinuity_tolerance_sec > 0.0 &&
+           activation_tempo.valid() && anchor_width_octaves > 0.0 &&
+           anchor_octave_margin >= 0.0 && anchor_octave_margin <= 1.0;
 }
 
 LiveConfig liveConfigFor(double sample_rate) {
@@ -49,6 +51,7 @@ ParticleFilterConfig LiveTracker::resolveFilter(const LiveConfig& config) {
 
 LiveTracker::LiveTracker(const LiveConfig& config)
     : config_(config), odf_(config.odf), filter_(resolveFilter(config)), sync_(config.sync),
+      activation_tempo_(config.activation_tempo),
       evidence_half_sec_(0.5 * static_cast<double>(config.odf.frameSize) /
                          config.odf.sampleRate) {
     gate_start_.fill(std::numeric_limits<double>::infinity());
@@ -172,6 +175,28 @@ void LiveTracker::submit(double time_sec, double normalised) {
         if (!acquired_ && sync_.ready()) {
             filter_.seedPhase(sync_.nextBeat(time_sec));
             acquired_ = true;
+        }
+    }
+
+    // Fed whatever the front end produced, before the filter sees it and
+    // whether or not the anchor is on: the estimate is worth reporting even
+    // when nothing acts on it, and a history that only exists while a feature
+    // is enabled cannot be compared against one where it is not.
+    activation_tempo_.observe(time_sec, normalised);
+
+    // Manual mode already has a period and did not get it from the room, so
+    // the anchor has nothing to add and no business overruling it.
+    if (config_.anchor_tempo && manual_bpm_ <= 0.0) {
+        const auto measured = activation_tempo_.estimate();
+        if (measured.answered() &&
+            measured.octave_margin >= config_.anchor_octave_margin) {
+            filter_.anchorTempo(measured.bpm, config_.anchor_width_octaves);
+        } else {
+            // Dropped rather than held. An anchor is a claim that the metrical
+            // level is known, and when the estimator stops saying so the claim
+            // has to go with it — otherwise a tempo measured in the first
+            // chorus outlives the evidence for it.
+            filter_.clearAnchor();
         }
     }
 
@@ -303,6 +328,11 @@ void LiveTracker::setManualTempo(double bpm) {
     const bool carry = published_;
 
     manual_bpm_ = bpm;
+    // A typed tempo outranks a measured one. Leaving the anchor set would do
+    // nothing while pinned — the prior is switched off there — but it would
+    // come back the moment manual mode was left, carrying a tempo from before
+    // the user overruled it.
+    filter_.clearAnchor();
     const double period = 60.0 / bpm;
     held_period_sec_ = period;
     locked_ = false;
@@ -328,6 +358,9 @@ void LiveTracker::reset() {
     // longer playing, and it would take several seconds to fade on its own.
     if (model_) model_->reset();
     filter_.reset();  // keeps the pin: a reset forgets audio, not the user
+    // The anchor is dropped with it, by the same rule read the other way: the
+    // activation history is audio, and this is what was concluded from it.
+    activation_tempo_.reset();
     sync_.reset();
     acquired_ = false;
     origin_sec_ = 0.0;

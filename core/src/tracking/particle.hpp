@@ -305,6 +305,30 @@ public:
     void unpinPeriod();
     bool pinned() const { return pinned_; }
 
+    // Moves the tempo prior onto a measured tempo instead of a believed one,
+    // and narrows it. This is holding a metrical level, which is a different
+    // promise from pinPeriod's holding a period.
+    //
+    // The prior is already a log-normal pull toward prior_centre_bpm, applied
+    // per second rather than once, so anchoring is that same term re-centred
+    // and tightened — no new machinery and no new failure mode. What matters
+    // is what it does *not* switch off: the cloud still holds many periods,
+    // the per-beat charge still runs, and the filter can still be argued out
+    // of the anchored octave by evidence. A pin cannot be, which is why a
+    // wrong pin is wrong until the recording ends.
+    //
+    // `width_octaves` is how much room the tempo is left. It wants to be
+    // narrow enough to outvote the half and double the autocorrelation was
+    // choosing between, and wide enough that a singer drifting a few percent
+    // is followed rather than fought.
+    //
+    // Zero or negative bpm clears the anchor and restores the configured
+    // centre. Anchoring while pinned does nothing: the pin already answers the
+    // question the anchor exists to answer.
+    void anchorTempo(double bpm, double width_octaves);
+    void clearAnchor() { anchorTempo(0.0, 0.0); }
+    double anchoredTempo() const { return anchor_bpm_; }
+
     // Puts the cloud's next beat on a known grid, periods untouched: this is
     // tracking::PhaseSync handing over the offset it correlated out.
     void seedPhase(double next_beat_sec);
@@ -346,6 +370,11 @@ private:
     bool pinned_ = false;
     double free_min_period_ = 0.0;
     double free_max_period_ = 0.0;
+
+    // A measured tempo to prefer, replacing the configured prior centre while
+    // set. Zero means no anchor and the configured centre stands.
+    double anchor_bpm_ = 0.0;
+    double anchor_width_octaves_ = 0.0;
 
     double last_time_sec_ = 0.0;
     bool started_ = false;

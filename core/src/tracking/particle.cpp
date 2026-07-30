@@ -104,6 +104,11 @@ void BeatParticleFilter::reset() {
     last_time_sec_ = 0.0;
     // A pin survives a reset. Resetting forgets what was heard; the tempo the
     // user typed is not something that was heard.
+    //
+    // An anchor does not survive, for exactly the same reason read the other
+    // way: it *was* heard, and it was heard in the audio being forgotten.
+    anchor_bpm_ = 0.0;
+    anchor_width_octaves_ = 0.0;
     mean_period_ = pinned_ ? min_period_ : 60.0 / config_.prior_centre_bpm;
     charge_ema_ = 0.0;
     onset_ema_ = 0.0;
@@ -160,6 +165,16 @@ void BeatParticleFilter::unpinPeriod() {
     max_period_ = free_max_period_;
     mean_period_ = 60.0 / config_.prior_centre_bpm;
     drawFromPrior();
+}
+
+void BeatParticleFilter::anchorTempo(double bpm, double width_octaves) {
+    if (!(bpm > 0.0) || !(width_octaves > 0.0)) {
+        anchor_bpm_ = 0.0;
+        anchor_width_octaves_ = 0.0;
+        return;
+    }
+    anchor_bpm_ = bpm;
+    anchor_width_octaves_ = width_octaves;
 }
 
 void BeatParticleFilter::seedPhase(double next_beat_sec) {
@@ -225,11 +240,19 @@ void BeatParticleFilter::observe(double time_sec, double onset) {
     // The prior, applied at a rate rather than once. `prior_scale` is half the
     // inverse square of the width, so the term below is the log of a
     // log-normal density in octaves, per second of elapsed time.
-    const double prior_centre = std::log2(config_.prior_centre_bpm);
+    // An anchor moves that centre onto a measured tempo and narrows the width.
+    // The term is otherwise unchanged, which is the point: holding a metrical
+    // level is this prior aimed by evidence, not a second mechanism arguing
+    // with it. Everything else stays on, so the filter can still be argued out
+    // of the anchored octave — see anchorTempo().
+    const bool anchored = anchor_bpm_ > 0.0;
+    const double prior_centre =
+        std::log2(anchored ? anchor_bpm_ : config_.prior_centre_bpm);
+    const double prior_width =
+        anchored ? anchor_width_octaves_ : config_.prior_width_octaves;
     const double prior_scale =
         pinned_ ? 0.0
-                : config_.prior_rate * dt /
-                      (2.0 * config_.prior_width_octaves * config_.prior_width_octaves);
+                : config_.prior_rate * dt / (2.0 * prior_width * prior_width);
 
     double sum = 0.0;
     double predicted_on_beat = 0.0;
