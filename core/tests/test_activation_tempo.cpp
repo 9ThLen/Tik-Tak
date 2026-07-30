@@ -49,12 +49,21 @@ TEST(ActivationTempo, RejectsAConfigurationItCannotHonour) {
 }
 
 TEST(ActivationTempo, SaysNothingBeforeItHasHeardEnough) {
-    ActivationTempo tempo{ActivationTempoConfig{}};
-    feedPulse(tempo, 120.0, 10.0);
+    const ActivationTempoConfig config;
+    ActivationTempo tempo{config};
+
+    // Deliberately expressed against the configured threshold rather than
+    // against a constant. Until the ring is full the rest of it is zeros, and
+    // an autocorrelation reads padding as a claim about the tempo, so this is
+    // not a politeness — it is why min_window_sec equals window_sec.
+    feedPulse(tempo, 120.0, config.min_window_sec - 1.0);
     EXPECT_FALSE(tempo.estimate().answered())
-        << "ten seconds is under min_window_sec, and a tempo of 0 is how that "
-           "is reported — not a quiet guess of 120";
+        << "answered before the window was full; a tempo of 0 is how not "
+           "knowing is reported — not a quiet guess of 120";
     EXPECT_DOUBLE_EQ(tempo.estimate().bpm, 0.0);
+
+    feedPulse(tempo, 120.0, 3.0, config.min_window_sec - 1.0);
+    EXPECT_TRUE(tempo.estimate().answered()) << "never started answering";
 }
 
 TEST(ActivationTempo, FindsASteadyPulseOnceItHas) {

@@ -76,41 +76,40 @@ struct LiveConfig {
     // prior at the metrical level the recording is actually in.
     ActivationTempoConfig activation_tempo;
 
-    // Off by default, and this is the switch that turns the whole thing on.
+    // On. Over 698 ballroom and 999 GTZAN recordings, against free running:
     //
-    // The estimator behind it is measured and clearly better at the octave
-    // than the filter is — 81.7% against 66.6% on ballroom at fifteen seconds,
-    // 69.1% against 58.5% on GTZAN. What is not yet measured is this softer
-    // way of using it, as against holding the period outright, and the two
-    // corpora cannot settle that: both are steady-tempo music, where a held
-    // period and a held metrical level behave identically. The difference only
-    // appears on material that changes tempo, which is the material the
-    // product is for. Defaulting to on before that measurement exists would be
-    // shipping the untested half of the idea.
-    bool anchor_tempo = false;
+    //                   ballroom            GTZAN
+    //     free       0.700  0.584        0.632  0.508
+    //     anchored   0.794  0.705        0.666  0.565
+    //     hard pin   0.778  0.782        0.697  0.637
+    //     the answer 0.881  0.873        0.737  0.790
+    //
+    // On ballroom that is better than holding the period outright, which is
+    // the thing the corpora were expected to prefer and the thing that cannot
+    // ship. It is not a compromise reached against them: at a six-second
+    // window the anchor is both better on the corpus and quicker to follow a
+    // tempo change than any longer-window setting, so nothing was traded away
+    // to get it. See ActivationTempoConfig::window_sec.
+    bool anchor_tempo = true;
 
     // How much room the anchored tempo is left, in octaves. A fifth of an
     // octave is about 15% either way, so half and double sit four widths out
     // and are outvoted, while a singer drifting a few percent is followed
     // rather than fought.
     //
-    // The corpus wants this narrower all the way down to a pin, and does not
-    // get it: ballroom F rises from 0.737 here to 0.772 at 0.05, GTZAN from
-    // 0.648 to 0.666, because neither corpus changes tempo and so neither is
-    // ever billed for the one thing tightening costs.
+    // 0.10 against 0.20, at the six-second window both were measured on:
     //
-    // What tightening costs is time spent on a stale measurement after a real
-    // tempo change. Over six changes it is 5.1 seconds on average here and
-    // 16.2 at 0.05 — but the worst of the six is 23.1 and 24.4, which is to
-    // say the width does not really bound it at all. The estimator's window
-    // does: at a ten-second window the worst case falls to 6.6 seconds.
+    //     width   ballroom F   GTZAN F   worst lag over six tempo changes
+    //     0.10      0.794       0.666           6.8 s
+    //     0.20      0.760       0.659           5.6 s
     //
-    // So 0.2 is a compromise chosen against a weak lever, not a settled
-    // number, and the setting that would actually settle it — a short window —
-    // has never been scored on a corpus. See AnAnchoredTrackerAlwaysFollows-
-    // ARealTempoChangeEventually for the table and for why one tempo change is
-    // not evidence about any of this.
-    double anchor_width_octaves = 0.2;
+    // A point and a bit of latency for three and a half points of F. Note how
+    // much smaller the choice is than it was at a thirty-second window, where
+    // the same widths spanned 23.1 seconds of worst-case lag: once the window
+    // is short the width stops being the thing that matters, which is the
+    // right way round, because the width is a belief and the window is
+    // evidence.
+    double anchor_width_octaves = 0.1;
 
     // How decided the estimator has to be before its answer is used, as the
     // gap to the best rival at another metrical level.

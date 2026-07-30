@@ -21,19 +21,37 @@ struct ActivationTempoConfig {
     double prior_centre_bpm = 140.0;
     double prior_width_octaves = 0.7;
 
-    // How much history the autocorrelation sees. Longer is better and flattens
-    // out: measured over BeatNet's activation on ballroom, the right octave is
-    // found on 81.7% of recordings from fifteen seconds, 82.8% from twenty and
-    // 85.1% from thirty, against 85.1% from the whole recording. Thirty seconds
-    // is where the causal estimate stops differing from the acausal one, so
-    // there is nothing to buy above it.
-    double window_sec = 30.0;
+    // How much history the autocorrelation sees. Short, and deliberately much
+    // shorter than this estimator alone would ask for.
+    //
+    // Taken by itself, longer is plainly better: over BeatNet's activation on
+    // ballroom the right octave is found on 64.2% of recordings from five
+    // seconds, 81.7% from fifteen, 85.1% from thirty and 85.1% from the whole
+    // recording. On that evidence this was 30, and that was wrong.
+    //
+    // What the isolated measurement misses is that the estimate is consumed by
+    // a tracker, and a stale estimate is worth less there than an inaccurate
+    // one. Scored end to end through the anchor, over 698 ballroom and 999
+    // GTZAN recordings, shorter wins on the corpus *and* on how fast a tempo
+    // change is followed — both at once, which is why this is not a trade:
+    //
+    //     window   ballroom F   GTZAN F   worst lag over six tempo changes
+    //      6 s       0.794       0.666            6.8 s
+    //      8 s       0.785       0.665            7.2 s
+    //     10 s       0.781       0.663           10.4 s
+    //     30 s       0.737       0.648           23.1 s
+    //
+    // Six seconds of activation is a worse look at the recording and a better
+    // answer about it. Below six is untested: the returns are already thinning
+    // — 0.009 F between ten seconds and six — and every second removed is a
+    // second the user waits before the anchor does anything, since
+    // min_window_sec follows this down.
+    double window_sec = 6.0;
 
-    // No answer before this much has been heard. Five seconds reaches 64.2%
-    // (ballroom) and 61.4% (GTZAN), which is around where pinning a period
-    // stops paying for itself, so answering that early would mostly be
-    // answering wrongly with confidence.
-    double min_window_sec = 15.0;
+    // No answer before this much has been heard, which is the whole window: a
+    // partially filled ring is zero-padded, and padding is silence the
+    // autocorrelation would read as evidence about the tempo.
+    double min_window_sec = 6.0;
 
     // The autocorrelation is recomputed at most this often. It is a 4096-point
     // transform over a buffer that changes by one frame at a time, so doing it

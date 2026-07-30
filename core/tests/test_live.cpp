@@ -649,57 +649,54 @@ TEST(LiveTracker, ADipInConfidenceDoesNotLetTwoBeatsOutTogether) {
 
 // --------------------------------------------------------- octave anchoring
 //
-// The corpora cannot decide how tightly the anchor should hold. Ballroom and
-// GTZAN are steady-tempo music, so on them a held metrical level and a held
-// period are indistinguishable, and the sweep simply rewards whichever holds
-// harder — over all 698 and 999 recordings, F against anchor width:
+// The anchor holds the metrical level an autocorrelation over the activation
+// measured, by re-centring the filter's tempo prior on it. Over all 698
+// ballroom and 999 GTZAN recordings, at the shipped six-second window:
 //
-//     width      ballroom          GTZAN
-//     free       0.700  0.584      0.632  0.508
-//     0.20       0.737  0.633      0.648  0.531
-//     0.10       0.757  0.653      0.658  0.544
-//     0.05       0.772  0.671      0.666  0.552
-//     hard pin   0.778  0.782      0.697  0.637
+//                   ballroom            GTZAN
+//     free       0.700  0.584        0.632  0.508
+//     anchored   0.794  0.705        0.666  0.565
+//     hard pin   0.778  0.782        0.697  0.637
+//     the answer 0.881  0.873        0.737  0.790
 //
-// Monotone the whole way to a pin, on both. Every point on that curve is a
-// corpus asking for the one thing it is constitutionally unable to be charged
-// for, and the tests below are the bill.
+// It was very nearly not chosen this way. Scored at a thirty-second window the
+// corpora asked, monotonically, for the anchor to hold harder all the way to a
+// pin -- F 0.737 at width 0.20, 0.757 at 0.10, 0.772 at 0.05, 0.778 pinned --
+// and neither corpus can be charged for that, because neither changes tempo.
+// The first test below is that bill, and it is what shortening the window was
+// looked for in the first place. Shortening turned out to win on the corpus as
+// well, so the conflict the tests were written to arbitrate no longer exists.
+// They stay because the reasoning has to survive the next change to either
+// number, not because they currently disagree with anything.
 
-TEST(LiveTracker, AnAnchoredTrackerAlwaysFollowsARealTempoChangeEventually) {
+TEST(LiveTracker, AnAnchoredTrackerFollowsARealTempoChangeQuickly) {
     // The anchor is re-measured from a sliding window rather than fixed once,
     // which is the whole difference between it and pinPeriod: a pinned period
-    // is wrong until the recording ends, an anchored one is wrong until the
-    // window turns over. So the tracker always gets there. How long it takes
-    // is the open question, and it is not settled by a width.
+    // is wrong until the recording ends, an anchored one only until the window
+    // turns over. What that costs is seconds spent on a stale tempo, and it is
+    // the window that bounds them, not the width.
     //
-    // Over six tempo changes, seconds until the estimate is within 3% of the
-    // new tempo -- mean, and worst of the six:
+    // Over these six tempo changes, seconds until the estimate is within 3% of
+    // the new tempo -- mean, and worst of the six:
     //
     //     window   width 0.05     width 0.10     width 0.20
+    //      6 s        --          4.2 /  6.8     2.2 /  5.6
+    //      8 s        --          4.3 /  7.2     3.0 /  6.5
     //     10 s     6.5 /  9.6     6.4 / 10.4     3.5 /  6.6
-    //     15 s     9.3 / 13.2     5.2 / 10.7     3.8 / 15.4
     //     20 s    11.5 / 17.4     6.0 / 15.3     3.5 / 13.6
     //     30 s    16.2 / 24.4     6.9 / 20.6     5.1 / 23.1
     //
-    // Read down the columns, not across: the window bounds the worst case and
-    // the width barely does. A single tempo change is not evidence about
-    // either -- the first pair measured at 30 s / 0.20 came back at 0.6 s and
-    // the worst of the same six is 23.1 s.
-    //
-    // The corpora want the opposite of what this does: ballroom F rises from
-    // 0.737 at width 0.20 to 0.772 at 0.05, GTZAN from 0.648 to 0.666, because
-    // neither corpus changes tempo and so neither is ever billed. Which is why
-    // the anchor is off, and why the number to settle is the window on
-    // material that does change tempo -- not the width on material that does
-    // not.
+    // Read down the columns, not across. One tempo change is not evidence
+    // about any of this: the first pair measured at 30 s / 0.20 came back at
+    // 0.6 s, and the worst of the same six is 23.1 s. The bound below is set
+    // against the worst, not the mean, for that reason.
     constexpr double kFps = 50.0;
     const double pairs[][2] = {{100, 132}, {120, 90}, {84, 112},
                                {150, 108}, {96, 144}, {132, 100}};
 
     for (const auto& pair : pairs) {
-        LiveConfig config = liveConfig();
-        config.anchor_tempo = true;
-        LiveTracker tracker{config};
+        LiveTracker tracker{liveConfig()};
+        ASSERT_TRUE(liveConfig().anchor_tempo);
 
         double now = 0.0;
         double phase = 0.0;
@@ -727,25 +724,26 @@ TEST(LiveTracker, AnAnchoredTrackerAlwaysFollowsARealTempoChangeEventually) {
             << "did not settle on " << pair[0] << " at all";
 
         play(pair[1], 60.0, true);
-        EXPECT_GE(lag_sec, 0.0)
+        ASSERT_GE(lag_sec, 0.0)
             << "never followed " << pair[0] << " -> " << pair[1]
             << ": the anchor is behaving as a pin";
-        // Deliberately loose, and named for what it is: this asserts that the
-        // anchor is leaveable, not that it is left quickly. A tight bound here
-        // would be asserting the lucky pair.
-        EXPECT_LT(lag_sec, 30.0)
-            << pair[0] << " -> " << pair[1] << " took " << lag_sec << " s";
+        EXPECT_LT(lag_sec, 12.0)
+            << pair[0] << " -> " << pair[1] << " took " << lag_sec << " s. "
+               "The worst of these six measured 6.8 s when the window and "
+               "width were chosen; twice that is a lengthening nobody meant.";
     }
 }
 
-TEST(LiveTracker, TheAnchorIsOffUntilTheCorpusThatCanJudgeItExists) {
-    // Not a preference, and the reason is written down so that turning it on
-    // later is a decision someone makes rather than a default someone
-    // inherits. The estimator behind the anchor is measured and better at the
-    // octave than the filter is; the soft *use* of it is measured only on
-    // material that cannot distinguish it from the hard use, which is
-    // separately measured and rejected.
-    EXPECT_FALSE(liveConfig().anchor_tempo);
-    EXPECT_TRUE(liveConfig().valid());
+TEST(LiveTracker, TheAnchorIsOnAndTheEstimatorIsShortSighted) {
+    // Both halves of the same decision, in one place, because separating them
+    // is how the wrong one gets kept. The anchor earns its place only at a
+    // window this short -- at thirty seconds it is worth a third as much and
+    // takes three times as long to follow a tempo change -- so a later change
+    // that lengthens the window has to re-answer whether to anchor at all.
+    const LiveConfig config = liveConfig();
+    EXPECT_TRUE(config.anchor_tempo);
+    EXPECT_DOUBLE_EQ(config.activation_tempo.window_sec, 6.0);
+    EXPECT_DOUBLE_EQ(config.anchor_width_octaves, 0.1);
+    EXPECT_DOUBLE_EQ(config.anchor_octave_margin, 0.0);
+    EXPECT_TRUE(config.valid());
 }
-
