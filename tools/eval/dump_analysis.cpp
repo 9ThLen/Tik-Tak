@@ -290,6 +290,12 @@ int main(int argc, char** argv) {
     // flux, in units where "a beat is worth about one"; BeatNet hands it a
     // probability instead, which is a different distribution with the same
     // nominal scale, and nothing re-derived these when the model arrived.
+    // Manual mode: the period is pinned and the room is asked only where the
+    // beat falls. Not a shippable path on its own — the tempo has to come from
+    // somewhere — but it is the only way to measure the ceiling of "the period
+    // is supplied by something else", which is a different question from
+    // --live-seeded's "the period starts out right and may drift".
+    double live_manual_bpm = 0.0;
     double live_prior_rate = 0.0;
     double live_observation_gain = 0.0;
     double live_onset_exponent = 0.0;
@@ -311,6 +317,7 @@ int main(int argc, char** argv) {
         {"--tempo-comb-decay", &tempo_comb_decay},
         {"--live-prior-centre", &live_prior_centre},
         {"--live-prior-width", &live_prior_width},
+        {"--live-manual-bpm", &live_manual_bpm},
         {"--live-prior-rate", &live_prior_rate},
         {"--live-observation-gain", &live_observation_gain},
         {"--live-onset-exponent", &live_onset_exponent},
@@ -618,6 +625,10 @@ int main(int argc, char** argv) {
         if (live_seed && analysis.bpm > 0.0) {
             tracker.seedTempo(analysis.bpm);
         }
+        // After the seed, deliberately: pinning the period supersedes
+        // concentrating the cloud on one, and asking for both should behave as
+        // the stronger of the two rather than as an ordering accident.
+        if (live_manual_bpm > 0.0) tracker.setManualTempo(live_manual_bpm);
 
         // A device-sized buffer, not the odd block above. takeBeat only hands
         // over a beat once it is within the lookahead of now, so the polling
