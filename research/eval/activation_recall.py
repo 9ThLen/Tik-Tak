@@ -219,9 +219,9 @@ def main() -> int:
             "tracker_r70": mean("tracker"),
             "peak_present": mean("peak_present"),
             "peak_present_chance": mean("peak_present_chance"),
-            # The product's pass mark applied to the ceiling: a corpus where the
-            # activation itself clears 80% on few recordings is a corpus no
-            # decoder can rescue.
+            # The product's pass mark applied to the height-only control, so it
+            # can be compared with the tracker's own on the same axis. Not a
+            # bound on the corpus: see the note on `top_n` in the docstring.
             "share_over_80_top_n": over80("top_n"),
             "share_over_80_tracker": over80("tracker"),
         }

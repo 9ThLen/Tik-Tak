@@ -340,41 +340,73 @@ struct LiveConfig {
 // into a slow trend (a nine-beat running median) and the residual around it:
 //
 //                  median drift   median jitter   rho(drift)   rho(jitter)
-//     GTZAN           0.0084          0.0112        -0.42        -0.53
-//     SMC             0.0418          0.0716        -0.02        -0.26
+//     GTZAN           0.0084          0.0122        -0.35        -0.39
+//     SMC             0.0423          0.0706        -0.20        -0.38
 //
-// (The rho column was computed on the 150-recording subset described above; on
-// the whole of each corpus the combined spread correlates at -0.42 on GTZAN and
-// -0.28 on SMC. The split has not been recomputed at full size, so treat the
-// two rho columns as the shape of the effect and not as final values.)
+// Whole corpora, from research/eval/timing_irregularity.py. Jitter is the
+// stronger predictor on both, and on SMC it is nearly twice as strong — but the
+// separation is modest and **drift is not zero anywhere**. An earlier revision
+// read a subset figure of -0.02 as "drift has no relationship with recall on
+// SMC" and built a conclusion on it; at full size that number is -0.20. The
+// supportable claim is only that irregularity predicts failure better than
+// drift does, not that drift is innocent.
 //
-// On SMC — the corpus where the decoder loses most — **drift has no
-// relationship with recall at all**. What predicts failure is beat-to-beat
-// irregularity: expressive timing, not tempo drift. A synthetic bench agrees
-// from the other side, passing every ramp of ±2/5/10% over 15 or 45 seconds at
-// F70 ≈ 0.995 while failing four of five clips at 40 ms of jitter.
+// A synthetic bench agrees on the direction from the other side, passing every
+// ramp of ±2/5/10% over 15 or 45 seconds at F70 ≈ 0.995 while failing four of
+// five clips at 40 ms of jitter. Note that at 70 ms of jitter its failure is
+// close to tautological, the deviation being the width of the scoring window.
 //
 // Nor is the filter over-smoothing, which is the next thing one would assume.
 // Score a locally steady pulse — the annotated beats with every interval
 // replaced by its local median, so it follows drift and never follows jitter:
 //
 //     recall at 70 ms          GTZAN    SMC
-//     a locally steady pulse   84.2%   30.7%
-//     our filter, oracle-fed   92.2%   52.2%
+//     a locally steady pulse   83.5%   33.2%
+//     our filter, oracle-fed   92.7%   54.6%
 //
-// Eight points above that bound on GTZAN and twenty-one on SMC. The filter
-// already follows a great deal of expressive timing. And 30.7% says something
-// about SMC rather than about us: seven in ten of its annotated beats sit more
+// Nine points above that bound on GTZAN and twenty-one on SMC. The filter
+// already follows a great deal of expressive timing. And 33.2% says something
+// about SMC rather than about us: two in three of its annotated beats sit more
 // than 70 ms from any locally regular pulse, so a large part of the remaining
-// 48 points is deviation a causal system cannot predict in principle. How much
+// 45 points is deviation a causal system cannot predict in principle. How much
 // is irreducible is not known; that it is a substantial share is.
+//
+// **Where the anchor helps and where it hurts, per recording.** With the same
+// oracle observation, the anchor changes some recordings by more than five
+// points and most by less. Grouping them and looking at what the groups have in
+// common is how one would find a run-time signal to make its strength
+// conditional — and the honest result is that these features do not provide one:
+//
+//     GTZAN            n    drift    jitter   recall on the real activation
+//     anchor saves    56   0.0149    0.0400              44.2%
+//     no effect      808   0.0074    0.0100              83.5%
+//     anchor costs   134   0.0139    0.0212              35.0%
+//
+//     SMC              n    drift    jitter
+//     anchor saves    60   0.0436    0.0713
+//     no effect       61   0.0406    0.0627
+//     anchor costs    96   0.0425    0.0742
+//
+// The recordings the anchor touches at all are the irregular ones the front end
+// is also failing on; the 808 it leaves alone are the easy ones. But saved and
+// cost are not separated by drift on either corpus, and on SMC they are not
+// separated by anything here. Only GTZAN's jitter column shows a gap worth
+// noticing, 0.040 against 0.021.
+//
+// So "widen the prior when the tempo is changing" is not supported yet: on the
+// evidence here it would fire on the saved and the cost recordings alike. A
+// conditional anchor is still the right shape — the on/off measurement supports
+// that much — but the condition has to come from quantities the tracker has at
+// run time, the octave margin and the size and persistence of the disagreement
+// between the anchor and the filter, and those have not been joined to this
+// outcome yet.
 //
 // **The filter cannot be made agile enough, and this is why.** If the decoder's
 // loss is tempo agility, the filter has a knob for exactly that:
 // `roughening_octaves`, the spread added to every resampled particle's period,
 // which ships at 0.01. Swept against the oracle activation it looks like a free
 // win — GTZAN flat within noise while the share of recordings clearing 80% rises
-// 84.7% -> 88.0%, and SMC recall 52.2% -> 65.2% at 0.08. Run on the *real*
+// 87.4% -> 91.4%, and SMC recall 54.6% -> 66.8% at 0.08. Run on the *real*
 // activation and scored by the product's own criterion, every one of those
 // numbers reverses:
 //

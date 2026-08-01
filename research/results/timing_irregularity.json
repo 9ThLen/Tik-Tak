@@ -1,0 +1,94 @@
+{
+  "provenance": {
+    "utc": "2026-08-01T22:39:22Z",
+    "commit": "ff196921c48e82bd8d06dae1f6df256c82c50706",
+    "tree_clean": false,
+    "python": "3.11.15",
+    "platform": "Windows",
+    "sources": [
+      "results\\oracle_activation_gtzan.json",
+      "results\\oracle_activation.json"
+    ],
+    "trend_beats": 9,
+    "margin": 0.05
+  },
+  "window_sec": 0.07,
+  "by_corpus": {
+    "gtzan": {
+      "n": 998,
+      "median_drift": 0.008361654447951887,
+      "median_jitter": 0.012184855485136592,
+      "rho_drift_vs_oracle": -0.35429380572826946,
+      "rho_jitter_vs_oracle": -0.38533592919194615,
+      "steady_pulse_recall": 0.8345096536931166,
+      "oracle_recall": 0.9270761646778775,
+      "anchor": {
+        "margin": 0.05,
+        "groups": {
+          "anchor saves": 56,
+          "no effect": 808,
+          "anchor costs": 134
+        },
+        "anchor saves": {
+          "n": 56,
+          "drift": 0.01488856169519161,
+          "jitter": 0.04004474157841342,
+          "real": 0.4417420814479638,
+          "steady": 0.6436781609195402
+        },
+        "no effect": {
+          "n": 808,
+          "drift": 0.007379339165784149,
+          "jitter": 0.009982178427423489,
+          "real": 0.8350340136054422,
+          "steady": 1.0
+        },
+        "anchor costs": {
+          "n": 134,
+          "drift": 0.013878974256809647,
+          "jitter": 0.02116526868896643,
+          "real": 0.350383631713555,
+          "steady": 0.9057226705796038
+        }
+      }
+    },
+    "smc": {
+      "n": 217,
+      "median_drift": 0.04229803537451923,
+      "median_jitter": 0.07056567031297292,
+      "rho_drift_vs_oracle": -0.19972096562803873,
+      "rho_jitter_vs_oracle": -0.3823111468124786,
+      "steady_pulse_recall": 0.3316260374754939,
+      "oracle_recall": 0.5460009562596883,
+      "anchor": {
+        "margin": 0.05,
+        "groups": {
+          "anchor saves": 60,
+          "no effect": 61,
+          "anchor costs": 96
+        },
+        "anchor saves": {
+          "n": 60,
+          "drift": 0.04355446373664183,
+          "jitter": 0.0713470617770614,
+          "real": 0.1904850055534987,
+          "steady": 0.2898981324278438
+        },
+        "no effect": {
+          "n": 61,
+          "drift": 0.0406473695531604,
+          "jitter": 0.0626917066007041,
+          "real": 0.2653061224489796,
+          "steady": 0.3157894736842105
+        },
+        "anchor costs": {
+          "n": 96,
+          "drift": 0.042533414540727094,
+          "jitter": 0.07418935525203543,
+          "real": 0.16433189655172414,
+          "steady": 0.23333333333333334
+        }
+      }
+    }
+  }
+}
