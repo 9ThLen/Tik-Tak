@@ -65,7 +65,6 @@ int cmdMeasure(const Options& options);
 int cmdTrack(const Options& options);
 int cmdListen(const Options& options);
 int cmdTap(const Options& options);
-int cmdTapMic(const Options& options);
 
 void printUsage();
 
