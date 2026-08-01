@@ -373,6 +373,10 @@ bool DownbeatConfig::valid() const {
     if (!(min_salience_range >= 0.0) || !std::isfinite(min_salience_range)) return false;
     if (!(min_phase_margin >= 0.0) || !std::isfinite(min_phase_margin)) return false;
     if (!(min_meter_margin >= 0.0) || !std::isfinite(min_meter_margin)) return false;
+    // Infinity is the valid default and means "the phase may not move". NaN and
+    // a negative cost are not: a negative cost pays the decoder to switch, which
+    // would shatter the phase on any material at all.
+    if (std::isnan(phase_switch_cost) || phase_switch_cost < 0.0) return false;
     return true;
 }
 
@@ -481,6 +485,89 @@ DownbeatResult findDownbeats(const std::vector<BeatFeature>& features,
     std::vector<double> times(features.size());
     for (std::size_t i = 0; i < features.size(); ++i) times[i] = features[i].time_sec;
     return resolveMeter(cueSalience(features, config), times, config);
+}
+
+// Best bar position per beat, by Viterbi over the m possible positions.
+//
+// Holding a position is free; moving costs `switch_cost` in salience units. The
+// emission is a contrast, not a level: the beat a position calls a downbeat
+// earns its salience and every other beat in the bar pays back an equal share.
+// Summed with the position held fixed that is exactly the mean(in) - mean(out)
+// the resolver maximises, only written per beat so it can be decoded over time
+// rather than scored once — which is what makes the two answers comparable.
+//
+// Plain doubles, deliberately, while the meter ranking beside it uses exact
+// expansions. Those exist because two meters can be separated by less than one
+// ulp of their scores and the winner must not depend on rounding. This decides
+// something coarser — whether a stretch of beats is better explained by moving
+// the bar line than by paying the cost — and the cost itself is a hand-set
+// number in the backend's units, so an ulp cannot be the deciding evidence.
+//
+// No switching until a full bar has passed. Choosing where to start is free,
+// and without this guard a position that holds for a single beat pays the cost
+// once instead of twice, on and off; that is cheap enough that the first beat
+// of a recording gets its own bar and is emitted as a spurious downbeat. Before
+// the first bar line there is no phase to *change* — it is still the opening
+// choice. The research prototype had this bug and it showed up as a false peak
+// at one particular cost, which is the reason the guard is spelled out here.
+std::vector<std::size_t> barPositions(const std::vector<double>& salience,
+                                      std::size_t m, double switch_cost) {
+    const std::size_t n = salience.size();
+    std::vector<std::size_t> path(n, 0);
+    if (n == 0 || m < 2) return path;
+
+    const double share = -1.0 / static_cast<double>(m - 1);
+    const auto emit = [&](std::size_t i, std::size_t p) {
+        return (i % m == p) ? salience[i] : salience[i] * share;
+    };
+
+    std::vector<double> score(m);
+    std::vector<double> next(m);
+    std::vector<std::size_t> back(n * m, 0);
+    for (std::size_t p = 0; p < m; ++p) score[p] = emit(0, p);
+
+    for (std::size_t i = 1; i < n; ++i) {
+        if (i < m) {
+            for (std::size_t p = 0; p < m; ++p) {
+                score[p] += emit(i, p);
+                back[i * m + p] = p;
+            }
+            continue;
+        }
+        // Only the best and second best predecessors are ever needed: the best
+        // is the source for every position except itself, which must fall back
+        // to the second.
+        std::size_t best = 0;
+        for (std::size_t p = 1; p < m; ++p) {
+            if (score[p] > score[best]) best = p;
+        }
+        std::size_t second = (best == 0) ? 1 : 0;
+        for (std::size_t p = 0; p < m; ++p) {
+            if (p != best && score[p] > score[second]) second = p;
+        }
+        for (std::size_t p = 0; p < m; ++p) {
+            const std::size_t from = (p == best) ? second : best;
+            const double switched = score[from] - switch_cost;
+            if (score[p] >= switched) {
+                next[p] = score[p] + emit(i, p);
+                back[i * m + p] = p;
+            } else {
+                next[p] = switched + emit(i, p);
+                back[i * m + p] = from;
+            }
+        }
+        score.swap(next);
+    }
+
+    std::size_t state = 0;
+    for (std::size_t p = 1; p < m; ++p) {
+        if (score[p] > score[state]) state = p;
+    }
+    for (std::size_t i = n; i-- > 0;) {
+        path[i] = state;
+        state = back[i * m + state];
+    }
+    return path;
 }
 
 DownbeatResult resolveMeter(const std::vector<double>& salience,
@@ -678,10 +765,31 @@ DownbeatResult resolveMeter(const std::vector<double>& salience,
         break;  // sorted best first, so the first other meter is the rival
     }
 
-    for (std::size_t i = static_cast<std::size_t>(result.phase); i < n;
-         i += static_cast<std::size_t>(result.beats_per_bar)) {
-        result.downbeats.push_back(beat_times[i]);
+    const auto m = static_cast<std::size_t>(result.beats_per_bar);
+    if (!std::isfinite(config.phase_switch_cost)) {
+        for (std::size_t i = static_cast<std::size_t>(result.phase); i < n;
+             i += m) {
+            result.downbeats.push_back(beat_times[i]);
+        }
+        return result;
     }
+
+    // The metre is the resolver's, decided by the exact arithmetic above and
+    // over the whole recording; only where the bar *starts* is allowed to move.
+    // Those are different questions with different evidence — a bar length is a
+    // periodicity and holds for a song, a bar line is a position and does not —
+    // and letting the decoder revisit the metre per beat would be a licence to
+    // find a bar length that fits every eight beats separately.
+    const std::vector<std::size_t> path =
+        barPositions(salience, m, config.phase_switch_cost);
+    for (std::size_t i = 0; i < n; ++i) {
+        if (i % m == path[i]) result.downbeats.push_back(beat_times[i]);
+    }
+    // The single reported phase becomes the opening choice rather than the
+    // whole answer. Callers reading `phase` and reconstructing beats[phase::m]
+    // would disagree with `downbeats`, so `downbeats` is the answer and this
+    // stays for diagnostics — which is what the margins beside it already are.
+    if (!path.empty()) result.phase = static_cast<int>(path[0]);
     return result;
 }
 

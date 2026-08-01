@@ -216,6 +216,12 @@ std::uint64_t fingerprint(const OfflineConfig& c) {
     putF64(bytes, c.downbeat.min_salience_range);
     putF64(bytes, c.downbeat.min_phase_margin);
     putF64(bytes, c.downbeat.min_meter_margin);
+    // The bar lines change with it, and a cached grid carries bar lines. Left
+    // out, a blob analysed with the phase pinned would be handed back to a
+    // configuration that lets it move, and the caller would get the old answer
+    // with no way to tell — which is the entire failure this fingerprint
+    // exists to prevent.
+    putF64(bytes, c.downbeat.phase_switch_cost);
     for (const MeterCandidate& m : c.downbeat.meters) {
         put64(bytes, static_cast<std::uint64_t>(m.beats_per_bar));
         putF64(bytes, m.prior);

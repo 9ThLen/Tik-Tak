@@ -852,4 +852,148 @@ TEST(Resolver, ExactProductTiesKeepTheConfiguredOrder) {
     EXPECT_EQ(result.beats_per_bar, 2);
 }
 
+// ------------------------------------------------------- the movable phase --
+//
+// A single global phase is right on only one side of an inserted or dropped
+// bar, and 14.1% of full-length annotated songs contain one. These pin the
+// three things that decide whether letting it move is an improvement or a way
+// of chasing noise: that it is off unless asked for, that it follows a real
+// slip, and that it does not move when there is nothing to follow.
+
+using tiktak::analysis::barPositions;
+
+// Bars of `per_bar`, with one bar of `inserted` beats spliced in at `at`, so
+// everything after it sits on a different phase. No single phase describes the
+// whole run — which is the case the decoder exists for and the one a corpus of
+// thirty-second excerpts almost never contains.
+std::pair<std::vector<double>, std::vector<double>> slippedBars(
+        int per_bar, int bars_before, int inserted, int bars_after,
+        double strong = 1.0, double weak = 0.0) {
+    std::vector<double> salience;
+    std::vector<double> times;
+    const auto push = [&](int length) {
+        for (int i = 0; i < length; ++i) {
+            salience.push_back(i == 0 ? strong : weak);
+            times.push_back(static_cast<double>(times.size()) * kBeat);
+        }
+    };
+    for (int b = 0; b < bars_before; ++b) push(per_bar);
+    push(inserted);
+    for (int b = 0; b < bars_after; ++b) push(per_bar);
+    return {salience, times};
+}
+
+TEST(MovablePhase, ShipsExpensiveEnoughToBeInertOnExcerpts) {
+    // 64 is the only cost in the sweep that gains on full-length songs and
+    // loses on nothing; at 8 it takes 0.007 of downbeat F off the recordings
+    // whose grid is already right. A change that lowers this has to bring the
+    // corpus numbers with it — the tables are beside the field.
+    const DownbeatConfig config;
+    EXPECT_DOUBLE_EQ(config.phase_switch_cost, 64.0);
+    EXPECT_TRUE(config.valid());
+}
+
+TEST(MovablePhase, PinnedIsStillReachableAndStillTheOldAnswer) {
+    // Every offline number measured before the decoder existed was measured
+    // with the phase pinned, so the setting that reproduces them has to remain
+    // available and has to keep producing the plain arithmetic sequence.
+    const auto [salience, times] = slippedBars(4, 6, 3, 6);
+    DownbeatConfig config;
+    config.phase_switch_cost = std::numeric_limits<double>::infinity();
+
+    const auto result = resolveMeter(salience, times, config);
+    ASSERT_EQ(result.beats_per_bar, 4);
+    for (std::size_t i = 0; i < result.downbeats.size(); ++i) {
+        const auto beat = static_cast<std::size_t>(result.phase) + i * 4u;
+        ASSERT_LT(beat, times.size());
+        EXPECT_DOUBLE_EQ(result.downbeats[i], times[beat]);
+    }
+}
+
+TEST(MovablePhase, FollowsASlipTheSingleAnswerCannotDescribe) {
+    const auto [salience, times] = slippedBars(4, 6, 3, 6);
+
+    DownbeatConfig pinned;
+    const auto before = resolveMeter(salience, times, pinned);
+
+    DownbeatConfig movable;
+    movable.phase_switch_cost = 1.0;
+    const auto after = resolveMeter(salience, times, movable);
+
+    ASSERT_EQ(after.beats_per_bar, 4) << "the metre is not the decoder's to move";
+
+    // Every beat that actually starts a bar, by construction.
+    std::vector<double> truth;
+    for (std::size_t i = 0; i < salience.size(); ++i) {
+        if (salience[i] > 0.5) truth.push_back(times[i]);
+    }
+    const auto hits = [&](const std::vector<double>& found) {
+        std::size_t n = 0;
+        for (double t : truth) {
+            for (double f : found) {
+                if (std::abs(f - t) < 1e-9) { ++n; break; }
+            }
+        }
+        return n;
+    };
+    EXPECT_EQ(hits(after.downbeats), truth.size())
+        << "a movable phase should place every bar line on this signal";
+    EXPECT_LT(hits(before.downbeats), truth.size())
+        << "if one phase already described it, the test signal is wrong";
+}
+
+TEST(MovablePhase, DoesNotWanderOnMusicThatNeverSlips) {
+    // Regular bars with noise on every beat. The decoder is free to switch at
+    // a cost that the slip test above shows is cheap enough to follow a real
+    // one, so if it moves here it is following the noise, and a bar line that
+    // moves for no reason is worse for a player than one that is merely wrong.
+    std::vector<double> salience(96);
+    std::vector<double> times(96);
+    unsigned seed = 12345u;
+    for (std::size_t i = 0; i < salience.size(); ++i) {
+        seed = seed * 1664525u + 1013904223u;
+        const double noise = 0.15 * (static_cast<double>(seed >> 8) / 16777215.0);
+        salience[i] = (i % 4 == 0 ? 1.0 : 0.0) + noise;
+        times[i] = static_cast<double>(i) * kBeat;
+    }
+
+    const auto path = barPositions(salience, 4, 1.0);
+    ASSERT_EQ(path.size(), salience.size());
+    for (std::size_t i = 1; i < path.size(); ++i) {
+        EXPECT_EQ(path[i], path[0]) << "the phase moved at beat " << i;
+    }
+}
+
+TEST(MovablePhase, AnUnpayableCostIsTheSameAnswerAsNoDecoderAtAll) {
+    // The two code paths are separate — infinity skips the decoder entirely —
+    // so this is what says they agree rather than merely both existing.
+    const auto [salience, times] = salienceBars(4, 2, 40);
+    DownbeatConfig pinned;
+    DownbeatConfig expensive;
+    expensive.phase_switch_cost = 1e6;
+
+    const auto a = resolveMeter(salience, times, pinned);
+    const auto b = resolveMeter(salience, times, expensive);
+
+    EXPECT_EQ(a.beats_per_bar, b.beats_per_bar);
+    EXPECT_EQ(a.phase, b.phase);
+    ASSERT_EQ(a.downbeats.size(), b.downbeats.size());
+    for (std::size_t i = 0; i < a.downbeats.size(); ++i) {
+        EXPECT_DOUBLE_EQ(a.downbeats[i], b.downbeats[i]);
+    }
+}
+
+TEST(MovablePhase, ANegativeCostIsRefusedRatherThanObeyed) {
+    // A negative cost pays the decoder to switch. It would shatter the phase on
+    // any material at all, and the failure would look like a tracker fault
+    // rather than a configuration one.
+    DownbeatConfig config;
+    config.phase_switch_cost = -1.0;
+    EXPECT_FALSE(config.valid());
+    config.phase_switch_cost = std::numeric_limits<double>::quiet_NaN();
+    EXPECT_FALSE(config.valid());
+    config.phase_switch_cost = 0.0;
+    EXPECT_TRUE(config.valid()) << "free switching is a legitimate experiment";
+}
+
 }  // namespace

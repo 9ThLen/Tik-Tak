@@ -740,6 +740,16 @@ TEST(LiveTracker, TheAnchorIsOnAndTheEstimatorIsShortSighted) {
     // window this short -- at thirty seconds it is worth a third as much and
     // takes three times as long to follow a tempo change -- so a later change
     // that lengthens the window has to re-answer whether to anchor at all.
+    //
+    // Shorter has been tried too, and six is a peak rather than the end of a
+    // slope in one direction. Corpus means look best at four seconds, but
+    // scoring both settings on the same clips puts 6 -> 4 at +0.006 F on
+    // ballroom with a 95% interval reaching only +0.0006 at its lower bound,
+    // at 400 clips better against 409 worse on GTZAN, and at -0.009 CMLt on
+    // SMC with an interval entirely below zero. SMC is the only corpus here
+    // whose tempo actually moves, so the single measurable effect of
+    // shortening lands on the material that matters most. Both tables are in
+    // activation_tempo.hpp beside window_sec.
     const LiveConfig config = liveConfig();
     EXPECT_TRUE(config.anchor_tempo);
     EXPECT_DOUBLE_EQ(config.activation_tempo.window_sec, 6.0);

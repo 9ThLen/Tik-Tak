@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -194,4 +195,16 @@ TEST(GridCache, RefusesAGridAnalysedWithADifferentIdeaOfBars) {
     OfflineConfig stricter_evidence = config;
     stricter_evidence.downbeat.min_salience_range = 0.10;
     EXPECT_FALSE(deserializeGrid(blob.data(), blob.size(), stricter_evidence, &restored));
+
+    // A movable bar line is a different set of bar lines, and this one is the
+    // easiest to leave out of the fingerprint because it changes nothing else
+    // about the analysis — the beats, the tempo and the metre all come back
+    // identical. The user would meet it as the accent staying where it was.
+    OfflineConfig pinned = config;
+    pinned.downbeat.phase_switch_cost = std::numeric_limits<double>::infinity();
+    EXPECT_FALSE(deserializeGrid(blob.data(), blob.size(), pinned, &restored));
+
+    OfflineConfig cheaper = config;
+    cheaper.downbeat.phase_switch_cost = 8.0;
+    EXPECT_FALSE(deserializeGrid(blob.data(), blob.size(), cheaper, &restored));
 }

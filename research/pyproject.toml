@@ -1,0 +1,27 @@
+[project]
+name = "tiktak-research"
+version = "0.1.0"
+description = "Research scaffolding for the tik-tak beat tracker (synthesis + evaluation)"
+requires-python = ">=3.11"
+dependencies = [
+    "mir_eval>=0.8",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8",
+    # test_import_corpus.py writes real audio files to build the trees it
+    # exercises, so this is a hard test dependency rather than an optional one.
+    # It was imported without being declared, and because the import sits at
+    # module scope pytest failed during *collection* — which aborts the entire
+    # run, so no Python test was executing in CI at all.
+    "soundfile>=0.12",
+]
+
+[tool.setuptools.packages.find]
+include = ["eval", "tiktak"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

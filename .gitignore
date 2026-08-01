@@ -24,6 +24,7 @@ android/**/build/
 **/*.py[cod]
 *.egg-info/
 .pytest_cache/
+.venv/
 .ipynb_checkpoints/
 
 # OS noise
@@ -31,16 +32,11 @@ android/**/build/
 Thumbs.db
 .tiktak/
 
-# Private/local workspaces. The public repository contains only the portable
-# core; keep corpora, research, model tooling, development hosts and internal
-# documentation out of Git.
+# Private/local state and corpus material. Development hosts, research code,
+# model tooling and documentation are versioned; downloaded datasets and audio
+# remain local.
 /.claude/
-/.github/workflows/desktop.yml
-/.github/workflows/research.yml
 /annotations/
-/desktop/
-/docs/
-/models/
 /music/
-/research/
-/tools/
+/research/data/
+/research/live_corpus_results.json

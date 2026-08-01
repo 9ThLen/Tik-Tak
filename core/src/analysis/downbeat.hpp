@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <limits>
 #include <vector>
 
 namespace tiktak::analysis {
@@ -180,6 +181,131 @@ struct DownbeatConfig {
     // still needs a phase supported by the audio rather than inventing one.
     double min_phase_margin = 0.25;
     double min_meter_margin = 0.40;
+
+    // What it costs the bar line to move, in this backend's salience units.
+    //
+    // Infinity — the default — means it may not, and the resolver behaves
+    // exactly as it did before this existed: one metre and one phase for the
+    // whole recording. Any finite value turns on a Viterbi over bar position,
+    // where holding a phase is free and changing costs this much, so the phase
+    // moves only where the evidence pays for it.
+    //
+    // Songs have intros, breaks and half-bar turns, and a single global phase
+    // is right on only one side of an inserted or dropped bar. On 554
+    // full-length annotated songs, 14.1% cannot be described by one phase at
+    // all; the ceiling by corpus is 0.999 for ballroom, 0.995 for GTZAN, 0.957
+    // for Harmonix and 0.893 for Beatles. Thirty-second excerpts rarely contain
+    // a section boundary, which is why this looked worthless for so long.
+    //
+    // **What it is worth, and on what.** Measured with the annotated grid and
+    // metre so only the phase rule varies, out of fold, both settings on the
+    // same recording, interval bootstrapped over paired differences:
+    //
+    //     cost    db F    difference   95% interval        better/worse
+    //      inf   0.7620        —             —                  —
+    //       20   0.7686     +0.0066   [+0.0022, +0.0116]      18 / 4
+    //        8   0.7684     +0.0064   [-0.0014, +0.0144]      35 / 21
+    //        4   0.7682     +0.0062   [-0.0026, +0.0150]      45 / 27
+    //
+    // 20 is the only cost whose interval clears zero, and the split says why:
+    // on the recordings one phase cannot describe it is worth +0.049 [+0.023,
+    // +0.080], and on the rest -0.0003 [-0.0027, +0.0022] — not a small price,
+    // no price. Every cheaper switch buys more where it is needed and spends
+    // more than that everywhere else, which is the degeneracy the cost prices.
+    //
+    // **On the built-in cues it is worth nothing**, and that is measured too,
+    // on the core's own grid and metre: at 64 it moves 13 recordings of 453 for
+    // +0.0055, at 8 it is +0.0078 with the interval straddling zero, and at 4
+    // it is -0.0135. Restricted to recordings whose grid is already right the
+    // same shape holds. So the value here is conditional on the salience, and
+    // the ordering the rest of this file argues for is not negotiable: a
+    // learned activation first, this second. The default is infinity because
+    // today the resolver is fed the cues.
+    //
+    // The cost is in salience units and therefore backend-specific, exactly
+    // like min_salience_range and the two margins. It is not part of their
+    // calibration triple because those three decide whether to answer and this
+    // decides the shape of the answer.
+    //
+    // **64, from a sweep through this resolver rather than through a
+    // prototype.** The tables above were decoded in Python over dumped cue
+    // columns; these are `dump_analysis --phase-switch-cost` on 2244
+    // recordings, paired, with the metre search and the gates all the real
+    // ones:
+    //
+    //     cost   harmonix (554)        ballroom (698)      GTZAN (992)
+    //      64   +0.0045 [+.0017,+.0080]  +0.0003          +0.0007
+    //      20   +0.0050 [-.0015,+.0114]  +0.0010          +0.0010
+    //       8   +0.0067 [-.0033,+.0169]  -0.0041          -0.0001
+    //
+    // Only one interval in the table clears zero and it is Harmonix at 64:
+    // 13 recordings better, 1 worse. Harmonix is the full-length corpus, which
+    // is the material a movable phase exists for; ballroom and GTZAN are
+    // thirty-second excerpts where four recordings in total move at all.
+    // Cheaper switching buys more on Harmonix and starts losing on ballroom,
+    // and on the recordings whose beat grid is already right it loses there
+    // too: pooled -0.0072 [-0.0144, -0.0000] at cost 8.
+    //
+    // So this is on, at the one cost that gains where the idea applies and is
+    // inert everywhere else. It is a small change and it is honest about being
+    // one: seventeen recordings in 2244 move, seventeen better against five.
+    // The larger number this file argues for is still upstream of here.
+    //
+    // The metre is untouched at every cost — 89.4%, 73.9% and 76.6% before and
+    // after, on all three corpora — which is the decoder being confined to the
+    // question it was given rather than a happy accident.
+    //
+    // **This number is already a minimum dwell, which is why there is not a
+    // second knob for one.** The obvious next idea is to require a phase to
+    // hold for several bars before it may move again, separating "how much
+    // evidence a change needs" from "how often one may happen". Measured on
+    // 600 recordings, how far apart the changes this decoder actually makes
+    // are:
+    //
+    //     cost   recordings that switch   switches each   median gap   under 2
+    //      64            0.5%                  0.01        17.7 bars     0.0%
+    //      20            9.7%                  0.12        19.0          0.0%
+    //       8           36.3%                  0.74        15.2          3.2%
+    //       4           69.7%                  3.68         5.2         28.0%
+    //       2           94.3%                 16.89         1.2         65.2%
+    //       1           98.7%                 46.19         0.5         86.3%
+    //
+    // At the shipped cost, and at 20, not one change in 600 recordings lands
+    // within two bars of another. Paying a cost of λ requires accumulating λ
+    // of advantage, which takes λ divided by the per-beat emission — so the
+    // cost buys a dwell whether or not one is asked for, and here it buys
+    // fifteen to nineteen bars of it.
+    //
+    // Built anyway and swept, because "it should be inert" is a prediction.
+    // A floor of 1, 2, 4 and 8 bars, on 600 recordings, pooled downbeat F
+    // against 0.4047 for the pinned phase:
+    //
+    //     cost      1 bar    2 bars    4 bars    8 bars
+    //       64     0.4052    0.4052    0.4052    0.4052
+    //       20     0.4059    0.4059    0.4059    0.4059
+    //        8     0.4066    0.4064    0.4062    0.4069
+    //        4     0.3801    0.3817    0.3850    0.3863
+    //        2     0.3575    0.3619    0.3670    0.3718
+    //        1     0.3388    0.3453    0.3537    0.3608
+    //
+    // Two readings, and both matter. The floor is **exactly** inert where the
+    // decoder is any good — identical to four decimal places at 64 and 20, and
+    // within noise at 8. And it does precisely what its mechanism promises
+    // where the decoder is broken: at cost 1 it recovers 0.022 of the 0.066
+    // that cheap switching threw away, monotonically in the length of the
+    // floor. It is a real repair of a real failure.
+    //
+    // It is still not worth having, because the repair never climbs back to
+    // where the cost alone already sits: the best cheap combination in the
+    // table, 4 with an eight-bar floor, is 0.0184 below the pinned phase and
+    // 0.0189 below what ships. Separating "how much evidence" from "how often"
+    // works, and then finds that the setting worth using was never in the
+    // region where the separation helps.
+    //
+    // The aggregating version of the same idea — score a four-bar pattern
+    // rather than a per-beat contrast — was tried on the activation and moved
+    // 85.0% to 85.3%, which is noise. See the phrase-term note further down.
+    double phase_switch_cost = 64.0;
 
     bool valid() const;
 };
@@ -384,6 +510,218 @@ std::vector<BeatFeature> beatFeatures(const BeatFeatureInput& input,
 // right in absolute terms. Ranking these cues against a learned activation
 // fairly still needs human annotation.
 //
+// **That human annotation has now been run, and it does not reproduce.** The
+// same decoder — `research/eval/moving_phase.py`, unmodified, the code that
+// produced the table above — scored against annotated bar lines on 1677
+// recordings, each held out from the checkpoint that scored it, with the
+// annotated grid and the annotated metre handed over so only the phase rule
+// varies:
+//
+//     decoder                      GTZAN db F     Ballroom db F
+//     one global phase (ships)        0.838           0.982
+//     movable phase, switch cost 20   0.838           0.982
+//                             ... 4   0.839           0.982
+//                             ... 1   0.828           0.980
+//                          ... 0.01   0.774           0.963
+//
+// Nothing wins. The reason is not the decoder, and it is worth stating before
+// anyone tunes the switch cost again: **there is nothing on these corpora to
+// win.** How well one global phase can describe the annotated bar lines at
+// all, computed from the annotations alone — no audio, no model:
+//
+//     corpus       beats (median)   ceiling F   recordings it cannot describe
+//     ballroom          61           0.9994               0.3%
+//     gtzan             57           0.9947               1.6%
+//     hainsworth       102           0.9892               3.2%
+//     rwc              393           0.9815              14.2%
+//     harmonix         395           0.9571              13.9%
+//     beatles          288           0.8925              34.1%
+//
+// GTZAN and Ballroom are thirty-second excerpts. A phase slip needs a section
+// boundary and fourteen bars rarely contain one, so a movable phase has 0.006
+// and 0.0006 F available to it there. The decoder does work where it is
+// needed — on the 2.6% of GTZAN that one phase cannot describe it gains 0.06
+// to 0.09 F — and loses more than that on the 97.4% where it is free to slip
+// and has no reason to.
+//
+// Two corrections follow, and both were errors of sample size rather than of
+// reasoning:
+//
+// *Five recordings overstated the problem by an order of magnitude.* The table
+// above says three of five songs cannot place half their bar lines from one
+// phase. On 911 annotated full-length songs the figure below 0.50 is 2%, and
+// the corpus ceiling is 0.957. Full-length songs do need a movable phase more
+// than excerpts do; they do not need it anything like that often.
+//
+// *The circularity is worse than the paragraph above admits.* It grants that
+// comparison down a column is unsafe and claims comparison along a row
+// survives, because the salience and the reference are held fixed and only the
+// phase constraint moves. That does not hold here: the reference is Beat
+// This!'s own peak picking, and its postprocessor is itself a decoder that
+// moves the phase freely. A movable-phase decoder reproduces a movable-phase
+// reference more closely whether or not either is right, so the 0.772 -> 0.933
+// belongs to the reference's freedom as much as to the music's.
+//
+// **On full-length songs it does win, and only when barely allowed to move.**
+// Harmonix is full-length and human-annotated but ships no audio; 554
+// recordings of it have since been aligned against the Set's own official
+// mel-spectrograms — a reference that owes nothing to any beat or downbeat
+// model, which is what stops the selection from answering its own question —
+// and rewritten onto the annotation's timeline. Scored out of fold, annotated
+// grid and annotated metre, both settings on the same recording, interval
+// bootstrapped over the paired differences:
+//
+//     switch cost    db F    difference   95% interval        better/worse
+//        inf        0.7620        —             —                  —
+//         20        0.7686     +0.0066   [+0.0022, +0.0116]      18 / 4
+//          8        0.7684     +0.0064   [-0.0014, +0.0144]      35 / 21
+//          4        0.7682     +0.0062   [-0.0026, +0.0150]      45 / 27
+//
+// Only a switch cost of 20 clears zero, and the split says why it is the right
+// one rather than merely the luckiest. On the 14.1% of recordings a single
+// phase cannot describe it is worth +0.049 [+0.023, +0.080]; on the other
+// 85.9% it is worth -0.0003 [-0.0027, +0.0022] — not a small cost, no cost.
+// Every smaller cost buys more where it is needed (+0.083 at 4) and spends
+// more than that everywhere else, which is exactly the degeneracy the switch
+// cost exists to price.
+//
+// So the decoder is real, it is small, and it is the *second* half of a job.
+// The first half is that resolveMeter is not fed this activation at all —
+// OfflineAnalyser calls findDownbeats, which is the built-in cues, and on
+// those cues this same decoder measured 0.415 -> 0.415, 0.658 -> 0.658 and
+// 0.665 -> 0.474 across three batches. Building it before the salience is
+// wired through would move the shipping number down by a tenth while the
+// measurement above says up by seven thousandths. Activations first, decoder
+// second: the ordering the earlier paragraphs assert on a model's own peak
+// picking now holds on human annotation, out of fold, with an interval.
+//
+// **On the path that actually ships, it is worth almost nothing, and the three
+// small batches above were not enough to say which way.** Same decoder, same
+// 554 songs, but now the grid is the core's own, the metre is the core's own,
+// the salience is these cues, and the score is the time-based downbeat F the
+// product is judged by — so a switch cost of infinity has to reproduce the
+// resolver's own bar lines, and on all 453 scorable recordings it does:
+//
+//     switch cost    db F    difference   95% interval        better/worse
+//        inf        0.3518        —             —                  —
+//         64        0.3572     +0.0055   [+0.0021, +0.0098]      13 / 1
+//         20        0.3579     +0.0061   [-0.0015, +0.0140]      55 / 40
+//          8        0.3596     +0.0078   [-0.0048, +0.0204]     128 / 125
+//          4        0.3383     -0.0135   [-0.0288, +0.0018]     164 / 200
+//
+// So "measured harmful on the cues" was a reading of sixteen recordings. On
+// 453 it is not harmful at high switch cost and not helpful either: the only
+// row whose interval clears zero moves 14 recordings out of 453, and the row
+// that moves everything loses. Both statements — the earlier harm and this
+// gain — are smaller than the 0.41 of downbeat F that is simply missing, and
+// neither is a reason to build anything.
+//
+// The obvious objection is that most of those 453 have a broken beat grid, and
+// a bar-phase decoder cannot be blamed for beats that are in the wrong place.
+// Restricting to the 153 whose grid is already right (beat F >= 0.8) does not
+// rescue it — it sharpens the same answer:
+//
+//     switch cost    db F    difference   95% interval        better/worse
+//        inf        0.6264        —             —                  —
+//         64        0.6327     +0.0063   [+0.0000, +0.0163]       3 / 0
+//         20        0.6204     -0.0060   [-0.0224, +0.0101]       9 / 11
+//          8        0.6217     -0.0048   [-0.0345, +0.0254]      33 / 44
+//          4        0.5743     -0.0522   [-0.0887, -0.0158]      42 / 82
+//
+// On a good grid and these cues the decoder either does nothing (three
+// recordings move at cost 64) or does harm. The same decoder on the same
+// corpus with a learned activation and the annotated grid gained +0.0066 with
+// an interval clear of zero. Same code, same songs, same standard: the
+// difference is the salience. That is the third independent way this file has
+// arrived at the same ordering, and the first on the path that ships.
+//
+// One caveat on the absolute values in the last two tables, not on the
+// differences: about 40% of that corpus is still misaligned, so 0.3518 and
+// 0.6264 are lower than this resolver deserves. See analysis/offline.hpp,
+// which splits the corpus with an out-of-fold tracker. Both settings run on
+// the same recording with the same grid on both sides, so the paired
+// differences and the intervals are unaffected — a displaced recording
+// displaces the two arms together.
+//
+// **Where the loss actually is, since it is not the decoding.** On GTZAN, with
+// the annotated grid and metre and a learned activation, one global phase
+// reaches 0.838 against a ceiling of 0.994. That 0.15 is the phase being
+// chosen wrong, and it is not a near miss: measured as a fraction of the whole
+// spread of the phase scores, the wrong phase led the right one by a median of
+// 0.70, and by 0.99 at the third quartile — a quarter of the failures put the
+// right phase at or near the *minimum*. Only 6.9% were within 0.05 of a tie.
+// Sixty per cent of them are exactly half a bar out.
+//
+// Both halves of that matter. A confident wrong answer is not recoverable by
+// any rule reading the same numbers, which is why swapping the mean for a
+// median or adding a four-bar phrase term moved 85.0% to 85.3% and 85.1% —
+// noise. And accumulating evidence across bars, whatever the mechanism, cannot
+// break a half-bar symmetry: the wrong phase repeats on exactly the period
+// being accumulated over, so more bars make it more confident, not less. The
+// cue that distinguishes beat 1 from beat 3 has to be one that does not repeat
+// at the half bar — which is the harmony argument made from five recordings at
+// the top of this file, now with a population attached to it.
+//
+// **The harmony cue is that cue, and reweighting it still does not ship.**
+// This file has argued twice that the way out is evidence which does not
+// repeat at the half bar, and named harmony as the candidate. It was swept:
+// only the ratio between the harmony and low weights matters to the phase, the
+// decision being an argmax over a scaled salience, and the Python single-phase
+// decoder reproduces this resolver's bar lines exactly (checked, 453 of 453).
+// On the 1121 recordings across all three corpora whose beat grid is already
+// right, metre held at what the core chose so only the phase moves:
+//
+//     harmony/low   harmonix   ballroom   gtzan   pooled   95% interval
+//         0.50       0.6175     0.6725   0.5213   0.5854  [-0.0301, -0.0109]
+//         1.00       0.6264     0.6906   0.5458   0.6056        — (ships)
+//         1.75       0.6472     0.7089   0.5597   0.6219  [+0.0064, +0.0267]
+//         3.00       0.6622     0.6916   0.5688   0.6230  [+0.0017, +0.0330]
+//         8.00       0.6593     0.6479   0.5630   0.6048  [-0.0239, +0.0218]
+//
+// A broad optimum, a clear direction, two of the three held-out folds choosing
+// 1.75, and an interval clear of zero. Everything this project asks of a
+// fitted constant.
+//
+// It does not survive the metre. Recombined and fed back through the real
+// resolver, where the metre search reads the same salience and is free to move
+// again:
+//
+//     harmony/low   pooled db F      difference   metre: hx / ballroom / gtzan
+//        0.00          0.5146   -0.0919 [-.111,-.073]   90.2 / 87.0 / 81.2
+//        0.50          0.5721   -0.0345 [-.046,-.023]   88.9 / 90.7 / 79.8
+//        1.00          0.6066            — (ships)      90.2 / 88.9 / 81.5
+//        1.25          0.6115   +0.0049 [-.003,+.013]   90.2 / 87.8 / 80.2
+//        1.75          0.6164   +0.0098 [-.002,+.022]   90.2 / 83.1 / 81.0
+//
+// Nothing clears zero upward, ballroom's metre falls six points by 1.75, and
+// every step away from 1.0 in the other direction is worse on both counts. The
+// shipped weighting is a genuine optimum — for the joint decision.
+//
+// The finding is not that harmony is useless — the phase table above is
+// unambiguous that it carries the half-bar-breaking evidence. It is that one
+// scalar cannot spend it, because the same mixture answers two questions and
+// the answers want different weights.
+//
+// **Which is itself a measurement, and it says what to build.** The table above
+// *is* the split: the metre came from the shipped mixture and only the phase
+// from the reweighted one. Repeated over every recording rather than only those
+// with a good grid, so the result does not depend on that filter:
+//
+//     harmony/low for the phase only, metre unchanged, n = 2244
+//                   harmonix   ballroom    gtzan   pooled   95% interval
+//         1.00       0.2879     0.4873    0.4167   0.4069        — (ships)
+//         1.75       0.2958     0.4977    0.4277   0.4169  [+0.0046, +0.0157]
+//
+// Pooled +0.0100 clear of zero, and clear of zero on ballroom [+0.0008,
+// +0.0208] and GTZAN [+0.0030, +0.0195] on their own. Same optimum, same shape
+// of curve, whichever subset it is asked on. So resolveMeter wants two inputs,
+// not one: the evidence that says how long the bar is and the evidence that
+// says where it starts are not the same evidence, and the seam that made this
+// measurable — one vector in, one answer out — is also what makes the gain
+// unreachable today. That is the change worth designing, and it is worth about
+// a hundredth of downbeat F, which is small but is more than anything else on
+// this side of the salience has been worth.
+//
 // Scoring is a contrast, not a sum: how far the chosen beats stand above the
 // ones they were chosen out of. A sum would make short bars win automatically
 // by containing more beats.
@@ -448,5 +786,20 @@ std::vector<double> cueSalience(const std::vector<BeatFeature>& features,
 DownbeatResult resolveMeter(const std::vector<double>& salience,
                             const std::vector<double>& beat_times,
                             const DownbeatConfig& config);
+
+// Which position in the bar each beat holds, allowing that to change.
+//
+// Exposed rather than hidden inside resolveMeter because it is the piece worth
+// testing on its own: whether it follows a real slip, whether it stays put when
+// there is nothing to follow, and whether it agrees with the research
+// prototype the switch costs were measured with. A decoder that is only
+// reachable through the resolver can only be tested through the resolver's
+// metre search as well, which would mix two failures into every red test.
+//
+// `switch_cost` is in salience units; infinity pins the position and returns a
+// constant path. Returns one position per beat, so beat i begins a bar exactly
+// when `i % m == path[i]`.
+std::vector<std::size_t> barPositions(const std::vector<double>& salience,
+                                      std::size_t m, double switch_cost);
 
 }  // namespace tiktak::analysis

@@ -118,6 +118,165 @@ struct OfflineResult {
     std::vector<BeatFeature> beat_features;
 };
 
+// ------------------------------------------- what this scores on real songs
+//
+// Every offline number this project quoted before 2026-08-01 came from either
+// thirty-second excerpts or agreement with another tracker on unannotated
+// audio. The application does neither: it analyses whole songs and is right or
+// wrong about them. Measured with the shipped defaults against human
+// annotation, one script over all four corpora so the harness cannot differ
+// between rows:
+//
+//     corpus      n    length    beat F   CMLt   AMLt   downbeat F   metre
+//     gtzan      998    30 s      0.781  0.648  0.845     0.417      76.2%
+//     ballroom   698    30 s      0.757  0.574  0.831     0.488      73.9%
+//     harmonix   554   3.7 min    0.473  0.447  0.667     0.288      89.4%
+//     smc        217    40 s      0.392  0.153  0.348       —          —
+//
+// **The Harmonix row is mostly not about this analyser, and reading it as such
+// was the first mistake made with it.** That corpus is audio realigned onto the
+// timeline of the Harmonix Set's own mel spectrograms, because the Set ships no
+// audio. The check is a tracker that owes nothing to ours and nothing to the
+// alignment: Beat This!, run out of fold, which predicts where a person taps
+// rather than where the audio is loudest. On 160 of these recordings it scores
+// **0.490** — a model that reaches about 0.9 on Harmonix in its own paper —
+// with its beats within 70 ms of the annotation on 56.9% of them, median
+// +22 ms, interquartile spread 109 ms. The same harness on GTZAN, which Beat
+// This! holds out of training entirely, gives 0.865 and 97.5% within 70 ms, so
+// the instrument is sound and the corpus is not.
+//
+// **And the corpus cannot be repaired, because the looseness is in its own
+// reference.** Three measurements, none involving a tracker: the produced audio
+// matches the official mel at lag zero (median +0 ms, interquartile spread
+// 11 ms whole-file, 1 ms across ten-second windows); it carries no splices (the
+// discontinuity rate at the reconstruction's frame grid equals the half-frame
+// control); and the official mel's own onset rise, fitted against the official
+// annotation, puts that annotation off by a median +8 ms with an interquartile
+// spread of **115 ms** — which correlates with where Beat This! lands at
+// r = +0.47, rising to +0.59 where the mel's onsets are clearest. Two
+// independent instruments agree on both the centre and the spread. The
+// alignment already reproduces its reference to the millisecond; the reference
+// is what sits ±55 ms from the annotation, at a 46 ms mel hop that cannot
+// resolve better.
+//
+// The cleanest single line of it: `final0` — the checkpoint trained on
+// Harmonix, on these recordings, against these annotations — scores **0.501**
+// here, against 0.503 for the fold checkpoints that never saw them, and 0.865
+// on GTZAN which it never saw either. A model does not do worse on its own
+// training data than on a corpus held out from it. It does that when the audio
+// it is handed is not the audio it was trained on, and no processing of ours
+// can put back a correspondence the Set does not distribute.
+//
+// So the row has to be split, and on the part that is verifiably aligned —
+// the 57 of 160 where Beat This! clears 0.8, so the audio demonstrably carries
+// the beats the annotation claims — this analyser looks entirely different:
+//
+//                        beat F   CMLt   AMLt   downbeat F   metre
+//     all 554             0.473  0.447  0.667     0.288      89.4%
+//     the aligned 57      0.765  0.702  0.851     0.493      86.0%
+//     ballroom (for scale) 0.757  0.574  0.831     0.488      73.9%
+//
+// **Full-length pop is not harder than the excerpt corpora.** 0.765 with a 95%
+// interval of [0.690, 0.834] sits on top of ballroom's 0.757 and GTZAN's 0.781,
+// and its CMLt and AMLt are better than either. The same conclusion arrives
+// from the other direction: cutting all 554 songs to their middle thirty
+// seconds changes almost nothing (-0.019 F [-0.032, -0.006] paired), so length
+// was never the variable. What differed was how much of the corpus was
+// measurable at all.
+//
+// Two things follow, and the second is the one that costs.
+//
+// *The 0.473 is not a number about this code and must not be quoted as one.*
+// Nor is the "44% of grids land on the beat against 94% on GTZAN" that was
+// briefly written here: our grid follows the audio, the audio is displaced, and
+// a displaced audio moves our grid and the flux together — which is exactly the
+// r = +0.96 between the two that made the effect look real. Everything measured
+// on this corpus needs the same split before it means anything.
+//
+// *What survives is a comparison against Beat This! on identical, verified
+// audio.* On those 57 recordings it scores 0.961 [0.948, 0.974] against our
+// 0.765. Two tenths of an F-measure, on material where nothing is in dispute
+// about the ground truth, is the honest size of the gap between a hand-built
+// onset function and a learned one — and it is the largest single number
+// anywhere in this file.
+//
+// It is not one latency, which was the cheap explanation and was tested first.
+// The best single timing shift is +30 ms on Harmonix, -30 on GTZAN, -20 on
+// ballroom and 0 on SMC; held out — chosen on one corpus, spent on the others
+// — every choice loses. Constants that disagree in sign are not a constant.
+//
+// **What octave error is left is one-sided.** Against a reference tempo taken
+// as the median annotated interval — and an octave, unlike a phase, survives a
+// misaligned recording, so this row does not need the split above:
+//
+//     corpus     annotated median   same    double   half
+//     harmonix        119 BPM       75.3%   16.6%    2.3%
+//     gtzan           114 BPM       73.0%   10.6%    8.7%
+//     ballroom        125 BPM       66.2%    9.2%   17.6%
+//
+// Ballroom halves and pop doubles, seven to one. analysis/tempo.hpp records
+// that re-centring the prior from 120 to 140 traded 67 halved recordings for
+// 43 doubled ones on ballroom and called it close to zero sum; on full-length
+// pop the trade has landed almost entirely on the doubling side. That is not
+// an argument to move it back — the same file explains why a global prior can
+// only choose where the crossover sits — but it does say which direction the
+// remaining error points on the product's own material.
+//
+// **The bar phase fails on top of all of it, and fails at the half bar.**
+// Taking only recordings where the grid is already right (beat F >= 0.8) and
+// the metre is right, so nothing upstream is at fault, and asking how far our
+// bar lines sit from the annotated ones. The filter also does the alignment
+// split for free on the Harmonix row: a grid cannot reach 0.8 F against an
+// annotation the audio does not match.
+//
+//     corpus       n     phase right   off by 1   off by 2   off by 3
+//     harmonix    138       68.1%       13.0%      14.5%       4.3%
+//     ballroom    336       75.0%        8.0%      12.8%       4.2%
+//     gtzan       481       59.0%       11.9%      22.5%       6.7%
+//
+// Half a bar is the single largest failure on all three, which is the same
+// shape analysis/downbeat.hpp measured on a learned activation and predicted
+// from first principles: a wrong phase that repeats on exactly the period the
+// evidence is accumulated over cannot be broken by accumulating more of it.
+//
+// **Which learned front end matters, and BeatNet is not it here.** The
+// causal LiveTracker driven by BeatNet was run over the same 554 songs, block
+// by block, to ask whether swapping the observation would do for this path
+// what it did for the microphone path. Over the whole corpus it comes out
+// slightly ahead (0.488 against 0.473, +0.014 [-0.002, +0.031] paired) — but
+// on the 57 recordings whose audio is verified, the two are **0.765 and
+// 0.765**. Identical. The apparent gain was the misaligned remainder, where a
+// smaller model degrades more gracefully, and it is not a gain in beat
+// placement.
+//
+// One thing does survive that comparison and is worth keeping: a causal
+// tracker with no lookahead at all draws level with this one, which sees the
+// whole file. Whatever the whole-file view is worth on ballroom and GTZAN, on
+// full-length pop it is worth nothing measurable. That is an argument about
+// where the remaining accuracy lives — in the evidence, not in the search —
+// and it points at the 0.765 against 0.961 above rather than at BeatNet.
+//
+// **The front end that does close it is already in this repository, and this
+// is what it is worth.** `dump_analysis --beat-this models/small0.onnx` runs
+// the core's own ONNX session, resampler, feature extractor and peak picker —
+// the shipping port, not a research approximation. Over all 998 GTZAN
+// recordings, which Beat This! holds out of training entirely:
+//
+//     path                                beat F   CMLt   AMLt   downbeat F
+//     spectral flux cues (ships)           0.781  0.648  0.845     0.417
+//     Beat This! small0 through the core   0.882  0.785  0.887     0.772
+//
+// Paired: beat F +0.102 [+0.087, +0.117], CMLt +0.138 [+0.110, +0.166], AMLt
+// +0.042 [+0.028, +0.056]. 606 recordings better against 179 worse on F.
+//
+// Two things that table is not. The downbeat column is not this resolver on a
+// better salience — when the model supplies the grid it also supplies the bar
+// lines from its own downbeat head, so 0.417 -> 0.772 is our resolver replaced
+// rather than improved. And the metre column is unchanged at 76.2% in both
+// rows because `beats_per_bar` is still reported from the cue analysis; the
+// tool does not re-run the metre search on the model's grid. Both are honest
+// gaps in the measurement, not results.
+//
 // Whole-file beat analysis: audio in, a beat grid out.
 //
 // Audio is fed in blocks and reduced to ODF frames as it arrives, so a long

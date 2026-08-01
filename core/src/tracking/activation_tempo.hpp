@@ -42,10 +42,45 @@ struct ActivationTempoConfig {
     //     30 s       0.737       0.648           23.1 s
     //
     // Six seconds of activation is a worse look at the recording and a better
-    // answer about it. Below six is untested: the returns are already thinning
-    // — 0.009 F between ten seconds and six — and every second removed is a
-    // second the user waits before the anchor does anything, since
-    // min_window_sec follows this down.
+    // answer about it.
+    //
+    // **Below six has since been tested, and six stays.** Swept down to 1.5 s,
+    // the corpus means look like a clean peak at four:
+    //
+    //     window   ballroom F/CMLt   GTZAN F/CMLt   SMC F/CMLt
+    //      8 s      0.785 / 0.694    0.665 / 0.561  0.246 / 0.116
+    //      6 s      0.794 / 0.705    0.666 / 0.565  0.245 / 0.121
+    //      5 s      0.796 / 0.707    0.667 / 0.568  0.243 / 0.112
+    //      4 s      0.801 / 0.710    0.666 / 0.569  0.241 / 0.116
+    //      3 s      0.796 / 0.705    0.660 / 0.563  0.236 / 0.109
+    //      2 s      0.785 / 0.696    0.656 / 0.560  0.229 / 0.108
+    //
+    // That reading does not survive scoring both settings on the *same* clips
+    // and taking a bootstrap interval over the paired differences, which is the
+    // only way to resolve gaps this small:
+    //
+    //     6 s -> 4 s      difference   95% interval        better/worse
+    //     ballroom F        +0.0063   [+0.0006, +0.0120]     314 / 229
+    //     ballroom CMLt     +0.0053   [-0.0014, +0.0119]     291 / 231
+    //     GTZAN F           -0.0002   [-0.0053, +0.0049]     400 / 409
+    //     GTZAN CMLt        +0.0030   [-0.0024, +0.0085]     354 / 317
+    //     SMC F             -0.0044   [-0.0147, +0.0058]      98 / 106
+    //     SMC CMLt          -0.0087   [-0.0166, -0.0010]      56 /  81
+    //
+    // One interval clears zero for four seconds — F on the easiest corpus, and
+    // its lower bound is +0.0006. One clears zero against it, and it is on SMC,
+    // the only corpus here whose tempo actually moves (68% of it varies by more
+    // than 4%, against Ballroom's 5%). GTZAN, which the unpaired means put
+    // ahead at four, is 400 clips better and 409 worse.
+    //
+    // So the trend below six is exhausted, and the honest reason is not that
+    // shorter is worse everywhere but that the differences stop being
+    // measurable while the one that remains measurable points the other way.
+    // Four seconds would buy two seconds off the wait for the first anchor,
+    // since min_window_sec follows this down, and that is a real product gain —
+    // but it is being bought with a CMLt loss on tempo-varying material rather
+    // than for free, and the free version was what the corpus means appeared to
+    // promise.
     double window_sec = 6.0;
 
     // No answer before this much has been heard, which is the whole window: a

@@ -135,6 +135,138 @@ struct LiveConfig {
     bool valid() const;
 };
 
+// ------------------------------- what this path is worth to a person using it
+//
+// An average F-measure cannot answer the question the product asks. Two
+// recordings with the same CMLt are not the same experience: one takes four
+// seconds to start clicking and then holds, the other starts at once and jumps
+// an octave twice in the middle. So the live benchmark also scores each
+// recording pass or fail — starts within 8 s, at least 80% of the beats it
+// emits land within 70 ms, *finds* at least 80% of the beats there were, and
+// never spends more than 4 s at the wrong metrical level — and reports the
+// share that passes. 1914 recordings, shipped thresholds:
+//
+//     front end          ballroom*   GTZAN   SMC*   median acquire
+//     spectral flux         5.7%     13.4%   1.4%       6 s
+//     BeatNet activation   57.2%     41.1%   3.2%       5 s
+//
+// The third criterion is matched recall and not the ratio of the two beat
+// counts, which is what it was first written as. A tracker can emit exactly as
+// many beats as there were and put all of them somewhere else: precision 0.80
+// with a count ratio of 0.80 bounds the beats actually found at 64%. The
+// figures above are after that correction and are about a point lower for it.
+//
+// **Quote GTZAN.** The weights are `beatnet_model_1`, and BeatNet ships three
+// models holding out GTZAN, Ballroom and Rock Corpus respectively — see
+// docs/ml-models.md, which records the correspondence. Model 1 holds out
+// GTZAN, so ballroom is train-on-test for it and its 57.4% is memorisation,
+// exactly as final0's ballroom score is for Beat This!. SMC's membership is
+// not documented either way and is marked with it. An earlier revision of this
+// comment averaged all three into "34.4% usable" and that number should not be
+// repeated: the honest headline is **42.6% on the one corpus this model has
+// certainly not seen**.
+//
+// **Acquisition is not the problem.** It was, and the diagnosis chain in
+// research/eval/README.md is about it; it is fixed. The median is five seconds
+// and slow acquisition is a listed failure on only 39% of SMC and almost
+// nothing elsewhere. What fails now is precision: 51% of GTZAN emits beats
+// that are more than a fifth wrong.
+//
+// **Where the metrical level comes from.** Of the tracking seconds the filter
+// spends at the wrong level, 85% of GTZAN are seconds where the anchor was
+// also wrong; read the other way round, when the anchor is wrong the filter is
+// wrong with it 92% of the time. Both conditionals are worth stating and only
+// the second is the causal one. Three ways of improving the anchor from what
+// is already computed were tried and all lost (below).
+//
+// That does not establish that the filter is blameless, and an earlier
+// revision of this comment said so on the strength of the filter agreeing with
+// a correct anchor 94% of the time. That figure cannot carry the claim.
+// `anchorTempo` is applied on every submitted frame — fifty a second with
+// BeatNet, see LiveTracker::submit — with a prior a tenth of an octave wide,
+// so the agreement is largely enforced rather than observed; only the estimate
+// behind it is refreshed once a second. And 15.4% of GTZAN's wrong seconds
+// happen while the anchor is right. Separating the two needs the filter run
+// *without* the anchor and against an oracle level; until that is done, no
+// statement here apportions blame between the estimator and the filter.
+//
+// **The level is not where the recordings are lost.** Scored per *recording*
+// rather than per second, with the grid read at half (both phases) or twice
+// its rate and judged at whichever agrees best — an oracle correction applied
+// to the whole recording, and therefore an upper bound on any control the
+// player could be given, while also removing the wrong-level criterion
+// outright rather than modelling one press:
+//
+//     usable        ballroom*   GTZAN   SMC*
+//     as it stands     57.2%    41.1%   3.2%
+//     any level        59.0%    46.0%   4.6%
+//
+// Five points on the corpus that counts, and of the GTZAN recordings that fail
+// today only 8.3% become usable at another level. A ×2 control in the product
+// would recover little.
+//
+// What is left on GTZAN once the level is forgiven: **too few beats found on
+// 52.6%**, wrong beats on 43.6%, slow acquisition on 9.2%. The largest single
+// failure is recall — the tracker is not putting beats where the beats are —
+// and that is what the count-ratio version of the criterion was hiding.
+//
+// Note what this does *not* say. A grid at the right level but the wrong local
+// tempo, or one that drifts, arrives as both of those failures too, so nothing
+// here separates placement from tempo. It says the level is not the way out,
+// and no more than that.
+//
+// **What the published comparison is, and is not.** BeatNet's paper reports
+// 0.754 beat F on GTZAN and BeatNet+ 0.806, both full systems — activation
+// plus their two-level cascade particle filter, not activations alone. The
+// same BeatNet activation through this tracker gives 0.666. That is a
+// published score against a local one, measured by different code on
+// different framing, and it is a *lead*, not a decoder gap: nothing here has
+// yet run their filter on our activations. The A/B that would make it a
+// measurement is the next piece of work.
+//
+// Reproducing any of this needs research/, which is not in the public
+// repository — see the .gitignore and the note in eval/README.md. That is why
+// the numbers live here in full rather than as a file reference.
+//
+// Material without percussion is a separate case and probably a real one: on
+// SMC this path is usable on 3.2% of recordings with 95% of failures being
+// wrong beats. That is *consistent with* the front end being the limit there
+// and does not demonstrate it — the same symptom follows from a decoder that
+// cannot hold a sparse pulse, and only an A/B on identical activations tells
+// them apart. It is the material BeatNet+ claims to address, which makes it
+// worth the A/B rather than worth assuming.
+//
+// **Listening before answering has no headroom, and the ceiling says so.**
+// The proposal is reasonable and recurs: not every song has an audible beat in
+// its first bar, so buffer some seconds of microphone and orient on them
+// before committing. Its ceiling can be measured without building any of it,
+// by handing the tracker the tempo an offline analysis of the *whole* file
+// found — strictly more than any buffer could recover:
+//
+//     seeded with the whole file's tempo   ballroom*   GTZAN   SMC*
+//     no                                     57.4%     42.6%   3.2%
+//     yes                                    56.6%     44.0%   2.8%
+//
+// A point and a half on GTZAN, and it moves in different directions on
+// different corpora. The same experiment on spectral flux was already
+// negative; this replicates it with the front end that works, which is what
+// makes it worth believing rather than a property of the old evidence.
+//
+// The reason is `anchor_tempo`, and it is structural rather than a shortfall.
+// The activation-tempo estimator re-aims the prior from a six-second window,
+// and applies it every frame, so any tempo put into the cloud at the start is
+// gone within six seconds of audio whether it was right or not. Seeding a
+// tracker that continuously re-anchors cannot do anything by construction —
+// which is worth knowing before building a buffer to do it more slowly.
+//
+// What the ceiling does not test is the *phase*: seedTempo concentrates the
+// cloud on a tempo and says nothing about where the beat falls. That half is
+// still open. But note which failures are actually left — wrong octave on 27%
+// of ballroom and 38% of GTZAN, *after* being told the tempo, and slightly
+// worse than without. The octave is not failing for want of knowing the tempo.
+// It is failing because the tracker leaves the tempo it was given, which puts
+// this back with everything else in this comment: the decoder.
+
 // A live configuration for a capture rate, with the front-end sized in
 // milliseconds rather than samples.
 //

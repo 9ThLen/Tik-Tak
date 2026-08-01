@@ -1,0 +1,104 @@
+name: research
+
+on:
+  # `push` on the default branch, `pull_request` everywhere else. With `push`
+  # on every branch as well, a branch with a PR open matches both triggers and
+  # runs each workflow twice against the same commit — eleven check runs for
+  # eight jobs, doubling the queue and making a red X ambiguous about which run
+  # it belongs to. The trade is that a branch with no PR gets no CI; opening
+  # one is how you ask for it.
+  push:
+    branches: ["main"]
+    paths:
+      - "research/**"
+      - "tools/parity/**"
+      - "tools/eval/**"
+      - "models/**"
+      - "NOTICE.md"
+      - "core/**"
+      - ".github/workflows/research.yml"
+  pull_request:
+    paths:
+      - "research/**"
+      - "tools/parity/**"
+      - "tools/eval/**"
+      - "models/**"
+      - "NOTICE.md"
+      - "core/**"
+      - ".github/workflows/research.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: python tests and C++ parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: research/pyproject.toml
+
+      - name: Install Python dependencies
+        run: python -m pip install -e "research[test]"
+
+      - name: Install Ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Configure parity tools
+        run: >
+          cmake -S tools/parity -B tools/parity/build -G Ninja
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DTIKTAK_WERROR=ON
+
+      - name: Build parity tools
+        run: cmake --build tools/parity/build
+
+      - name: Configure the analysis dump
+        run: >
+          cmake -S tools/eval -B tools/eval/build -G Ninja
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DTIKTAK_WERROR=ON
+
+      - name: Build the analysis dump
+        run: cmake --build tools/eval/build
+
+      # After the C++ tools, on purpose: the salience-backend tests skip
+      # themselves when dump_analysis is missing, and a test that silently
+      # skips on every CI run is a test that does not exist. Building first
+      # turns the skip into a thing that only happens on a source-only laptop.
+      - name: Run Python tests
+        working-directory: research
+        run: python -m pytest -q
+
+      - name: Compare C++ against the Python reference
+        run: python tools/parity/check_parity.py
+
+      # A regression signal on synthetic clips, not a calibration: they have no
+      # chord changes, so the harmony cue is not exercised, and the margin
+      # threshold must be chosen on real recordings. Ten of the thirteen clips
+      # currently come back with the right metre and phase; the three that do
+      # not are named in research/eval/README.md.
+      - name: Score the bar lines
+        working-directory: research
+        run: python -m eval.downbeat_benchmark --expect-correct 10
+
+  model-artifacts-windows:
+    name: model artifacts (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install pytest
+        run: python -m pip install pytest
+
+      - name: Exercise Windows artifact locking
+        run: python -m pytest -q research/tests/test_model_artifacts.py
