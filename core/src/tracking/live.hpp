@@ -225,9 +225,40 @@ struct LiveConfig {
 //     as it stands     57.2%    41.1%   3.2%
 //     any level        59.0%    46.0%   4.6%
 //
-// Five points on the corpus that counts, and of the GTZAN recordings that fail
-// today only 8.3% become usable at another level. A ×2 control in the product
-// would recover little.
+// Five points on GTZAN, and of the GTZAN recordings that fail today only 8.3%
+// become usable at another level.
+//
+// **On whole songs it is the other way round, and that reverses the reading.**
+// RWC 2.0 arrived after the numbers above: 328 full-length recordings, 23.4
+// hours, beats for all five collections, and out of `beatnet_model_1`'s five
+// training corpora — so it is held out, correctly aligned (Beat This! scores
+// 0.993 on RWC-Pop, which is train-on-test for *it* and therefore an alignment
+// check rather than a score; Harmonix scored 0.490 on the same check and turned
+// out to be displaced), and not made of thirty-second excerpts:
+//
+//     usable            n    as it stands   any level    F    CMLt
+//     RWC-Pop         100        33.0%        56.0%    0.786  0.703
+//     RWC royalty-free 15        33.3%        40.0%    0.618  0.562
+//     RWC-Genre       102        10.8%        21.6%    0.574  0.432
+//     RWC-Jazz         50         6.0%        12.0%    0.523  0.346
+//     RWC-Classical    61         0.0%         1.6%    0.374  0.155
+//
+// Beat placement on full-length pop is *better* than on GTZAN — F 0.786 against
+// 0.665 — and the recordings are lost to the metrical level instead. The
+// failure list inverts with it: on RWC-Pop the wrong level is a listed failure
+// on 62% of recordings against too-few-beats on 38%, where GTZAN reads 37.7%
+// against 54.3%.
+//
+// So "a ×2 control in the product would recover little" was true of excerpts and
+// is false of songs: the oracle level is worth 23 points here against 4.9 on
+// GTZAN. It remains an oracle over the whole recording and therefore an upper
+// bound on any control a player could be given, not a forecast of one. But the
+// direction of the work follows the corpus that looks like the product, and
+// this one does: a thirty-second excerpt simply does not last long enough to
+// spend four seconds at the wrong level and then be judged on it.
+//
+// Classical at 0.0% and jazz at 6.0% are not a surprise and not the same
+// problem; see the note on sparse material below.
 //
 // Why GTZAN's recordings fail, as a share of all 999 of them — a recording can
 // fail several ways at once, so these overlap and do not sum to the 58.9% that
