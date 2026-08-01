@@ -1,0 +1,28 @@
+{
+  "window_sec": 0.07,
+  "warmup_sec": 5.0,
+  "by_corpus": {
+    "gtzan": {
+      "n": 998,
+      "peaks_per_sec": 8.707067050863591,
+      "top_n": 0.6468558481769194,
+      "top_n_chance": 0.19182729435866783,
+      "tracker_r70": 0.6674539161145486,
+      "peak_present": 0.9872473568113966,
+      "peak_present_chance": 0.7914773461901867,
+      "share_over_80_top_n": 0.3276553106212425,
+      "share_over_80_tracker": 0.45791583166332667
+    },
+    "smc": {
+      "n": 217,
+      "peaks_per_sec": 11.261030615869327,
+      "top_n": 0.3584440110604834,
+      "top_n_chance": 0.12953866226988822,
+      "tracker_r70": 0.26096676109086175,
+      "peak_present": 0.9739816982789725,
+      "peak_present_chance": 0.8782759891109453,
+      "share_over_80_top_n": 0.041474654377880185,
+      "share_over_80_tracker": 0.055299539170506916
+    }
+  }
+}

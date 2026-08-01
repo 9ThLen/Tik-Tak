@@ -23,9 +23,13 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import csv
+import hashlib
 import json
 import math
 import pathlib
+import platform
+import re
+import subprocess
 import sys
 import time
 from collections import Counter
@@ -54,6 +58,10 @@ MAX_ACQUISITION_SEC = 8.0
 MIN_PRECISION = 0.80
 MIN_RECALL = 0.80
 MAX_WRONG_OCTAVE_SEC = 4.0
+# How long a stretch at the annotated level has to last before it is called a
+# settle rather than a lucky second. Same figure as the wrong-level limit, so
+# the two criteria cannot disagree about what "briefly" means.
+SETTLE_SEC = 4.0
 
 
 def _audio_path(ground_truth: pathlib.Path, row: dict[str, str]) -> pathlib.Path:
@@ -90,16 +98,26 @@ def load_corpus(
                 }
             )
     if include_root_audio:
+        # Numbered, never named. This is whoever's music happens to be on the
+        # machine, and it reaches at least three outputs — the aggregate report,
+        # the per-track file and any traceback. Anonymising it here rather than
+        # at each of those is the only version that stays true when a fourth
+        # output is added. Nothing downstream needs the title: root audio is
+        # unannotated, so it is scored for "does the binary survive it" and for
+        # nothing else.
         items.extend(
             {
                 "corpus": "root",
-                "name": path.name,
+                "name": f"local-{index:04d}",
                 "audio": path,
                 "annotation": None,
                 "annotated": False,
             }
-            for path in sorted(music.iterdir())
-            if path.is_file() and path.suffix.lower() in ROOT_AUDIO_SUFFIXES
+            for index, path in enumerate(
+                sorted(path for path in music.iterdir()
+                       if path.is_file()
+                       and path.suffix.lower() in ROOT_AUDIO_SUFFIXES)
+            )
         )
     return items
 
@@ -181,7 +199,23 @@ def octave_statistics(estimate: Estimate, beats: np.ndarray) -> dict[str, Any]:
     # When the tracker first believed it had the tempo, and the longest
     # uninterrupted stretch it then spent at the wrong metrical level. Both are
     # per-recording facts that no average over recordings can reconstruct.
+    #
+    # `acquired_at` is the first confidence lock and nothing more — it does not
+    # ask whether the level was right. That is not only a labelling problem, it
+    # can change a verdict: lock at 2 s on half tempo, release, re-lock
+    # correctly at 10 s, and if the wrong stretch was under the four-second
+    # limit the recording passes the eight-second acquisition criterion on the
+    # strength of a lock that was wrong. An earlier note here claimed nothing
+    # was lost by this, only misattributed, and that was too strong.
+    #
+    # `settled_at` is the honest one: the start of the first locked stretch at
+    # the annotated level that then lasts `SETTLE_SEC`. It is reported beside
+    # `acquired_at` rather than replacing it in the pass criterion, so that the
+    # rates stay comparable with everything measured before it existed — the
+    # difference between the two columns is the size of the problem.
     acquired_at: float | None = None
+    settled_at: float | None = None
+    same_since: float | None = None
     worst_wrong_run = 0.0
     wrong_since: float | None = None
 
@@ -201,6 +235,8 @@ def octave_statistics(estimate: Estimate, beats: np.ndarray) -> dict[str, Any]:
         if not locked and wrong_since is not None:
             worst_wrong_run = max(worst_wrong_run, float(time_sec) - wrong_since)
             wrong_since = None
+        if not locked:
+            same_since = None  # a release ends the stretch, however right it was
 
         if time_sec < 5.0:
             continue
@@ -222,8 +258,15 @@ def octave_statistics(estimate: Estimate, beats: np.ndarray) -> dict[str, Any]:
                 worst_wrong_run = max(worst_wrong_run,
                                       float(time_sec) - wrong_since)
                 wrong_since = None
-        elif wrong_since is None:
-            wrong_since = float(time_sec)
+            if same_since is None:
+                same_since = float(time_sec)
+            elif (settled_at is None
+                  and float(time_sec) - same_since >= SETTLE_SEC):
+                settled_at = same_since
+        else:
+            same_since = None
+            if wrong_since is None:
+                wrong_since = float(time_sec)
 
         if state not in {"half", "same", "double"}:
             continue
@@ -254,6 +297,7 @@ def octave_statistics(estimate: Estimate, beats: np.ndarray) -> dict[str, Any]:
         "eligible_samples": eligible_samples,
         "states": dict(states),
         "acquired_at": acquired_at,
+        "settled_at": settled_at,
         "worst_wrong_octave_sec": worst_wrong_run,
         "final_ref_bpm": local_reference_bpm(beats, final_time),
         "final_state": tempo_state(
@@ -368,12 +412,13 @@ def _score_one(
     binary: pathlib.Path,
     model: pathlib.Path | None,
     seeded: bool = False,
+    extra: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     started = time.perf_counter()
     try:
         estimate = Analyser(binary).analyse_live_file(
             item["audio"], model=model if mode == "model" else None,
-            seeded=seeded,
+            seeded=seeded, extra=extra,
         )
         result: dict[str, Any] = {
             "ok": True,
@@ -452,9 +497,56 @@ def _score_one(
             "corpus": item["corpus"],
             "name": item["name"],
             "annotated": item["annotated"],
-            "error": str(error),
+            "error": _without_local_paths(str(error)),
             "wall": time.perf_counter() - started,
         }
+
+
+# The report is meant to be committed beside the numbers that cite it, so it
+# must not carry this machine's directory layout. Exception text is the one
+# place a path gets in, because the decoder names the file it could not read.
+def _without_local_paths(text: str) -> str:
+    cleaned = re.sub(r"[A-Za-z]:[\\/][^\s,;]*[\\/]([^\s\\/,;]+)", r"<audio>/\1", text)
+    return re.sub(r"(?<![\w<])/(?:[^\s/,;]+/)+([^\s/,;]+)", r"<audio>/\1", cleaned)
+
+
+# What a number needs beside it to still mean something in six months. A rate
+# quoted without the commit, the weights and the corpus it was measured on is
+# not reproducible and not falsifiable either: any later disagreement is
+# unresolvable, because nobody can tell whether the code moved or the corpus did.
+def _digest(path: pathlib.Path) -> dict | None:
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return None
+    return {"name": path.name, "bytes": len(data),
+            "sha256": hashlib.sha256(data).hexdigest()}
+
+
+def _provenance(binary: pathlib.Path, model: pathlib.Path | None,
+                items: list[dict[str, Any]], repository: pathlib.Path) -> dict:
+    def git(*command: str) -> str | None:
+        try:
+            done = subprocess.run(("git", "-C", str(repository)) + command,
+                                  capture_output=True, text=True, timeout=30)
+        except (OSError, subprocess.SubprocessError):
+            return None
+        return done.stdout.strip() if done.returncode == 0 else None
+
+    corpora: Counter[str] = Counter(item["corpus"] for item in items)
+    annotated: Counter[str] = Counter(
+        item["corpus"] for item in items if item["annotated"])
+    return {
+        "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "commit": git("rev-parse", "HEAD"),
+        "tree_clean": git("status", "--porcelain") == "",
+        "binary": _digest(binary),
+        "model": _digest(model) if model else None,
+        "python": platform.python_version(),
+        "platform": platform.system(),
+        "corpora": {name: {"files": corpora[name], "annotated": annotated[name]}
+                    for name in sorted(corpora)},
+    }
 
 
 def _finite_stat(values: list[float], function: Any) -> float | None:
@@ -478,8 +570,13 @@ def summarize(mode: str, results: list[dict[str, Any]], wall: float) -> dict:
     switching = [result for result in scored if result["switches"] > 0]
     scored_hours = sum(result["duration"] for result in scored) / 3600.0
 
+    # The manifest defines the annotated corpora. Keeping a fixed allow-list
+    # here silently dropped every newly prepared dataset from the per-corpus
+    # report; RWC 2.0 was the first one to expose that. Root audio is excluded
+    # because it returns before scoring and therefore is absent from `scored`.
+    corpus_names = sorted({result["corpus"] for result in scored})
     by_corpus = {}
-    for corpus in ("ballroom", "gtzan", "harmonix", "smc"):
+    for corpus in corpus_names:
         part = [result for result in scored if result["corpus"] == corpus]
         switches = sum(result["switches"] for result in part)
         hours = sum(result["duration"] for result in part) / 3600.0
@@ -509,6 +606,27 @@ def summarize(mode: str, results: list[dict[str, Any]], wall: float) -> dict:
             "median_acquisition_sec": _finite_stat(
                 [result["acquired_at"] for result in part
                  if result.get("acquired_at") is not None], np.median),
+            # Beside it, and deliberately not instead of it: the first lock that
+            # was at the right level and held. The share that never settle at
+            # all is the part `median_acquisition_sec` cannot see, because a
+            # recording that locks fast and wrongly still contributes a small
+            # number to it.
+            "median_settle_sec": _finite_stat(
+                [result["settled_at"] for result in part
+                 if result.get("settled_at") is not None], np.median),
+            "never_settled_fraction": (
+                sum(result.get("settled_at") is None for result in part)
+                / len(part) if part else None
+            ),
+            "acquisition_was_a_false_start_fraction": (
+                sum(
+                    result.get("acquired_at") is not None
+                    and result["acquired_at"] <= MAX_ACQUISITION_SEC
+                    and (result.get("settled_at") is None
+                         or result["settled_at"] > MAX_ACQUISITION_SEC)
+                    for result in part
+                ) / len(part) if part else None
+            ),
             "f_measure": _finite_stat(
                 [result["f_measure"] for result in part], np.mean
             ),
@@ -583,11 +701,18 @@ def summarize(mode: str, results: list[dict[str, Any]], wall: float) -> dict:
         "failure_reasons": {
             key: count / len(scored) for key, count in pooled_failures.most_common()
         } if scored else {},
+        # Named only for the annotated corpora. `root` is whatever audio the
+        # machine happens to hold — a person's own music — and this report is
+        # meant to be committed, so those titles do not belong in it. The count
+        # stays, because a run that silently stopped reading half its input has
+        # to be visible.
         "failures": [
             {
                 "corpus": result["corpus"],
-                "name": result["name"],
-                "error": result["error"],
+                "name": (result["name"] if result["annotated"]
+                         else "<local audio>"),
+                "error": (result["error"] if result["annotated"]
+                          else "not decodable"),
             }
             for result in results
             if not result["ok"]
@@ -672,6 +797,23 @@ def main(argv: list[str] | None = None) -> int:
                              "the ceiling on any proposal to listen first "
                              "before answering, since a few seconds of buffer "
                              "cannot beat the whole recording")
+    # The arm that matters enough to be a flag of its own. `--extra` can express
+    # it too, but only as `--extra=--live-no-anchor`: argparse refuses a
+    # separate value that begins with a dash, so the obvious spelling with a
+    # space fails outright — and an arm of the central experiment should not
+    # depend on remembering that.
+    parser.add_argument("--no-anchor", action="store_true",
+                        help="run the particle filter with the activation-tempo "
+                             "anchor off. The anchor is applied on every frame, "
+                             "so the filter agreeing with a correct anchor says "
+                             "nothing about the filter; this is the only arm "
+                             "that measures what the filter contributes alone")
+    # One string rather than nargs, because argparse hands leading-dash values
+    # in an nargs list straight to its own parser and eats the flag.
+    parser.add_argument("--extra", default="",
+                        help="further flags passed to dump_analysis unchanged. "
+                             "Must be spelled --extra=--flag, not --extra "
+                             "'--flag'")
     parser.add_argument("--per-track", type=pathlib.Path,
                         help="write one file per mode with every recording's "
                              "metrics and verdict")
@@ -681,6 +823,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--workers must be positive")
     if args.mode in {"model", "both"} and args.model is None:
         parser.error("--model is required for model mode")
+
+    extra_flags = tuple(args.extra.split())
+    if args.no_anchor:
+        extra_flags = ("--live-no-anchor",) + extra_flags
 
     items = load_corpus(args.manifest, args.music, args.include_root_audio)
     missing_audio = [str(item["audio"]) for item in items if not item["audio"].is_file()]
@@ -721,7 +867,7 @@ def main(argv: list[str] | None = None) -> int:
         ) as pool:
             futures = [
                 pool.submit(_score_one, item, mode, args.binary, args.model,
-                            args.seeded)
+                            args.seeded, extra_flags)
                 for item in items
             ]
             for completed, future in enumerate(
@@ -758,6 +904,7 @@ def main(argv: list[str] | None = None) -> int:
                 ensure_ascii=False), encoding="utf-8")
 
     report = {
+        "provenance": _provenance(args.binary, args.model, items, repository),
         "protocol": {
             "causal": True,
             "callback_samples": 512,
@@ -767,12 +914,31 @@ def main(argv: list[str] | None = None) -> int:
             "release_confidence": RELEASE_CONFIDENCE,
             "octave_tolerance_percent": 8.0,
             "seeded": args.seeded,
+            # The arm this run is, spelled exactly as it reached the binary.
+            "tracker_flags": list(extra_flags),
             "usable": {
                 "max_acquisition_sec": MAX_ACQUISITION_SEC,
                 "min_precision_70ms": MIN_PRECISION,
                 "min_recall_70ms": MIN_RECALL,
                 "max_wrong_octave_sec": MAX_WRONG_OCTAVE_SEC,
+                "settle_sec": SETTLE_SEC,
+                "acquisition": (
+                    "the pass criterion uses acquired_at, the first confidence "
+                    "lock, which does not ask whether the level was right — a "
+                    "brief wrong lock inside the limit can carry a recording "
+                    "past it. settled_at is reported beside it and is the "
+                    "first locked stretch at the annotated level lasting "
+                    "settle_sec; acquisition_was_a_false_start_fraction is how "
+                    "often the two disagree in the direction that flatters us"
+                ),
                 "aggregate": "macro-average over corpora with n >= 30",
+                # Stated because it is easy to read these as shares of the
+                # failures and be wrong by the failure rate.
+                "failure_reasons": (
+                    "share of ALL recordings in the corpus failing for each "
+                    "reason; one recording can fail for several, so they do "
+                    "not sum to the failure rate"
+                ),
                 "any_octave": (
                     "oracle: the grid is read at half (both phases) or twice "
                     "its rate and judged at whichever agrees best, over the "

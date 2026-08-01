@@ -24,6 +24,13 @@ level is usually wrong with it. The residual is not negligible either — a thir
 of ballroom's wrong seconds happen while the anchor is right. Separating the
 filter's own contribution needs it run without the anchor and against an oracle
 level, not this statistic.
+
+**Which seconds count.** The tracker's own lock/release hysteresis, matching
+``live_corpus_benchmark``. This script used to keep every sample above the lock
+threshold instead, which is a different and worse question: it samples the
+tracker's most confident moments, and confidence is not independent of what is
+being measured. Numbers taken before 2026-08-01 were computed that way and are
+not comparable with these.
 """
 
 from __future__ import annotations
@@ -48,7 +55,17 @@ from eval.annotations import load_annotation  # noqa: E402
 DATA = RESEARCH / "data"
 MODEL = REPOSITORY / "models" / "beatnet_model_1.ttw"
 TOLERANCE = math.log2(1.08)
+
+# The same hysteresis the corpus benchmark uses, and for the same reason. An
+# earlier version of this script kept every sample with `confidence >= 0.25`,
+# which is not the tracker's notion of tracking at all: it is a sample of the
+# tracker's most confident moments. That biases the very thing being measured,
+# because confidence and correctness are not independent — dropping the shaky
+# seconds drops the seconds where the anchor and the filter disagree. Once
+# locked, the tracker keeps tracking down to `RELEASE`, and those seconds count.
 LOCK = 0.25
+RELEASE = 0.02
+WARMUP_SEC = 5.0
 
 
 def local_bpm(beats: np.ndarray, at: float) -> float:
@@ -88,8 +105,13 @@ def one(audio: pathlib.Path) -> dict | None:
         return None
 
     rows = []
+    locked = False
     for i in range(n):
-        if times[i] < 5.0 or conf[i] < LOCK:
+        if not locked and conf[i] >= LOCK:
+            locked = True
+        elif locked and conf[i] < RELEASE:
+            locked = False
+        if times[i] < WARMUP_SEC or not locked:
             continue          # only while the tracker is actually tracking
         ref = local_bpm(reference, float(times[i]))
         rows.append((level(float(filt[i]), ref), level(float(anchor[i]), ref),

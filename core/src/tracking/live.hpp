@@ -146,9 +146,11 @@ struct LiveConfig {
 // never spends more than 4 s at the wrong metrical level — and reports the
 // share that passes. 1914 recordings, shipped thresholds:
 //
-//     front end          ballroom*   GTZAN   SMC*   median acquire
+//     front end          ballroom*   GTZAN    SMC   median acquire
 //     spectral flux         5.7%     13.4%   1.4%       6 s
 //     BeatNet activation   57.2%     41.1%   3.2%       5 s
+//
+//     * in this model's training set — see below, and do not quote it
 //
 // The third criterion is matched recall and not the ratio of the two beat
 // counts, which is what it was first written as. A tracker can emit exactly as
@@ -156,28 +158,48 @@ struct LiveConfig {
 // with a count ratio of 0.80 bounds the beats actually found at 64%. The
 // figures above are after that correction and are about a point lower for it.
 //
-// **Quote GTZAN.** The weights are `beatnet_model_1`, and BeatNet ships three
-// models holding out GTZAN, Ballroom and Rock Corpus respectively — see
-// docs/ml-models.md, which records the correspondence. Model 1 holds out
-// GTZAN, so ballroom is train-on-test for it and its 57.4% is memorisation,
-// exactly as final0's ballroom score is for Beat This!. SMC's membership is
-// not documented either way and is marked with it. An earlier revision of this
-// comment averaged all three into "34.4% usable" and that number should not be
-// repeated: the honest headline is **42.6% on the one corpus this model has
-// certainly not seen**.
+// **Quote GTZAN.** The weights are `beatnet_model_1`. BeatNet trains on five
+// corpora — Ballroom, Beatles, Carnatic, GTZAN and Rock Corpus — and ships
+// three models, holding out GTZAN, Ballroom and Rock Corpus respectively;
+// docs/ml-models.md records both. Model 1 holds out GTZAN, so ballroom is in
+// its training set and its 57.2% is *not an independent estimate*. That is
+// weaker than saying it memorised those recordings, which nothing here shows,
+// and it is enough: a number measured on training material cannot be quoted as
+// performance whatever produced it. SMC is in none of the five, so its 3.2% is
+// out of training — it is a domain shift rather than a held-out twin of GTZAN,
+// and that is why it is reported apart rather than averaged in.
 //
-// **Acquisition is not the problem.** It was, and the diagnosis chain in
-// research/eval/README.md is about it; it is fixed. The median is five seconds
-// and slow acquisition is a listed failure on only 39% of SMC and almost
-// nothing elsewhere. What fails now is precision: 51% of GTZAN emits beats
-// that are more than a fifth wrong.
+// An earlier revision averaged all three into "34.4% usable" and a later one
+// wrote the honest headline as 42.6%, which is the *pooled* rate over all
+// 1914 recordings and therefore has ballroom in it too. Both are wrong for the
+// same reason. The headline is **41.1%, GTZAN, per corpus**.
 //
-// **Where the metrical level comes from.** Of the tracking seconds the filter
-// spends at the wrong level, 85% of GTZAN are seconds where the anchor was
-// also wrong; read the other way round, when the anchor is wrong the filter is
-// wrong with it 92% of the time. Both conditionals are worth stating and only
-// the second is the causal one. Three ways of improving the anchor from what
-// is already computed were tried and all lost (below).
+// **Acquisition is not the problem, with one caveat.** It was, and the
+// diagnosis chain in research/eval/README.md is about it; it is fixed. The
+// median is five seconds, and slow acquisition is a listed failure on 38.7% of
+// SMC and 9.2% of everything else. The caveat is that "acquired" means the
+// first time confidence crossed the lock threshold, whether or not the level it
+// locked to was right, and that is not merely a labelling problem: lock at 2 s
+// on half tempo, release, re-lock correctly at 10 s, and if the wrong stretch
+// stayed under four seconds the recording passes the acquisition criterion on
+// the strength of a lock that was wrong. So the rates above can contain false
+// passes. The benchmark now also reports `settled_at` — the first locked
+// stretch at the annotated level that lasts four seconds — beside the old
+// figure rather than in place of it, so the two columns can be compared instead
+// of one silently replacing the other.
+//
+// **Where the metrical level comes from — withdrawn pending a re-run.** This
+// paragraph used to give two conditional rates, 85% and 92%, for how often the
+// anchor and the filter are at the wrong level together. They were computed by
+// keeping every observation above the lock threshold, which is not the
+// tracker's notion of tracking: it samples the tracker's most *confident*
+// seconds, and confidence is not independent of what is being measured —
+// throwing away the shaky seconds throws away the seconds where the two
+// disagree. `octave_blame.py` now follows the lock/release hysteresis instead,
+// and no number replaces those two until it has been run again. What survives
+// is only the direction, and only weakly: the anchor and the filter are at the
+// wrong level together far more often than apart. Three ways of improving the
+// anchor from what is already computed were tried and all lost (below).
 //
 // That does not establish that the filter is blameless, and an earlier
 // revision of this comment said so on the strength of the filter agreeing with
@@ -185,10 +207,12 @@ struct LiveConfig {
 // `anchorTempo` is applied on every submitted frame — fifty a second with
 // BeatNet, see LiveTracker::submit — with a prior a tenth of an octave wide,
 // so the agreement is largely enforced rather than observed; only the estimate
-// behind it is refreshed once a second. And 15.4% of GTZAN's wrong seconds
-// happen while the anchor is right. Separating the two needs the filter run
-// *without* the anchor and against an oracle level; until that is done, no
-// statement here apportions blame between the estimator and the filter.
+// behind it is refreshed once a second. The 15.4% residual quoted here is
+// withdrawn with the rest of that measurement. Separating the two needs the
+// filter run *without* the anchor and against an oracle level — which is now a
+// flag, `--live-no-anchor`, and an arm of the benchmark, `--no-anchor`. Until
+// it has been run, no statement here apportions blame between the estimator
+// and the filter.
 //
 // **The level is not where the recordings are lost.** Scored per *recording*
 // rather than per second, with the grid read at half (both phases) or twice
@@ -197,7 +221,7 @@ struct LiveConfig {
 // player could be given, while also removing the wrong-level criterion
 // outright rather than modelling one press:
 //
-//     usable        ballroom*   GTZAN   SMC*
+//     usable        ballroom*   GTZAN    SMC
 //     as it stands     57.2%    41.1%   3.2%
 //     any level        59.0%    46.0%   4.6%
 //
@@ -205,10 +229,20 @@ struct LiveConfig {
 // today only 8.3% become usable at another level. A ×2 control in the product
 // would recover little.
 //
-// What is left on GTZAN once the level is forgiven: **too few beats found on
-// 52.6%**, wrong beats on 43.6%, slow acquisition on 9.2%. The largest single
-// failure is recall — the tracker is not putting beats where the beats are —
-// and that is what the count-ratio version of the criterion was hiding.
+// Why GTZAN's recordings fail, as a share of all 999 of them — a recording can
+// fail several ways at once, so these overlap and do not sum to the 58.9% that
+// fail:
+//
+//     too few beats found     54.3%
+//     wrong beats             51.4%
+//     wrong level over 4 s    37.7%
+//     slow to acquire          9.2%
+//     never acquired           0.5%
+//
+// The largest is recall: the tracker is not putting beats where the beats are.
+// That is what the count-ratio version of the criterion was hiding, and an
+// earlier revision of this comment misreported these as 52.6/43.6 against an
+// unstated denominator. They are shares of the corpus, not of the failures.
 //
 // Note what this does *not* say. A grid at the right level but the wrong local
 // tempo, or one that drifts, arrives as both of those failures too, so nothing
@@ -224,14 +258,168 @@ struct LiveConfig {
 // yet run their filter on our activations. The A/B that would make it a
 // measurement is the next piece of work.
 //
-// Reproducing any of this needs research/, which is not in the public
-// repository — see the .gitignore and the note in eval/README.md. That is why
-// the numbers live here in full rather than as a file reference.
+// Every figure above was measured twice, by
 //
-// Material without percussion is a separate case and probably a real one: on
-// SMC this path is usable on 3.2% of recordings with 95% of failures being
-// wrong beats. That is *consistent with* the front end being the limit there
-// and does not demonstrate it — the same symptom follows from a decoder that
+//     python -m eval.live_corpus_benchmark --model models/beatnet_model_1.ttw \
+//         --include-root-audio --mode model --output results/live_usable.json
+//
+// which writes the commit, the weight file's SHA-256, the per-corpus file
+// counts and whether the tree was clean beside the numbers. Quoting a rate
+// without those is neither reproducible nor falsifiable: a later disagreement
+// cannot be settled, because nobody can tell whether the code moved or the
+// corpus did. Note that a run from a dirty tree records a commit that does not
+// identify the binary that produced it, so the artifact only becomes provenance
+// once the tree is clean. The audio is not in the repository (see .gitignore),
+// which is why the numbers are written out here as well.
+//
+// **Where the missing beats go, measured without a decoder and then without a
+// front end.** Two experiments, `research/eval/activation_recall.py` and
+// `oracle_activation.py`. The first takes as many of the strongest peaks of the
+// BeatNet activation as there are annotated beats — no rhythm, no filter, just
+// height — and the second feeds the filter a pulse at every annotated beat and
+// nothing else. Recall at 70 ms, after the same five-second warm-up:
+//
+//                                     GTZAN     SMC
+//     strongest N peaks               64.7%    35.8%
+//     the shipping path               66.7%    26.1%
+//     told the beats, as shipped      92.7%    54.6%
+//     told the beats, anchor off      95.3%    59.8%
+//
+// Whole corpora: 998 GTZAN and 217 SMC, every genre. An earlier revision quoted
+// 92.2% from a subset that took every sixth recording and then the first 150 of
+// those, which stops at reggae and omits the rock genre entirely on a corpus
+// filed by genre. The bias turned out to be worth half a point here, but it was
+// not knowable in advance and the sampling is fixed (`sample()` rounds the
+// stride up so the stride itself does the limiting).
+//
+// Read it as a budget. On GTZAN the front end costs about 26 points and
+// everything after it about 7 — so most of the recall is lost before the
+// decoder, and a better observation is worth more than a better decoder. On SMC
+// the same arithmetic gives 29 points to the front end and **45 to what follows
+// it**: told exactly where every beat is, this tracker still finds barely half.
+// That is the opposite of what this comment used to say about SMC, which was
+// that the symptom was consistent with a front-end limit.
+//
+// The last row is why the row above it is not "the filter". `anchor_tempo`
+// ships true and `submit` applies it on every frame, so an oracle run measures
+// the six-second autocorrelation and the filter together. Separated, the anchor
+// costs **2.6 points on GTZAN and 5.2 on SMC** when the observation is perfect,
+// and on GTZAN it costs 6.1 points of the recordings that clear the 80% bar.
+// That is what an insurance premium looks like: with a clean observation the
+// anchor has nothing to protect against and its six-second lag is pure cost.
+//
+// **And here is the payout.** The same switch on the *real* activation, scored
+// by the product's criterion over all 1914 recordings:
+//
+//     usable          ballroom   GTZAN    SMC   mean F   tracks that switch level
+//     anchor on         57.2%   41.1%   3.2%    0.665           27.2%
+//     anchor off        38.3%   34.3%   2.8%    0.608           46.8%
+//
+// **Read the GTZAN column and only that one.** It costs 2.6 points of GTZAN
+// recall to buy 6.8 points of usable recordings — a payout between two and three
+// times the premium, on the corpus this model has not been trained on. Ballroom
+// shows nineteen points and SMC shows almost nothing, and neither is admissible
+// as the size of the effect: ballroom is in `beatnet_model_1`'s training set,
+// and SMC is so far from usable at either setting that a difference there is
+// measured between two failures. The mechanism is visible in the last column
+// the tracker ends on, which falls from 67.2% correct to 58.7% on GTZAN when
+// the anchor goes: what the anchor sells is octave stability, which is exactly
+// what it was added for and what `ActivationTempo`'s own comment claims for it.
+//
+// So the anchor stays, and the conclusion is narrower and more useful than
+// either "keep" or "remove": its strength should depend on how much the
+// observation is worth at that moment. It is paying a fixed premium against a
+// risk that varies, and the two numbers above are the first measurement of both
+// sides of that trade rather than of one.
+//
+// And the decoder's loss has a name — but not the one this comment gave it
+// first. The rank correlation between a recording's annotated tempo spread and
+// its oracle-fed recall is -0.51 on GTZAN, which was read here as "the filter
+// cannot follow a tempo that changes". That reading was wrong, because the
+// spread it correlates with is two things at once. Split the interval series
+// into a slow trend (a nine-beat running median) and the residual around it:
+//
+//                  median drift   median jitter   rho(drift)   rho(jitter)
+//     GTZAN           0.0084          0.0112        -0.42        -0.53
+//     SMC             0.0418          0.0716        -0.02        -0.26
+//
+// (The rho column was computed on the 150-recording subset described above; on
+// the whole of each corpus the combined spread correlates at -0.42 on GTZAN and
+// -0.28 on SMC. The split has not been recomputed at full size, so treat the
+// two rho columns as the shape of the effect and not as final values.)
+//
+// On SMC — the corpus where the decoder loses most — **drift has no
+// relationship with recall at all**. What predicts failure is beat-to-beat
+// irregularity: expressive timing, not tempo drift. A synthetic bench agrees
+// from the other side, passing every ramp of ±2/5/10% over 15 or 45 seconds at
+// F70 ≈ 0.995 while failing four of five clips at 40 ms of jitter.
+//
+// Nor is the filter over-smoothing, which is the next thing one would assume.
+// Score a locally steady pulse — the annotated beats with every interval
+// replaced by its local median, so it follows drift and never follows jitter:
+//
+//     recall at 70 ms          GTZAN    SMC
+//     a locally steady pulse   84.2%   30.7%
+//     our filter, oracle-fed   92.2%   52.2%
+//
+// Eight points above that bound on GTZAN and twenty-one on SMC. The filter
+// already follows a great deal of expressive timing. And 30.7% says something
+// about SMC rather than about us: seven in ten of its annotated beats sit more
+// than 70 ms from any locally regular pulse, so a large part of the remaining
+// 48 points is deviation a causal system cannot predict in principle. How much
+// is irreducible is not known; that it is a substantial share is.
+//
+// **The filter cannot be made agile enough, and this is why.** If the decoder's
+// loss is tempo agility, the filter has a knob for exactly that:
+// `roughening_octaves`, the spread added to every resampled particle's period,
+// which ships at 0.01. Swept against the oracle activation it looks like a free
+// win — GTZAN flat within noise while the share of recordings clearing 80% rises
+// 84.7% -> 88.0%, and SMC recall 52.2% -> 65.2% at 0.08. Run on the *real*
+// activation and scored by the product's own criterion, every one of those
+// numbers reverses:
+//
+//     usable            ballroom   GTZAN    SMC   mean F
+//     0.01, as shipped     57.2%   41.1%   3.2%    0.665
+//     0.02                 56.3%   40.2%   3.2%    0.659
+//     0.08                 40.4%   30.0%   2.3%    0.615
+//
+// Eleven points of GTZAN gone, and SMC — the corpus the widening was *for* —
+// worse too, despite gaining thirteen points of oracle recall. The reason is in
+// the paragraph above: 8.7 noise peaks a second at a median height of 0.0018. A
+// cloud wide enough to follow a tempo that moves is wide enough to chase those,
+// and agility and noise-immunity are not two knobs but one.
+//
+// So 0.01 stays. It is worth being explicit that an earlier version of this
+// paragraph used the same evidence to argue for a predominant-local-pulse
+// decoder, on the grounds that a random-walk tempo cannot follow tempo change.
+// The drift/jitter split above withdraws that: tempo change is not what fails,
+// and a decoder that produces a *smooth* local pulse would sit nearer the
+// 84.2%/30.7% steady-pulse bound than to what this filter already does. If one
+// is tried, it should be tried for the octave, where the same evidence still
+// favours a window over a recursion — `ActivationTempo` beats the filter 81.7%
+// to 66.6% on ballroom at choosing the level — and not for recall.
+//
+// A caution for anyone sweeping anything else here: an oracle observation
+// removes precisely the pressure most of these settings exist to resist, so a
+// parameter tuned under one is tuned against a threat model that does not
+// exist. Attribute loss with the oracle; never choose a value with it.
+//
+// A caution about the first row. It is a *lower* bound on what is extractable,
+// not an upper one: it ignores periodicity entirely, which is the whole
+// advantage a tracker has, and on GTZAN the shipping path duly beats it. On SMC
+// the shipping path is ten points *below* peak height alone — periodicity
+// machinery actively destroying information that was present.
+//
+// Do not quote "a peak exists within 70 ms of the beat", which is 98.7%. Random
+// times score 78.7% on the same test: the activation carries 8.7 local maxima a
+// second against 1.8 beats, at a median height of 0.0018, so that measure reads
+// the density of the noise floor. Every number above is reported against its own
+// null for this reason.
+//
+// Material without percussion remains a separate case: on SMC this path is
+// usable on 3.2% of recordings, with 94.9% of *all* its recordings failing on
+// wrong beats and 94.5% on too few. The same symptom follows from a decoder
+// that
 // cannot hold a sparse pulse, and only an A/B on identical activations tells
 // them apart. It is the material BeatNet+ claims to address, which makes it
 // worth the A/B rather than worth assuming.

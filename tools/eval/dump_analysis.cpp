@@ -251,6 +251,23 @@ int main(int argc, char** argv) {
     // live tracker derives from it — measuring a proposed confidence change in
     // Python first is a rebuild per idea cheaper.
     bool dump_odf = false;
+    // Prints the learned activation the causal path runs on, before any decoder
+    // has touched it.
+    //
+    // This is the measurement the live work has been missing. The benchmark's
+    // largest single failure is recall — beats that were there and were not
+    // found — and every experiment so far has asked which *decoder* loses them,
+    // which cannot be answered while nobody has checked whether the activation
+    // has a peak at those beats at all. With this dumped the question becomes
+    // arithmetic: the maximum activation inside the same 70 ms window the score
+    // uses, around each annotated beat, with no decoder involved in the answer.
+    //
+    // Computed by a second pass over the same samples through
+    // ml::BeatNetActivation — the class LiveTracker itself holds — rather than
+    // by a hook inside the tracker. A hook would put a research need inside a
+    // real-time class that ships; a second pass through the same class cannot
+    // disagree with the tracker about what the activation is.
+    bool dump_activation = false;
     // Overrides for the live tracker's lock/release hysteresis, so a threshold
     // can be chosen on one batch and validated on another without a rebuild.
     double live_lock = 0.0;
@@ -306,6 +323,14 @@ int main(int argc, char** argv) {
     double live_observation_gain = 0.0;
     double live_onset_exponent = 0.0;
     double live_beat_gain = 0.0;
+    // How far the cloud is allowed to move and to jump between resamples. These
+    // are the filter's tempo agility, and they are exposed because the oracle
+    // experiment made agility the question: fed a pulse at every annotated beat,
+    // the filter still recalls 92% of GTZAN and 52% of SMC, and the shortfall
+    // correlates with how much the recording's tempo moves. Before reaching for
+    // somebody else's decoder it is worth knowing whether ours has a setting.
+    double live_roughening = 0.0;
+    double live_regeneration = -1.0;  // 0 is a meaningful value here
 
     // Soft octave holding: the filter's tempo prior is re-centred on what an
     // autocorrelation over the activation history makes of the tempo, instead
@@ -342,6 +367,8 @@ int main(int argc, char** argv) {
         {"--live-observation-gain", &live_observation_gain},
         {"--live-onset-exponent", &live_onset_exponent},
         {"--live-beat-gain", &live_beat_gain},
+        {"--live-roughening", &live_roughening},
+        {"--live-regeneration", &live_regeneration},
         {"--live-anchor-width", &live_anchor_width},
         {"--live-anchor-margin", &live_anchor_margin},
         {"--live-anchor-window", &live_anchor_window},
@@ -359,6 +386,10 @@ int main(int argc, char** argv) {
         }
         if (std::strcmp(argv[i], "--dump-odf") == 0) {
             dump_odf = true;
+            continue;
+        }
+        if (std::strcmp(argv[i], "--dump-activation") == 0) {
+            dump_activation = true;
             continue;
         }
         if (std::strcmp(argv[i], "--live") == 0) {
@@ -681,6 +712,12 @@ int main(int argc, char** argv) {
             live_config.filter.onset_exponent = live_onset_exponent;
         }
         if (live_beat_gain > 0.0) live_config.filter.beat_gain = live_beat_gain;
+        if (live_roughening > 0.0) {
+            live_config.filter.roughening_octaves = live_roughening;
+        }
+        if (live_regeneration >= 0.0) {
+            live_config.filter.regeneration = live_regeneration;
+        }
         live_config.anchor_tempo = live_anchor;
         if (live_anchor_width > 0.0) {
             live_config.anchor_width_octaves = live_anchor_width;
@@ -929,6 +966,34 @@ int main(int argc, char** argv) {
             std::printf("%s%.6f", i == 0 ? "" : ",", odf_times[i]);
         }
         std::printf("],\n");
+    }
+    if (dump_activation && model_weights.valid()) {
+        // A fresh pass, and fresh state: the tracker's own instance has been
+        // run to the end of the file and an LSTM that has already seen it would
+        // not answer the same way twice.
+        tiktak::ml::BeatNetActivation activation_pass(rate, model_weights);
+        std::vector<double> at, beat_p, downbeat_p;
+        at.reserve(samples.size() / 441);
+        beat_p.reserve(at.capacity());
+        downbeat_p.reserve(at.capacity());
+        activation_pass.process(samples.data(), samples.size(),
+                                [&](double t, double beat, double downbeat) {
+                                    at.push_back(t);
+                                    beat_p.push_back(beat);
+                                    downbeat_p.push_back(downbeat);
+                                });
+        const auto series = [](const char* name, const std::vector<double>& values,
+                               const char* format) {
+            std::printf("  \"%s\": [", name);
+            for (std::size_t i = 0; i < values.size(); ++i) {
+                std::printf(i == 0 ? "" : ",");
+                std::printf(format, values[i]);
+            }
+            std::printf("],\n");
+        };
+        series("activation_times", at, "%.6f");
+        series("activation_beat", beat_p, "%.5g");
+        series("activation_downbeat", downbeat_p, "%.5g");
     }
     if (live) {
         std::printf("  \"live_bpm\": %.17g,\n", finiteOrZero(live_bpm));

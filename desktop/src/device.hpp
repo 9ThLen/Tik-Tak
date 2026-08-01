@@ -49,13 +49,33 @@ public:
     // default: forcing a rate makes the driver resample behind our back, and a
     // resampler between the click and the speaker is exactly what a timing
     // harness must not have.
+    //
+    // `preferred_name` is looked up in the capture list when `capture` is asked
+    // for, and in the playback list otherwise. It used to be looked up in the
+    // playback list either way, which made naming a microphone impossible while
+    // appearing to work: the name matched nothing and the default opened.
     bool start(AudioCallback callback, void* user, double sample_rate, bool capture,
                const std::string& preferred_name = {});
+
+    // `start` in two halves, for callers that have to build something to match
+    // the stream. Between `open` and `begin` the device exists and has settled
+    // on a format but is not running, so `sample_rate()` is already the rate the
+    // callback will really be handed. Anything sized in samples — a tracker's
+    // window, a click — can then be built for that rate rather than for one
+    // assumed in advance, which is how a 44.1 kHz microphone came to be fed to a
+    // tracker that had been told it was listening at 48 kHz.
+    bool open(AudioCallback callback, void* user, double sample_rate, bool capture,
+              const std::string& preferred_name = {});
+    bool begin();
+
     void stop();
 
     double sample_rate() const { return sample_rate_; }
     std::size_t period_frames() const { return period_frames_; }
+    // In capture mode this is the capture device: the one that was asked for and
+    // the one the answer depends on.
     const std::string& name() const { return name_; }
+    const std::string& playback_name() const { return playback_name_; }
     const std::string& backend() const { return backend_; }
     const std::string& error() const { return error_; }
 
@@ -74,6 +94,7 @@ private:
     double output_latency_ = 0.0;
     double input_latency_ = 0.0;
     std::string name_;
+    std::string playback_name_;
     std::string backend_;
     std::string error_;
 };

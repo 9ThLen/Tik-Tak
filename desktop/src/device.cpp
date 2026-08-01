@@ -92,6 +92,11 @@ DeviceList listDevices() {
 
 bool Device::start(AudioCallback callback, void* user, double sample_rate, bool capture,
                    const std::string& preferred_name) {
+    return open(callback, user, sample_rate, capture, preferred_name) && begin();
+}
+
+bool Device::open(AudioCallback callback, void* user, double sample_rate, bool capture,
+                  const std::string& preferred_name) {
     stop();
 
     impl_ = new (std::nothrow) Impl();
@@ -109,15 +114,22 @@ bool Device::start(AudioCallback callback, void* user, double sample_rate, bool 
 
     // Resolving a name to an id has to happen against the enumerated list;
     // miniaudio has no lookup by name.
+    //
+    // Which list depends on what is being opened. Asking for capture and then
+    // searching the playback names is not a near miss — the two lists rarely
+    // share a name, so it failed on every microphone, and the failure it
+    // produced was "no playback device named <your microphone>".
     ma_device_id chosen_id{};
     bool have_id = false;
     if (!preferred_name.empty()) {
-        ma_device_info* infos = nullptr;
-        ma_uint32 count = 0;
+        ma_device_info* playback_infos = nullptr;
+        ma_uint32 playback_count = 0;
         ma_device_info* capture_infos = nullptr;
         ma_uint32 capture_count = 0;
-        if (ma_context_get_devices(&impl_->context, &infos, &count, &capture_infos,
-                                   &capture_count) == MA_SUCCESS) {
+        if (ma_context_get_devices(&impl_->context, &playback_infos, &playback_count,
+                                   &capture_infos, &capture_count) == MA_SUCCESS) {
+            const ma_device_info* infos = capture ? capture_infos : playback_infos;
+            const ma_uint32 count = capture ? capture_count : playback_count;
             for (ma_uint32 i = 0; i < count; ++i) {
                 if (preferred_name == infos[i].name) {
                     chosen_id = infos[i].id;
@@ -127,7 +139,8 @@ bool Device::start(AudioCallback callback, void* user, double sample_rate, bool 
             }
         }
         if (!have_id) {
-            error_ = "no playback device named '" + preferred_name + "'";
+            error_ = std::string("no ") + (capture ? "capture" : "playback") +
+                     " device named '" + preferred_name + "'";
             return false;
         }
     }
@@ -136,10 +149,12 @@ bool Device::start(AudioCallback callback, void* user, double sample_rate, bool 
         ma_device_config_init(capture ? ma_device_type_duplex : ma_device_type_playback);
     config.playback.format = ma_format_f32;
     config.playback.channels = 1;
-    if (have_id) config.playback.pDeviceID = &chosen_id;
     if (capture) {
         config.capture.format = ma_format_f32;
         config.capture.channels = 1;
+        if (have_id) config.capture.pDeviceID = &chosen_id;
+    } else if (have_id) {
+        config.playback.pDeviceID = &chosen_id;
     }
     config.sampleRate = static_cast<ma_uint32>(sample_rate > 0.0 ? sample_rate : 0.0);
     config.dataCallback = dataCallback;
@@ -152,8 +167,10 @@ bool Device::start(AudioCallback callback, void* user, double sample_rate, bool 
     impl_->device_ready = true;
 
     sample_rate_ = impl_->device.sampleRate;
-    name_ = impl_->device.playback.name;
-    period_frames_ = impl_->device.playback.internalPeriodSizeInFrames;
+    playback_name_ = impl_->device.playback.name;
+    name_ = capture ? impl_->device.capture.name : playback_name_;
+    period_frames_ = capture ? impl_->device.capture.internalPeriodSizeInFrames
+                             : impl_->device.playback.internalPeriodSizeInFrames;
 
     // What the driver claims. Reported, never assumed — see the header.
     const double periods = impl_->device.playback.internalPeriods > 0
@@ -177,7 +194,14 @@ bool Device::start(AudioCallback callback, void* user, double sample_rate, bool 
     impl_->shared.user = user;
     impl_->shared.sample_rate = sample_rate_;
     impl_->shared.frames_played.store(0, std::memory_order_relaxed);
+    return true;
+}
 
+bool Device::begin() {
+    if (!impl_ || !impl_->device_ready) {
+        error_ = "the device was not opened";
+        return false;
+    }
     if (ma_device_start(&impl_->device) != MA_SUCCESS) {
         error_ = "could not start the audio device";
         return false;

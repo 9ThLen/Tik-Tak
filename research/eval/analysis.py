@@ -19,6 +19,7 @@ import json
 import pathlib
 import subprocess
 import tempfile
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -189,6 +190,7 @@ class Analyser:
         model: pathlib.Path | str | None = None,
         manual_bpm: float | None = None,
         seeded: bool = False,
+        extra: "Sequence[str] | None" = None,
     ) -> Estimate:
         """Runs the causal tracker and returns its live state over time.
 
@@ -197,6 +199,13 @@ class Analyser:
         nothing knows the whole file in advance — it is the ceiling on every
         proposal that buys accuracy by listening first, since a few seconds of
         buffer can only ever be a worse look at the recording than all of it.
+
+        ``extra`` is passed through to ``dump_analysis`` unchanged, so an arm of
+        a factorial can be a flag rather than a fork of this file. It exists for
+        ``--live-no-anchor`` in particular: with the anchor applied on every
+        frame, a filter that agrees with a correct anchor is not evidence about
+        the filter, and turning it off is the only way to ask what the filter
+        contributes on its own.
         """
         args = [str(path), "--live"]
         if seeded:
@@ -205,6 +214,8 @@ class Analyser:
             args.extend(["--live-model", str(model)])
         if manual_bpm is not None:
             args.extend(["--live-manual-bpm", repr(float(manual_bpm))])
+        if extra:
+            args.extend(str(flag) for flag in extra)
         return self._run(args)
 
     def analyse_audio(self, audio: np.ndarray, sample_rate: float,

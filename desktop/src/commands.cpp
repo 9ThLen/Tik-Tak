@@ -139,9 +139,22 @@ void listenCallback(void* user, double stream_time_sec, const float* input, floa
 // because it also plays a click, and a click is what this bench must not do:
 // a listener tapping along to our own metronome confirms whatever grid it has.
 // So the tracker is driven directly and nothing goes to the speaker.
+// The beats are collected into a buffer of fixed size rather than a vector.
+// Two reasons, and both are the audio thread's: `push_back` allocates when it
+// runs out of room, which on the audio thread is a dropout waiting for the one
+// run that matters; and a vector written on one thread while `size()` is read
+// on another is a data race, so the beat count printed during the run was
+// undefined behaviour rather than merely stale. The count is published with a
+// release store after the sample is written, so a reader that acquires it sees
+// every beat it counts.
+constexpr std::size_t kTapBeatCapacity = 16384;  // ~2 h at 140 BPM
+
 struct TapMicState {
     tiktak::tracking::LiveTracker* tracker = nullptr;
-    std::vector<double>* beats = nullptr;
+    double* beats = nullptr;
+    std::size_t capacity = 0;
+    std::atomic<std::size_t>* beat_count = nullptr;
+    std::atomic<std::size_t>* beats_dropped = nullptr;
     std::atomic<double>* clock = nullptr;
     double lookahead_sec = 0.25;
 };
@@ -158,7 +171,13 @@ void tapMicCallback(void* user, double stream_time_sec, const float* input, floa
     // to whichever asked first.
     double beat = 0.0;
     while (state->tracker->takeBeat(stream_time_sec, state->lookahead_sec, &beat)) {
-        state->beats->push_back(beat);
+        const std::size_t n = state->beat_count->load(std::memory_order_relaxed);
+        if (n >= state->capacity) {
+            state->beats_dropped->fetch_add(1, std::memory_order_relaxed);
+            continue;
+        }
+        state->beats[n] = beat;
+        state->beat_count->store(n + 1, std::memory_order_release);
     }
 }
 
@@ -180,24 +199,37 @@ int cmdTapMic(const Options& options) {
         return 1;
     }
 
-    Device probe;
-    const double rate = options.sample_rate > 0.0 ? options.sample_rate : 48000.0;
+    // The device is opened before the tracker is built, and this order is the
+    // whole point of `open`/`begin`. A tracker is sized in samples, so building
+    // one for an assumed 48 kHz and then handing it a 44.1 kHz microphone tells
+    // it every beat is 8.8% later than it is — the tracker reports a tempo 8.8%
+    // low and cannot be argued out of it, because nothing downstream knows.
+    Device device;
+    TapMicState state;
+    if (!device.open(tapMicCallback, &state, options.sample_rate, true, options.device_name)) {
+        std::fprintf(stderr, "tiktak: %s\n", device.error().c_str());
+        return 1;
+    }
+    const double rate = device.sample_rate();
+
     tiktak::tracking::LiveConfig config = tiktak::tracking::liveConfigFor(rate);
     tiktak::tracking::LiveTracker tracker =
         weights.valid() ? tiktak::tracking::LiveTracker(config, weights)
                         : tiktak::tracking::LiveTracker(config);
 
-    std::vector<double> beats;
-    beats.reserve(4096);
+    std::vector<double> beat_storage(kTapBeatCapacity, 0.0);
+    std::atomic<std::size_t> beat_count{0};
+    std::atomic<std::size_t> beats_dropped{0};
     std::atomic<double> clock{0.0};
-    TapMicState state;
     state.tracker = &tracker;
-    state.beats = &beats;
+    state.beats = beat_storage.data();
+    state.capacity = beat_storage.size();
+    state.beat_count = &beat_count;
+    state.beats_dropped = &beats_dropped;
     state.clock = &clock;
     state.lookahead_sec = options.lookahead_sec;
 
-    Device device;
-    if (!device.start(tapMicCallback, &state, rate, true, options.device_name)) {
+    if (!device.begin()) {
         std::fprintf(stderr, "tiktak: %s\n", device.error().c_str());
         return 1;
     }
@@ -221,11 +253,22 @@ int cmdTapMic(const Options& options) {
         }
         if (key == 'q' || key == 'Q' || key == '\r' || key == '\n') break;
         taps.push_back(clock.load(std::memory_order_relaxed));
-        std::printf("\r%zu taps, %zu beats heard  ", taps.size(), beats.size());
+        std::printf("\r%zu taps, %zu beats heard  ", taps.size(),
+                    beat_count.load(std::memory_order_acquire));
         std::fflush(stdout);
     }
     device.stop();
     std::printf("\n\n");
+
+    // Read after the device has stopped, so the producer is gone and the count
+    // cannot move underneath the copy.
+    const std::size_t heard = beat_count.load(std::memory_order_acquire);
+    const std::vector<double> beats(beat_storage.begin(),
+                                    beat_storage.begin() + static_cast<std::ptrdiff_t>(heard));
+    if (const std::size_t lost = beats_dropped.load(std::memory_order_relaxed)) {
+        std::printf("** %zu beats past the %zu the buffer holds were dropped **\n", lost,
+                    kTapBeatCapacity);
+    }
 
     // The tracker's beats are predictions of when a beat *will* fall, so they
     // run ahead of the audio the listener is reacting to; the constant that
@@ -538,7 +581,9 @@ void printUsage() {
         "  --rate N           sample rate; 0 takes the device's own (0)\n"
         "  --latency-ms N     output latency to compensate (0) — measure it first\n"
         "  --lookahead-ms N   how far ahead beats are handed out (250)\n"
-        "  --device NAME      playback device, as printed by `devices`\n"
+        "  --device NAME      as printed by `devices`; the capture device for\n"
+        "                     `listen`, `measure` and `tap --mic`, the playback\n"
+        "                     device for everything else\n"
         "  -o, --out PATH     where to write (render, measure, track)\n"
         "\n"
         "Track options:\n"
@@ -879,6 +924,26 @@ int cmdListen(const Options& options) {
 #endif
     }
 
+    // The device is opened before anything is built for it. Both the tracker
+    // and the click are sized in samples, and this used to build them for 48 kHz
+    // — the default `rate` above — while asking the device for
+    // `options.sample_rate`, which is 0 and means "whatever you prefer". On a
+    // 44.1 kHz microphone the tracker was then told that 44100 samples was a
+    // second: every interval 8.8% short, so a 120 BPM room read as 110 and no
+    // amount of tracking could recover it, because nothing downstream knew.
+    Device device;
+    ListenState state;
+    if (!from_file) {
+        // Duplex: the microphone is the whole point, so a machine that cannot
+        // capture cannot run this at all.
+        if (!device.open(listenCallback, &state, options.sample_rate, true,
+                         options.device_name)) {
+            std::fprintf(stderr, "tiktak: %s\n", device.error().c_str());
+            return 1;
+        }
+        rate = device.sample_rate();
+    }
+
     LiveMetronomeConfig cfg;
     cfg.tracker = tiktak::tracking::liveConfigFor(rate);
     cfg.click.sample_rate = rate;
@@ -940,19 +1005,15 @@ int cmdListen(const Options& options) {
         return metronome.stats().clean() ? 0 : 1;
     }
 
-    Device device;
-    ListenState state;
     state.metronome = &metronome;
-
-    // Duplex: the microphone is the whole point, so a machine that cannot
-    // capture cannot run this at all.
-    if (!device.start(listenCallback, &state, options.sample_rate, true, options.device_name)) {
+    if (!device.begin()) {
         std::fprintf(stderr, "tiktak: %s\n", device.error().c_str());
         return 1;
     }
 
-    std::printf("%s via %s — %.0f Hz, %zu-frame periods\n", device.name().c_str(),
-                device.backend().c_str(), device.sample_rate(), device.period_frames());
+    std::printf("%s in, %s out, via %s — %.0f Hz, %zu-frame periods\n", device.name().c_str(),
+                device.playback_name().c_str(), device.backend().c_str(), device.sample_rate(),
+                device.period_frames());
     if (cfg.round_trip_sec <= 0.0) {
         std::printf(
             "no round trip given: the click will be late by whatever the device's is.\n"
