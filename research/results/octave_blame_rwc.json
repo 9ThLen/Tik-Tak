@@ -1,0 +1,73 @@
+{
+  "provenance": {
+    "utc": "2026-08-02T07:34:49Z",
+    "commit": "f1cddbf44c7faabccd2c84e4dc77070fa8e87689",
+    "tree_clean": false,
+    "python": "3.11.15",
+    "platform": "Windows",
+    "binary": {
+      "name": "dump_analysis.exe",
+      "bytes": 975872,
+      "sha256": "958f5dbe1db1862bcd5597f27a814ffc477bf081a129c69f225b8979dce48ced"
+    },
+    "model": {
+      "name": "beatnet_model_1.ttw",
+      "bytes": 1609332,
+      "sha256": "812ed11af745885127cfb967e7db847c9bdef44b8e2c80c79cf875f790b978f1"
+    },
+    "manifest": "manifest.csv",
+    "lock": 0.25,
+    "release": 0.02,
+    "warmup_sec": 5.0
+  },
+  "by_corpus": {
+    "rwc-pop": {
+      "recordings": 100,
+      "tracking_seconds": 23089,
+      "filter_at_annotated_level": 0.8118151500714627,
+      "anchor_at_annotated_level": 0.8473732080211356,
+      "p_anchor_wrong_given_filter_wrong": 0.7562715765247411,
+      "p_filter_wrong_given_anchor_wrong": 0.9324631101021567,
+      "filter_follows_a_right_anchor": 0.9458727319192436,
+      "median_margin_anchor_right": 0.7658,
+      "median_margin_anchor_wrong": 0.4406,
+      "disagreement": {
+        "share_of_tracked_seconds": 0.07497076529949326,
+        "anchor_is_right": 0.6117850953206239,
+        "filter_is_right": 0.13749277874061236,
+        "neither": 0.2507221259387637,
+        "median_margin": 0.4367
+      },
+      "median_margin_held": 0.7693,
+      "median_margin_lost": 0.5813,
+      "disagree_share_held": 0.0330188679245283,
+      "disagree_share_lost": 0.15246636771300448,
+      "longest_disagreement_sec_held": 2.0,
+      "longest_disagreement_sec_lost": 5.0
+    },
+    "rwc-genre": {
+      "recordings": 102,
+      "tracking_seconds": 22072,
+      "filter_at_annotated_level": 0.5603479521565785,
+      "anchor_at_annotated_level": 0.6168448713301921,
+      "p_anchor_wrong_given_filter_wrong": 0.8279060181368508,
+      "p_filter_wrong_given_anchor_wrong": 0.9499822632139057,
+      "filter_follows_a_right_anchor": 0.8773411678295997,
+      "median_margin_anchor_right": 0.767,
+      "median_margin_anchor_wrong": 0.5067,
+      "disagreement": {
+        "share_of_tracked_seconds": 0.1427600579920261,
+        "anchor_is_right": 0.5299904792129483,
+        "filter_is_right": 0.1342430974293875,
+        "neither": 0.3357664233576642,
+        "median_margin": 0.4839
+      },
+      "median_margin_held": 0.7798,
+      "median_margin_lost": 0.57355,
+      "disagree_share_held": 0.044444444444444446,
+      "disagree_share_lost": 0.19289340101522842,
+      "longest_disagreement_sec_held": 3.0,
+      "longest_disagreement_sec_lost": 5.0
+    }
+  }
+}

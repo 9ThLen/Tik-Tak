@@ -1,0 +1,49 @@
+{
+  "provenance": {
+    "utc": "2026-08-02T07:41:13Z",
+    "commit": "f1cddbf44c7faabccd2c84e4dc77070fa8e87689",
+    "tree_clean": false,
+    "python": "3.11.15",
+    "platform": "Windows",
+    "binary": {
+      "name": "dump_analysis.exe",
+      "bytes": 975872,
+      "sha256": "958f5dbe1db1862bcd5597f27a814ffc477bf081a129c69f225b8979dce48ced"
+    },
+    "model": {
+      "name": "beatnet_model_1.ttw",
+      "bytes": 1609332,
+      "sha256": "812ed11af745885127cfb967e7db847c9bdef44b8e2c80c79cf875f790b978f1"
+    },
+    "manifest": "manifest.csv",
+    "lock": 0.25,
+    "release": 0.02,
+    "warmup_sec": 5.0
+  },
+  "by_corpus": {
+    "gtzan": {
+      "recordings": 994,
+      "tracking_seconds": 24419,
+      "filter_at_annotated_level": 0.6718129325525206,
+      "anchor_at_annotated_level": 0.7208730906261518,
+      "p_anchor_wrong_given_filter_wrong": 0.7662840029947592,
+      "p_filter_wrong_given_anchor_wrong": 0.9009683098591549,
+      "filter_follows_a_right_anchor": 0.8935976822132591,
+      "median_margin_anchor_right": 0.7537,
+      "median_margin_anchor_wrong": 0.44865,
+      "disagreement": {
+        "share_of_tracked_seconds": 0.15274990785863468,
+        "anchor_is_right": 0.5021447721179625,
+        "filter_is_right": 0.18096514745308312,
+        "neither": 0.31689008042895445,
+        "median_margin": 0.34825
+      },
+      "median_margin_held": 0.778875,
+      "median_margin_lost": 0.5070250000000001,
+      "disagree_share_held": 0.038461538461538464,
+      "disagree_share_lost": 0.2692307692307692,
+      "longest_disagreement_sec_held": 1.0,
+      "longest_disagreement_sec_lost": 3.0
+    }
+  }
+}

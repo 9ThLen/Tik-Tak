@@ -357,6 +357,23 @@ def verdict(result: dict[str, Any]) -> dict[str, Any]:
     if result.get("worst_wrong_octave_sec", 0.0) > MAX_WRONG_OCTAVE_SEC:
         reasons.append("wrong_octave")
 
+    # The same verdict with the acquisition criterion read strictly: not "when
+    # did confidence first cross the lock threshold" but "when did the tracker
+    # first settle at the annotated level and stay there". The two differ far
+    # more often than the caveat suggested — on 43% of RWC-Pop and 62% of
+    # RWC-Jazz the recording acquires inside the limit on the strength of a lock
+    # that was at the wrong level or did not hold. Reported beside the headline
+    # rather than replacing it, so every earlier number stays comparable and the
+    # gap between the two columns is visible instead of being absorbed.
+    strict = list(reasons)
+    settled = result.get("settled_at")
+    if settled is None or not math.isfinite(settled):
+        if "never_acquired" not in strict:
+            strict.append("never_settled")
+    elif settled > MAX_ACQUISITION_SEC:
+        if "slow_acquisition" not in strict:
+            strict.append("slow_settle")
+
     # The same verdict with the metrical level forgiven: the grid is allowed to
     # be read at half or twice its rate, whichever agrees with the reference
     # better, and only then judged. Not a claim that a wrong level is
@@ -402,6 +419,7 @@ def verdict(result: dict[str, Any]) -> dict[str, Any]:
             forgiving.append("too_few_beats")
 
     return {"usable": not reasons, "reasons": reasons,
+            "usable_strict": not strict, "reasons_strict": strict,
             "usable_any_octave": not forgiving,
             "reasons_any_octave": forgiving}
 
@@ -596,6 +614,14 @@ def summarize(mode: str, results: list[dict[str, Any]], wall: float) -> dict:
             # every reader back to the per-track file.
             "usable_rate_any_octave": (
                 sum(result["usable_any_octave"] for result in part) / len(part)
+                if part else None
+            ),
+            # The headline read strictly: acquisition means settling at the
+            # right level, not merely locking. The gap between this and
+            # `usable_rate` is how much of the headline rests on locks that were
+            # not right.
+            "usable_rate_strict": (
+                sum(result["usable_strict"] for result in part) / len(part)
                 if part else None
             ),
             # Every reason a recording failed for, so a corpus that fails on

@@ -1,0 +1,353 @@
+{
+  "provenance": {
+    "utc": "2026-08-02T08:43:20Z",
+    "commit": "f1cddbf44c7faabccd2c84e4dc77070fa8e87689",
+    "tree_clean": false,
+    "binary": {
+      "name": "dump_analysis.exe",
+      "bytes": 975872,
+      "sha256": "782d62d543ad4464d6139c086ab6e17f02b4f7b91f9c11ad994804138fc10d23"
+    },
+    "model": {
+      "name": "beatnet_model_1.ttw",
+      "bytes": 1609332,
+      "sha256": "812ed11af745885127cfb967e7db847c9bdef44b8e2c80c79cf875f790b978f1"
+    },
+    "python": "3.11.15",
+    "platform": "Windows",
+    "corpora": {
+      "ballroom": {
+        "files": 698,
+        "annotated": 698
+      },
+      "gtzan": {
+        "files": 1000,
+        "annotated": 1000
+      },
+      "root": {
+        "files": 109,
+        "annotated": 0
+      },
+      "smc": {
+        "files": 217,
+        "annotated": 217
+      }
+    }
+  },
+  "protocol": {
+    "causal": true,
+    "callback_samples": 512,
+    "poll_seconds": 1.0,
+    "warmup_seconds": 5.0,
+    "lock_confidence": 0.25,
+    "release_confidence": 0.02,
+    "octave_tolerance_percent": 8.0,
+    "seeded": false,
+    "tracker_flags": [
+      "--live-anchor-width",
+      "0.03"
+    ],
+    "usable": {
+      "max_acquisition_sec": 8.0,
+      "min_precision_70ms": 0.8,
+      "min_recall_70ms": 0.8,
+      "max_wrong_octave_sec": 4.0,
+      "settle_sec": 4.0,
+      "acquisition": "the pass criterion uses acquired_at, the first confidence lock, which does not ask whether the level was right — a brief wrong lock inside the limit can carry a recording past it. settled_at is reported beside it and is the first locked stretch at the annotated level lasting settle_sec; acquisition_was_a_false_start_fraction is how often the two disagree in the direction that flatters us",
+      "aggregate": "macro-average over corpora with n >= 30",
+      "failure_reasons": "share of ALL recordings in the corpus failing for each reason; one recording can fail for several, so they do not sum to the failure rate",
+      "any_octave": "oracle: the grid is read at half (both phases) or twice its rate and judged at whichever agrees best, over the whole recording — an upper bound on any control the player could be given"
+    },
+    "reference_bpm": "local median of up to 10 neighbouring annotated intervals",
+    "switch_definition": "half/normal/double state change while hysteresis-active; reacquisition changes reported separately"
+  },
+  "summaries": [
+    {
+      "mode": "model",
+      "attempted": 2024,
+      "success": 2015,
+      "scored": 1914,
+      "usable_rate_macro": 0.3606187911422529,
+      "usable_rate_any_octave_macro": 0.3886825504812379,
+      "usable_rate_pooled": 0.4566353187042842,
+      "usable_rate_any_octave_pooled": 0.49320794148380354,
+      "failure_reasons": {
+        "too_few_beats": 0.4754440961337513,
+        "wrong_beats": 0.46290491118077326,
+        "wrong_octave": 0.3406478578892372,
+        "slow_acquisition": 0.1071055381400209,
+        "never_acquired": 0.005747126436781609
+      },
+      "failures": [
+        {
+          "corpus": "gtzan",
+          "name": "jazz.00054",
+          "error": "dump_analysis failed on <audio>/jazz.00054.wav: <audio>/jazz.00054.wav is not a WAV, FLAC or MP3 file"
+        },
+        {
+          "corpus": "root",
+          "name": "<local audio>",
+          "error": "not decodable"
+        },
+        {
+          "corpus": "root",
+          "name": "<local audio>",
+          "error": "not decodable"
+        },
+        {
+          "corpus": "root",
+          "name": "<local audio>",
+          "error": "not decodable"
+        },
+        {
+          "corpus": "root",
+          "name": "<local audio>",
+          "error": "not decodable"
+        },
+        {
+          "corpus": "root",
+          "name": "<local audio>",
+          "error": "not decodable"
+        },
+        {
+          "corpus": "root",
+          "name": "<local audio>",
+          "error": "not decodable"
+        },
+        {
+          "corpus": "root",
+          "name": "<local audio>",
+          "error": "not decodable"
+        },
+        {
+          "corpus": "root",
+          "name": "<local audio>",
+          "error": "not decodable"
+        }
+      ],
+      "quality": {
+        "f_measure": 0.6858876053193225,
+        "cmlt": 0.5895602144409862,
+        "amlt": 0.6534903565459307,
+        "p70": 0.7018699479974324,
+        "r70": 0.6914474340099469,
+        "coverage": 0.9995404444303226
+      },
+      "silent_tracks": 6,
+      "median_final_confidence": 0.8023383405,
+      "median_final_spread_octaves": 0.024723822800000003,
+      "active_fraction": 0.8894127568230604,
+      "octave": {
+        "tracks_with_switch": 478,
+        "track_fraction": 0.2497387669801463,
+        "total_switches": 1081,
+        "within_lock_switches": 1027,
+        "reacquire_switches": 54,
+        "switches_per_audio_hour": 64.3159029686507,
+        "active_state_shares": {
+          "same": 0.7296039305262251,
+          "half": 0.06841787699866396,
+          "double": 0.06384950221954058,
+          "other": 0.1381286902555704,
+          "zero": 0.0
+        },
+        "final_states": {
+          "other": 310,
+          "half": 118,
+          "same": 1371,
+          "double": 115
+        }
+      },
+      "by_corpus": {
+        "ballroom": {
+          "n": 698,
+          "usable_rate": 0.6031518624641834,
+          "usable_rate_any_octave": 0.6260744985673352,
+          "failure_reasons": {
+            "too_few_beats": 0.2922636103151863,
+            "wrong_beats": 0.28796561604584525,
+            "wrong_octave": 0.23065902578796563,
+            "slow_acquisition": 0.07306590257879657
+          },
+          "median_acquisition_sec": 5.004,
+          "median_settle_sec": 7.001,
+          "never_settled_fraction": 0.11174785100286533,
+          "acquisition_was_a_false_start_fraction": 0.2836676217765043,
+          "f_measure": 0.8233099637820074,
+          "cmlt": 0.7372106833357183,
+          "switch_tracks": 214,
+          "switches": 550,
+          "switches_per_hour": 90.68617014843001,
+          "final_same_fraction": 0.8853868194842407,
+          "final_half": 54,
+          "final_double": 10,
+          "final_other_or_zero": 16
+        },
+        "gtzan": {
+          "n": 999,
+          "usable_rate": 0.44644644644644643,
+          "usable_rate_any_octave": 0.4984984984984985,
+          "failure_reasons": {
+            "too_few_beats": 0.4994994994994995,
+            "wrong_beats": 0.4774774774774775,
+            "wrong_octave": 0.32232232232232233,
+            "slow_acquisition": 0.07607607607607608,
+            "never_acquired": 0.004004004004004004
+          },
+          "median_acquisition_sec": 5.016,
+          "median_settle_sec": 5.016,
+          "never_settled_fraction": 0.24824824824824826,
+          "acquisition_was_a_false_start_fraction": 0.34934934934934936,
+          "f_measure": 0.6872788510665983,
+          "cmlt": 0.5900480970992696,
+          "switch_tracks": 209,
+          "switches": 425,
+          "switches_per_hour": 51.010122289814696,
+          "final_same_fraction": 0.7187187187187187,
+          "final_half": 60,
+          "final_double": 77,
+          "final_other_or_zero": 144
+        },
+        "smc": {
+          "n": 217,
+          "usable_rate": 0.03225806451612903,
+          "usable_rate_any_octave": 0.041474654377880185,
+          "failure_reasons": {
+            "wrong_beats": 0.9585253456221198,
+            "too_few_beats": 0.9539170506912442,
+            "wrong_octave": 0.7788018433179723,
+            "slow_acquisition": 0.35944700460829493,
+            "never_acquired": 0.03225806451612903
+          },
+          "median_acquisition_sec": 6.002,
+          "median_settle_sec": 8.51,
+          "never_settled_fraction": 0.7788018433179723,
+          "acquisition_was_a_false_start_fraction": 0.5069124423963134,
+          "f_measure": 0.23745138085626863,
+          "cmlt": 0.11238315423753951,
+          "switch_tracks": 55,
+          "switches": 106,
+          "switches_per_hour": 43.963133640552996,
+          "final_same_fraction": 0.16129032258064516,
+          "final_half": 4,
+          "final_double": 28,
+          "final_other_or_zero": 150
+        }
+      },
+      "top_switching": [
+        {
+          "corpus": "ballroom",
+          "name": "Albums-Step_By_Step-18",
+          "switches": 11,
+          "within": 11,
+          "reacquire": 0,
+          "final_bpm": 106.26727552524218,
+          "final_state": "half"
+        },
+        {
+          "corpus": "ballroom",
+          "name": "Media-104219",
+          "switches": 11,
+          "within": 11,
+          "reacquire": 0,
+          "final_bpm": 200.15138799318825,
+          "final_state": "same"
+        },
+        {
+          "corpus": "ballroom",
+          "name": "Media-104916",
+          "switches": 11,
+          "within": 11,
+          "reacquire": 0,
+          "final_bpm": 201.5455792635362,
+          "final_state": "same"
+        },
+        {
+          "corpus": "smc",
+          "name": "smc_011",
+          "switches": 10,
+          "within": 10,
+          "reacquire": 0,
+          "final_bpm": 103.77892980972295,
+          "final_state": "other"
+        },
+        {
+          "corpus": "ballroom",
+          "name": "Albums-Chrisanne3-13",
+          "switches": 9,
+          "within": 9,
+          "reacquire": 0,
+          "final_bpm": 198.13014468917467,
+          "final_state": "same"
+        },
+        {
+          "corpus": "ballroom",
+          "name": "Albums-Chrisanne3-14",
+          "switches": 8,
+          "within": 8,
+          "reacquire": 0,
+          "final_bpm": 104.49865168308126,
+          "final_state": "half"
+        },
+        {
+          "corpus": "ballroom",
+          "name": "Albums-Step_By_Step-15",
+          "switches": 8,
+          "within": 8,
+          "reacquire": 0,
+          "final_bpm": 102.73260808545707,
+          "final_state": "half"
+        },
+        {
+          "corpus": "ballroom",
+          "name": "Media-105816",
+          "switches": 8,
+          "within": 8,
+          "reacquire": 0,
+          "final_bpm": 199.56616172531326,
+          "final_state": "same"
+        },
+        {
+          "corpus": "gtzan",
+          "name": "reggae.00035",
+          "switches": 8,
+          "within": 8,
+          "reacquire": 0,
+          "final_bpm": 157.03317757190436,
+          "final_state": "same"
+        },
+        {
+          "corpus": "ballroom",
+          "name": "Albums-Chrisanne2-11",
+          "switches": 8,
+          "within": 7,
+          "reacquire": 1,
+          "final_bpm": 105.3238116116535,
+          "final_state": "other"
+        },
+        {
+          "corpus": "ballroom",
+          "name": "Albums-Ballroom_Classics4-18",
+          "switches": 7,
+          "within": 7,
+          "reacquire": 0,
+          "final_bpm": 202.15774191961412,
+          "final_state": "same"
+        },
+        {
+          "corpus": "ballroom",
+          "name": "Media-104216",
+          "switches": 7,
+          "within": 7,
+          "reacquire": 0,
+          "final_bpm": 198.76437336010733,
+          "final_state": "same"
+        }
+      ],
+      "harmonix_four": [],
+      "audio_hours": 23.119539750320712,
+      "wall_seconds": 561.9077849001624,
+      "rtf": 0.006751237156588961
+    }
+  ]
+}

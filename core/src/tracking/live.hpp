@@ -111,6 +111,35 @@ struct LiveConfig {
     // evidence.
     double anchor_width_octaves = 0.1;
 
+    // The width to use instead while the filter and the anchor are at
+    // *different* metrical levels. Zero means "no such rule", which is what
+    // ships until the measurement below says otherwise.
+    //
+    // The direction is the whole point and it is the opposite of the obvious
+    // one. Faced with a tracker that loses recordings to the octave, the
+    // natural move is to loosen the anchor when the two disagree, on the
+    // grounds that the anchor may be holding the filter back from a real change.
+    // Measured over three corpora with the tracker's own hysteresis, that is
+    // backwards — during the seconds they disagree, the *anchor* is at the
+    // annotated level three to four times as often as the filter:
+    //
+    //     disagreeing seconds   share   anchor right   filter right   neither
+    //     RWC-Pop                7.5%       61.2%          13.7%       25.1%
+    //     RWC-Genre             14.3%       53.0%          13.4%       33.6%
+    //     GTZAN                 15.3%       50.2%          18.1%       31.7%
+    //
+    // So a disagreement is evidence against the cloud, not against the anchor.
+    // Siding with the anchor outright would be worth about 3.6 points of
+    // correctly-levelled seconds on RWC-Pop and 4.9 on GTZAN, which bounds what
+    // this parameter can buy; a third of the disagreements are cases where
+    // neither is right and nothing here reaches those.
+    //
+    // Why a width rather than an override: the filter is not only choosing a
+    // level, it is also placing beats, and an override would discard the phase
+    // it has along with the period. Narrowing the anchor lets the cloud keep
+    // its phase while its period is pulled.
+    double anchor_width_when_split = 0.0;
+
     // How decided the estimator has to be before its answer is used, as the
     // gap to the best rival at another metrical level.
     //
@@ -260,6 +289,27 @@ struct LiveConfig {
 // Classical at 0.0% and jazz at 6.0% are not a surprise and not the same
 // problem; see the note on sparse material below.
 //
+// **How much of that rests on a lock that was not right.** The acquisition
+// criterion asks when confidence first crossed the threshold, not whether the
+// level it locked to was the right one, and on full-length material the two
+// come apart constantly: a recording acquires inside the eight seconds on the
+// strength of a wrong or momentary lock on 43% of RWC-Pop, 52.9% of RWC-Genre
+// and 62% of RWC-Jazz. Read strictly — acquisition means settling at the
+// annotated level and holding for four seconds — the headline moves:
+//
+//     usable            as it stands   read strictly
+//     RWC-Pop               33.0%          28.0%
+//     RWC royalty-free      33.3%          26.7%
+//     RWC-Genre             10.8%           8.8%
+//     RWC-Jazz               6.0%           6.0%
+//
+// Five points on RWC-Pop, which is worth stating and worth keeping in
+// proportion: the false-start *fraction* is 43% but the headline only falls by
+// five, because most recordings with a false start were already failing on
+// something else. Both columns are reported, and the loose one stays the
+// headline so that every number measured before `settled_at` existed remains
+// comparable with the ones after.
+//
 // Why GTZAN's recordings fail, as a share of all 999 of them — a recording can
 // fail several ways at once, so these overlap and do not sum to the 58.9% that
 // fail:
@@ -365,42 +415,39 @@ struct LiveConfig {
 //
 // And the decoder's loss has a name — but not the one this comment gave it
 // first. The rank correlation between a recording's annotated tempo spread and
-// its oracle-fed recall is -0.51 on GTZAN, which was read here as "the filter
+// its oracle-fed recall is -0.53 on GTZAN, which was read here as "the filter
 // cannot follow a tempo that changes". That reading was wrong, because the
 // spread it correlates with is two things at once. Split the interval series
 // into a slow trend (a nine-beat running median) and the residual around it:
 //
 //                  median drift   median jitter   rho(drift)   rho(jitter)
-//     GTZAN           0.0084          0.0122        -0.35        -0.39
+//     GTZAN           0.0084          0.0122        -0.45        -0.49
 //     SMC             0.0423          0.0706        -0.20        -0.38
 //
-// Whole corpora, from research/eval/timing_irregularity.py. Jitter is the
-// stronger predictor on both, and on SMC it is nearly twice as strong — but the
-// separation is modest and **drift is not zero anywhere**. An earlier revision
-// read a subset figure of -0.02 as "drift has no relationship with recall on
-// SMC" and built a conclusion on it; at full size that number is -0.20. The
-// supportable claim is only that irregularity predicts failure better than
-// drift does, not that drift is innocent.
+// Whole corpora, from research/eval/timing_irregularity.py, with tied recall
+// values assigned their average rank. The high-frequency residual is the
+// stronger predictor on both, though only modestly on GTZAN; on SMC it is nearly
+// twice as strong. Calling that residual "jitter" is a statistical label, not a
+// claim that it is random: swing and other structured timing can live there too.
 //
 // A synthetic bench agrees on the direction from the other side, passing every
 // ramp of ±2/5/10% over 15 or 45 seconds at F70 ≈ 0.995 while failing four of
 // five clips at 40 ms of jitter. Note that at 70 ms of jitter its failure is
 // close to tautological, the deviation being the width of the scoring window.
 //
-// Nor is the filter over-smoothing, which is the next thing one would assume.
-// Score a locally steady pulse — the annotated beats with every interval
-// replaced by its local median, so it follows drift and never follows jitter:
+// One useful control is a locally steady pulse: replace every annotated interval
+// by its centred local median, anchor the result at the first beat, and walk it
+// forward:
 //
 //     recall at 70 ms          GTZAN    SMC
 //     a locally steady pulse   83.5%   33.2%
 //     our filter, oracle-fed   92.7%   54.6%
 //
-// Nine points above that bound on GTZAN and twenty-one on SMC. The filter
-// already follows a great deal of expressive timing. And 33.2% says something
-// about SMC rather than about us: two in three of its annotated beats sit more
-// than 70 ms from any locally regular pulse, so a large part of the remaining
-// 45 points is deviation a causal system cannot predict in principle. How much
-// is irreducible is not known; that it is a substantial share is.
+// The filter scores nine points above this baseline on GTZAN and twenty-one on
+// SMC, so it follows timing that this smoothing strategy discards. Nothing here
+// is an impossibility bound: the baseline uses future intervals, is re-anchored
+// only once, and can accumulate phase error. It does not establish how much of
+// either corpus a causal system can recover.
 //
 // **Where the anchor helps and where it hurts, per recording.** With the same
 // oracle observation, the anchor changes some recordings by more than five
@@ -455,12 +502,12 @@ struct LiveConfig {
 // So 0.01 stays. It is worth being explicit that an earlier version of this
 // paragraph used the same evidence to argue for a predominant-local-pulse
 // decoder, on the grounds that a random-walk tempo cannot follow tempo change.
-// The drift/jitter split above withdraws that: tempo change is not what fails,
-// and a decoder that produces a *smooth* local pulse would sit nearer the
-// 84.2%/30.7% steady-pulse bound than to what this filter already does. If one
-// is tried, it should be tried for the octave, where the same evidence still
-// favours a window over a recursion — `ActivationTempo` beats the filter 81.7%
-// to 66.6% on ballroom at choosing the level — and not for recall.
+// The drift/jitter split above withdraws that diagnosis: smooth ramps are not
+// what the synthetic filter loses, and the locally steady baseline cannot
+// predict how PLP would score. If PLP is tried, the remaining positive evidence
+// is for octave selection, where a window still beats the recursion —
+// `ActivationTempo` scores 81.7% against the filter's 66.6% on ballroom — not
+// for recall.
 //
 // A caution for anyone sweeping anything else here: an oracle observation
 // removes precisely the pressure most of these settings exist to resist, so a

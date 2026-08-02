@@ -50,10 +50,12 @@ RESEARCH = REPOSITORY / "research"
 sys.path.insert(0, str(RESEARCH))
 
 from eval.analysis import DEFAULT_BINARY  # noqa: E402
-from eval.annotations import load_annotation  # noqa: E402
+from eval.live_corpus_benchmark import load_corpus  # noqa: E402
+from eval.live_corpus_benchmark import load_reference_beats  # noqa: E402
+from eval.provenance import provenance  # noqa: E402
 
-DATA = RESEARCH / "data"
 MODEL = REPOSITORY / "models" / "beatnet_model_1.ttw"
+GROUND_TRUTH = REPOSITORY / "music" / "ground-truth" / "manifest.csv"
 TOLERANCE = math.log2(1.08)
 
 # The same hysteresis the corpus benchmark uses, and for the same reason. An
@@ -85,10 +87,11 @@ def level(bpm: float, reference: float) -> str:
     return "other"
 
 
-def one(audio: pathlib.Path) -> dict | None:
-    done = subprocess.run([str(DEFAULT_BINARY), str(audio), "--live",
+def one(item: dict) -> dict | None:
+    done = subprocess.run([str(DEFAULT_BINARY), str(item["audio"]), "--live",
                            "--live-model", str(MODEL)],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, encoding="utf-8",
+                          errors="replace")
     if done.returncode != 0:
         return None
     raw = json.loads(done.stdout)
@@ -100,7 +103,8 @@ def one(audio: pathlib.Path) -> dict | None:
     n = min(len(times), len(filt), len(anchor), len(conf), len(margin))
     if n < 10:
         return None
-    reference = load_annotation(audio.with_suffix(".beats")).beats
+    reference = load_reference_beats(item["annotation"])
+    reference = reference[np.isfinite(reference)]
     if len(reference) < 8:
         return None
 
@@ -116,23 +120,73 @@ def one(audio: pathlib.Path) -> dict | None:
         ref = local_bpm(reference, float(times[i]))
         rows.append((level(float(filt[i]), ref), level(float(anchor[i]), ref),
                      float(margin[i])))
-    return {"name": audio.stem, "rows": rows} if rows else None
+    if not rows:
+        return None
+
+    # Per recording, and only from quantities the tracker holds at run time.
+    # The blame statistic below says where the level goes wrong; it cannot say
+    # *when* to act, because nothing in it is available without the annotation.
+    # These four are: the estimator's own octave margin, how often it and the
+    # filter disagree about the level, and how long the longest disagreement
+    # lasts. If one of them separates the recordings that end at the right level
+    # from the ones that do not, it is a candidate for making the anchor's
+    # strength conditional instead of fixed.
+    disagree = np.array([row[0] != row[1] for row in rows])
+    longest = current = 0
+    for flag in disagree:
+        current = current + 1 if flag else 0
+        longest = max(longest, current)
+    return {
+        "name": item["name"],
+        "corpus": item["corpus"],
+        "rows": rows,
+        "right_level_share": float(np.mean([row[0] == "same" for row in rows])),
+        "median_margin": float(np.median([row[2] for row in rows])),
+        "disagree_share": float(np.mean(disagree)),
+        "longest_disagreement_sec": float(longest),  # one row per second
+        "tracked_seconds": len(rows),
+    }
+
+
+def sample(part: list, limit: int) -> list:
+    """A subset that spans the corpus rather than stopping partway through it.
+
+    Same correction as `oracle_activation.sample`: the obvious stride-then-
+    truncate drops the tail of a list, which on a corpus filed by genre means
+    dropping whole genres.
+    """
+    if not limit or len(part) <= limit:
+        return part
+    return part[:: -(-len(part) // limit)]
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--corpora", nargs="*", default=["ballroom", "gtzan"])
-    parser.add_argument("--limit", type=int, default=150)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--manifest", type=pathlib.Path, default=GROUND_TRUTH)
+    parser.add_argument("--corpora", nargs="*", default=["rwc-pop", "gtzan"])
+    parser.add_argument("--limit", type=int, default=0,
+                        help="0 = every recording in the corpus")
     parser.add_argument("--workers", type=int, default=6)
+    parser.add_argument("--output", type=pathlib.Path)
     args = parser.parse_args()
 
+    items = load_corpus(args.manifest, REPOSITORY / "music", False)
+    report: dict = {
+        "provenance": provenance(REPOSITORY,
+                                 {"binary": DEFAULT_BINARY, "model": MODEL},
+                                 manifest=str(args.manifest.name),
+                                 lock=LOCK, release=RELEASE,
+                                 warmup_sec=WARMUP_SEC),
+        "by_corpus": {},
+    }
+
     for corpus in args.corpora:
-        folder = DATA / corpus / corpus
-        files = sorted(p for p in folder.rglob("*.wav")
-                       if p.with_suffix(".beats").is_file())
-        files = files[:: max(1, len(files) // args.limit)][: args.limit]
+        part = sample([i for i in items if i["corpus"] == corpus], args.limit)
+        if not part:
+            print(f"{corpus}: not in {args.manifest}")
+            continue
         with concurrent.futures.ThreadPoolExecutor(args.workers) as pool:
-            got = [g for g in pool.map(one, files) if g]
+            got = [g for g in pool.map(one, part) if g]
         rows = [r for g in got for r in g["rows"]]
         if not rows:
             print(f"{corpus}: nothing")
@@ -142,21 +196,76 @@ def main() -> int:
         anchor = np.array([r[1] for r in rows])
         margin = np.array([r[2] for r in rows])
         wrong = filt != "same"
-        print(f"\n{corpus}: {len(got)} recordings, {len(rows)} tracking seconds")
-        print(f"   the filter is at the annotated level  {np.mean(~wrong):.1%}")
-        print(f"   the anchor is                          "
-              f"{np.mean(anchor == 'same'):.1%}")
-        print(f"\n   of the {int(wrong.sum())} seconds the filter gets wrong:")
-        agrees = anchor[wrong] != "same"
-        print(f"      the anchor was wrong too   {np.mean(agrees):.1%}  "
-              f"-> the estimator chose the level")
-        print(f"      the anchor was right       {np.mean(~agrees):.1%}  "
-              f"-> the filter left an anchor that was right")
         good = anchor == "same"
-        print(f"\n   of the {int(good.sum())} seconds the anchor gets right, "
-              f"the filter follows {np.mean(filt[good] == 'same'):.1%}")
-        print(f"   octave margin when the anchor is right {np.median(margin[good]):.3f}, "
-              f"wrong {np.median(margin[~good]):.3f}")
+
+        summary = {
+            "recordings": len(got),
+            "tracking_seconds": len(rows),
+            "filter_at_annotated_level": float(np.mean(~wrong)),
+            "anchor_at_annotated_level": float(np.mean(good)),
+            # Both conditionals, because only the second is the causal one and
+            # an earlier reading of this script quoted the first as if it were.
+            "p_anchor_wrong_given_filter_wrong": float(
+                np.mean(anchor[wrong] != "same")),
+            "p_filter_wrong_given_anchor_wrong": float(
+                np.mean(filt[~good] != "same")),
+            "filter_follows_a_right_anchor": float(np.mean(filt[good] == "same")),
+            "median_margin_anchor_right": float(np.median(margin[good])),
+            "median_margin_anchor_wrong": float(np.median(margin[~good])),
+        }
+
+        # Sustained disagreement between the two is the run-time signal that
+        # separates the recordings that hold the level from the ones that lose
+        # it. A policy needs one more thing from it: during those seconds, which
+        # of the two is right. "Relax the anchor" and "trust the anchor harder"
+        # are opposite actions and this is the number that chooses between them.
+        split = filt != anchor
+        if split.any():
+            summary["disagreement"] = {
+                "share_of_tracked_seconds": float(np.mean(split)),
+                "anchor_is_right": float(np.mean(anchor[split] == "same")),
+                "filter_is_right": float(np.mean(filt[split] == "same")),
+                "neither": float(np.mean((anchor[split] != "same")
+                                         & (filt[split] != "same"))),
+                "median_margin": float(np.median(margin[split])),
+            }
+            d = summary["disagreement"]
+            print(f"   when they disagree ({d['share_of_tracked_seconds']:.1%} of "
+                  f"seconds): anchor right {d['anchor_is_right']:.1%}, "
+                  f"filter right {d['filter_is_right']:.1%}, "
+                  f"neither {d['neither']:.1%}")
+
+        print(f"\n{corpus}: {len(got)} recordings, {len(rows)} tracking seconds")
+        print(f"   the filter is at the annotated level  "
+              f"{summary['filter_at_annotated_level']:.1%}")
+        print(f"   the anchor is                         "
+              f"{summary['anchor_at_annotated_level']:.1%}")
+        print(f"   P(anchor wrong | filter wrong)        "
+              f"{summary['p_anchor_wrong_given_filter_wrong']:.1%}")
+        print(f"   P(filter wrong | anchor wrong)        "
+              f"{summary['p_filter_wrong_given_anchor_wrong']:.1%}   <- causal")
+        print(f"   octave margin, anchor right {summary['median_margin_anchor_right']:.3f}"
+              f"  wrong {summary['median_margin_anchor_wrong']:.3f}")
+
+        # The discriminator question, per recording and from run-time
+        # quantities only: does anything the tracker can see separate the
+        # recordings that hold the right level from the ones that do not?
+        held = np.array([g["right_level_share"] >= 0.8 for g in got])
+        if 5 <= held.sum() <= len(got) - 5:
+            print(f"   of {len(got)} recordings, {int(held.sum())} hold the right "
+                  f"level for 80% of their tracked seconds:")
+            for key, label in (("median_margin", "octave margin        "),
+                               ("disagree_share", "anchor/filter disagree"),
+                               ("longest_disagreement_sec", "longest disagreement ")):
+                a = float(np.median([g[key] for g in np.array(got)[held]]))
+                b = float(np.median([g[key] for g in np.array(got)[~held]]))
+                summary[f"{key}_held"] = a
+                summary[f"{key}_lost"] = b
+                print(f"      {label}  held {a:8.3f}   lost {b:8.3f}")
+        report["by_corpus"][corpus] = summary
+
+    if args.output:
+        args.output.write_text(json.dumps(report, indent=2), encoding="utf-8")
     return 0
 
 

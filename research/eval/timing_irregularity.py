@@ -6,18 +6,16 @@ written, so this costs no audio processing at all.
 
 **Which irregularity.** The oracle-fed filter's recall correlates with the
 coefficient of variation of the annotated beat intervals. That statistic is two
-things at once, and they call for opposite work: a slow tempo *drift*, which a
-tracker ought to follow, and beat-to-beat *jitter* — expressive timing — which
-is largely unpredictable. Splitting the interval series into a running median
-and the residual around it separates them, and the correlations differ enough
-that the undivided number was read the wrong way round once already.
+things at once: a slow tempo *drift* and a beat-to-beat residual around it. The
+residual can contain expressive but structured timing, so this script calls it
+``jitter`` only as a compact statistical label, not as a claim that it is random
+or causally unpredictable.
 
-**How much is reachable.** A locally steady pulse — the annotated beats with
-every interval replaced by its local median — follows drift and never follows
-jitter. It is what a tracker scores if it treats every deviation as noise. Our
-filter should be above it, and how far above says how much expressive timing it
-already follows; how far the bound is *below* 100% says how much of the corpus
-simply is not on a regular pulse.
+**Locally steady baseline.** Replacing every annotated interval by its centred
+local median produces one illustrative smooth pulse. It is anchored only at the
+first beat, can accumulate phase error, and uses future intervals, so it is
+neither causal nor a bound on what a causal tracker can recover. The comparison
+only says how the filter fares against this particular smoothing strategy.
 
 **Which recordings the anchor saves, and which it costs.** `oracle_activation`
 scores every recording with the anchor on and off, so the per-track difference
@@ -51,6 +49,7 @@ sys.path.insert(0, str(RESEARCH))
 from eval.live_corpus_benchmark import load_corpus  # noqa: E402
 from eval.live_corpus_benchmark import load_reference_beats  # noqa: E402
 from eval.provenance import provenance  # noqa: E402
+from eval.statistics import spearman  # noqa: E402
 
 WINDOW_SEC = 0.070
 WARMUP_SEC = 5.0
@@ -75,7 +74,7 @@ def split(beats: np.ndarray) -> tuple[float, float] | None:
 
 
 def steady_pulse(beats: np.ndarray) -> np.ndarray | None:
-    """The annotated beats, walked at the local median interval."""
+    """One non-causal baseline, walked from beat zero at median intervals."""
     intervals = np.diff(beats)
     if len(intervals) < 2 * TREND_BEATS:
         return None
@@ -97,15 +96,6 @@ def recall(reference: np.ndarray, found: np.ndarray) -> float:
     return hits / len(reference)
 
 
-def spearman(x: np.ndarray, y: np.ndarray) -> float | None:
-    ok = np.isfinite(x) & np.isfinite(y)
-    if ok.sum() < 20:
-        return None
-    rx = np.argsort(np.argsort(x[ok]))
-    ry = np.argsort(np.argsort(y[ok]))
-    return float(np.corrcoef(rx, ry)[0, 1])
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--oracle", nargs="+", type=pathlib.Path, required=True,
@@ -122,8 +112,10 @@ def main() -> int:
                  REPOSITORY / "music" / "ground-truth" / "manifest.csv",
                  REPOSITORY / "music", False)}
 
+    source_files = {f"oracle_{index}": path
+                    for index, path in enumerate(args.oracle)}
     report: dict = {
-        "provenance": provenance(REPOSITORY, sources=[str(p) for p in args.oracle],
+        "provenance": provenance(REPOSITORY, source_files,
                                  trend_beats=TREND_BEATS, margin=args.margin),
         "window_sec": WINDOW_SEC, "by_corpus": {},
     }
@@ -160,22 +152,28 @@ def main() -> int:
             jitter = np.array([r["jitter"] for r in rows])
             steady = np.array([r["steady"] for r in rows])
             oracle = np.array([r["oracle"] for r in rows])
+            drift_rho = spearman(drift, oracle, min_samples=20)
+            jitter_rho = spearman(jitter, oracle, min_samples=20)
+            drift_rho_text = f"{drift_rho:+.2f}" if drift_rho is not None else "n/a"
+            jitter_rho_text = (
+                f"{jitter_rho:+.2f}" if jitter_rho is not None else "n/a"
+            )
 
             summary = {
                 "n": len(rows),
                 "median_drift": float(np.median(drift)),
                 "median_jitter": float(np.median(jitter)),
-                "rho_drift_vs_oracle": spearman(drift, oracle),
-                "rho_jitter_vs_oracle": spearman(jitter, oracle),
+                "rho_drift_vs_oracle": drift_rho,
+                "rho_jitter_vs_oracle": jitter_rho,
                 "steady_pulse_recall": float(steady.mean()),
                 "oracle_recall": float(oracle.mean()),
             }
 
             print(f"\n{corpus}: {len(rows)} recordings")
             print(f"   drift  median {np.median(drift):.4f}   "
-                  f"rho vs oracle recall {spearman(drift, oracle):+.2f}")
+                  f"rho vs oracle recall {drift_rho_text}")
             print(f"   jitter median {np.median(jitter):.4f}   "
-                  f"rho vs oracle recall {spearman(jitter, oracle):+.2f}")
+                  f"rho vs oracle recall {jitter_rho_text}")
             print(f"   a locally steady pulse recalls {steady.mean():.1%}, "
                   f"our filter {oracle.mean():.1%}")
 

@@ -12,8 +12,16 @@ bool LiveConfig::valid() const {
            lock_confidence <= 1.0 && release_confidence >= 0.0 &&
            release_confidence < lock_confidence && discontinuity_tolerance_sec > 0.0 &&
            activation_tempo.valid() && anchor_width_octaves > 0.0 &&
+           anchor_width_when_split >= 0.0 &&
            anchor_octave_margin >= 0.0 && anchor_octave_margin <= 1.0;
 }
+
+namespace {
+// Within eight percent is the same metrical level, matching the tolerance the
+// benchmark scores octaves with. Two answers further apart than this are not a
+// disagreement about tempo, they are a disagreement about what a beat is.
+constexpr double kSameLevelOctaves = 0.11;  // log2(1.08)
+}  // namespace
 
 LiveConfig liveConfigFor(double sample_rate) {
     LiveConfig out;
@@ -190,7 +198,20 @@ void LiveTracker::submit(double time_sec, double normalised) {
         const auto measured = activation_tempo_.estimate();
         if (measured.answered() &&
             measured.octave_margin >= config_.anchor_octave_margin) {
-            filter_.anchorTempo(measured.bpm, config_.anchor_width_octaves);
+            // Narrower while the two sit at different metrical levels. See
+            // LiveConfig::anchor_width_when_split for which way round that is
+            // and why: when they disagree the estimator is at the annotated
+            // level three to four times as often as the cloud, so the
+            // disagreement is a reason to pull towards the anchor, not away.
+            double width = config_.anchor_width_octaves;
+            if (config_.anchor_width_when_split > 0.0) {
+                const double bpm = filter_.estimate(time_sec).bpm;
+                if (bpm > 0.0 &&
+                    std::abs(std::log2(bpm / measured.bpm)) > kSameLevelOctaves) {
+                    width = config_.anchor_width_when_split;
+                }
+            }
+            filter_.anchorTempo(measured.bpm, width);
         } else {
             // Dropped rather than held. An anchor is a claim that the metrical
             // level is known, and when the estimator stops saying so the claim

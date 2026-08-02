@@ -49,6 +49,7 @@ from eval.analysis import DEFAULT_BINARY  # noqa: E402
 from eval.live_corpus_benchmark import load_corpus  # noqa: E402
 from eval.live_corpus_benchmark import load_reference_beats  # noqa: E402
 from eval.provenance import provenance  # noqa: E402
+from eval.statistics import spearman  # noqa: E402
 
 FPS = 50.0
 WINDOW_SEC = 0.070
@@ -230,11 +231,7 @@ def main() -> int:
         spread = np.array([row["tempo_spread"] for row in rows])
         bump = np.array([row["bump"] for row in rows])
         usable = np.isfinite(spread) & np.isfinite(bump)
-        correlation = None
-        if usable.sum() > 10:
-            ranks = (np.argsort(np.argsort(spread[usable])),
-                     np.argsort(np.argsort(bump[usable])))
-            correlation = float(np.corrcoef(ranks[0], ranks[1])[0, 1])
+        correlation = spearman(spread, bump, min_samples=11)
 
         labels = [("real", "BeatNet activation      "),
                   ("impulse", "oracle, one frame       "),

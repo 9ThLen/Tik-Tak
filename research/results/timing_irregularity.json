@@ -1,14 +1,20 @@
 {
   "provenance": {
-    "utc": "2026-08-01T22:39:22Z",
-    "commit": "ff196921c48e82bd8d06dae1f6df256c82c50706",
+    "utc": "2026-08-02T09:45:10Z",
+    "commit": "f1cddbf44c7faabccd2c84e4dc77070fa8e87689",
     "tree_clean": false,
     "python": "3.11.15",
     "platform": "Windows",
-    "sources": [
-      "results\\oracle_activation_gtzan.json",
-      "results\\oracle_activation.json"
-    ],
+    "oracle_0": {
+      "name": "oracle_activation_gtzan.json",
+      "bytes": 405826,
+      "sha256": "46e83c0ed4cb8ecc4d568a51737da087d936f8ad32a005838d220330baccf57a"
+    },
+    "oracle_1": {
+      "name": "oracle_activation.json",
+      "bytes": 96348,
+      "sha256": "99351c86cd2d708dd1dd4bbffebe022bdabd50ea442804fd9f658cd9a6131e90"
+    },
     "trend_beats": 9,
     "margin": 0.05
   },
@@ -18,8 +24,8 @@
       "n": 998,
       "median_drift": 0.008361654447951887,
       "median_jitter": 0.012184855485136592,
-      "rho_drift_vs_oracle": -0.35429380572826946,
-      "rho_jitter_vs_oracle": -0.38533592919194615,
+      "rho_drift_vs_oracle": -0.44577333435819644,
+      "rho_jitter_vs_oracle": -0.48933316598725024,
       "steady_pulse_recall": 0.8345096536931166,
       "oracle_recall": 0.9270761646778775,
       "anchor": {
@@ -56,8 +62,8 @@
       "n": 217,
       "median_drift": 0.04229803537451923,
       "median_jitter": 0.07056567031297292,
-      "rho_drift_vs_oracle": -0.19972096562803873,
-      "rho_jitter_vs_oracle": -0.3823111468124786,
+      "rho_drift_vs_oracle": -0.19972001766247538,
+      "rho_jitter_vs_oracle": -0.3820497675249231,
       "steady_pulse_recall": 0.3316260374754939,
       "oracle_recall": 0.5460009562596883,
       "anchor": {
