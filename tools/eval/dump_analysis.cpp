@@ -342,9 +342,6 @@ int main(int argc, char** argv) {
     // running exactly and looked like the feature doing nothing.
     bool live_anchor = tiktak::tracking::LiveConfig{}.anchor_tempo;
     double live_anchor_width = 0.0;
-    // The width used instead while the filter and the anchor sit at
-    // different metrical levels; see LiveConfig::anchor_width_when_split.
-    double live_anchor_split_width = 0.0;
     double live_anchor_margin = -1.0;
     double live_anchor_window = 0.0;
     double live_anchor_min_window = 0.0;
@@ -373,7 +370,6 @@ int main(int argc, char** argv) {
         {"--live-roughening", &live_roughening},
         {"--live-regeneration", &live_regeneration},
         {"--live-anchor-width", &live_anchor_width},
-        {"--live-anchor-split-width", &live_anchor_split_width},
         {"--live-anchor-margin", &live_anchor_margin},
         {"--live-anchor-window", &live_anchor_window},
         {"--live-anchor-min-window", &live_anchor_min_window},
@@ -725,9 +721,6 @@ int main(int argc, char** argv) {
         live_config.anchor_tempo = live_anchor;
         if (live_anchor_width > 0.0) {
             live_config.anchor_width_octaves = live_anchor_width;
-        }
-        if (live_anchor_split_width > 0.0) {
-            live_config.anchor_width_when_split = live_anchor_split_width;
         }
         if (live_anchor_margin >= 0.0) {
             live_config.anchor_octave_margin = live_anchor_margin;

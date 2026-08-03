@@ -208,11 +208,21 @@ def octave_statistics(estimate: Estimate, beats: np.ndarray) -> dict[str, Any]:
     # strength of a lock that was wrong. An earlier note here claimed nothing
     # was lost by this, only misattributed, and that was too strong.
     #
-    # `settled_at` is the honest one: the start of the first locked stretch at
-    # the annotated level that then lasts `SETTLE_SEC`. It is reported beside
-    # `acquired_at` rather than replacing it in the pass criterion, so that the
-    # rates stay comparable with everything measured before it existed — the
-    # difference between the two columns is the size of the problem.
+    # `settled_at` is the honest one: the **start** of the first locked stretch
+    # at the annotated level that then lasts `SETTLE_SEC`, not the moment that
+    # stretch is confirmed. Those differ by `SETTLE_SEC`, and the choice is
+    # deliberate — the question the criterion asks is "when did the tracker
+    # begin doing the right thing", and a listener hears the first correct beat,
+    # not the fourth second of correctness. The consequence has to be stated
+    # rather than left implicit: `settled_at <= 8 s` admits a recording whose
+    # correctness is only *established* at twelve seconds. Anyone comparing this
+    # against a latency figure defined the other way will be out by four
+    # seconds, in our favour.
+    #
+    # It is reported beside `acquired_at` rather than replacing it in the pass
+    # criterion, so the rates stay comparable with everything measured before it
+    # existed — the difference between the two columns is the size of the
+    # problem.
     acquired_at: float | None = None
     settled_at: float | None = None
     same_since: float | None = None
@@ -704,6 +714,7 @@ def summarize(mode: str, results: list[dict[str, Any]], wall: float) -> dict:
            if by_corpus[c]["usable_rate"] is not None and by_corpus[c]["n"] >= 30]
     rates = [by_corpus[c]["usable_rate"] for c in big]
     rates_any = [by_corpus[c]["usable_rate_any_octave"] for c in big]
+    rates_strict = [by_corpus[c]["usable_rate_strict"] for c in big]
     pooled_failures: Counter[str] = Counter()
     for result in scored:
         pooled_failures.update(result.get("reasons", ()))
@@ -722,6 +733,15 @@ def summarize(mode: str, results: list[dict[str, Any]], wall: float) -> dict:
         ),
         "usable_rate_any_octave_pooled": (
             sum(result["usable_any_octave"] for result in scored) / len(scored)
+            if scored else None
+        ),
+        # Aggregated alongside the other two rather than left per corpus, so a
+        # reader who quotes the headline can see in the same object how much of
+        # it rests on locks that were never at the right level.
+        "usable_rate_strict_macro": (
+            float(np.mean(rates_strict)) if rates_strict else None),
+        "usable_rate_strict_pooled": (
+            sum(result["usable_strict"] for result in scored) / len(scored)
             if scored else None
         ),
         "failure_reasons": {

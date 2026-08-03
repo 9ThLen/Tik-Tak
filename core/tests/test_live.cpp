@@ -753,7 +753,10 @@ TEST(LiveTracker, TheAnchorIsOnAndTheEstimatorIsShortSighted) {
     const LiveConfig config = liveConfig();
     EXPECT_TRUE(config.anchor_tempo);
     EXPECT_DOUBLE_EQ(config.activation_tempo.window_sec, 6.0);
-    EXPECT_DOUBLE_EQ(config.anchor_width_octaves, 0.1);
+    // 0.02, not the 0.10 the first two-point sweep chose. Swept properly it is
+    // worth 2.4 points of usable GTZAN-family recordings and 2.5 of RWC, and
+    // 4.0 of RWC read strictly; the table is in live.hpp beside the field.
+    EXPECT_DOUBLE_EQ(config.anchor_width_octaves, 0.02);
     EXPECT_DOUBLE_EQ(config.anchor_octave_margin, 0.0);
     EXPECT_TRUE(config.valid());
 }
