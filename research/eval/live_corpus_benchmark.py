@@ -70,23 +70,46 @@ def _audio_path(ground_truth: pathlib.Path, row: dict[str, str]) -> pathlib.Path
         return ground_truth / "sources" / "ballroom_audio" / relative
     if row["dataset"] == "gtzan":
         return ground_truth / "audio" / "gtzan-ready" / relative
+    if row["dataset"] == "harmonix":
+        return ground_truth / "audio" / relative
     return ground_truth / relative
+
+
+# The three the ground-truth manifest has always meant. Harmonix is in the same
+# file and has been since before any of these numbers, but was never scored,
+# because reaching it needs asking. That is deliberate and it is why it is a
+# usable holdout: every figure this repository quotes from this manifest was
+# measured without it, so it can still answer a question it has not been used
+# to tune. Adding it to this set would spend that in one commit.
+DEFAULT_CORPORA = frozenset({"ballroom", "gtzan", "smc"})
 
 
 def load_corpus(
     manifest: pathlib.Path,
     music: pathlib.Path,
     include_root_audio: bool,
+    corpora: frozenset[str] | set[str] | None = None,
 ) -> list[dict[str, Any]]:
     ground_truth = manifest.parent
+    wanted = DEFAULT_CORPORA if corpora is None else frozenset(corpora)
     items: list[dict[str, Any]] = []
     with manifest.open(encoding="utf-8-sig", newline="") as handle:
         for row in csv.DictReader(handle):
+            # `audio-aligned` is how a separately prepared manifest — RWC 2.0 —
+            # declares its audio; the named datasets are the ones whose audio
+            # this manifest has always resolved by convention. Harmonix says
+            # `ok`, set by tools/harmonix_validate_ready.py only for the tracks
+            # that passed the alignment gate in HARMONIX_ALIGNMENT.md, which is
+            # why the 235 rejected ones cannot slip in here.
             has_audio = (
                 row["dataset"] in {"ballroom", "gtzan", "smc"}
-                or row["status"] == "audio-aligned"
+                or row["status"] in {"audio-aligned", "ok"}
             )
-            if not has_audio:
+            if not has_audio or (corpora is not None
+                                 and row["dataset"] not in wanted):
+                continue
+            if corpora is None and row["dataset"] not in DEFAULT_CORPORA \
+                    and row["status"] != "audio-aligned":
                 continue
             items.append(
                 {
@@ -835,6 +858,15 @@ def main(argv: list[str] | None = None) -> int:
         "--mode", choices=("baseline", "model", "both"), default="both"
     )
     parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--corpora", nargs="+",
+                        help="datasets to score, by their name in the manifest. "
+                             "Omitted means the three this manifest has always "
+                             "meant — ballroom, gtzan, smc — so every earlier "
+                             "number stays comparable. `--corpora harmonix` "
+                             "reaches the 581 aligned full-length recordings "
+                             "that no run has scored; see "
+                             "eval/PREREGISTERED_harmonix_ensemble.md before "
+                             "spending them")
     parser.add_argument("--include-root-audio", action="store_true")
     parser.add_argument("--output", type=pathlib.Path)
     parser.add_argument("--seeded", action="store_true",
@@ -874,7 +906,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.no_anchor:
         extra_flags = ("--live-no-anchor",) + extra_flags
 
-    items = load_corpus(args.manifest, args.music, args.include_root_audio)
+    items = load_corpus(args.manifest, args.music, args.include_root_audio,
+                        corpora=set(args.corpora) if args.corpora else None)
     missing_audio = [str(item["audio"]) for item in items if not item["audio"].is_file()]
     missing_annotations = [
         str(item["annotation"])

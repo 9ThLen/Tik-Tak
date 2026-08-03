@@ -271,6 +271,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--binary", type=pathlib.Path, default=DEFAULT_BINARY)
     parser.add_argument("--limit", type=int, default=0,
                         help="score a spanning subset rather than everything")
+    parser.add_argument("--corpora", nargs="+",
+                        help="datasets to score; see the same flag on "
+                             "live_corpus_benchmark")
     parser.add_argument("--workers", type=int, default=6)
     parser.add_argument("--output", type=pathlib.Path)
     # Re-analysis without re-measuring. The paired statistics are the part most
@@ -300,7 +303,9 @@ def main(argv: list[str] | None = None) -> int:
     if missing:
         parser.error("missing weights: " + ", ".join(missing))
 
-    items = [item for item in load_corpus(args.manifest, args.music, False)
+    items = [item for item in load_corpus(args.manifest, args.music, False,
+                                          corpora=set(args.corpora)
+                                          if args.corpora else None)
              if item["annotated"]]
     if args.limit and len(items) > args.limit:
         items = items[:: -(-len(items) // args.limit)]

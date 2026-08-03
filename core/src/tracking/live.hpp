@@ -335,79 +335,58 @@ struct LiveConfig {
 // almost every recording with a false start was already failing on something
 // else. At the 0.10 width the same two columns read 33.0% and 28.0%, so
 // narrowing the anchor bought most of its gain precisely on the recordings the
-// strict reading used to take away — which is the shape of a real improvement
-// rather than a criterion getting easier. Both columns are reported, and the
+// strict reading used to take away. That rules out one way of being fooled —
+// the criterion getting easier — and not the other: 0.02 was chosen by looking
+// at this corpus, so none of these numbers is an out-of-sample estimate of it.
+// See the note on RWC as a development corpus below. Both columns are reported,
+// and the
 // loose one stays the headline so that every number measured before
 // `settled_at` existed remains comparable with the ones after.
 //
 // **We have been measuring on the weakest of the three published folds.**
 // BeatNet ships three checkpoints. Every number in this comment is fold 1, for
-// no better reason than that it was the first one fetched. On RWC — the only
-// corpus with any resolution where all three are equally out of training, see
-// below — fold 1 is the worst of them:
+// no better reason than that it was the first one fetched. On RWC it is the
+// worst of the three, and averaging all three activations frame by frame is
+// better than any of them:
 //
-//     RWC, 328 recordings   usable   strict   any level     F
-//     fold 1                 14.9%    14.7%      24.6%    0.602
-//     fold 2                 18.1%    16.9%      28.8%    0.614
-//     fold 3                 18.7%    16.2%      27.4%    0.603
+//     RWC, 328 recordings, one seam   usable   strict     F
+//     fold 1, which ships              14.7%    13.9%   0.613
+//     fold 2                           18.2%    16.2%   0.624
+//     fold 3                           18.7%    16.4%   0.612
+//     mean of the three                20.6%    19.2%   0.650
 //
-// And averaging the three activations frame by frame — one front end, so they
-// are already synchronised — beats all of them. Scored with every arm through
-// `--live-activation`, so the mean is compared against the folds on the same
-// seam and not across two code paths; each fold lands within 0.4 points of its
-// native run above, which is what makes that row readable:
+// Exactly one comparison in that table is established: the mean beats fold 1 on
+// the loose criterion, +25 recordings against -7, exact sign test p .0021, which
+// is .0168 after correcting for the family of eight the harness runs. Read
+// strictly the same comparison does **not** survive at .0633, and the mean is
+// not established as better than folds 2 or 3 at all. Full tables, every paired
+// count and the corrections are in research/results/README.md, produced by
+// research/eval/beatnet_ensemble.py; do not re-derive them here, because two
+// copies of a number is how one of them goes stale.
 //
-//     RWC, one seam         usable   strict   any level     F
-//     fold 1                 14.7%    13.9%      24.6%    0.613
-//     fold 2                 18.2%    16.2%      29.3%    0.624
-//     fold 3                 18.7%    16.4%      28.9%    0.612
-//     mean of the three      20.6%    19.2%      33.7%    0.650
-//     max of the three       15.2%    14.4%      21.9%    0.590
+// **RWC is a development corpus now, not an independent estimate.** The width
+// above was chosen by looking at RWC, and the decision to take the mean
+// seriously was made after seeing these RWC scores. An earlier revision of this
+// comment argued that averaging "spends no corpus" because the rule itself
+// consults no scores. That is wrong and worth spelling out, because it is a
+// tempting mistake: the *rule* consults nothing, but the *decision to apply the
+// rule* was made with these numbers in hand, and that is what selection is. The
+// configuration above is a candidate that has to be confirmed somewhere it has
+// never been run. research/eval/PREREGISTERED_harmonix_ensemble.md fixes that
+// comparison before the corpus is looked at.
 //
-// Read the paired counts before believing the gap, because two rates two points
-// apart over 328 recordings can be six tracks or forty. Recordings gained
-// against lost, exact sign test, and corrected for the whole family of eight
-// comparisons the harness makes — the correction is not a formality, it is what
-// decides two of these rows:
+// Nothing here says the ensemble should ship, and one obvious objection to it
+// cannot even be raised yet. "Does averaging hurt the downbeat?" has no answer
+// through this class, because `LiveTracker` has no downbeat input: the network
+// emits three classes, `observe` takes one number, and the bar lines the live
+// benchmark reports come from the offline resolver rather than from the model's
+// downbeat head at all. So the untested part is not a missing column in the
+// activation file — it is a missing consumer, and supplying one is a feature
+// with its own design, not a measurement that could be slotted in here.
 //
-//     mean against      won  lost      p    corrected
-//     fold 1, usable    +25    -7   .0021      .0168  *
-//     fold 1, strictly  +25    -9   .0090      .0633
-//     max,    usable    +25    -9   .0090      .0633
-//     max,    strictly  +23    -9   .0201      .1003
-//     fold 3, strictly  +18    -9   .1221      .4883
-//     fold 2, strictly  +19   -10   .1360      .4883
-//     fold 2, usable    +19   -12   .2810      .5621
-//     fold 3, usable    +18   -12   .3616      .5621
-//
-// So what is established is one row: **the mean beats fold 1 on the headline
-// criterion**, and that is what shipping fold 1 costs. The same comparison read
-// strictly does *not* survive the correction at .0633, and an earlier revision
-// of this comment claimed it did by quoting the loose column's correction for
-// both. That the mean beats the *best* single fold is not established either —
-// 18 against 12 is churn with a favourable sign. Folds 2 and 3 are
-// indistinguishable from each other (+17 -16 uncorrected, p 1.00), and fold 3
-// against fold 1 is +22 -10, p .050 before any correction and nothing after it.
-// `max` is worse than the mean, so this is
-// not "any pooling helps": what a mean suppresses and a max keeps is one fold
-// being confident and wrong, and that is apparently the failure mode.
-//
-// Why not simply ship the best fold. Choosing between them on RWC spends the
-// one unseen corpus on that choice, and RWC stops being an unseen estimate of
-// whatever is chosen. There is no second corpus to move the choice to: BeatNet
-// trains on Ballroom, Beatles, Carnatic, GTZAN and Rock Corpus and each fold
-// withholds a *different* one of them, so on any of those five the folds are
-// not comparable — each has a different subset memorised. SMC is equally unseen
-// by all three but the live path scores 3.2% on it, which has no resolution.
-// The mean needs no such choice: it is a fixed rule that does not consult the
-// scores, and it is measurably better than the incumbent. That is the argument
-// for it, and it is a different argument from "it is the best arm".
-//
-// Not yet measured, and it is what shipping this would need: `--live-activation`
-// carries the beat channel only, so the downbeat and metre path on an averaged
-// downbeat activation is untested, and three networks is three times the
-// compute — 0.03 real-time rather than 0.0098, which a phone can afford but
-// which is not free. research/eval/beatnet_ensemble.py is the harness.
+// The other thing not measured is the cost: three networks is three times the
+// compute, roughly 0.03 real-time on this desktop, which says nothing about a
+// phone. That number has to come from the phone.
 //
 // Why GTZAN's recordings fail, as a share of all 999 of them — a recording can
 // fail several ways at once, so these overlap and do not sum to the 55.5% that
