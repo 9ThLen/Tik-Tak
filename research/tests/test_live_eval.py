@@ -5,6 +5,7 @@ import pytest
 
 from eval.analysis import Analyser, DEFAULT_BINARY, Estimate
 from eval.live_corpus_benchmark import (
+    _provenance,
     verdict,
     load_reference_beats,
     local_reference_bpm,
@@ -247,6 +248,24 @@ def test_the_strict_headline_is_macro_over_big_corpora_and_pooled_over_all():
     # whole point of reporting the two side by side.
     assert summary["usable_rate_macro"] == pytest.approx(1.0)
     assert summary["usable_rate_pooled"] == pytest.approx(1.0)
+
+
+def test_provenance_names_every_checkpoint_the_core_averaged(tmp_path):
+    # An ensemble run that records one model is a run nobody can reproduce, and
+    # the difference between one checkpoint and three is the entire result the
+    # artifact exists to report. The key is present and empty for a single-model
+    # run, so an older artifact without it reads as "predates ensembles" rather
+    # than as "used one model".
+    first, second = tmp_path / "a.ttw", tmp_path / "b.ttw"
+    first.write_bytes(b"aaa")
+    second.write_bytes(b"bbbb")
+
+    alone = _provenance(first, first, [], tmp_path)
+    assert alone["also_models"] == []
+
+    averaged = _provenance(first, first, [], tmp_path, (second,))
+    assert [entry["name"] for entry in averaged["also_models"]] == ["b.ttw"]
+    assert averaged["also_models"][0]["sha256"] != averaged["model"]["sha256"]
 
 
 def test_switch_rate_divides_by_the_time_switches_could_have_happened_in():

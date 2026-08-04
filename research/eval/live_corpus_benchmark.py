@@ -628,7 +628,8 @@ def _digest(path: pathlib.Path) -> dict | None:
 
 
 def _provenance(binary: pathlib.Path, model: pathlib.Path | None,
-                items: list[dict[str, Any]], repository: pathlib.Path) -> dict:
+                items: list[dict[str, Any]], repository: pathlib.Path,
+                also_models: "tuple[pathlib.Path, ...]" = ()) -> dict:
     def git(*command: str) -> str | None:
         try:
             done = subprocess.run(("git", "-C", str(repository)) + command,
@@ -646,6 +647,13 @@ def _provenance(binary: pathlib.Path, model: pathlib.Path | None,
         "tree_clean": git("status", "--porcelain") == "",
         "binary": _digest(binary),
         "model": _digest(model) if model else None,
+        # Every checkpoint the core averaged, in the order it was given them.
+        # A run that averaged three models and recorded one is a run nobody can
+        # reproduce, and the difference between one and three is the whole
+        # result — so this is present and empty rather than absent, so that its
+        # absence in an older artifact is legible as "this predates ensembles"
+        # rather than as "this used one model".
+        "also_models": [_digest(path) for path in also_models],
         "python": platform.python_version(),
         "platform": platform.system(),
         "corpora": {name: {"files": corpora[name], "annotated": annotated[name]}
@@ -985,6 +993,17 @@ def main(argv: list[str] | None = None) -> int:
         "--binary", type=pathlib.Path, default=DEFAULT_BINARY
     )
     parser.add_argument("--model", type=pathlib.Path)
+    # Additional checkpoints, averaged with `--model` over one front end by the
+    # core. Repeatable. This is the arm of
+    # eval/PREREGISTERED_ensemble_in_core.md, and it is spelled as an addition
+    # to `--model` rather than as a list so that provenance keeps recording
+    # which single model a baseline run used.
+    #
+    # Do not point it at GTZAN or Ballroom. Folds 1, 2 and 3 hold out GTZAN,
+    # Ballroom and Rock Corpus respectively, so an average of them is
+    # train-on-test on the first two and the resulting rates mean nothing.
+    parser.add_argument("--also-model", type=pathlib.Path, action="append",
+                        default=[], metavar="MODEL")
     parser.add_argument(
         "--mode", choices=("baseline", "model", "both"), default="both"
     )
@@ -1032,10 +1051,16 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--workers must be positive")
     if args.mode in {"model", "both"} and args.model is None:
         parser.error("--model is required for model mode")
+    if args.also_model and args.mode == "baseline":
+        parser.error("--also-model needs a mode that runs the model")
 
     extra_flags = tuple(args.extra.split())
     if args.no_anchor:
         extra_flags = ("--live-no-anchor",) + extra_flags
+    # Appended, so `--model` stays the first checkpoint and the baseline arm is
+    # literally the same command with these flags removed.
+    for extra_model in args.also_model:
+        extra_flags += ("--live-model", str(extra_model))
 
     items = load_corpus(args.manifest, args.music, args.include_root_audio,
                         corpora=set(args.corpora) if args.corpora else None)
@@ -1114,7 +1139,8 @@ def main(argv: list[str] | None = None) -> int:
                 ensure_ascii=False), encoding="utf-8")
 
     report = {
-        "provenance": _provenance(args.binary, args.model, items, repository),
+        "provenance": _provenance(args.binary, args.model, items, repository,
+                                  tuple(args.also_model)),
         "protocol": {
             "causal": True,
             "callback_samples": 512,
