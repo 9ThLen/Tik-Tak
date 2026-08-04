@@ -22,6 +22,67 @@ looking at it and the averaged activation was taken seriously after seeing its
 scores. It is still the most useful corpus here for finding out *why* something
 fails. It can no longer say that a chosen configuration is good.
 
+**An averaged activation narrows that table further, and permanently.** The row
+for GTZAN says "fold 1 only" for a reason: folds 2 and 3 were trained on GTZAN,
+and folds 1 and 3 on Ballroom. So a mean of the three is train-on-test on both,
+and the shipped single fold may be quoted on GTZAN where the ensemble may not —
+they are not comparable there at all. Adopting `EnsembleMean` retires 1,697 of
+the 2,760 annotated recordings here as evaluation ground, leaving Harmonix,
+RWC and SMC. That is a cost of the ensemble, not merely of testing it, and it is
+the strongest argument for recording new material.
+
+## The baseline every later arm is measured against
+
+`live_baseline_gtzan_family.json`, `live_baseline_rwc.json`,
+`live_baseline_harmonix.json`. Commit `4422afc`, clean tree, nothing dropped
+(1914 of 1915, 328 of 328, 581 of 581). The shipped configuration: fold 1,
+`anchor_width_octaves` 0.02, the core's own front end.
+
+```bash
+research/.venv/Scripts/python.exe -m eval.live_corpus_benchmark --mode model --model models/beatnet_model_1.ttw --workers 8 --output results/live_baseline_gtzan_family.json
+```
+
+with `--manifest music/rwc2/manifest.csv --music music/rwc2` for RWC and
+`--corpora harmonix` for Harmonix.
+
+| corpus | n | no episode >4 s | usable | strict | correct time | longest run | settle P50/P90 | sw / 5 min | never settled | F |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| ballroom¹ | 698 | 78.1% | 60.9% | 58.2% | 80.8% | 24 s | 7.0 / 13.6 | 9.14 | 10.5% | 0.820 |
+| GTZAN | 999 | 67.9% | 44.5% | 43.6% | 67.7% | 23 s | 5.0 / 14.0 | 5.34 | 24.0% | 0.685 |
+| SMC | 217 | 28.1% | 3.2% | 3.2% | 13.9% | 0 s | 12.0 / 31.0 | 3.82 | 80.2% | 0.228 |
+| RWC-Pop | 100 | 47.0% | 39.0% | 38.0% | 81.0% | 147 s | 7.0 / 32.5 | 5.74 | 4.0% | 0.799 |
+| RWC-Genre | 102 | 19.6% | 12.7% | 12.7% | 55.1% | 65 s | 8.0 / 66.8 | 4.62 | 22.5% | 0.583 |
+| RWC-Jazz | 50 | 16.0% | 8.0% | 8.0% | 49.5% | 30 s | 15.0 / 63.4 | 6.27 | 14.0% | 0.539 |
+| RWC-Classical | 61 | 1.6% | 0.0% | 0.0% | 20.2% | 7 s | 31.0 / 204.8 | 6.24 | 39.3% | 0.352 |
+| **Harmonix** | 581 | **41.5%** | **31.0%** | **26.2%** | **77.5%** | 114 s | 8.0 / 36.6 | 4.21 | 4.5% | 0.795 |
+
+¹ in fold 1's training set — not quotable as performance, present only because
+the GTZAN-family run produces it.
+
+**Average correctness is not the binding constraint, and has not been for some
+time.** On Harmonix the tracker is right for 77.5% of the time after warm-up and
+usable on 31.0% of recordings; on RWC-Pop, 81.0% against 39.0%. Those describe
+the same runs. The reconciliation is in the same table: the median longest
+correct run is 114 seconds, and 58.5% of Harmonix has at least one slip to the
+wrong level lasting more than four seconds. A recording that is right for 95% of
+its length fails on the other 5% if that 5% is contiguous. So a target of
+"raise correct time above 70%" would have been asking for a number that already
+passes by seven points.
+
+`no_wrong_level_episode_fraction` is therefore the primary endpoint from here,
+and the target table is written around episode-freeness rather than averages.
+
+Three denominators are reported for correct time and they are not
+interchangeable — the column above is the mean over recordings. On Harmonix the
+three read 77.5% (mean over recordings), 76.8% (pooled over seconds) and 82.1%
+(over *locked* time only, which is the old `active_state_shares.same`). The last
+is the flattering one, because silence leaves its own denominator; a plan was
+recently built around a `64.6%` whose denominator nobody could name.
+
+SMC is not a hard corpus so much as one the tracker never starts on: 80.2% never
+settle and the median longest correct run is zero seconds. Its oracle ceiling is
+4.1%, so it has no resolution to lend any comparison.
+
 ## The pre-registered test: does averaging the three folds hold up out of sample
 
 `beatnet_ensemble_harmonix.json`. 581 full-length recordings, `attempted 581,
