@@ -62,6 +62,14 @@ MAX_WRONG_OCTAVE_SEC = 4.0
 # settle rather than a lucky second. Same figure as the wrong-level limit, so
 # the two criteria cannot disagree about what "briefly" means.
 SETTLE_SEC = 4.0
+# Nothing before this counts for or against the tracker: it is the grace period
+# a listener would give any device before expecting an answer. Every rate that
+# divides by time has to divide by the time *after* it, which is why it is a
+# name rather than a literal -- `switches_per_five_minutes` divided by whole
+# audio duration for one release, and on a thirty-second excerpt that is a
+# denominator a sixth too large, understating the switch rate by that much on
+# exactly the corpora where clips are shortest.
+WARMUP_SEC = 5.0
 
 
 def _audio_path(ground_truth: pathlib.Path, row: dict[str, str]) -> pathlib.Path:
@@ -281,7 +289,7 @@ def octave_statistics(estimate: Estimate, beats: np.ndarray) -> dict[str, Any]:
         if not locked:
             same_since = None  # a release ends the stretch, however right it was
 
-        if time_sec < 5.0:
+        if time_sec < WARMUP_SEC:
             continue
         eligible_samples += 1
         # What the user would have seen at this moment, silence included. A
@@ -360,6 +368,11 @@ def octave_statistics(estimate: Estimate, beats: np.ndarray) -> dict[str, Any]:
         # active fraction, and on full-length material that is a large gap.
         "correct_share_of_eligible": (
             states["same"] / eligible_samples if eligible_samples else None),
+        # The same denominator in seconds, for the rates that are quoted per
+        # unit of time rather than as shares. Anything divided by whole audio
+        # duration instead is too small by `WARMUP_SEC` per recording -- a sixth
+        # of a thirty-second excerpt.
+        "eligible_sec": max(0.0, final_time - WARMUP_SEC),
         "longest_correct_run_sec": longest_correct_run,
         **state_at,
         "switches": within_switches + reacquire_switches,
@@ -728,21 +741,54 @@ def summarize(mode: str, results: list[dict[str, Any]], wall: float) -> dict:
                  if result.get("acquired_at") is not None],
                 lambda xs: np.percentile(xs, 90)),
             # How much of the time after warm-up the tracker was actually right,
-            # counting silence against it. This is the number a user would
-            # recognise, and it is strictly lower than `active_state_shares`.
+            # counting silence against it. Three denominators, named rather than
+            # left to be inferred, because they answer different questions and
+            # differ by a lot:
+            #
+            #   ..._recording_mean  every recording counted once, whatever its
+            #                       length. The one to quote per corpus.
+            #   ..._time_pooled     every second counted once, so long songs
+            #                       dominate. The one to quote per hour of use.
+            #   correct_share_of_active   the old `active_state_shares.same`:
+            #                       right among the time it was *speaking*.
+            #                       Highest of the three, and the one that
+            #                       flatters, because silence leaves its own
+            #                       denominator.
             "mean_correct_share_of_eligible": _finite_stat(
                 [result["correct_share_of_eligible"] for result in part
                  if result.get("correct_share_of_eligible") is not None],
                 np.mean),
+            "correct_share_of_eligible_time_pooled": (
+                sum(result["states"].get("same", 0) for result in part)
+                / sum(result["eligible_samples"] for result in part)
+                if sum(result["eligible_samples"] for result in part) else None),
+            "correct_share_of_active": (
+                sum(result["states"].get("same", 0) for result in part)
+                / sum(result["active_samples"] for result in part)
+                if sum(result["active_samples"] for result in part) else None),
+            # The episode metric, and as of this release the primary one. A
+            # recording is right on average and still unusable if it slips to
+            # the wrong level once for more than `MAX_WRONG_OCTAVE_SEC`; the
+            # Harmonix baseline is 77.5% correct time against 31% usable, and
+            # this fraction is what reconciles those two numbers. Same threshold
+            # as the verdict's octave clause, so the two cannot disagree.
+            "no_wrong_level_episode_fraction": (
+                sum(result["worst_wrong_octave_sec"] <= MAX_WRONG_OCTAVE_SEC
+                    for result in part) / len(part) if part else None),
             "median_longest_correct_run_sec": _finite_stat(
                 [result.get("longest_correct_run_sec") for result in part], np.median),
-            # Level changes per five minutes of audio, which is the unit a
-            # person notices them in. `switches_per_hour` below is the same
-            # thing at a scale nobody experiences.
+            # Level changes per five minutes, which is the unit a person
+            # notices them in. Over *eligible* time: switches are only counted
+            # after warm-up, so dividing by whole audio duration -- which the
+            # first version of this did -- charges the tracker for a stretch it
+            # was never scored over, and on a thirty-second excerpt that is a
+            # sixth of the denominator. `switches_per_hour` below is the same
+            # thing at a scale nobody experiences, and is left on duration
+            # because every earlier report quoted it that way.
             "switches_per_five_minutes": (
                 sum(result["switches"] for result in part)
-                / (sum(result["duration"] for result in part) / 300.0)
-                if sum(result["duration"] for result in part) else None),
+                / (sum(result["eligible_sec"] for result in part) / 300.0)
+                if sum(result["eligible_sec"] for result in part) else None),
             "never_settled_fraction": (
                 sum(result.get("settled_at") is None for result in part)
                 / len(part) if part else None
@@ -808,6 +854,8 @@ def summarize(mode: str, results: list[dict[str, Any]], wall: float) -> dict:
     rates = [by_corpus[c]["usable_rate"] for c in big]
     rates_any = [by_corpus[c]["usable_rate_any_octave"] for c in big]
     rates_strict = [by_corpus[c]["usable_rate_strict"] for c in big]
+    rates_no_episode = [by_corpus[c]["no_wrong_level_episode_fraction"]
+                        for c in big]
     pooled_failures: Counter[str] = Counter()
     for result in scored:
         pooled_failures.update(result.get("reasons", ()))
@@ -836,6 +884,19 @@ def summarize(mode: str, results: list[dict[str, Any]], wall: float) -> dict:
         "usable_rate_strict_pooled": (
             sum(result["usable_strict"] for result in scored) / len(scored)
             if scored else None
+        ),
+        # The share of recordings that never once slipped to the wrong metrical
+        # level for longer than `MAX_WRONG_OCTAVE_SEC`. Promoted to the headline
+        # because average correctness turned out not to be the binding
+        # constraint: the shipped tracker is right 77.5% of the time on Harmonix
+        # and usable on 31% of it, and the difference is single episodes inside
+        # otherwise-correct recordings. Optimising the average would have moved
+        # a number that already passes.
+        "no_wrong_level_episode_macro": (
+            float(np.mean(rates_no_episode)) if rates_no_episode else None),
+        "no_wrong_level_episode_pooled": (
+            sum(result["worst_wrong_octave_sec"] <= MAX_WRONG_OCTAVE_SEC
+                for result in scored) / len(scored) if scored else None
         ),
         "failure_reasons": {
             key: count / len(scored) for key, count in pooled_failures.most_common()

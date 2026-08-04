@@ -216,6 +216,7 @@ def _scored(corpus: str, name: str, **overrides):
         "f_measure": 0.9, "cmlt": 0.8, "amlt": 0.85, "coverage": 1.0,
         "switches": 0, "within_switches": 0, "reacquire_switches": 0,
         "states": {"same": 30}, "active_samples": 30, "eligible_samples": 30,
+        "eligible_sec": 25.0,
         "final_state": "same", "final_ref_bpm": 120.0, "final_active": True,
     })
     result.update(verdict(result))
@@ -246,3 +247,61 @@ def test_the_strict_headline_is_macro_over_big_corpora_and_pooled_over_all():
     # whole point of reporting the two side by side.
     assert summary["usable_rate_macro"] == pytest.approx(1.0)
     assert summary["usable_rate_pooled"] == pytest.approx(1.0)
+
+
+def test_switch_rate_divides_by_the_time_switches_could_have_happened_in():
+    # Switches are only counted after warm-up, so the rate has to divide by
+    # eligible time. The first version divided by whole audio duration, which on
+    # a thirty-second excerpt is a sixth too large -- and understated the rate
+    # by that much on exactly the corpora made of short excerpts. The fixture is
+    # built so the two denominators give different answers.
+    results = [_scored("gtzan", f"g{i}", ) for i in range(30)]
+    for result in results:
+        result["switches"] = 2
+        result["duration"] = 30.0        # what the wrong denominator used
+        result["eligible_sec"] = 25.0    # what the right one uses
+
+    summary = summarize("model", results, wall=1.0)
+    got = summary["by_corpus"]["gtzan"]["switches_per_five_minutes"]
+
+    assert got == pytest.approx(60 / (750 / 300.0))     # 24.0, over eligible
+    assert got != pytest.approx(60 / (900 / 300.0))     # 20.0, over duration
+
+
+def test_the_episode_metric_agrees_with_the_verdict_it_was_promoted_from():
+    # The headline is now "never slipped for more than four seconds", and the
+    # verdict already had that clause. Two spellings of one threshold would
+    # eventually disagree, so the test pins them together rather than pinning a
+    # number: every recording the fraction counts as clean must also be one the
+    # verdict did not fail for `wrong_octave`.
+    results = (
+        [_scored("gtzan", f"ok{i}", worst_wrong_octave_sec=0.0) for i in range(20)]
+        + [_scored("gtzan", f"edge{i}", worst_wrong_octave_sec=4.0) for i in range(5)]
+        + [_scored("gtzan", f"bad{i}", worst_wrong_octave_sec=9.0) for i in range(15)]
+    )
+    summary = summarize("model", results, wall=1.0)
+
+    assert summary["by_corpus"]["gtzan"]["no_wrong_level_episode_fraction"] == (
+        pytest.approx(25 / 40))
+    assert summary["no_wrong_level_episode_pooled"] == pytest.approx(25 / 40)
+    clean = sum("wrong_octave" not in result["reasons"] for result in results)
+    assert clean == 25
+
+
+def test_the_three_correct_time_denominators_are_reported_separately():
+    # Right whenever it spoke, silent a third of the time. Over active time that
+    # is 100%; over eligible time it is 67%. Reporting one number without saying
+    # which denominator it used is how "64.6%" ended up in a plan meaning
+    # something different from what the plan compared it against.
+    results = [_scored("gtzan", f"g{i}") for i in range(30)]
+    for result in results:
+        result["states"] = {"same": 20}
+        result["active_samples"] = 20
+        result["eligible_samples"] = 30
+        result["correct_share_of_eligible"] = 20 / 30
+
+    corpus = summarize("model", results, wall=1.0)["by_corpus"]["gtzan"]
+
+    assert corpus["correct_share_of_active"] == pytest.approx(1.0)
+    assert corpus["correct_share_of_eligible_time_pooled"] == pytest.approx(2 / 3)
+    assert corpus["mean_correct_share_of_eligible"] == pytest.approx(2 / 3)
