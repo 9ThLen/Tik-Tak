@@ -66,6 +66,24 @@ LiveTracker::LiveTracker(const LiveConfig& config, const ml::BeatNetWeights& wei
                          ml::BeatNetFeatures::kModelRate;
 }
 
+LiveTracker::LiveTracker(const LiveConfig& config,
+                         const ml::BeatNetWeights* const* weights, std::size_t count)
+    : LiveTracker(config) {
+    // Same contract as the single-weight form: an invalid set leaves the
+    // tracker on spectral flux rather than half-built. Checked before anything
+    // is constructed, so an ensemble is all of its checkpoints or none of them
+    // -- averaging two where three were asked for is a different estimator with
+    // different numbers, and would be indistinguishable from the right one at
+    // the call site.
+    if (weights == nullptr || count == 0) return;
+    for (std::size_t i = 0; i < count; ++i) {
+        if (weights[i] == nullptr || !weights[i]->valid()) return;
+    }
+    model_.emplace(config.odf.sampleRate, weights, count);
+    evidence_half_sec_ = 0.5 * static_cast<double>(ml::BeatNetFeatures::kFrameSize) /
+                         ml::BeatNetFeatures::kModelRate;
+}
+
 void LiveTracker::gateClick(double heard_time_sec) {
     gate_start_[gate_next_] = heard_time_sec - config_.gate_before_sec;
     gate_end_[gate_next_] = heard_time_sec + config_.gate_after_sec;

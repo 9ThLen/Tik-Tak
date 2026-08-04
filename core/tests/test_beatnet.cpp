@@ -2,10 +2,12 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <numeric>
+#include <utility>
 #include <vector>
 
 #include "support.hpp"
@@ -25,8 +27,12 @@ namespace {
 // everything here that is about *structure* — the loader, the state, and the
 // arithmetic's shape — is tested against a blob built on the spot. Reference
 // behavior with production weights is verified separately.
+// `step` varies the made-up numbers, so two calls can stand in for two of
+// BeatNet's published checkpoints where what is under test is that several are
+// combined correctly rather than what any one of them says.
 std::vector<unsigned char> makeWeightFile(std::uint32_t version = 1,
-                                          std::uint32_t features = BeatNetWeights::kFeatures) {
+                                          std::uint32_t features = BeatNetWeights::kFeatures,
+                                          double step = 0.7) {
     std::vector<unsigned char> out(BeatNetWeights::kFileBytes);
     std::memcpy(out.data(), "TTBN", 4);
 
@@ -43,7 +49,7 @@ std::vector<unsigned char> makeWeightFile(std::uint32_t version = 1,
     // Small, varied and deterministic. Large weights would saturate every
     // sigmoid and make the state tests pass for the wrong reason.
     for (std::size_t i = 0; i < BeatNetWeights::kParameters; ++i) {
-        const float value = 0.05f * std::sin(0.7 * static_cast<double>(i));
+        const float value = 0.05f * static_cast<float>(std::sin(step * static_cast<double>(i)));
         std::uint32_t bits;
         std::memcpy(&bits, &value, sizeof(bits));
         for (std::size_t b = 0; b < 4; ++b) {
@@ -358,6 +364,122 @@ TEST(BeatNetActivation, CountsFramesFromItsOwnZero) {
     EXPECT_NEAR(times.front(), 0.0, 1e-12);
     for (std::size_t i = 1; i < times.size(); ++i) {
         EXPECT_NEAR(times[i] - times[i - 1], 0.02, 1e-9) << "frame " << i;
+    }
+}
+
+// ---------------------------------------------------------------- averaging --
+//
+// The measured gain from averaging BeatNet's three checkpoints is the largest
+// available to the live path without training anything, so what this class has
+// to guarantee is that it computes the same mean the research seam did — not
+// merely something that combines several networks. These tests pin the
+// arithmetic, because a bug here would not crash: it would produce a working
+// tracker several points below the one that was measured.
+
+namespace {
+
+// Every frame of the activation, so two arrangements can be compared exactly.
+std::vector<std::pair<double, double>> runActivation(BeatNetActivation& activation,
+                                                     const std::vector<float>& audio) {
+    std::vector<std::pair<double, double>> out;
+    activation.process(audio.data(), audio.size(),
+                       [&](double, double beat, double downbeat) {
+                           out.emplace_back(beat, downbeat);
+                       });
+    return out;
+}
+
+}  // namespace
+
+TEST(BeatNetActivation, TheAverageIsTheMeanOfTheNetworksItAverages) {
+    // Two different weight sets, run separately and together. Frame by frame,
+    // the ensemble must equal the arithmetic mean of the two — in probability
+    // space, which is where the seam averaged them and therefore what every
+    // measured number describes. Averaging logits instead would also pass a
+    // test that only checked the result lay between the two.
+    const auto blobA = makeWeightFile(1, BeatNetWeights::kFeatures, 0.7);
+    const auto blobB = makeWeightFile(1, BeatNetWeights::kFeatures, 0.31);
+    BeatNetWeights a, b;
+    ASSERT_TRUE(a.load(blobA.data(), blobA.size()));
+    ASSERT_TRUE(b.load(blobB.data(), blobB.size()));
+
+    const auto audio = clickTrack(120.0, 3.0, 48000.0);
+    BeatNetActivation alone_a(48000.0, a);
+    BeatNetActivation alone_b(48000.0, b);
+    const auto only_a = runActivation(alone_a, audio);
+    const auto only_b = runActivation(alone_b, audio);
+
+    const BeatNetWeights* both[] = {&a, &b};
+    BeatNetActivation ensemble(48000.0, both, 2);
+    const auto averaged = runActivation(ensemble, audio);
+
+    ASSERT_EQ(ensemble.networks(), 2u);
+    ASSERT_EQ(averaged.size(), only_a.size());
+    ASSERT_EQ(averaged.size(), only_b.size());
+    ASSERT_GT(averaged.size(), 10u);
+    for (std::size_t i = 0; i < averaged.size(); ++i) {
+        EXPECT_NEAR(averaged[i].first,
+                    0.5 * (only_a[i].first + only_b[i].first), 1e-9) << "frame " << i;
+        EXPECT_NEAR(averaged[i].second,
+                    0.5 * (only_a[i].second + only_b[i].second), 1e-9) << "frame " << i;
+    }
+
+    // And the two networks must actually have disagreed, or the assertion above
+    // is satisfied by any combining rule at all.
+    double spread = 0.0;
+    for (std::size_t i = 0; i < averaged.size(); ++i) {
+        spread = std::max(spread, std::abs(only_a[i].first - only_b[i].first));
+    }
+    EXPECT_GT(spread, 1e-4) << "the two weight sets produced the same activation";
+}
+
+TEST(BeatNetActivation, OneNetworkAveragedWithItselfIsThatNetwork) {
+    // The degenerate case, which is worth pinning because it is the one an
+    // off-by-one in the scale factor would break while leaving the two-network
+    // case looking plausible.
+    const auto blob = makeWeightFile();
+    BeatNetWeights weights;
+    ASSERT_TRUE(weights.load(blob.data(), blob.size()));
+
+    const auto audio = clickTrack(120.0, 2.0, 48000.0);
+    BeatNetActivation single(48000.0, weights);
+    const auto alone = runActivation(single, audio);
+
+    const BeatNetWeights* twice[] = {&weights, &weights};
+    BeatNetActivation doubled(48000.0, twice, 2);
+    const auto both = runActivation(doubled, audio);
+
+    ASSERT_EQ(both.size(), alone.size());
+    for (std::size_t i = 0; i < both.size(); ++i) {
+        EXPECT_NEAR(both[i].first, alone[i].first, 1e-12) << "frame " << i;
+        EXPECT_NEAR(both[i].second, alone[i].second, 1e-12) << "frame " << i;
+    }
+}
+
+TEST(BeatNetActivation, ResetForgetsEveryNetworkNotJustTheFirst) {
+    // Each checkpoint carries its own LSTM state. Resetting only the first
+    // would leave the ensemble remembering music that is no longer playing, on
+    // two thirds of its networks, and the symptom would be an activation that
+    // is subtly wrong after a stream restart rather than an obvious failure.
+    const auto blobA = makeWeightFile(1, BeatNetWeights::kFeatures, 0.7);
+    const auto blobB = makeWeightFile(1, BeatNetWeights::kFeatures, 0.31);
+    BeatNetWeights a, b;
+    ASSERT_TRUE(a.load(blobA.data(), blobA.size()));
+    ASSERT_TRUE(b.load(blobB.data(), blobB.size()));
+
+    const auto audio = clickTrack(120.0, 2.0, 48000.0);
+    const BeatNetWeights* both[] = {&a, &b};
+    BeatNetActivation ensemble(48000.0, both, 2);
+
+    const auto first = runActivation(ensemble, audio);
+    ensemble.reset();
+    const auto second = runActivation(ensemble, audio);
+
+    ASSERT_EQ(first.size(), second.size());
+    ASSERT_GT(first.size(), 10u);
+    for (std::size_t i = 0; i < first.size(); ++i) {
+        EXPECT_NEAR(first[i].first, second[i].first, 1e-12) << "frame " << i;
+        EXPECT_NEAR(first[i].second, second[i].second, 1e-12) << "frame " << i;
     }
 }
 

@@ -226,9 +226,42 @@ private:
 // allocation, no locks, no I/O — though a frame's arithmetic lands in one
 // audio callback every 20 ms rather than being spread evenly, so a shell with
 // a very small buffer should measure before assuming.
+// **More than one set of weights averages them.** BeatNet publishes three
+// checkpoints, each withholding a different one of its five training corpora,
+// and the mean of their activations is a materially better observation than any
+// one of them: measured through the research seam on 581 full-length recordings
+// it lifts the share with no wrong-level episode from 40.8% to 50.6% and beat F
+// from 0.803 to 0.845, every comparison significant after Holm correction. See
+// research/results/README.md, and eval/PREREGISTERED_ensemble_in_core.md for
+// what this class is required to reproduce.
+//
+// The averaging happens here, over one front end, rather than in the tracker
+// over several activations. The features are identical for every checkpoint —
+// same rate, same filterbank, same frame — so computing them once is not an
+// optimisation to be verified, it is the only arrangement that is correct;
+// three front ends would be three copies of one answer. It also means the cost
+// of N networks is N times the *network* and once the spectrum, which is why
+// the real-time factor has to be measured rather than assumed to triple.
+//
+// A mean and not a max. They fail in opposite directions — a mean is dragged
+// down by a checkpoint that is unsure, a max by one that is wrong and confident
+// — and on RWC and Harmonix alike the max arm scores below every single fold on
+// the usable rate. What the mean suppresses is the failure the corpora contain.
 class BeatNetActivation {
 public:
     BeatNetActivation(double sampleRate, const BeatNetWeights& weights);
+
+    // `weights` is `count` pointers, each to a valid() set that must outlive
+    // this object; the core does no I/O and does not own them. A count of zero
+    // or a null entry is a programming error and is asserted, not tolerated:
+    // quietly falling back to fewer networks than the caller asked for would
+    // produce a working tracker that is not the one being measured, and the
+    // difference between those two is several points of the headline.
+    BeatNetActivation(double sampleRate,
+                      const BeatNetWeights* const* weights, std::size_t count);
+
+    // How many networks are being averaged. One, for the single-weight form.
+    std::size_t networks() const { return models_.size(); }
 
     void reset();
 
@@ -245,17 +278,30 @@ public:
     void process(const float* samples, std::size_t n, Fn&& onActivation) {
         features_.process(samples, n, [&](const float* f, std::size_t count, double t) {
             (void)count;
-            model_.forward(f, probabilities_);
-            onActivation(t,
-                         static_cast<double>(probabilities_[0]) +
-                             static_cast<double>(probabilities_[1]),
-                         static_cast<double>(probabilities_[1]));
+            // Averaged in probability space, which is where the research seam
+            // averaged them and therefore what the measured numbers describe.
+            // Averaging the logits instead is a geometric mean of the odds and
+            // is a different estimator with different numbers; it has not been
+            // measured and must not be substituted here on the grounds that it
+            // is more principled.
+            double beat = 0.0;
+            double downbeat = 0.0;
+            for (BeatNetModel& model : models_) {
+                model.forward(f, probabilities_);
+                beat += static_cast<double>(probabilities_[0]) +
+                        static_cast<double>(probabilities_[1]);
+                downbeat += static_cast<double>(probabilities_[1]);
+            }
+            const double scale = 1.0 / static_cast<double>(models_.size());
+            onActivation(t, beat * scale, downbeat * scale);
         });
     }
 
 private:
     BeatNetFeatures features_;
-    BeatNetModel model_;
+    // Sized once, in the constructor. `process` walks it and allocates nothing,
+    // which is what keeps this usable from an audio callback.
+    std::vector<BeatNetModel> models_;
     float probabilities_[BeatNetWeights::kClasses] = {0.0f, 0.0f, 0.0f};
 };
 

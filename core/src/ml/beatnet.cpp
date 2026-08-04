@@ -285,11 +285,29 @@ void BeatNetFeatures::advance() {
 // ------------------------------------------------------------- activation --
 
 BeatNetActivation::BeatNetActivation(double sampleRate, const BeatNetWeights& weights)
-    : features_(sampleRate), model_(weights) {}
+    : features_(sampleRate) {
+    models_.reserve(1);
+    models_.emplace_back(weights);
+}
+
+BeatNetActivation::BeatNetActivation(double sampleRate,
+                                     const BeatNetWeights* const* weights,
+                                     std::size_t count)
+    : features_(sampleRate) {
+    assert(weights != nullptr && count > 0);
+    // Reserved exactly, so the vector never reallocates -- BeatNetModel holds a
+    // reference to its weights and so cannot be move-assigned, and growing the
+    // vector would copy every model's buffers for no reason.
+    models_.reserve(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        assert(weights[i] != nullptr && weights[i]->valid());
+        models_.emplace_back(*weights[i]);
+    }
+}
 
 void BeatNetActivation::reset() {
     features_.reset();
-    model_.reset();
+    for (BeatNetModel& model : models_) model.reset();
 }
 
 }  // namespace tiktak::ml

@@ -748,10 +748,33 @@ public:
     // device, not from a workstation.
     LiveTracker(const LiveConfig& config, const ml::BeatNetWeights& weights);
 
+    // Several checkpoints, their activations averaged over one front end.
+    //
+    // BeatNet publishes three, each withholding a different training corpus,
+    // and averaging them is the largest measured improvement available to the
+    // live path that does not require training anything: on 581 full-length
+    // recordings it takes the share with no wrong-level episode from 40.8% to
+    // 50.6%. The averaging and the reasons for it are in ml/beatnet.hpp; the
+    // tracker is unchanged, which is again what makes before and after
+    // comparable.
+    //
+    // **It costs two corpora.** Folds 1, 2 and 3 hold out GTZAN, Ballroom and
+    // Rock Corpus respectively, so an average of all three is train-on-test on
+    // GTZAN and on Ballroom, and neither can be quoted for a tracker built this
+    // way — 1,697 of the 2,760 annotated recordings on the research machine.
+    // A single fold does not have that problem, which is the one thing it still
+    // has going for it. Anyone comparing an averaged tracker against a
+    // published GTZAN number is comparing against a corpus it was trained on.
+    LiveTracker(const LiveConfig& config,
+                const ml::BeatNetWeights* const* weights, std::size_t count);
+
     const LiveConfig& config() const { return config_; }
 
     // True when the learned front end is the one feeding the filter.
     bool usingModel() const { return model_.has_value(); }
+
+    // How many checkpoints that front end averages. Zero when there is none.
+    std::size_t models() const { return model_ ? model_->networks() : 0; }
 
     // Feeds captured audio. `stream_time_sec` is the time of samples[0], in the
     // same clock the shell schedules output in.

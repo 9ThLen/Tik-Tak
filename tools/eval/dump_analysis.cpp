@@ -54,6 +54,7 @@
 #include <cstring>
 #include <iterator>
 #include <string>
+#include <deque>
 #include <vector>
 
 // Internal, on purpose: resolveMeter is the seam itself, and going through the
@@ -284,7 +285,11 @@ int main(int argc, char** argv) {
     // --live-activation answers "would a better observation help"; this answers
     // "does the thing we would ship actually do it", which is a different
     // question and the one that matters now.
-    std::string model_path;
+    //
+    // Repeatable. Given more than once the core averages the checkpoints over a
+    // single front end, which is the arm eval/PREREGISTERED_ensemble_in_core.md
+    // is about; the order does not matter to a mean, and it is not recorded.
+    std::vector<std::string> model_paths;
     // The offline path's replacement for a beat tracker from 2007. Decodes,
     // resamples to the model's rate, runs the network and picks the peaks —
     // the same code an app would run, not a research approximation of it.
@@ -408,7 +413,7 @@ int main(int argc, char** argv) {
         }
         if (std::strcmp(argv[i], "--live-model") == 0) {
             if (i + 1 >= argc) { std::fprintf(stderr, "--live-model needs a file\n"); return 2; }
-            model_path = argv[++i];
+            model_paths.emplace_back(argv[++i]);
             continue;
         }
         if (std::strcmp(argv[i], "--activation-fps") == 0) {
@@ -561,6 +566,9 @@ int main(int argc, char** argv) {
                      "  --live-no-anchor   the same, with that holding turned off\n"
                      "  --live-activation <file> [--activation-fps N]\n"
                      "                     drive the particle filter from this activation\n"
+                     "  --live-model <file>\n"
+                     "                     the core computes the activation itself; repeat\n"
+                     "                     the flag to average several checkpoints\n"
                      "  calibration: --salience-min-range <v> "
                      "--salience-min-phase-margin <v> "
                      "--salience-min-meter-margin <v>\n"
@@ -679,18 +687,25 @@ int main(int argc, char** argv) {
         live = true;
     }
     std::vector<double> model_downbeats;
-    tiktak::ml::BeatNetWeights model_weights;
-    if (!model_path.empty()) {
+    // Held by value in a deque rather than a vector: BeatNetWeights owns the
+    // storage its member pointers point into, so a vector reallocating on push
+    // would leave every earlier set pointing at freed bytes. A deque never
+    // moves what it already holds.
+    std::deque<tiktak::ml::BeatNetWeights> model_weights;
+    std::vector<const tiktak::ml::BeatNetWeights*> model_refs;
+    for (const std::string& path : model_paths) {
         std::vector<unsigned char> blob;
-        if (!readBytes(model_path.c_str(), blob)) {
-            std::fprintf(stderr, "cannot read %s\n", model_path.c_str());
+        if (!readBytes(path.c_str(), blob)) {
+            std::fprintf(stderr, "cannot read %s\n", path.c_str());
             return 1;
         }
-        if (!model_weights.load(blob.data(), blob.size())) {
+        tiktak::ml::BeatNetWeights& weights = model_weights.emplace_back();
+        if (!weights.load(blob.data(), blob.size())) {
             std::fprintf(stderr, "%s is not a weight file this build can run\n",
-                         model_path.c_str());
+                         path.c_str());
             return 1;
         }
+        model_refs.push_back(&weights);
         live = true;
     }
     if (live) {
@@ -732,9 +747,10 @@ int main(int argc, char** argv) {
             live_config.activation_tempo.min_window_sec = live_anchor_min_window;
         }
         tiktak::tracking::LiveTracker tracker =
-            model_weights.valid()
-                ? tiktak::tracking::LiveTracker(live_config, model_weights)
-                : tiktak::tracking::LiveTracker(live_config);
+            model_refs.empty()
+                ? tiktak::tracking::LiveTracker(live_config)
+                : tiktak::tracking::LiveTracker(live_config, model_refs.data(),
+                                                model_refs.size());
         if (live_seed && analysis.bpm > 0.0) {
             tracker.seedTempo(analysis.bpm);
         }
@@ -967,11 +983,15 @@ int main(int argc, char** argv) {
         }
         std::printf("],\n");
     }
-    if (dump_activation && model_weights.valid()) {
+    if (dump_activation && !model_refs.empty()) {
         // A fresh pass, and fresh state: the tracker's own instance has been
         // run to the end of the file and an LSTM that has already seen it would
-        // not answer the same way twice.
-        tiktak::ml::BeatNetActivation activation_pass(rate, model_weights);
+        // not answer the same way twice. Whatever the tracker was given, the
+        // dump is of the same thing — one checkpoint or the mean of several —
+        // so an activation dumped here can be handed back through
+        // --live-activation and reproduce the run it came from.
+        tiktak::ml::BeatNetActivation activation_pass(rate, model_refs.data(),
+                                                      model_refs.size());
         std::vector<double> at, beat_p, downbeat_p;
         at.reserve(samples.size() / 441);
         beat_p.reserve(at.capacity());
