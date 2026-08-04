@@ -58,6 +58,14 @@ from eval.provenance import provenance  # noqa: E402
 FPS = 50.0
 MACRO_MIN = 30
 
+# How much of the corpus may go missing before an average stops describing the
+# corpus it names. Two percent is roughly one bad file in fifty and is worth a
+# warning; a third of the corpus is a different experiment wearing the same
+# name. Nothing was chosen by looking at a result — the failure that motivated
+# it lost 33%, and any threshold in this range would have caught it.
+MAX_DROPPED_SHARE = 0.02
+MAX_DROPS_SHOWN = 20
+
 # Fold order is the order the folds are published in, not a ranking.
 FOLDS = ("1", "2", "3")
 
@@ -82,37 +90,56 @@ def sign_test(wins: int, losses: int) -> float:
 
 
 def activation_of(binary: pathlib.Path, audio: pathlib.Path,
-                  model: pathlib.Path) -> np.ndarray | None:
-    done = subprocess.run(
-        [str(binary), str(audio), "--live", "--live-model", str(model),
-         "--dump-activation"],
-        capture_output=True, text=True, encoding="utf-8", errors="replace")
+                  model: pathlib.Path) -> tuple[np.ndarray | None, str]:
+    """The activation, or None and the reason there is none.
+
+    Every one of these failures used to be spelled `return None`, and `one`
+    turned any of them into a recording that simply was not there. That is how
+    a run on 2026-08-04 lost the last 109 of 328 recordings — the machine
+    stopped being able to spawn processes partway through — and still produced
+    a well-formed table, with every surviving corpus scoring exactly as before
+    and the macro average collapsing because the easy corpus had silently
+    fallen out of it. The numbers were not wrong; the corpus was, and nothing
+    said so. So the reason travels with the failure now.
+    """
+    try:
+        done = subprocess.run(
+            [str(binary), str(audio), "--live", "--live-model", str(model),
+             "--dump-activation"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace")
+    except OSError as error:
+        # The failure that actually happened: not a bad file, an environment
+        # that could no longer start a child process.
+        return None, f"could not run the binary: {type(error).__name__}"
     if done.returncode != 0:
-        return None
+        return None, (f"exit {done.returncode}: "
+                      f"{done.stderr.strip()[:160] or 'no message'}")
     try:
         payload = json.loads(done.stdout)
     except json.JSONDecodeError:
-        return None
+        return None, "output was not JSON"
     stream = payload.get("activation_beat")
     if not stream:
-        return None
-    return np.asarray(stream, dtype=np.float64)
+        return None, "no activation in the output"
+    return np.asarray(stream, dtype=np.float64), ""
 
 
 def one(item: dict, binary: pathlib.Path,
         models: dict[str, pathlib.Path]) -> dict | None:
     streams: dict[str, np.ndarray] = {}
     for fold, model in models.items():
-        stream = activation_of(binary, item["audio"], model)
+        stream, why = activation_of(binary, item["audio"], model)
         if stream is None:
-            return None
+            return {"__dropped__": f"{item['corpus']}/{item['name']}: "
+                                   f"fold {fold} {why}"}
         streams[fold] = stream
 
     lengths = {len(stream) for stream in streams.values()}
     if len(lengths) != 1:
         # Not a tolerance question. One front end produced all three, so
         # different lengths mean one of the runs is not the run it claims to be.
-        return None
+        return {"__dropped__": f"{item['corpus']}/{item['name']}: the three "
+                               f"folds produced {sorted(lengths)} frames"}
 
     stack = np.vstack([streams[fold] for fold in models])
     arms = dict(streams)
@@ -314,21 +341,43 @@ def main(argv: list[str] | None = None) -> int:
         return one(item, args.binary, models)
 
     collected: dict[str, list[dict]] = {}
-    failed = 0
+    dropped: list[str] = []
     with concurrent.futures.ThreadPoolExecutor(args.workers) as pool:
         for result in pool.map(work, items):
-            if result is None:
-                failed += 1
+            if "__dropped__" in result:
+                dropped.append(result["__dropped__"])
                 continue
             for arm, row in result.items():
                 collected.setdefault(arm, []).append(row)
+
+    # Loud, and fatal past a threshold. A dropped recording is not a corpus
+    # that is one smaller — it is a different corpus, and if the drops are not
+    # spread evenly they change the macro average without changing a single
+    # per-corpus rate. That is exactly what happened when this was a silent
+    # counter: every surviving corpus scored the same and the headline moved
+    # eight points, because the easy corpus was the part that vanished.
+    for line in dropped[:MAX_DROPS_SHOWN]:
+        print(f"   dropped {line}")
+    if len(dropped) > MAX_DROPS_SHOWN:
+        print(f"   ... and {len(dropped) - MAX_DROPS_SHOWN} more")
+    if dropped:
+        share = len(dropped) / len(items)
+        print(f"\n   {len(dropped)} of {len(items)} recordings dropped "
+              f"({share:.1%})")
+        if share > MAX_DROPPED_SHARE:
+            print(f"   REFUSING to aggregate: more than "
+                  f"{MAX_DROPPED_SHARE:.0%} of the corpus is missing, so any "
+                  f"average here describes a corpus nobody chose. Fix the "
+                  f"cause and run it again.")
+            return 1
 
     report = {
         "provenance": provenance(
             REPOSITORY,
             {"binary": args.binary,
              **{f"model_{fold}": path for fold, path in models.items()}},
-            arms=sorted(collected), attempted=len(items), dropped=failed),
+            arms=sorted(collected), attempted=len(items),
+            dropped=len(dropped), dropped_detail=dropped),
         "fps": FPS,
         "by_arm": {arm: aggregate(rows) for arm, rows in collected.items()},
     }
@@ -340,7 +389,7 @@ def main(argv: list[str] | None = None) -> int:
     macro = any(summary.get("usable_rate_macro") is not None
                 for summary in report["by_arm"].values())
     suffix = "" if macro else " (pooled — no corpus reaches the macro minimum)"
-    print(f"\n{len(items) - failed} of {len(items)} recordings, "
+    print(f"\n{len(items) - len(dropped)} of {len(items)} recordings, "
           f"every arm through --live-activation{suffix}\n")
     print(f"   {'arm':8} {'usable':>8} {'strict':>8} {'any lvl':>8} "
           f"{'F':>7} {'CMLt':>7}")

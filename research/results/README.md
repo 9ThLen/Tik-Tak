@@ -15,12 +15,80 @@ a formality here:
 | GTZAN | out of fold 1's training, in folds 2 and 3's | fold 1 only |
 | SMC | out of all three | anything, but at 3.2% usable it has no resolution |
 | RWC | out of all three — **development corpus since 2026-08-03** | debugging, factorization, regression; not confirmation |
-| Harmonix | out of all three, **unspent** | reserved, see `eval/PREREGISTERED_harmonix_ensemble.md` |
+| Harmonix | out of all three — **spent 2026-08-04** on the pre-registered ensemble test | that one hypothesis, honestly; a development corpus from now on |
 
 RWC became a development corpus the moment `anchor_width_octaves` was chosen by
 looking at it and the averaged activation was taken seriously after seeing its
 scores. It is still the most useful corpus here for finding out *why* something
 fails. It can no longer say that a chosen configuration is good.
+
+## The pre-registered test: does averaging the three folds hold up out of sample
+
+`beatnet_ensemble_harmonix.json`. 581 full-length recordings, `attempted 581,
+dropped 0`, commit `e6cf8bd`, clean tree. The protocol and the four predictions
+were fixed in `eval/PREREGISTERED_harmonix_ensemble.md` before the corpus was
+looked at; primary endpoint `usable_strict`, primary comparison mean against
+fold 1, α 0.05 uncorrected because the hypothesis was fixed in advance.
+
+| arm | usable | strict | any level | F | CMLt |
+|---|---|---|---|---|---|
+| fold 1 — ships today | 31.7% | 27.5% | 52.7% | 0.8027 | 0.6911 |
+| fold 2 | 31.2% | 25.8% | 51.5% | 0.7970 | 0.7008 |
+| fold 3 | 32.5% | 25.6% | 52.7% | 0.7872 | 0.6809 |
+| **mean** | **38.7%** | **33.0%** | **60.2%** | **0.8445** | **0.7404** |
+| max | 28.6% | 22.2% | 41.1% | 0.7564 | 0.6239 |
+
+Every comparison the mean makes is significant after Holm correction over all
+eight:
+
+| the mean against | criterion | won | lost | p |
+|---|---|---|---|---|
+| max | strictly | 72 | 9 | <1e-6 |
+| max | usable | 79 | 20 | <1e-6 |
+| fold 2 | strictly | 59 | 17 | 1e-6 |
+| fold 3 | strictly | 62 | 19 | 2e-6 |
+| fold 2 | usable | 70 | 26 | 8e-6 |
+| fold 1 | usable | 69 | 28 | 3.8e-5 |
+| **fold 1** | **strictly (primary)** | **54** | **22** | **3.1e-4** |
+| fold 3 | usable | 67 | 31 | 3.6e-4 |
+
+**Two of the four predictions were wrong**, both because the ensemble did better
+than expected:
+
+| | prediction | result | |
+|---|---|---|---|
+| P1 (primary) | mean beats fold 1 on strict, p<0.05 | p = 3.1e-4 | ✅ |
+| P2 | margin smaller than RWC's 5.3 pts | 5.5 pts | ❌ |
+| P3 | mean strict in 30–50% | 33.0% | ✅ |
+| P4 | mean does not beat fold 3 | p = 2e-6 | ❌ |
+
+P4's failure retires a claim: **"fold 1 is the weakest" does not replicate.** On
+RWC the folds spread 14.7 / 18.2 / 18.7; here they sit inside 1.3 points with
+fold 1 in the middle. That ranking was corpus-specific noise. What replicates,
+and more strongly out of sample, is that the mean beats all of them — and since
+there is no best fold to pick, no corpus need be spent picking one.
+
+P2's failure retires a worry rather than a claim. The margin was expected to
+shrink because RWC had chosen the width; it grew from 5.3 to 5.5 points. The
+premise was wrong: a width chosen on RWC moves every arm together, so it biases
+the absolute level and not a fold-against-mean contrast.
+
+### Where the remaining distance is
+
+Same run, same best configuration, why the 581 recordings fail — shares of the
+whole corpus, so they overlap:
+
+| | mean | fold 1 |
+|---|---|---|
+| wrong metrical level over 4 s | **49.4%** | 59.2% |
+| wrong beats (precision) | 24.1% | 32.9% |
+| too few beats (recall) | 24.1% | 31.7% |
+| slow to acquire | 17.4% | 15.0% |
+
+The level is twice the next failure, and forgiving it outright is worth
+**21.5 points** (38.7% → 60.2%). See `core/src/tracking/live.hpp` for why the
+next thing to try is giving `LiveTracker` the downbeat channel it currently
+discards.
 
 ## The three BeatNet folds and their average, on RWC
 

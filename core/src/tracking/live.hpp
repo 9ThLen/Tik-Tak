@@ -345,35 +345,47 @@ struct LiveConfig {
 //
 // **We have been measuring on the weakest of the three published folds.**
 // BeatNet ships three checkpoints. Every number in this comment is fold 1, for
-// no better reason than that it was the first one fetched. On RWC it is the
-// worst of the three, and averaging all three activations frame by frame is
-// better than any of them:
+// no better reason than that it was the first one fetched. Averaging all three
+// activations frame by frame — one front end, so they are already synchronised
+// — beats every one of them, and that is the finding. Measured on Harmonix,
+// 581 full-length recordings, out of all three folds' training and never used
+// to choose anything here:
 //
-//     RWC, 328 recordings, one seam   usable   strict     F
-//     fold 1, which ships              14.7%    13.9%   0.613
-//     fold 2                           18.2%    16.2%   0.624
-//     fold 3                           18.7%    16.4%   0.612
-//     mean of the three                20.6%    19.2%   0.650
+//     Harmonix, one seam   usable   strict   any level     F
+//     fold 1, which ships   31.7%    27.5%      52.7%    0.803
+//     fold 2                31.2%    25.8%      51.5%    0.797
+//     fold 3                32.5%    25.6%      52.7%    0.787
+//     mean of the three     38.7%    33.0%      60.2%    0.845
+//     max of the three      28.6%    22.2%      41.1%    0.756
 //
-// Exactly one comparison in that table is established: the mean beats fold 1 on
-// the loose criterion, +25 recordings against -7, exact sign test p .0021, which
-// is .0168 after correcting for the family of eight the harness runs. Read
-// strictly the same comparison does **not** survive at .0633, and the mean is
-// not established as better than folds 2 or 3 at all. Full tables, every paired
-// count and the corrections are in research/results/README.md, produced by
-// research/eval/beatnet_ensemble.py; do not re-derive them here, because two
-// copies of a number is how one of them goes stale.
+// The mean beats all three folds on both criteria, every comparison significant
+// after correction, the weakest at p .0006. `max` is worse than any fold, so
+// this is not "any pooling helps": what a mean suppresses and a max keeps is one
+// fold being confident and wrong.
 //
-// **RWC is a development corpus now, not an independent estimate.** The width
-// above was chosen by looking at RWC, and the decision to take the mean
-// seriously was made after seeing these RWC scores. An earlier revision of this
-// comment argued that averaging "spends no corpus" because the rule itself
-// consults no scores. That is wrong and worth spelling out, because it is a
-// tempting mistake: the *rule* consults nothing, but the *decision to apply the
-// rule* was made with these numbers in hand, and that is what selection is. The
-// configuration above is a candidate that has to be confirmed somewhere it has
-// never been run. research/eval/PREREGISTERED_harmonix_ensemble.md fixes that
-// comparison before the corpus is looked at.
+// This was pre-registered before the corpus was looked at, in
+// research/eval/PREREGISTERED_harmonix_ensemble.md, and **two of its four
+// predictions were wrong** — both in the direction of the ensemble being better
+// than expected. One of them matters here: "fold 1 is the weakest of the three"
+// was measured on RWC, where they spread 14.7 / 18.2 / 18.7, and it **does not
+// replicate**. On Harmonix the three sit inside 1.3 points with fold 1 in the
+// middle. The fold ranking was corpus-specific noise. Do not use it, and do not
+// choose a fold on it.
+//
+// The other wrong prediction was that the margin would shrink out of sample,
+// because RWC had chosen the width and the decision to try averaging. It grew
+// slightly, 5.3 points to 5.5. The premise was wrong rather than the
+// measurement: a width chosen on RWC shifts every arm together, so it biases
+// the absolute level and not a fold-against-mean contrast.
+//
+// **RWC is a development corpus, not an independent estimate.** The width above
+// was chosen by looking at it. An earlier revision of this comment argued that
+// averaging "spends no corpus" because the rule consults no scores — wrong, and
+// worth spelling out because it is a tempting mistake: the rule consults
+// nothing, but the decision to apply the rule was made with those numbers in
+// hand. Harmonix is what the claim above rests on. Full tables, paired counts
+// and corrections for both corpora are in research/results/README.md; do not
+// re-derive them here, because two copies of a number is how one goes stale.
 //
 // Nothing here says the ensemble should ship, and one obvious objection to it
 // cannot even be raised yet. "Does averaging hurt the downbeat?" has no answer
@@ -387,6 +399,32 @@ struct LiveConfig {
 // The other thing not measured is the cost: three networks is three times the
 // compute, roughly 0.03 real-time on this desktop, which says nothing about a
 // phone. That number has to come from the phone.
+//
+// **And that missing consumer is probably the largest lever left.** On the best
+// configuration measured — this width, this ensemble — here is why the 581
+// Harmonix recordings fail, as shares of the whole corpus, so they overlap:
+//
+//     wrong metrical level over 4 s   49.4%
+//     wrong beats (precision)         24.1%
+//     too few beats (recall)          24.1%
+//     slow to acquire                 17.4%
+//
+// The level is the dominant failure by a factor of two, and forgiving it
+// outright takes the corpus from 38.7% usable to 60.2% — twenty-one points, on
+// full-length songs, against under five on GTZAN excerpts, which simply do not
+// last long enough to drift. Every decoder-side attempt on it has been worth a
+// few points at most: narrowing this anchor bought 2.4 to 6.6, and siding with
+// the anchor during a disagreement was bounded at 3.6 to 4.9. That gap between
+// what tuning reaches and what the oracle is worth is the shape of a problem
+// that needs different *evidence*, not a better search over the same evidence.
+//
+// The evidence exists and is discarded. BeatNet emits beat, downbeat and null
+// at 50 fps; `observe` takes the beat channel and the downbeat probability is
+// dropped on the floor. A bar line every four beats is a direct statement about
+// which of half, one and double is the beat — exactly the quantity that fails
+// here. So "give this class a downbeat input" is not only what the ensemble
+// needs before it can ship; on this evidence it is the first thing to try for
+// the octave, and it is the cheapest, because nothing new has to be trained.
 //
 // Why GTZAN's recordings fail, as a share of all 999 of them — a recording can
 // fail several ways at once, so these overlap and do not sum to the 55.5% that

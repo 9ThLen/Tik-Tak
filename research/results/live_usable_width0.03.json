@@ -1,12 +1,12 @@
 {
   "provenance": {
-    "utc": "2026-08-02T08:43:20Z",
-    "commit": "f1cddbf44c7faabccd2c84e4dc77070fa8e87689",
-    "tree_clean": false,
+    "utc": "2026-08-03T19:02:30Z",
+    "commit": "e6cf8bd7ccfae91cb02e91f5e85a9312d70b6255",
+    "tree_clean": true,
     "binary": {
       "name": "dump_analysis.exe",
       "bytes": 975872,
-      "sha256": "782d62d543ad4464d6139c086ab6e17f02b4f7b91f9c11ad994804138fc10d23"
+      "sha256": "a90b2ac469c6b51dfe0e330ab9adc64a760b32290cc3f4e3c14a1cda44bc3657"
     },
     "model": {
       "name": "beatnet_model_1.ttw",
@@ -23,10 +23,6 @@
       "gtzan": {
         "files": 1000,
         "annotated": 1000
-      },
-      "root": {
-        "files": 109,
-        "annotated": 0
       },
       "smc": {
         "files": 217,
@@ -64,13 +60,15 @@
   "summaries": [
     {
       "mode": "model",
-      "attempted": 2024,
-      "success": 2015,
+      "attempted": 1915,
+      "success": 1914,
       "scored": 1914,
       "usable_rate_macro": 0.3606187911422529,
       "usable_rate_any_octave_macro": 0.3886825504812379,
       "usable_rate_pooled": 0.4566353187042842,
       "usable_rate_any_octave_pooled": 0.49320794148380354,
+      "usable_rate_strict_macro": 0.3406198045721107,
+      "usable_rate_strict_pooled": 0.4320794148380355,
       "failure_reasons": {
         "too_few_beats": 0.4754440961337513,
         "wrong_beats": 0.46290491118077326,
@@ -83,46 +81,6 @@
           "corpus": "gtzan",
           "name": "jazz.00054",
           "error": "dump_analysis failed on <audio>/jazz.00054.wav: <audio>/jazz.00054.wav is not a WAV, FLAC or MP3 file"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
         }
       ],
       "quality": {
@@ -152,9 +110,9 @@
           "zero": 0.0
         },
         "final_states": {
+          "same": 1371,
           "other": 310,
           "half": 118,
-          "same": 1371,
           "double": 115
         }
       },
@@ -163,6 +121,7 @@
           "n": 698,
           "usable_rate": 0.6031518624641834,
           "usable_rate_any_octave": 0.6260744985673352,
+          "usable_rate_strict": 0.5601719197707736,
           "failure_reasons": {
             "too_few_beats": 0.2922636103151863,
             "wrong_beats": 0.28796561604584525,
@@ -187,6 +146,7 @@
           "n": 999,
           "usable_rate": 0.44644644644644643,
           "usable_rate_any_octave": 0.4984984984984985,
+          "usable_rate_strict": 0.4294294294294294,
           "failure_reasons": {
             "too_few_beats": 0.4994994994994995,
             "wrong_beats": 0.4774774774774775,
@@ -212,6 +172,7 @@
           "n": 217,
           "usable_rate": 0.03225806451612903,
           "usable_rate_any_octave": 0.041474654377880185,
+          "usable_rate_strict": 0.03225806451612903,
           "failure_reasons": {
             "wrong_beats": 0.9585253456221198,
             "too_few_beats": 0.9539170506912442,
@@ -345,9 +306,9 @@
         }
       ],
       "harmonix_four": [],
-      "audio_hours": 23.119539750320712,
-      "wall_seconds": 561.9077849001624,
-      "rtf": 0.006751237156588961
+      "audio_hours": 16.807662648022035,
+      "wall_seconds": 443.41284010000527,
+      "rtf": 0.007328219035596097
     }
   ]
 }
