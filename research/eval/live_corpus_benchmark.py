@@ -251,6 +251,16 @@ def octave_statistics(estimate: Estimate, beats: np.ndarray) -> dict[str, Any]:
     same_since: float | None = None
     worst_wrong_run = 0.0
     wrong_since: float | None = None
+    # The longest unbroken stretch at the annotated level, and what the tracker
+    # was doing at a few fixed moments. A share says how much of the time was
+    # right; neither says whether it was right *in one piece*, and a tracker
+    # that is correct for four minutes straight is a different product from one
+    # that is correct for two seconds at a time sixty times over.
+    longest_correct_run = 0.0
+    at_seconds = (5.0, 10.0, 30.0, 60.0)
+    state_at: dict[str, str | None] = {f"state_at_{int(t)}s": None
+                                       for t in at_seconds}
+    pending = list(at_seconds)
 
     observations = zip(*(np.asarray(column)[:count] for column in columns))
     for time_sec, bpm, confidence, spread in observations:
@@ -274,7 +284,18 @@ def octave_statistics(estimate: Estimate, beats: np.ndarray) -> dict[str, Any]:
         if time_sec < 5.0:
             continue
         eligible_samples += 1
+        # What the user would have seen at this moment, silence included. A
+        # tracker that has not locked is showing nothing, which is not a right
+        # answer — so "not locked" is recorded here rather than skipped, and
+        # only then does the loop move on.
+        while pending and float(time_sec) >= pending[0]:
+            state_at[f"state_at_{int(pending.pop(0))}s"] = (
+                tempo_state(float(bpm), local_reference_bpm(beats, float(time_sec)))
+                if locked else "silent")
         if not locked:
+            if same_since is not None:
+                longest_correct_run = max(longest_correct_run,
+                                          float(time_sec) - same_since)
             continue
 
         active_samples += 1
@@ -293,10 +314,16 @@ def octave_statistics(estimate: Estimate, beats: np.ndarray) -> dict[str, Any]:
                 wrong_since = None
             if same_since is None:
                 same_since = float(time_sec)
-            elif (settled_at is None
-                  and float(time_sec) - same_since >= SETTLE_SEC):
-                settled_at = same_since
+            else:
+                longest_correct_run = max(longest_correct_run,
+                                          float(time_sec) - same_since)
+                if (settled_at is None
+                        and float(time_sec) - same_since >= SETTLE_SEC):
+                    settled_at = same_since
         else:
+            if same_since is not None:
+                longest_correct_run = max(longest_correct_run,
+                                          float(time_sec) - same_since)
             same_since = None
             if wrong_since is None:
                 wrong_since = float(time_sec)
@@ -321,7 +348,20 @@ def octave_statistics(estimate: Estimate, beats: np.ndarray) -> dict[str, Any]:
     )
     if wrong_since is not None:
         worst_wrong_run = max(worst_wrong_run, final_time - wrong_since)
+    if same_since is not None:
+        longest_correct_run = max(longest_correct_run, final_time - same_since)
     return {
+        # The share of the time after warm-up when the tracker was showing the
+        # right tempo. Deliberately over *eligible* time, not active time.
+        # `active_state_shares` divides by the time the tracker was locked, so
+        # every second it spent silent is excluded from its own denominator —
+        # which flatters it exactly where a user is worst served, because
+        # silence is not a right answer, it is no answer. The two differ by the
+        # active fraction, and on full-length material that is a large gap.
+        "correct_share_of_eligible": (
+            states["same"] / eligible_samples if eligible_samples else None),
+        "longest_correct_run_sec": longest_correct_run,
+        **state_at,
         "switches": within_switches + reacquire_switches,
         "within_switches": within_switches,
         "reacquire_switches": reacquire_switches,
@@ -673,6 +713,36 @@ def summarize(mode: str, results: list[dict[str, Any]], wall: float) -> dict:
             "median_settle_sec": _finite_stat(
                 [result["settled_at"] for result in part
                  if result.get("settled_at") is not None], np.median),
+            # P90 beside the median, because a median settle of eight seconds
+            # with a tail at ninety is a different product from one with a tail
+            # at twelve, and the median cannot tell them apart. Computed only
+            # over recordings that settled at all — `never_settled_fraction`
+            # below is the rest, and folding those in as some large number
+            # would invent a latency for a recording that never arrived.
+            "p90_settle_sec": _finite_stat(
+                [result["settled_at"] for result in part
+                 if result.get("settled_at") is not None],
+                lambda xs: np.percentile(xs, 90)),
+            "p90_acquisition_sec": _finite_stat(
+                [result["acquired_at"] for result in part
+                 if result.get("acquired_at") is not None],
+                lambda xs: np.percentile(xs, 90)),
+            # How much of the time after warm-up the tracker was actually right,
+            # counting silence against it. This is the number a user would
+            # recognise, and it is strictly lower than `active_state_shares`.
+            "mean_correct_share_of_eligible": _finite_stat(
+                [result["correct_share_of_eligible"] for result in part
+                 if result.get("correct_share_of_eligible") is not None],
+                np.mean),
+            "median_longest_correct_run_sec": _finite_stat(
+                [result.get("longest_correct_run_sec") for result in part], np.median),
+            # Level changes per five minutes of audio, which is the unit a
+            # person notices them in. `switches_per_hour` below is the same
+            # thing at a scale nobody experiences.
+            "switches_per_five_minutes": (
+                sum(result["switches"] for result in part)
+                / (sum(result["duration"] for result in part) / 300.0)
+                if sum(result["duration"] for result in part) else None),
             "never_settled_fraction": (
                 sum(result.get("settled_at") is None for result in part)
                 / len(part) if part else None

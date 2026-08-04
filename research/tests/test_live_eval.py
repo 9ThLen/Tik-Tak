@@ -147,6 +147,64 @@ def test_a_recording_that_never_acquires_is_not_also_called_never_settled():
     assert "never_settled" not in got["reasons_strict"]
 
 
+def _timeline(bpms, confidences, beat_bpm=120.0, duration=80.0):
+    """A per-second live history and a matching annotated beat grid."""
+    times = np.arange(len(bpms), dtype=np.float64)
+    return (
+        Estimate.from_json({
+            "live_times": times.tolist(),
+            "live_bpms": list(bpms),
+            "live_confidences": list(confidences),
+            "live_tempo_spreads_octaves": [0.01] * len(bpms),
+            "live_bpm": float(bpms[-1]),
+        }),
+        np.arange(0.0, duration, 60.0 / beat_bpm),
+    )
+
+
+def test_correct_time_counts_silence_against_the_tracker():
+    # Forty seconds after warm-up: right for twenty, then silent for twenty.
+    # The share over *active* time is 100% — the tracker was never wrong when
+    # it spoke. The share a user would recognise is 50%, because for half the
+    # time it showed nothing. That difference is the whole reason this field
+    # exists, so it is asserted rather than assumed.
+    bpms = [120.0] * 65
+    confidences = [0.9] * 45 + [0.0] * 20
+    estimate, beats = _timeline(bpms, confidences)
+    got = octave_statistics(estimate, beats)
+
+    active_share = got["states"]["same"] / got["active_samples"]
+    assert active_share == pytest.approx(1.0)
+    assert got["correct_share_of_eligible"] == pytest.approx(40 / 60, abs=0.02)
+    assert got["correct_share_of_eligible"] < active_share
+
+
+def test_the_longest_correct_run_is_not_the_total_correct_time():
+    # Right for ten seconds, wrong for ten, right for ten again. Thirty seconds
+    # of correct time in total, but never more than ten in a row — and a
+    # metronome that resets twice is not one that held for thirty.
+    bpms = [120.0] * 15 + [60.0] * 10 + [120.0] * 10
+    estimate, beats = _timeline(bpms, [0.9] * len(bpms))
+    got = octave_statistics(estimate, beats)
+
+    assert got["states"]["same"] == 20
+    assert got["longest_correct_run_sec"] == pytest.approx(10.0, abs=1.5)
+
+
+def test_a_tracker_that_has_not_locked_reads_as_silent_not_as_wrong():
+    # The fixed-moment snapshots must distinguish "showing nothing" from
+    # "showing the wrong tempo": they are different failures with different
+    # fixes, and collapsing them would hide slow acquisition inside the octave
+    # numbers.
+    bpms = [120.0] * 65
+    confidences = [0.0] * 20 + [0.9] * 45
+    estimate, beats = _timeline(bpms, confidences)
+    got = octave_statistics(estimate, beats)
+
+    assert got["state_at_10s"] == "silent"
+    assert got["state_at_30s"] == "same"
+
+
 def _scored(corpus: str, name: str, **overrides):
     """One entry of `summarize`'s input, passing unless told otherwise."""
     result = _result(**overrides)
