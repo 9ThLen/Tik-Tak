@@ -503,8 +503,12 @@ double octaveNearest(double bpm, double held_bpm);
 //
 // Every figure above was measured twice, by
 //
-//     python -m eval.live_corpus_benchmark --model models/beatnet_model_1.ttw \
-//         --include-root-audio --mode model --output results/live_usable.json
+//     python -m eval.live_corpus_benchmark --model models/beatnet_model_1.ttw --include-root-audio --mode model --output results/live_usable.json
+//
+// On one line on purpose, and please leave it that way. A backslash
+// continuation at the end of a `//` comment is a line splice, so it makes the
+// next line part of this comment — GCC calls that -Wcomment and the build here
+// is -Werror. It was written wrapped, and it broke the Linux build.
 //
 // which writes the commit, the weight file's SHA-256, the per-corpus file
 // counts and whether the tree was clean beside the numbers. Quoting a rate
