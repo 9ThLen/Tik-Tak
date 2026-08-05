@@ -156,7 +156,7 @@ typedef struct tt_offline_config {
     /* Tempo search. */
     double min_bpm;              /* 0 -> 40                                    */
     double max_bpm;              /* 0 -> 220                                   */
-    double prior_centre_bpm;     /* 0 -> 120                                   */
+    double prior_centre_bpm;     /* 0 -> 140                                   */
     double prior_width_octaves;  /* Prior width in octaves. 0 -> 0.7           */
     int    tempo_grid_size;      /* Candidate tempi. 0 -> 512                  */
     /* Comb scoring over metrical multiples. 0 -> 1, which disables it: it
@@ -699,7 +699,7 @@ typedef struct tt_live_config {
     /* Tempo range and prior, the same belief the offline estimator applies. */
     double min_bpm;            /* 0 -> 40                                      */
     double max_bpm;            /* 0 -> 220                                     */
-    double prior_centre_bpm;   /* 0 -> 120                                     */
+    double prior_centre_bpm;   /* 0 -> 150                                     */
 
     /* Particles carried. More is steadier and costs linearly. 0 -> 512. */
     int particles;

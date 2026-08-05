@@ -44,10 +44,17 @@ def test_prior_peaks_at_its_centre():
     assert prior[0] < prior[1]
 
 
-@pytest.mark.parametrize("bpm", [90, 100, 120, 140])
+@pytest.mark.parametrize("bpm", [100, 110, 120, 140, 160])
 def test_estimates_moderate_tempi_exactly(bpm):
     # Tempi near the prior centre must come out right; the octave errors this
     # estimator does make are at the extremes, and are tested separately.
+    #
+    # 90 used to be in this list and is not any more. That is not a regression
+    # being written off: the centre moved from 120 to 140 for a measured reason
+    # (see TempoConfig.prior_centre_bpm), and 90 sits below the half/double
+    # crossover of a 140 centre — 140/sqrt(2) is 99 — so it is now an extreme
+    # rather than a moderate one. It moved to the octave test below, and the
+    # trade that put it there is pinned explicitly further down.
     clip = make_clip(bpm=bpm, duration_sec=25, seed=bpm)
     result = odf_of(clip)
     estimate = estimate_tempo(result.full, result.fps)
@@ -56,11 +63,11 @@ def test_estimates_moderate_tempi_exactly(bpm):
     assert estimate.confidence > 0.5
 
 
-@pytest.mark.parametrize("bpm", [72, 168, 190])
+@pytest.mark.parametrize("bpm", [72, 90, 168, 190])
 def test_extreme_tempi_are_at_worst_an_octave_out(bpm):
-    # A documented, accepted limitation: the log-normal prior centred at 120 BPM
-    # pulls the extremes towards it. The estimate must still be metrically
-    # related to the truth — a non-metrical answer would be a real failure.
+    # A documented, accepted limitation: the log-normal prior pulls the extremes
+    # towards its centre. The estimate must still be metrically related to the
+    # truth — a non-metrical answer would be a real failure.
     clip = make_clip(bpm=bpm, duration_sec=25, seed=bpm)
     result = odf_of(clip)
     estimate = estimate_tempo(result.full, result.fps)
@@ -69,6 +76,52 @@ def test_extreme_tempi_are_at_worst_an_octave_out(bpm):
     assert min(abs(ratio - r) for r in (0.5, 1.0, 2.0)) < 0.06, (
         f"{bpm} BPM estimated as {estimate.bpm:.1f}, which is not a metrical relative"
     )
+
+
+def test_the_shipped_centre_keeps_a_tempo_the_old_one_halved():
+    # The reason the centre moved, and the mirror of the core's own
+    # Tempo.TheShippedCentreKeepsATempoTheOldOneHalved. A centre of 120 halved
+    # 176 BPM, which over 698 annotated ballroom recordings was the tracker's
+    # largest single failure mode: it landed on exactly half the annotation 186
+    # times, and the 120 prior independently prefers the half on 184 of those
+    # same 698. A quickstep at 176 now survives.
+    clip = make_clip(bpm=176, duration_sec=25, seed=176)
+    result = odf_of(clip)
+
+    assert estimate_tempo(result.full, result.fps).bpm == pytest.approx(176, rel=0.04)
+    halved = estimate_tempo(result.full, result.fps, TempoConfig(prior_centre_bpm=120.0))
+    assert halved.bpm == pytest.approx(88, rel=0.04)
+
+
+def test_the_shipped_centre_doubles_a_tempo_the_old_one_kept():
+    # And the bill for the test above, kept in the suite rather than left to the
+    # prose. Re-centring is close to zero sum: over the same 698 recordings the
+    # halves go 186 -> 119 and the doubles go 11 -> 54, so two thirds of what it
+    # removes comes back on slower material. 90 BPM is this repository's
+    # smallest reproduction of that — right under a centre of 120, doubled under
+    # the 140 that ships.
+    #
+    # It is pinned because it is the accepted cost of a net win, not because it
+    # is correct. A global prior can only choose where the half/double crossover
+    # sits; telling fast music from slow needs evidence about the metre.
+    clip = make_clip(bpm=90, duration_sec=25, seed=90)
+    result = odf_of(clip)
+
+    assert estimate_tempo(result.full, result.fps).bpm == pytest.approx(180, rel=0.04)
+    kept = estimate_tempo(result.full, result.fps, TempoConfig(prior_centre_bpm=120.0))
+    assert kept.bpm == pytest.approx(90, rel=0.04)
+
+
+def test_the_defaults_match_the_core():
+    # These two numbers are the shipped configuration and they live in two
+    # places: here and core/src/analysis/tempo.hpp. The centre drifted apart
+    # once already — the core moved to 140 with corpus evidence and this file
+    # stayed at 120 for a month, which made every research number computed here
+    # a measurement of something the app does not do. tools/parity/check_parity
+    # is what catches it properly, by running both; this is the cheap version
+    # that runs in the ordinary test suite.
+    assert TempoConfig().prior_centre_bpm == 140.0
+    assert TempoConfig().prior_width_octaves == 0.7
 
 
 def test_comb_is_off_by_default_and_still_works_when_asked_for():

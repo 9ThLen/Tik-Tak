@@ -112,6 +112,39 @@ def test_silence_yields_no_beats():
     del beats
 
 
+def test_the_hypothesis_search_beats_the_estimator_alone():
+    # The estimator ranks candidates by plausibility and has no idea which one
+    # would actually *fit*. On this clip it is wrong: 90 BPM material comes back
+    # as 181, because the prior's centre sits above it. Tracking the leading
+    # candidates and scoring each by the objective the DP maximises anyway
+    # recovers the right one.
+    #
+    # Pinned against `tempo_hypotheses=1`, which is the reference as it stood
+    # before the search was ported across from the core — without it this reads
+    # as "the tracker happens to work at 90 BPM" rather than as a mechanism.
+    clip = make_clip(bpm=90, duration_sec=25, seed=90)
+    result = compute_odf(clip.audio, OdfConfig(sample_rate=clip.sample_rate))
+
+    searched = track_beats(result.full, result.times, result.fps)
+    first_choice = track_beats(result.full, result.times, result.fps,
+                               config=TrackerConfig(tempo_hypotheses=1))
+
+    assert searched.bpm == pytest.approx(90, rel=0.04)
+    assert first_choice.bpm == pytest.approx(180, rel=0.04)
+    assert evaluate(clip.beats, searched.beats)["f_measure"] > 0.95
+    assert evaluate(clip.beats, first_choice.beats)["f_measure"] < 0.8
+
+
+def test_a_manual_tempo_is_not_second_guessed_by_the_search():
+    # A hint is an instruction, not a hypothesis. Searching around it would be
+    # overriding the caller — and on this clip the search would have every
+    # excuse, since left alone it picks 90 over the 180 asked for.
+    clip = make_clip(bpm=90, duration_sec=25, seed=90)
+    beats, _ = track(clip, bpm=180.0)
+
+    assert beats.bpm == pytest.approx(180.0)
+
+
 def test_rejects_mismatched_inputs():
     with pytest.raises(ValueError):
         track_beats(np.zeros(10), np.zeros(5), 100.0, bpm=120.0)
@@ -121,3 +154,7 @@ def test_rejects_mismatched_inputs():
         track_beats(np.ones(10), np.zeros(10), 100.0, bpm=-1.0)
     with pytest.raises(ValueError):
         TrackerConfig(tightness=0.0).validate()
+    with pytest.raises(ValueError):
+        TrackerConfig(tempo_hypotheses=0).validate()
+    with pytest.raises(ValueError):
+        TrackerConfig(tempo_fit_weight=-1.0).validate()
