@@ -12,7 +12,13 @@ bool LiveConfig::valid() const {
            lock_confidence <= 1.0 && release_confidence >= 0.0 &&
            release_confidence < lock_confidence && discontinuity_tolerance_sec > 0.0 &&
            activation_tempo.valid() && anchor_width_octaves > 0.0 &&
-           anchor_octave_margin >= 0.0 && anchor_octave_margin <= 1.0;
+           anchor_octave_margin >= 0.0 && anchor_octave_margin <= 1.0 &&
+           anchor_freeze_timeout_sec > 0.0;
+}
+
+double octaveNearest(double bpm, double held_bpm) {
+    if (!(bpm > 0.0) || !(held_bpm > 0.0)) return bpm;
+    return bpm * std::exp2(std::round(std::log2(held_bpm / bpm)));
 }
 
 LiveConfig liveConfigFor(double sample_rate) {
@@ -206,19 +212,74 @@ void LiveTracker::submit(double time_sec, double normalised) {
     // the anchor has nothing to add and no business overruling it.
     if (config_.anchor_tempo && manual_bpm_ <= 0.0) {
         const auto measured = activation_tempo_.estimate();
-        if (measured.answered() &&
-            measured.octave_margin >= config_.anchor_octave_margin) {
+        last_octave_margin_ = measured.octave_margin;
+        has_margin_ = measured.answered();
+
+        // The hold expires on its own clock, before anything is decided with
+        // it, and whatever the estimator is doing.
+        //
+        // Checking this only on the weak-margin branch left it immortal in the
+        // one case that matters most: silence produces no estimate at all, so
+        // no branch that could expire it was ever reached, and a hold taken in
+        // the first chorus survived an arbitrarily long quiet passage. Not
+        // answering is not evidence for the hold.
+        if (config_.anchor_octave_freeze && held_octave_bpm_ > 0.0 &&
+            time_sec - held_since_sec_ >= config_.anchor_freeze_timeout_sec) {
+            held_octave_bpm_ = 0.0;
+        }
+
+        // The abstain arm changes what is published, never what is tracked, so
+        // its threshold is a publishing threshold and the anchor keeps the
+        // baseline's behaviour. Without this the arm would be silence *and* a
+        // dropped anchor at once, which is the `clear` arm with a mute on it
+        // and measures neither of the two things separately.
+        const double anchor_gate =
+            config_.anchor_margin_abstain ? 0.0 : config_.anchor_octave_margin;
+
+        if (!measured.answered()) {
+            // No estimate at all, which is a different state from an estimate
+            // that is not trusted: there is nothing to hold either.
+            filter_.clearAnchor();
+        } else if (measured.octave_margin >= anchor_gate) {
             // One width, unconditionally. Making it depend on whether the
             // filter and the anchor sit at the same metrical level was built,
             // measured on both corpus families, and removed: see
             // LiveConfig::anchor_width_octaves for the numbers and for why the
             // obvious version of that rule points the wrong way.
             filter_.anchorTempo(measured.bpm, config_.anchor_width_octaves);
+            // A confident anchor always refreshes the hold, including when it
+            // lands on a different octave from the one being held. The freeze
+            // exists to survive an absence of evidence, never to outvote it.
+            held_octave_bpm_ = measured.bpm;
+            held_since_sec_ = time_sec;
+        } else if (config_.anchor_octave_freeze && held_octave_bpm_ > 0.0) {
+            // Weak margin, and an octave recently worth keeping. Move the
+            // estimator's own tempo by whole octaves to the equivalent nearest
+            // the hold.
+            //
+            // The tempo *inside* the octave is not frozen: a band drifting from
+            // 128 to 132 anchors at 132, because the doubt is over which
+            // multiple of the pulse is the beat and never over the pulse. And
+            // the phase is not touched — this writes an anchor, which is a
+            // prior over period, and nothing here reaches where a beat falls.
+            filter_.anchorTempo(octaveNearest(measured.bpm, held_octave_bpm_),
+                                config_.anchor_width_octaves);
+        } else if (config_.anchor_octave_freeze) {
+            // Either nothing has been held yet, or the hold has outlived its
+            // evidence. Both fall back to the baseline exactly: accepting a
+            // weak anchor is what ships, and refusing to anchor at the start of
+            // a recording is the arm that already lost.
+            held_octave_bpm_ = 0.0;
+            filter_.anchorTempo(measured.bpm, config_.anchor_width_octaves);
         } else {
             // Dropped rather than held. An anchor is a claim that the metrical
             // level is known, and when the estimator stops saying so the claim
             // has to go with it — otherwise a tempo measured in the first
             // chorus outlives the evidence for it.
+            //
+            // Measured and rejected as a policy of its own; see
+            // LiveConfig::anchor_octave_margin. It stays reachable because it
+            // is the control the freeze arm has to beat.
             filter_.clearAnchor();
         }
     }
@@ -244,6 +305,12 @@ void LiveTracker::observe(double time_sec, double activation) {
 }
 
 bool LiveTracker::takeBeat(double now_sec, double lookahead_sec, double* beat_sec) {
+    // The abstain arm, and the only other place it acts. "Publish nothing"
+    // has to mean the clicks too — a tracker that reported no confidence and
+    // went on handing out beats would be scored as silent by anything reading
+    // the meter and as speaking by anything counting beats.
+    if (abstaining()) return false;
+
     const BeatEstimate current = filter_.estimate(now_sec);
 
     double candidate = 0.0;
@@ -386,6 +453,11 @@ void LiveTracker::reset() {
     activation_tempo_.reset();
     sync_.reset();
     acquired_ = false;
+    // The hold is a conclusion about audio, and goes with the audio.
+    held_octave_bpm_ = 0.0;
+    held_since_sec_ = 0.0;
+    last_octave_margin_ = 0.0;
+    has_margin_ = false;
     origin_sec_ = 0.0;
     consumed_ = 0;
     started_ = false;

@@ -12,9 +12,12 @@ definition would agree with itself while both sides were wrong.
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import pathlib
 import struct
+
+import numpy as np
 
 import pytest
 
@@ -81,33 +84,57 @@ def test_the_flattened_convolution_width_follows_from_the_kernel():
     assert width == 262
 
 
-def test_a_checkpoint_with_the_wrong_shape_is_refused():
-    torch = pytest.importorskip("torch")
+def zeros():
+    return {name: np.zeros(shape, dtype="float32")
+            for name, shape in export_beatnet.TENSORS}
 
-    state = {name: torch.zeros(shape) for name, shape in export_beatnet.TENSORS}
+
+def test_a_checkpoint_with_the_wrong_shape_is_refused():
+    state = zeros()
     assert len(export_beatnet.convert(state)) == 1609332
 
-    state["linear0.weight"] = torch.zeros((150, 84))
+    state["linear0.weight"] = np.zeros((150, 84), dtype="float32")
     with pytest.raises(SystemExit, match="linear0.weight"):
         export_beatnet.convert(state)
 
 
 def test_a_checkpoint_missing_a_tensor_is_refused():
-    torch = pytest.importorskip("torch")
-
-    state = {name: torch.zeros(shape) for name, shape in export_beatnet.TENSORS}
+    state = zeros()
     del state["lstm.bias_hh_l1"]
     with pytest.raises(SystemExit, match="lstm.bias_hh_l1"):
         export_beatnet.convert(state)
 
 
-def test_the_real_checkpoint_converts_if_it_is_here():
-    torch = pytest.importorskip("torch")
+def test_the_reader_needs_no_torch_and_gets_the_same_bytes():
+    """The published checkpoint, read without the framework that wrote it.
+
+    Correctness is not argued here, it is checked against a hash the manifest
+    already vouches for — produced, when it was pinned, by the torch-based
+    reader this one replaces. Byte-identical or it is wrong.
+    """
     checkpoint = EXPORT_PY.parent / "beatnet_model_1_weights.pt"
     if not checkpoint.is_file():
         pytest.skip("the published checkpoint is not in this checkout")
 
-    payload = export_beatnet.convert(
-        torch.load(checkpoint, map_location="cpu", weights_only=True))
+    payload = export_beatnet.convert(export_beatnet._read_state_dict(checkpoint))
     assert len(payload) == 1609332
     assert payload[:4] == b"TTBN"
+    assert (hashlib.sha256(payload).hexdigest()
+            == "812ed11af745885127cfb967e7db847c9bdef44b8e2c80c79cf875f790b978f1")
+
+
+def test_the_reader_refuses_a_pickle_that_asks_for_anything_else(tmp_path):
+    """A checkpoint is data, and this reader will not let it become code.
+
+    The file is downloaded from the internet, so an unpickler that imports
+    whatever it is told to is a remote-execution hole wearing a file format.
+    """
+    import pickle
+    import zipfile
+
+    path = tmp_path / "hostile.pt"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("archive/data.pkl", pickle.dumps(__import__("os").system))
+
+    with pytest.raises(pickle.UnpicklingError, match="does not provide"):
+        export_beatnet._read_state_dict(path)

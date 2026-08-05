@@ -231,11 +231,210 @@ The honest position is that RWC has *already* been spent, on the width and on
 taking the mean seriously, and neither the mean nor any fold can be confirmed
 there now. That is what `eval/PREREGISTERED_harmonix_ensemble.md` exists to fix.
 
+## The pre-registered test: does the core reproduce it, and at what cost
+
+`ensemble_in_core_{harmonix,rwc,smc}.json` against
+`fold1_in_core_{harmonix,rwc,smc}.json`, verdict in
+`ensemble_in_core_verdict.json`, produced by `eval/ensemble_in_core.py`. Six
+arms, commit `fa781bc`, `tree_clean` true on all six, nothing dropped (581 of
+581 Harmonix, 328 of 328 RWC, 217 of 217 SMC). Protocol and predictions were
+fixed in `eval/PREREGISTERED_ensemble_in_core.md` before `EnsembleMean` existed.
+
+The seam experiment above handed the tracker a pre-computed activation. This
+asks the different question: **does the core, running three networks itself over
+one shared front end, reproduce that gain** — and is what it costs worth what it
+buys.
+
+Read the reproduction first, because it is what makes the rest mean anything.
+Every fold-1 arm reproduced the `4422afc` baselines **exactly**, to the last
+printed digit, on all three corpora. The harness is deterministic and averaging
+did not disturb the single-checkpoint path it shares code with.
+
+### The six gates
+
+| Harmonix | fold 1 | ensemble | required | |
+|---|---:|---:|---:|---|
+| no wrong-level episode >4 s | 41.5% | **48.2%** | ≥ 46.5%, p<.05 | ✅ |
+| usable, strictly | 26.2% | 28.9% | ≥ 30% | ❌ |
+| correct time (eligible, mean) | 77.5% | 79.0% | ≥ 75% | ✅ |
+| switches / eligible 5 min | 4.21 | 4.46 | not above baseline | ❌ |
+| settle P90 | 36.61 s | 36.81 s | not above baseline | ❌ |
+| beat F | 0.7953 | **0.8300** | ≥ 0.785 | ✅ |
+
+### Paired over recordings, Holm-corrected over all six comparisons
+
+| corpus | endpoint | n | fold 1 | ensemble | won | lost | p | p Holm |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| harmonix | no wrong-level episode >4 s | 581 | 41.5% | 48.2% | 70 | 31 | 0.0001 | **0.0008** |
+| harmonix | usable, strictly | 581 | 26.2% | 28.9% | 45 | 29 | 0.0805 | 0.2415 |
+| rwc | no wrong-level episode >4 s | 328 | 25.3% | 31.1% | 28 | 9 | 0.0026 | **0.0128** |
+| rwc | usable, strictly | 328 | 18.0% | 22.3% | 23 | 9 | 0.0201 | 0.0802 |
+| smc | no wrong-level episode >4 s | 217 | 28.1% | 25.8% | 26 | 31 | 0.5966 | 1.0000 |
+| smc | usable, strictly | 217 | 3.2% | 2.8% | 0 | 1 | 1.0000 | 1.0000 |
+
+The correction is not a formality here. RWC's strict-usability row is p = 0.020
+raw and 0.080 corrected, so it is reported as having moved and **not** as having
+been shown.
+
+### The five predictions
+
+| | prediction | outcome | |
+|---|---|---|---|
+| P1 | episode gate cleared on Harmonix, ≥46.5%, p<.05 | 48.2%, p_holm 0.0008 | ✅ |
+| P2 | episode gain larger than the strict-usability gain | +6.7 against +2.7 pts | ✅ |
+| P3 | RWC-Pop the same direction, by less than Harmonix | +5.0 against +6.7 pts | ✅ |
+| P4 | SMC does not improve | −2.3 pts, p_holm 1.0 | ✅ |
+| P5 | the core within 2 points of the seam | 48.2% against ~51% | ❌ |
+
+**P5's miss is not the bug it was written to catch.** It said a discrepancy over
+two points means the shared front end or the per-frame averaging is not doing
+what the offline average did. The averaging is not at fault: the core's averaged
+activation agrees with the mean of three separately dumped activations to 8e-6,
+while the folds themselves differ by up to 0.99 on the same file. What is left
+is the front end underneath, and this file already records that the two paths
+differ by about a point. The core reproduces roughly half the seam's gain on
+strict usability, +2.7 against +5.5, and that is a property of the ensemble on
+the core's front end rather than of the arithmetic.
+
+### The verdict: effect confirmed, adoption not approved
+
+**The effect is real.** Episodes fall on Harmonix and again on RWC, both
+surviving correction, and beat F rises 3.5 points. Averaging the folds does
+what it was adopted to do.
+
+**Adoption is not approved, because three acceptance gates failed** — strict
+usability 28.9% against a 30% bound, switches 4.46 against 4.21, settle P90
+36.81 s against 36.61 s. The table those come from is headed "to accept", and a
+failed acceptance gate means the thing is not accepted. The separate "what
+would sink this" list was hit by nothing, and an earlier version of this section
+presented the two readings as an open disagreement; that was wrong. A shorter
+list of ways to fail outright cannot retire the gates that were written to
+decide the question, and reading it as if it could is exactly the move
+pre-registration exists to prevent.
+
+What the "what would sink this" list being clean does mean is narrower and
+still worth stating: nothing here disqualifies the approach, so the gates are
+worth another attempt rather than the idea being finished.
+
+**The two failed cost gates change sign by corpus.** Switches per five minutes
+*fell* on RWC-Pop (5.74 → 5.07), RWC-Classical (6.24 → 3.97) and
+RWC-Royalty-Free (5.48 → 4.51), and rose only on Harmonix, RWC-Genre and
+RWC-Jazz. A cost that changes sign with the material is not the cost that gate
+was written to catch, and "episodes bought with churn" is not supported here as
+a general claim.
+
+**None of this is a decision to ship, and the pre-registration says so.** Real-
+time factor with three networks on the target phone is out of its scope, and if
+three networks do not fit the CPU budget the corpus verdict is moot. That is the
+cheapest measurement that can close the question, and it is worth taking before
+paying the adoption price — GTZAN and Ballroom retired permanently as evaluation
+corpora, 1,697 of the 2,760 annotated recordings here.
+
+The whole protocol re-runs as one command:
+
+```bash
+python -m eval.ensemble_in_core --family
+```
+
 ## The anchor width sweep
 
 `live_usable_width*.json` and `live_usable_rwc_width*.json`. The table and the
 reasoning live beside the constant, in `core/src/tracking/live.hpp` at
 `anchor_width_octaves`, because that is where someone changing it will look.
+
+## Can a wrong level be seen coming: a documented negative, and an accident
+
+`phase_instability_{rwcpop,harmonix}.json`, from `eval/phase_instability.py`,
+where the tables and the reasoning live. The question was whether the settled
+phase relationship between the low and high ODF bands comes apart *before* the
+tracker slips to the wrong metrical level. RWC-Pop chose the threshold, Harmonix
+never chose anything.
+
+Harmonix is the **threshold-transfer corpus, not a held-out one** — it was
+already spent on the seam experiment above, and calling it held out would claim
+more than it carries.
+
+**It does not.** With the threshold carried across, the phase feature warns of
+16.3% of every episode over four seconds — the diagonal. It is not better than
+a plain fall in coherence, which leads it on both corpora, and it is one of
+only two signals here that cannot even see every episode: no settled phase ever
+forms on 10% of them. The mechanism is in the same file — a single band's phase
+mostly fails the Rayleigh threshold the core already uses to decide whether a
+phase means anything, so there is little reliable relationship there to come
+apart.
+
+**What the controls turned up instead is worth more than the hypothesis was.**
+`live_anchor_margin`, which the live path computes every frame and uses for
+nothing else, warns of **85.9% of every wrong-level episode one to four seconds
+before it starts**, at a threshold chosen on RWC-Pop and carried to Harmonix as
+a number, with 16.9% of correct locked frames above it. It sees all 1,063
+episodes, so that rate has no hidden denominator. Anticipatory, not concurrent:
+0.895 AUC on the window ending a second before the onset against 0.932 on the
+transition itself.
+
+**That 16.9% is not a cost and must not be quoted as one.** It is the share of
+correct locked frames above the threshold. What a gate costs depends on what
+the gate does, and freezing the octave while leaving tempo and phase free is
+nearly free on a frame where the octave was not going to move. Only replaying
+the tracker under the policy turns that column into a cost — and a tracker that
+abstains spends no time at the wrong level, so the episode endpoint can always
+be improved by saying less. Anything built on this is scored on locked time
+kept as well as on episodes avoided.
+
+An earlier version of this section quoted 85.3% / 18.3% from an evaluator that
+scored every signal on the *phase* feature's availability, which silently made
+the denominator 996 of 1,063 episodes. The numbers above are from the corrected
+one; `tests/test_phase_instability.py` pins the difference.
+
+## Acting on that warning: the octave freeze, measured
+
+`arm_{baseline,clear,freeze,abstain}.json` with their per-track files. Four arms
+of `eval/PREREGISTERED_octave_freeze.md`, Harmonix, 581 of 581 on each, commit
+`a2c18eb`, `tree_clean` true on all four. Shipped fold 1 throughout, τ = 0.5916
+carried from RWC-Pop as a number.
+
+| Harmonix | episode-free | strict | correct time | sw / 5 min | settle P90 | F |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline | 41.48% | 26.16% | 77.54% | 4.21 | 36.61 s | 0.7953 |
+| clear | 30.64% | 18.07% | 74.61% | 7.12 | 51.71 s | 0.7798 |
+| **freeze** | **41.82%** | **26.85%** | **77.87%** | **3.81** | **38.61 s** | **0.7965** |
+| abstain | 84.17% | 18.93% | 64.74% | 0.71 | 50.91 s | 0.6979 |
+
+Paired against baseline, per recording:
+
+| | won | lost | p |
+|---|---:|---:|---:|
+| freeze, episode-free (**primary**) | 17 | 15 | **0.86** |
+| freeze, usable strictly | 7 | 3 | 0.34 |
+| clear, episode-free | 17 | 80 | <1e-4 |
+| abstain, episode-free | 248 | 0 | <1e-4 |
+
+**Adoption not approved. The freeze is inert on the endpoint it was built for.**
+41.82% against a 46.5% bound, and a sign test that could hardly be more null.
+
+**Five of the six predictions held; the primary did not.** The freeze beats
+`clear` by eleven points (P2), `clear` at this τ is worse than baseline on F as
+its older measurements predicted (P3), `abstain` takes the highest episode-free
+and the lowest correct time and fails the correct-time gate (P4), F moves by
+0.0012 (P5), and the switch rate falls, 4.21 → 3.81 (P6).
+
+**So the policy did act, and the episodes did not care.** P6 is the important
+one: switches fell by a tenth, F did not move, and `clear` at the same trigger
+was catastrophic — the arm is demonstrably doing what it is described as doing,
+to the right recordings, at the right moments. The episode rate still did not
+move. Whatever makes a wrong-level episode on this corpus, it is not an anchor
+switching octave while the estimator is unsure.
+
+**A signal that predicts is not a policy that helps, and this is the cleanest
+demonstration of it here.** The same `live_anchor_margin` separates episodes at
+0.895 AUC one to four seconds ahead. Acting on exactly that warning, at exactly
+that threshold, changes nothing. The prediction is real and the lever was the
+wrong one.
+
+**`abstain` is why the endpoint needs its guard.** 248 recordings better and
+none worse, to 84.17% episode-free — by saying nothing on more than half the
+polls, at a cost of thirteen points of correct time and ten of F. It was never a
+candidate, and it is the measured size of what silence buys on this metric.
 
 ## Everything else
 

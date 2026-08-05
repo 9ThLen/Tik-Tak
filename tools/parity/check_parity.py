@@ -268,6 +268,17 @@ def check_beatnet(binary: pathlib.Path) -> bool | None:
         print(f"\nskipping BeatNet: the reference needs {checkpoint.name}")
         return None
 
+    # The reference runs the network through PyTorch, deliberately: an
+    # independent implementation of the LSTM is the whole point of comparing
+    # against it, and one written here would only be agreeing with itself.
+    # Absent torch this check cannot run, and saying so is better than the
+    # traceback it used to produce.
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        print("\nskipping BeatNet: the reference runs on torch, which is not installed")
+        return None
+
     print(f"\ncomparing {binary} against research/eval/beatnet_onnx.py")
     print(f"weights: {WEIGHTS.name} against {checkpoint.name}")
     print(f"tolerance: {BEATNET_TOLERANCE:.0e} absolute\n")
@@ -490,7 +501,7 @@ def main() -> int:
     beat_cases.append(("manual 100", make_clip(bpm=100, duration_sec=12, seed=6), 137, 100.0))
     beat_cases.append(("drift 120->140",
                        make_clip(bpm=120, duration_sec=15, tempo_drift=20, seed=7), 137, 0.0))
-    # The one case here where the tracked tempo is *not* the estimated one: the
+    # The one case above where the tracked tempo is *not* the estimated one: the
     # estimator says 181 and the hypothesis search tracks 90. Every other clip
     # here tracks its own first-choice candidate, so all of them agreed for a
     # month while the reference had no hypothesis search at all — it tracked the
