@@ -184,3 +184,69 @@ passing first:
 Test 6 is the one to write first: a rule that quietly assumes four beats to the
 bar would show up as a gain on this corpus and a defect on the material it was
 not measured on.
+
+---
+
+## Deviations found during implementation, 2026-08-05
+
+Appended, not edited into the text above. Everything before this line is what
+was registered; everything below is what implementing it revealed, recorded
+before any corpus was touched.
+
+### 1. The bar estimator cannot share the beat estimator's configuration
+
+"a second `ActivationTempo`, identical configuration" is not implementable.
+`ActivationTempoConfig` runs from 40 to 220 BPM, and a four-beat bar at 120 BPM
+is 30 a minute — below its floor, so the shipped configuration cannot represent
+the quantity at all.
+
+`barTempoDefaults()` in `tracking/live.hpp` sets 10 to 120 BPM, from the
+arithmetic (a six-beat bar at 60, a two-beat bar at 240), a prior centre of 35
+(the beat prior's 140 at four beats to the bar, so the two cannot disagree about
+which octave is a priori plausible) and a 12-second window. The window is the
+one judgement: `min_window_sec` must equal `window_sec` because a partly filled
+ring is zero-padded and the padding reads as evidence, so the window is also how
+long the arm is inert at the start of a recording. Twelve seconds is about six
+bars, the fewest an autocorrelation peak can be believed on, and it leaves
+eighteen seconds of a thirty-second excerpt rather than six. None of it was
+chosen against a corpus.
+
+### 2. The mechanism is one-sided, and the registered text missed why
+
+**The set of plausible bars is closed under doubling** on (2, 4) and on (3, 6).
+An octave shift therefore carries one plausible bar onto another, the two tie,
+and the arm abstains. Measured on the arithmetic, gap to the runner-up:
+
+| case | best k | gap | outcome |
+|---|---:|---:|---|
+| 4/4 at 120, correct | 0 | 0.000 | abstains |
+| 4/4 at 120, **doubled** | +1 | **0.415** | **rescued** |
+| 4/4 at 120, halved | −1 | 0.000 | abstains |
+| waltz, 3 to the bar | −1 | 0.000 | abstains |
+| 6/8 | 0 | 0.000 | abstains |
+
+The registered mechanism said a tracker at half implies a bar of one and a half,
+which is true, and did not notice that the *correct* reading is simultaneously
+ambiguous — 2 against 4 — so the tie kills the vote there as well.
+
+What the arm actually is, then: **a one-sided double-time corrector that is
+silent everywhere else.** It cannot confirm a correct level and cannot rescue a
+halved one. It is safe, because it never moves an answer it cannot decide, and
+it is pointed at the dominant error — Harmonix doubles seven times for every
+once it halves.
+
+**This changes two predictions and they are restated rather than quietly
+dropped:**
+
+- **P2** is no longer a prediction. "The gain is concentrated in double-time
+  rather than half" is now true by construction, not by measurement, and must
+  not be reported as a confirmed prediction.
+- **P4** stands, but its interpretation narrows: the distance to `oracle-bar`
+  is now bounded by the share of episodes that are doubling in the first place,
+  not by how well the bar rate is estimated.
+
+**The tie was not broken with the tempo prior, deliberately.** That would work,
+and it would also destroy the only reason this arm exists: the prior is already
+measured as zero-sum on the octave, and folding it back in would make the bar
+rate a re-reading of the same belief rather than independent evidence — which
+is exactly what sank the octave freeze.
