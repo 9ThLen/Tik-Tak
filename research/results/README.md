@@ -436,7 +436,7 @@ none worse, to 84.17% episode-free — by saying nothing on more than half the
 polls, at a cost of thirteen points of correct time and ten of F. It was never a
 candidate, and it is the measured size of what silence buys on this metric.
 
-## The downbeat channel: the evidence works, the estimator over it does not
+## An accurate bar period has strong leverage; reading one off BeatNet is unproven
 
 `{hx,gz}_{baseline,barrate,oracle}.json` with their per-track files. Three arms
 of `eval/PREREGISTERED_downbeat_channel.md`, commit `dce26bb`, `tree_clean` true
@@ -476,10 +476,30 @@ The decision rule is right, the firing rate is right, and **the estimated bar
 period is no better than a coin about which octave to take.** Handed the true
 bar length instead, the identical rule wins 114 recordings against 3.
 
-So the direction is confirmed and the estimator is retired — the opposite of
-what a measured arm alone would have concluded. Without the oracle this reads
-"the downbeat channel does not decide the octave", which the same run shows is
-false and worth 19.1 points.
+### What this does and does not license, stated carefully
+
+**`oracle-bar` never touches BeatNet's downbeat output.** It reads the bar
+length from the annotation. So what these six runs establish is:
+
+> An accurate bar period has strong leverage on the octave — 19.1 points of
+> episode-freeness on Harmonix, 8.3 on GTZAN — and one generic autocorrelation
+> estimator failed to supply one.
+
+They do **not** establish that the downbeat channel carries recoverable bar
+information. Two possibilities remain conflated and this design cannot separate
+them: BeatNet's downbeat output may be uninformative, or `ActivationTempo` may
+be the wrong way to read it. The matching firing rates do not help — two arms
+can fire on the same recordings while disagreeing about the period on every one
+of them, which is exactly what 10-against-10 versus 114-against-3 looks like.
+
+An earlier version of this section was headed "the evidence works, the estimator
+over it does not", and the commit that added it claimed "the downbeat channel
+decides the octave". Both overclaimed: the oracle is silent about the channel.
+
+The question is now its own experiment — see
+`eval/PREREGISTERED_downbeat_audit.md`, which asks whether a bar period can be
+recovered from the raw beat and downbeat activations at all, before any further
+live policy is written.
 
 ### The predictions
 
@@ -505,10 +525,14 @@ which is most of a thirty-second excerpt.
 
 ### What this leaves
 
-The bar rate is the thing to replace, not the idea. Nothing here says the
-estimator has to be an autocorrelation over a sparse channel with a
-twelve-second warm-up — that was the cheapest thing that could work, and it is
-the part the oracle now shows is failing.
+Not "replace the estimator" — that assumes the answer to the question above.
+What is open is whether the bar period is recoverable from the model's own
+outputs at all, and the next experiment is the smallest one that closes it: an
+offline audit reading the downbeat probability **at the predicted beat
+positions** rather than autocorrelating it, since the downbeat head answers
+"which of these beats starts a bar", not "how slow is the bar".
+
+No further live policy until that audit reports.
 
 ## Everything else
 
