@@ -13,54 +13,12 @@ bool LiveConfig::valid() const {
            release_confidence < lock_confidence && discontinuity_tolerance_sec > 0.0 &&
            activation_tempo.valid() && anchor_width_octaves > 0.0 &&
            anchor_octave_margin >= 0.0 && anchor_octave_margin <= 1.0 &&
-           anchor_freeze_timeout_sec > 0.0 && bar_tempo.valid() &&
-           bar_ratio_margin > 0.0;
+           anchor_freeze_timeout_sec > 0.0;
 }
 
 double octaveNearest(double bpm, double held_bpm) {
     if (!(bpm > 0.0) || !(held_bpm > 0.0)) return bpm;
     return bpm * std::exp2(std::round(std::log2(held_bpm / bpm)));
-}
-
-bool barEndorsedOctave(double beat_period_sec, double bar_period_sec,
-                       double margin, int* octave) {
-    if (octave == nullptr) return false;
-    if (!(beat_period_sec > 0.0) || !(bar_period_sec > 0.0)) return false;
-
-    // 2, 3, 4 and 6. Not 5 or 7, which are not bars this product is for, and
-    // not 8 or 12 on purpose: those are exactly what a doubled tempo implies,
-    // so admitting them would make the wrong octave look like a long bar.
-    static constexpr double kBars[] = {2.0, 3.0, 4.0, 6.0};
-
-    double score[3];
-    for (int k = -1; k <= 1; ++k) {
-        const double candidate = beat_period_sec * std::exp2(k);
-        const double ratio = bar_period_sec / candidate;
-        double closest = std::numeric_limits<double>::infinity();
-        for (const double bars : kBars) {
-            closest = std::min(closest, std::fabs(std::log2(ratio / bars)));
-        }
-        score[k + 1] = closest;
-    }
-
-    int best_octave = -1;
-    for (int k = 0; k <= 2; ++k) {
-        if (score[k] < score[best_octave + 1]) best_octave = k - 1;
-    }
-    const double best = score[best_octave + 1];
-    double runner_up = std::numeric_limits<double>::infinity();
-    for (int k = -1; k <= 1; ++k) {
-        if (k != best_octave) runner_up = std::min(runner_up, score[k + 1]);
-    }
-
-    // The winner has to be close to a plausible bar in the first place. Without
-    // this, three candidates that are all equally wrong would still elect one
-    // of themselves as soon as they were unequally wrong.
-    if (best > margin * 2.0) return false;
-    if (runner_up - best < margin) return false;
-
-    *octave = best_octave;
-    return true;
 }
 
 LiveConfig liveConfigFor(double sample_rate) {
@@ -100,7 +58,6 @@ ParticleFilterConfig LiveTracker::resolveFilter(const LiveConfig& config) {
 LiveTracker::LiveTracker(const LiveConfig& config)
     : config_(config), odf_(config.odf), filter_(resolveFilter(config)), sync_(config.sync),
       activation_tempo_(config.activation_tempo),
-      bar_tempo_(config.bar_tempo),
       evidence_half_sec_(0.5 * static_cast<double>(config.odf.frameSize) /
                          config.odf.sampleRate) {
     gate_start_.fill(std::numeric_limits<double>::infinity());
@@ -187,22 +144,12 @@ void LiveTracker::process(double stream_time_sec, const float* samples, std::siz
         // What the gate can still prevent is the click moving the filter,
         // which is the failure that matters: a tracker that locks onto itself.
         // What it cannot prevent is the model having heard it.
-        model_->process(samples, n, [&](double frame_sec, double beat,
-                                        double downbeat) {
+        model_->process(samples, n, [&](double frame_sec, double beat, double) {
             ++stats_.frames;
             const double time_sec = origin_sec_ + frame_sec;
             if (gatedAt(time_sec)) {
                 ++stats_.gated;
                 return;
-            }
-            // The downbeat goes in before the beat does, so that the anchor
-            // decision inside submit() sees a bar rate that includes this
-            // frame rather than one frame behind it. Gated exactly as the beat
-            // is: a frame the click contaminated is contaminated in all three
-            // channels.
-            if (config_.bar_channel) {
-                bar_tempo_.observe(time_sec,
-                                   std::min(1.0, std::max(0.0, downbeat)));
             }
             submit(time_sec, std::min(1.0, std::max(0.0, beat)));
         });
@@ -294,45 +241,16 @@ void LiveTracker::submit(double time_sec, double normalised) {
             // that is not trusted: there is nothing to hold either.
             filter_.clearAnchor();
         } else if (measured.octave_margin >= anchor_gate) {
-            // The bar rate gets to move the octave, and only the octave. It is
-            // the one piece of evidence here that did not come from re-reading
-            // the beat channel, which is the entire reason this arm exists —
-            // see eval/PREREGISTERED_downbeat_channel.md, and the octave freeze
-            // it replaces, which acted correctly on no new evidence and moved
-            // nothing.
-            double bpm = measured.bpm;
-            int octave = 0;
-            if (config_.bar_channel) {
-                // A pinned period beats a measured one, which is the whole of
-                // the oracle arm: the same decision rule reading a bar length
-                // it did not have to find.
-                const auto bar = bar_tempo_.estimate();
-                const double bar_period =
-                    config_.bar_period_sec > 0.0 ? config_.bar_period_sec
-                    : bar.answered()             ? 60.0 / bar.bpm
-                                                 : 0.0;
-                if (bar_period > 0.0 &&
-                    barEndorsedOctave(60.0 / measured.bpm, bar_period,
-                                      config_.bar_ratio_margin, &octave)) {
-                    // A candidate period of P * 2^k is a tempo of bpm / 2^k.
-                    bpm = measured.bpm * std::exp2(-octave);
-                }
-            }
-
             // One width, unconditionally. Making it depend on whether the
             // filter and the anchor sit at the same metrical level was built,
             // measured on both corpus families, and removed: see
             // LiveConfig::anchor_width_octaves for the numbers and for why the
             // obvious version of that rule points the wrong way.
-            filter_.anchorTempo(bpm, config_.anchor_width_octaves);
+            filter_.anchorTempo(measured.bpm, config_.anchor_width_octaves);
             // A confident anchor always refreshes the hold, including when it
             // lands on a different octave from the one being held. The freeze
             // exists to survive an absence of evidence, never to outvote it.
-            // What was actually anchored, not what the estimator said. With the
-            // bar channel on, those differ exactly when it moved the octave,
-            // and holding the estimator's answer would let the freeze undo the
-            // bar rate the moment the margin weakened.
-            held_octave_bpm_ = bpm;
+            held_octave_bpm_ = measured.bpm;
             held_since_sec_ = time_sec;
         } else if (config_.anchor_octave_freeze && held_octave_bpm_ > 0.0) {
             // Weak margin, and an octave recently worth keeping. Move the
@@ -533,7 +451,6 @@ void LiveTracker::reset() {
     // The anchor is dropped with it, by the same rule read the other way: the
     // activation history is audio, and this is what was concluded from it.
     activation_tempo_.reset();
-    bar_tempo_.reset();
     sync_.reset();
     acquired_ = false;
     // The hold is a conclusion about audio, and goes with the audio.

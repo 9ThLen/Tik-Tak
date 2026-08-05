@@ -173,6 +173,11 @@ def load_reference_downbeats(path: pathlib.Path) -> np.ndarray:
     that parser rejects the normalized bundle's header outright, so a caller
     that only caught the exception would read *no* downbeats on Harmonix and
     RWC while looking like it had merely found none.
+
+    Kept after the bar-rate arm was reverted, because
+    `eval/PREREGISTERED_downbeat_audit.md` needs annotated bar lines to score a
+    recovered bar period against, and this is the only reader that gets them
+    from both formats.
     """
     with path.open(encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
@@ -528,35 +533,6 @@ def verdict(result: dict[str, Any]) -> dict[str, Any]:
             "usable_strict": not strict, "reasons_strict": strict,
             "usable_any_octave": not forgiving,
             "reasons_any_octave": forgiving}
-
-
-def _oracle_bar_flags(item: dict[str, Any], enabled: bool) -> tuple[str, ...]:
-    """`--live-bar-period` for this recording, read from its annotation.
-
-    The `oracle-bar` arm of `eval/PREREGISTERED_downbeat_channel.md`, and the
-    reason it needs per-recording flags at all: every other arm is one
-    configuration for a whole run, and this one is a different number per song.
-
-    The median interval between annotated downbeats, not the mean: a recording
-    with an intro in a different metre, or one whose last bar is clipped by the
-    excerpt, would drag a mean off the length that holds for the rest of it.
-
-    Silent when the recording has fewer than three downbeats. Two give exactly
-    one interval and no way to tell a bar from a mistake, and the arm is
-    supposed to fall back to baseline where it has nothing, not to guess.
-    """
-    if not enabled or not item.get("annotated"):
-        return ()
-    try:
-        downbeats = load_reference_downbeats(item["annotation"])
-    except (OSError, ValueError, KeyError):
-        return ()
-    if downbeats is None or len(downbeats) < 3:
-        return ()
-    period = float(np.median(np.diff(np.asarray(downbeats, dtype=np.float64))))
-    if not math.isfinite(period) or period <= 0.0:
-        return ()
-    return ("--live-bar-period", repr(period))
 
 
 def _score_one(
@@ -1079,15 +1055,6 @@ def main(argv: list[str] | None = None) -> int:
     # separate value that begins with a dash, so the obvious spelling with a
     # space fails outright — and an arm of the central experiment should not
     # depend on remembering that.
-    parser.add_argument("--oracle-bar", action="store_true",
-                        help="hand the tracker each recording's annotated bar "
-                             "length instead of letting it measure one. The "
-                             "oracle arm of eval/PREREGISTERED_downbeat_"
-                             "channel.md — a bound on what the downbeat "
-                             "channel could be worth, not a shippable mode, "
-                             "since nothing in a room knows the bar length in "
-                             "advance. Only does anything alongside "
-                             "--extra=--live-bar-channel")
     parser.add_argument("--no-anchor", action="store_true",
                         help="run the particle filter with the activation-tempo "
                              "anchor off. The anchor is applied on every frame, "
@@ -1178,8 +1145,7 @@ def main(argv: list[str] | None = None) -> int:
         ) as pool:
             futures = [
                 pool.submit(_score_one, item, mode, args.binary, args.model,
-                            args.seeded,
-                            extra_flags + _oracle_bar_flags(item, args.oracle_bar))
+                            args.seeded, extra_flags)
                 for item in items
             ]
             for completed, future in enumerate(

@@ -13,19 +13,6 @@
 
 namespace tiktak::tracking {
 
-// The bar-rate estimator's defaults. A function rather than a literal because
-// it is the beat estimator's type with four of its fields meaning something
-// else; see LiveConfig::bar_tempo for why each number is what it is.
-inline ActivationTempoConfig barTempoDefaults() {
-    ActivationTempoConfig out;
-    out.min_bpm = 10.0;   // a six-beat bar at 60 BPM
-    out.max_bpm = 120.0;  // a two-beat bar at 240 BPM
-    out.prior_centre_bpm = 35.0;  // the beat prior's 140, four beats to the bar
-    out.window_sec = 12.0;
-    out.min_window_sec = 12.0;  // must equal the window: see the field's note
-    return out;
-}
-
 struct LiveConfig {
     dsp::OdfConfig odf;
     ParticleFilterConfig filter;
@@ -215,53 +202,6 @@ struct LiveConfig {
     // by silence alone, so the arms that do speak can be read against it.
     bool anchor_margin_abstain = false;
 
-    // Use BeatNet's downbeat channel as evidence about the metrical level.
-    //
-    // `eval/PREREGISTERED_downbeat_channel.md`. The network emits beat,
-    // downbeat and null; until this, the beat channel drove everything and the
-    // downbeat probability was discarded unnamed in the model callback. Beats
-    // and bars are locked by a small integer, so a bar rate rules an octave out
-    // without having to be trusted on its own: a tracker at double implies a
-    // bar of eight beats and one at half implies a bar of one and a half.
-    //
-    // Off by default. This is an experimental arm and nothing has accepted it.
-    // Inert on the ODF front end, which has no downbeat channel to read.
-    bool bar_channel = false;
-
-    // The bar-rate estimator. **Not** the beat one's configuration, and the
-    // pre-registration was wrong to say it could be.
-    //
-    // Bars are slower than the range `ActivationTempoConfig` was written for: a
-    // four-beat bar at 120 BPM is 30 a minute, below its `min_bpm` of 40, so
-    // the shipped configuration cannot represent the quantity at all. The
-    // bounds here are arithmetic rather than a sweep — a two-beat bar at 240
-    // BPM is 120 a minute and a six-beat bar at 60 BPM is 10 — and the prior
-    // centre is the beat prior at four beats to the bar, so the two estimators
-    // cannot disagree about which octave is a priori plausible.
-    //
-    // The window is the one judgement call. `min_window_sec` must equal
-    // `window_sec` — a partly filled ring is zero-padded and the padding reads
-    // as evidence — so the window is also how long the arm stays inert at the
-    // start of a recording. Six seconds of beats is about twelve beats; twelve
-    // seconds of bars is about six bars, which is the fewest an autocorrelation
-    // peak can be believed on, and it leaves eighteen seconds of a thirty-second
-    // excerpt rather than six. Chosen from that, and from nothing measured.
-    ActivationTempoConfig bar_tempo = barTempoDefaults();
-
-    // How far the winning octave must beat the runner-up before the bar rate is
-    // allowed to move the anchor, in log2 units of the implied beats-per-bar.
-    // A bar rate that cannot choose does not get to vote.
-    double bar_ratio_margin = 0.15;
-
-    // A bar period handed in rather than measured, seconds. Zero estimates it.
-    //
-    // The `oracle-bar` arm, and a diagnostic bound rather than a mode: nothing
-    // in a room knows the bar length in advance. It exists because if the
-    // measured arm fails the corpus cannot otherwise say whether the downbeat
-    // channel is uninformative or merely hard to read, and those want different
-    // answers — one retires the direction, the other retires the estimator.
-    double bar_period_sec = 0.0;
-
     // A stream time this far from where the sample count says it should be
     // means the device dropped or repeated a buffer.
     double discontinuity_tolerance_sec = 0.002;
@@ -280,24 +220,6 @@ struct LiveConfig {
 // are the same distance away: 60 and 240 are both one octave from 120, and on
 // a linear scale 60 is much closer.
 double octaveNearest(double bpm, double held_bpm);
-
-// Which octave of the beat the bar rate endorses: -1, 0 or +1 written through
-// `octave`, true when one of them won by `margin`.
-//
-// Beats and bars are locked by a small integer, so `bar / beat` has to land
-// near 2, 3, 4 or 6. Each candidate beat period is scored by its distance in
-// log2 to the nearest of those, and the winner has to beat the runner-up by
-// `margin` — a bar rate that cannot choose does not get to vote, which is most
-// of what keeps this from firing on material it has nothing to say about.
-//
-// Distance in log2 and not in ratio, so that 3 against 4 and 4 against 6 are
-// the same size of mistake. On a linear scale the wide gaps at the top would
-// make a six-beat bar almost unreachable.
-//
-// False when either period is not positive, when nothing is close enough to a
-// plausible bar, or when two candidates are too near to separate.
-bool barEndorsedOctave(double beat_period_sec, double bar_period_sec,
-                       double margin, int* octave);
 
 // ------------------------------- what this path is worth to a person using it
 //
@@ -965,13 +887,6 @@ public:
     // inferring it from beat times, which conflates this with the filter.
     double heldOctaveBpm() const { return held_octave_bpm_; }
 
-    // What the downbeat channel currently makes of the bar rate, for the tests
-    // the arm was pre-registered with and for a bench that needs to say which
-    // of the two estimators was wrong when the octave is.
-    ActivationTempoEstimate barFromActivation() const {
-        return bar_tempo_.estimate();
-    }
-
     // Hands out the next beat to play, once, when it comes within
     // `lookahead_sec` of now. True when `beat_sec` was written.
     //
@@ -1055,10 +970,6 @@ private:
     BeatParticleFilter filter_;
     PhaseSync sync_;
     ActivationTempo activation_tempo_;
-    // The bar-rate estimator, fed the downbeat channel. Constructed always and
-    // observed only when `bar_channel` is on, so that turning the arm on does
-    // not change an allocation pattern the audio thread depends on.
-    ActivationTempo bar_tempo_;
 
     // Engaged only by the constructor that was handed weights. Held by value
     // rather than behind a pointer so that the audio path has no indirection

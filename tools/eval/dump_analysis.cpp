@@ -355,9 +355,6 @@ int main(int argc, char** argv) {
     // through --live-anchor-margin on its own.
     bool live_octave_freeze = false;
     bool live_margin_abstain = false;
-    bool live_bar_channel = false;
-    double live_bar_margin = 0.0;
-    double live_bar_period = 0.0;
     double live_freeze_timeout = 0.0;
 
     struct Threshold {
@@ -388,8 +385,6 @@ int main(int argc, char** argv) {
         {"--live-anchor-window", &live_anchor_window},
         {"--live-anchor-min-window", &live_anchor_min_window},
         {"--live-freeze-timeout", &live_freeze_timeout},
-        {"--live-bar-margin", &live_bar_margin},
-        {"--live-bar-period", &live_bar_period},
     };
 
     for (int i = 1; i < argc; ++i) {
@@ -466,11 +461,6 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--live-margin-abstain") == 0) {
             live = true;
             live_margin_abstain = true;
-            continue;
-        }
-        if (std::strcmp(argv[i], "--live-bar-channel") == 0) {
-            live = true;
-            live_bar_channel = true;
             continue;
         }
         // Parsed here rather than in the table above because that table's
@@ -774,13 +764,6 @@ int main(int argc, char** argv) {
         }
         live_config.anchor_octave_freeze = live_octave_freeze;
         live_config.anchor_margin_abstain = live_margin_abstain;
-        live_config.bar_channel = live_bar_channel;
-        if (live_bar_margin > 0.0) {
-            live_config.bar_ratio_margin = live_bar_margin;
-        }
-        if (live_bar_period > 0.0) {
-            live_config.bar_period_sec = live_bar_period;
-        }
         if (live_freeze_timeout > 0.0) {
             live_config.anchor_freeze_timeout_sec = live_freeze_timeout;
         }
