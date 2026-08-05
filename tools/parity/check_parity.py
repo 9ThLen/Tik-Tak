@@ -268,6 +268,17 @@ def check_beatnet(binary: pathlib.Path) -> bool | None:
         print(f"\nskipping BeatNet: the reference needs {checkpoint.name}")
         return None
 
+    # The reference runs the network through PyTorch, deliberately: an
+    # independent implementation of the LSTM is the whole point of comparing
+    # against it, and one written here would only be agreeing with itself.
+    # Absent torch this check cannot run, and saying so is better than the
+    # traceback it used to produce.
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        print("\nskipping BeatNet: the reference runs on torch, which is not installed")
+        return None
+
     print(f"\ncomparing {binary} against research/eval/beatnet_onnx.py")
     print(f"weights: {WEIGHTS.name} against {checkpoint.name}")
     print(f"tolerance: {BEATNET_TOLERANCE:.0e} absolute\n")
