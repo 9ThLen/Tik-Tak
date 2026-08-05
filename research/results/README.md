@@ -534,6 +534,88 @@ positions** rather than autocorrelating it, since the downbeat head answers
 
 No further live policy until that audit reports.
 
+## The downbeat audit: the metre is there, the octave is not
+
+`audit_{gtzan,harmonix}.json`, from `eval/downbeat_audit.py`, answering
+`eval/PREREGISTERED_downbeat_audit.md`. Offline, no live core involved: read
+BeatNet's downbeat probability at each beat of a grid and score, over every
+metre in {2, 3, 4, 6} and every bar phase, the contrast between the beats that
+would be downbeats and the beats that would not. Then score the same grid
+**doubled** and ask which one the evidence prefers.
+
+Whole-recording rather than over the last few bars, deliberately: it is a
+ceiling. A causal decoder seeing two to four bars cannot extract more than an
+offline one seeing all of them.
+
+| GTZAN, n = 991 | metre | octave separation |
+|---|---:|---:|
+| **beat-sync** | **60.8%** [57.7, 63.9] | 76.2% [73.4, 78.8] |
+| shuffled | 23.5% [20.9, 26.3] | **84.2%** [81.7, 86.4] |
+| beat-as-downbeat | 38.1% [35.1, 41.2] | 23.6% [21.0, 26.4] |
+
+| Harmonix, n = 579 | metre | octave separation |
+|---|---:|---:|
+| **beat-sync** | **82.9%** [79.6, 85.9] | 79.6% [76.1, 82.8] |
+| shuffled | 30.1% [26.3, 34.0] | **84.1%** [80.9, 87.0] |
+| beat-as-downbeat | 60.1% [56.0, 64.1] | 7.8% [5.7, 10.3] |
+
+### The metre is carried, decisively
+
+`beat-sync` clears both controls on both corpora — 37 and 53 points over
+shuffled, and 23 points over `beat-as-downbeat` on each. That last comparison is
+the one that matters, because the beat channel alone reaches 38% and 60%: some
+metre accuracy is available from the grid's own periodicity, and the downbeat
+channel adds a large amount on top of it.
+
+### The octave is not, and the control is the only reason we know
+
+**`beat-sync` scores 76.2% and 79.6% on octave separation — and shuffled noise
+scores 84.2% and 84.1%.** The intervals do not overlap on GTZAN. The signal is
+*behind* its own null on both corpora.
+
+Without the control this would have read as a strong result. It is not one, and
+the reason the null sits so high is structural: the doubled grid carries twice
+as many points, so the maximum over (metre, phase) of a noise contrast is
+systematically smaller there, and the comparison tilts toward the shorter grid
+before any evidence is consulted. 84% is what that tilt is worth. Nothing in
+the downbeat channel beats it.
+
+`beat-as-downbeat` confirms the instrument from the other side: at 23.6% and
+7.8% it prefers the *doubled* grid outright, which is exactly what a decoder
+finding periodicity in the grid it was handed looks like — the beat channel is
+high at every beat, so doubling it manufactures a clean alternation.
+
+### Verdict
+
+**A2 fails: the pre-registration asked for at least 15 points over shuffled and
+the result is 8.0 and 4.5 points behind it.** By the terms fixed before the run,
+that closes the downbeat head for octave correction with a documented negative
+rather than motivating another filter.
+
+A1 and A3 are unmeasured. Both need the live path, and neither can change a
+verdict that turns on A2 — a decoder cannot recover a share of the oracle gap
+using information the audit says is not there. A1's original purpose was to
+separate "the channel is empty" from "the instrument is wrong", and the audit
+answers that directly instead.
+
+P1 is also unmeasured: the `autocorr` arm was specified and not implemented, so
+"beat-sync beats autocorr on bar period" is not reported either way. It would
+not move the verdict, and it is recorded as a gap rather than quietly dropped.
+
+**P3 predicted exactly this** — "the metre comes back and the `P` against `P/2`
+decision does not" — for the reason `analysis/downbeat.hpp` already records
+about the half bar: a bar phase repeats at both grids, so a wrong octave that
+repeats on the period the evidence is accumulated over cannot be broken by
+accumulating more of it.
+
+### What survives
+
+Not the octave. But an 82.9% metre read on full-length songs, against a 30.1%
+null, is a large amount of unused information about something else the product
+gets wrong: the offline downbeat resolver scores 0.417 F on GTZAN with the
+built-in cues. That is a lead for bar-line placement, not a proposal, and it is
+a different experiment from this one.
+
 ## Everything else
 
 `oracle_activation*.json`, `activation_recall.json`, `octave_blame_*.json`,
