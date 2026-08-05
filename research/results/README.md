@@ -386,6 +386,56 @@ scored every signal on the *phase* feature's availability, which silently made
 the denominator 996 of 1,063 episodes. The numbers above are from the corrected
 one; `tests/test_phase_instability.py` pins the difference.
 
+## Acting on that warning: the octave freeze, measured
+
+`arm_{baseline,clear,freeze,abstain}.json` with their per-track files. Four arms
+of `eval/PREREGISTERED_octave_freeze.md`, Harmonix, 581 of 581 on each, commit
+`a2c18eb`, `tree_clean` true on all four. Shipped fold 1 throughout, τ = 0.5916
+carried from RWC-Pop as a number.
+
+| Harmonix | episode-free | strict | correct time | sw / 5 min | settle P90 | F |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline | 41.48% | 26.16% | 77.54% | 4.21 | 36.61 s | 0.7953 |
+| clear | 30.64% | 18.07% | 74.61% | 7.12 | 51.71 s | 0.7798 |
+| **freeze** | **41.82%** | **26.85%** | **77.87%** | **3.81** | **38.61 s** | **0.7965** |
+| abstain | 84.17% | 18.93% | 64.74% | 0.71 | 50.91 s | 0.6979 |
+
+Paired against baseline, per recording:
+
+| | won | lost | p |
+|---|---:|---:|---:|
+| freeze, episode-free (**primary**) | 17 | 15 | **0.86** |
+| freeze, usable strictly | 7 | 3 | 0.34 |
+| clear, episode-free | 17 | 80 | <1e-4 |
+| abstain, episode-free | 248 | 0 | <1e-4 |
+
+**Adoption not approved. The freeze is inert on the endpoint it was built for.**
+41.82% against a 46.5% bound, and a sign test that could hardly be more null.
+
+**Five of the six predictions held; the primary did not.** The freeze beats
+`clear` by eleven points (P2), `clear` at this τ is worse than baseline on F as
+its older measurements predicted (P3), `abstain` takes the highest episode-free
+and the lowest correct time and fails the correct-time gate (P4), F moves by
+0.0012 (P5), and the switch rate falls, 4.21 → 3.81 (P6).
+
+**So the policy did act, and the episodes did not care.** P6 is the important
+one: switches fell by a tenth, F did not move, and `clear` at the same trigger
+was catastrophic — the arm is demonstrably doing what it is described as doing,
+to the right recordings, at the right moments. The episode rate still did not
+move. Whatever makes a wrong-level episode on this corpus, it is not an anchor
+switching octave while the estimator is unsure.
+
+**A signal that predicts is not a policy that helps, and this is the cleanest
+demonstration of it here.** The same `live_anchor_margin` separates episodes at
+0.895 AUC one to four seconds ahead. Acting on exactly that warning, at exactly
+that threshold, changes nothing. The prediction is real and the lever was the
+wrong one.
+
+**`abstain` is why the endpoint needs its guard.** 248 recordings better and
+none worse, to 84.17% episode-free — by saying nothing on more than half the
+polls, at a cost of thirteen points of correct time and ten of F. It was never a
+candidate, and it is the measured size of what silence buys on this metric.
+
 ## Everything else
 
 `oracle_activation*.json`, `activation_recall.json`, `octave_blame_*.json`,
