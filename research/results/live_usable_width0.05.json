@@ -1,12 +1,12 @@
 {
   "provenance": {
-    "utc": "2026-08-02T21:33:22Z",
-    "commit": "f1cddbf44c7faabccd2c84e4dc77070fa8e87689",
-    "tree_clean": false,
+    "utc": "2026-08-03T19:09:41Z",
+    "commit": "e6cf8bd7ccfae91cb02e91f5e85a9312d70b6255",
+    "tree_clean": true,
     "binary": {
       "name": "dump_analysis.exe",
       "bytes": 975872,
-      "sha256": "782d62d543ad4464d6139c086ab6e17f02b4f7b91f9c11ad994804138fc10d23"
+      "sha256": "a90b2ac469c6b51dfe0e330ab9adc64a760b32290cc3f4e3c14a1cda44bc3657"
     },
     "model": {
       "name": "beatnet_model_1.ttw",
@@ -23,10 +23,6 @@
       "gtzan": {
         "files": 1000,
         "annotated": 1000
-      },
-      "root": {
-        "files": 109,
-        "annotated": 0
       },
       "smc": {
         "files": 217,
@@ -64,13 +60,15 @@
   "summaries": [
     {
       "mode": "model",
-      "attempted": 2024,
-      "success": 2015,
+      "attempted": 1915,
+      "success": 1914,
       "scored": 1914,
       "usable_rate_macro": 0.3534157906250213,
       "usable_rate_any_octave_macro": 0.37856832928774264,
       "usable_rate_pooled": 0.44670846394984326,
       "usable_rate_any_octave_pooled": 0.47962382445141066,
+      "usable_rate_strict_macro": 0.31822760660915755,
+      "usable_rate_strict_pooled": 0.4054336468129572,
       "failure_reasons": {
         "too_few_beats": 0.49164054336468127,
         "wrong_beats": 0.48066875653082547,
@@ -83,51 +81,11 @@
           "corpus": "gtzan",
           "name": "jazz.00054",
           "error": "dump_analysis failed on <audio>/jazz.00054.wav: <audio>/jazz.00054.wav is not a WAV, FLAC or MP3 file"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
         }
       ],
       "quality": {
         "f_measure": 0.6792737327926915,
-        "cmlt": 0.5791349927487636,
+        "cmlt": 0.5791349927487637,
         "amlt": 0.64158400594034,
         "p70": 0.69376440112816,
         "r70": 0.6861212896646289,
@@ -152,9 +110,9 @@
           "zero": 0.0
         },
         "final_states": {
+          "other": 349,
           "same": 1345,
           "half": 109,
-          "other": 349,
           "double": 111
         }
       },
@@ -201,8 +159,8 @@
           "median_settle_sec": 6.014,
           "never_settled_fraction": 0.2702702702702703,
           "acquisition_was_a_false_start_fraction": 0.3763763763763764,
-          "f_measure": 0.6788253714037997,
-          "cmlt": 0.5780778507842516,
+          "f_measure": 0.6788253714037995,
+          "cmlt": 0.5780778507842517,
           "switch_tracks": 224,
           "switches": 439,
           "switches_per_hour": 52.69045572994977,
@@ -349,9 +307,9 @@
         }
       ],
       "harmonix_four": [],
-      "audio_hours": 23.11956555027032,
-      "wall_seconds": 605.7775539997965,
-      "rtf": 0.0072783176834286915
+      "audio_hours": 16.807662648022035,
+      "wall_seconds": 429.41793320002034,
+      "rtf": 0.007096927259916497
     }
   ]
 }

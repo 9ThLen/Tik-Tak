@@ -1,12 +1,12 @@
 {
   "provenance": {
-    "utc": "2026-08-02T08:52:40Z",
-    "commit": "f1cddbf44c7faabccd2c84e4dc77070fa8e87689",
-    "tree_clean": false,
+    "utc": "2026-08-03T18:47:34Z",
+    "commit": "e6cf8bd7ccfae91cb02e91f5e85a9312d70b6255",
+    "tree_clean": true,
     "binary": {
       "name": "dump_analysis.exe",
       "bytes": 975872,
-      "sha256": "782d62d543ad4464d6139c086ab6e17f02b4f7b91f9c11ad994804138fc10d23"
+      "sha256": "a90b2ac469c6b51dfe0e330ab9adc64a760b32290cc3f4e3c14a1cda44bc3657"
     },
     "model": {
       "name": "beatnet_model_1.ttw",
@@ -23,10 +23,6 @@
       "gtzan": {
         "files": 1000,
         "annotated": 1000
-      },
-      "root": {
-        "files": 109,
-        "annotated": 0
       },
       "smc": {
         "files": 217,
@@ -64,13 +60,15 @@
   "summaries": [
     {
       "mode": "model",
-      "attempted": 2024,
-      "success": 2015,
+      "attempted": 1915,
+      "success": 1914,
       "scored": 1914,
       "usable_rate_macro": 0.3440606857589326,
       "usable_rate_any_octave_macro": 0.36629656694665785,
       "usable_rate_pooled": 0.43521421107628006,
       "usable_rate_any_octave_pooled": 0.46499477533960293,
+      "usable_rate_strict_macro": 0.3344178050558801,
+      "usable_rate_strict_pooled": 0.42371995820271685,
       "failure_reasons": {
         "too_few_beats": 0.5188087774294671,
         "wrong_beats": 0.47648902821316613,
@@ -83,55 +81,15 @@
           "corpus": "gtzan",
           "name": "jazz.00054",
           "error": "dump_analysis failed on <audio>/jazz.00054.wav: <audio>/jazz.00054.wav is not a WAV, FLAC or MP3 file"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
-        },
-        {
-          "corpus": "root",
-          "name": "<local audio>",
-          "error": "not decodable"
         }
       ],
       "quality": {
-        "f_measure": 0.6642283548268086,
-        "cmlt": 0.5752606535938305,
-        "amlt": 0.6405935151614025,
+        "f_measure": 0.6642283548268088,
+        "cmlt": 0.5752606535938304,
+        "amlt": 0.6405935151614027,
         "p70": 0.6910513306475864,
         "r70": 0.6615985023396717,
-        "coverage": 0.9400961306312197
+        "coverage": 0.9400961306312198
       },
       "silent_tracks": 9,
       "median_final_confidence": 0.7979952945,
@@ -152,9 +110,9 @@
           "zero": 0.0
         },
         "final_states": {
+          "other": 294,
           "same": 1376,
           "half": 126,
-          "other": 294,
           "double": 118
         }
       },
@@ -163,6 +121,7 @@
           "n": 698,
           "usable_rate": 0.5744985673352435,
           "usable_rate_any_octave": 0.5945558739255015,
+          "usable_rate_strict": 0.5515759312320917,
           "failure_reasons": {
             "too_few_beats": 0.36103151862464183,
             "wrong_beats": 0.3037249283667622,
@@ -188,6 +147,7 @@
           "n": 999,
           "usable_rate": 0.42542542542542544,
           "usable_rate_any_octave": 0.4674674674674675,
+          "usable_rate_strict": 0.4194194194194194,
           "failure_reasons": {
             "too_few_beats": 0.5335335335335335,
             "wrong_beats": 0.4944944944944945,
@@ -213,6 +173,7 @@
           "n": 217,
           "usable_rate": 0.03225806451612903,
           "usable_rate_any_octave": 0.03686635944700461,
+          "usable_rate_strict": 0.03225806451612903,
           "failure_reasons": {
             "too_few_beats": 0.9585253456221198,
             "wrong_beats": 0.9493087557603687,
@@ -346,9 +307,9 @@
         }
       ],
       "harmonix_four": [],
-      "audio_hours": 23.119539750320712,
-      "wall_seconds": 557.3826822999399,
-      "rtf": 0.00669686873238671
+      "audio_hours": 16.807662648022035,
+      "wall_seconds": 424.1713682000991,
+      "rtf": 0.007010218048935498
     }
   ]
 }

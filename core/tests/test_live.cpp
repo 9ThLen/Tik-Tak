@@ -532,6 +532,50 @@ TEST(LiveTracker, WithoutWeightsItIsTheTrackerItAlwaysWas) {
     tiktak::ml::BeatNetWeights empty;
     LiveTracker refused{liveConfig(), empty};
     EXPECT_FALSE(refused.usingModel()) << "weights that never loaded must not engage";
+    EXPECT_EQ(refused.models(), 0u);
+}
+
+TEST(LiveTracker, SeveralCheckpointsRunOverOneFrontEnd) {
+    // Averaging BeatNet's published checkpoints is the largest measured gain
+    // available to the live path, and the tracker's side of it is only that it
+    // still runs one front end at the model's rate. Three networks producing
+    // three times the frames would mean three front ends, which is both wrong
+    // and three times the cost of the part that is shared.
+    const auto blob = stubWeightFile();
+    tiktak::ml::BeatNetWeights weights;
+    ASSERT_TRUE(weights.load(blob.data(), blob.size()));
+
+    const tiktak::ml::BeatNetWeights* three[] = {&weights, &weights, &weights};
+    LiveTracker tracker{liveConfig(), three, 3};
+    EXPECT_TRUE(tracker.usingModel());
+    EXPECT_EQ(tracker.models(), 3u);
+
+    const auto audio = tiktak::test::clickTrack(120.0, 4.0, kRate);
+    feed(tracker, audio);
+    EXPECT_NEAR(static_cast<double>(tracker.stats().frames), 200.0, 3.0);
+}
+
+TEST(LiveTracker, AnEnsembleIsAllOfItsCheckpointsOrNoneOfThem) {
+    // A half-built ensemble is the dangerous failure: it tracks, it publishes,
+    // and it is several points below the configuration that was measured, with
+    // nothing at the call site to say so. So one bad entry refuses the whole
+    // thing and leaves the tracker on spectral flux, where `usingModel` makes
+    // the fallback visible.
+    const auto blob = stubWeightFile();
+    tiktak::ml::BeatNetWeights good;
+    ASSERT_TRUE(good.load(blob.data(), blob.size()));
+    tiktak::ml::BeatNetWeights never_loaded;
+
+    const tiktak::ml::BeatNetWeights* mixed[] = {&good, &never_loaded};
+    LiveTracker refused{liveConfig(), mixed, 2};
+    EXPECT_FALSE(refused.usingModel());
+
+    const tiktak::ml::BeatNetWeights* null_entry[] = {&good, nullptr};
+    LiveTracker also_refused{liveConfig(), null_entry, 2};
+    EXPECT_FALSE(also_refused.usingModel());
+
+    LiveTracker empty{liveConfig(), nullptr, 0};
+    EXPECT_FALSE(empty.usingModel());
 }
 
 TEST(LiveTracker, GatesItsOwnClickThroughTheModelToo) {
@@ -753,7 +797,10 @@ TEST(LiveTracker, TheAnchorIsOnAndTheEstimatorIsShortSighted) {
     const LiveConfig config = liveConfig();
     EXPECT_TRUE(config.anchor_tempo);
     EXPECT_DOUBLE_EQ(config.activation_tempo.window_sec, 6.0);
-    EXPECT_DOUBLE_EQ(config.anchor_width_octaves, 0.1);
+    // 0.02, not the 0.10 the first two-point sweep chose. Swept properly it is
+    // worth 2.4 points of usable GTZAN-family recordings and 2.5 of RWC, and
+    // 4.0 of RWC read strictly; the table is in live.hpp beside the field.
+    EXPECT_DOUBLE_EQ(config.anchor_width_octaves, 0.02);
     EXPECT_DOUBLE_EQ(config.anchor_octave_margin, 0.0);
     EXPECT_TRUE(config.valid());
 }

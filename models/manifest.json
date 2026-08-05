@@ -503,6 +503,330 @@
         "citation": "Francesco Foscarin, Jan Schlüter and Gerhard Widmer. \"Beat this! Accurate beat tracking without DBN postprocessing.\" Proceedings of the 25th International Society for Music Information Retrieval Conference (ISMIR), San Francisco, CA, November 2024.",
         "modifications": "exported to ONNX, then weights quantised to int8 by models/quantise.py; weights not retrained"
       }
+    },
+    "beatnet_model_2": {
+      "purpose": "BeatNet fold checkpoint 2. The three published models hold out GTZAN, Ballroom and Rock Corpus respectively; all three are unseen on RWC, which is in none of BeatNet's five training corpora. Fetched to test whether a better or averaged activation is worth pursuing before any model is built — see docs/ml-models.md.",
+      "license": "CC BY 4.0; the conditions are attribution and an indication of modification, and NOTICE.md carries both",
+      "source": {
+        "repo": "https://github.com/mjhydri/BeatNet",
+        "revision": "81cedd4beeb7235262db80969a0c9ce9a48a0ed4",
+        "url": "https://raw.githubusercontent.com/mjhydri/BeatNet/81cedd4beeb7235262db80969a0c9ce9a48a0ed4/src/BeatNet/models/model_2_weights.pt",
+        "path": "src/BeatNet/models/model_2_weights.pt"
+      },
+      "file": "beatnet_model_2_weights.pt",
+      "expected_mb": 1.54,
+      "attribution": {
+        "work": "BeatNet",
+        "creators": [
+          "Mojtaba Heydari",
+          "Frank Cwitkowitz",
+          "Zhiyao Duan"
+        ],
+        "copyright": "Mojtaba Heydari and contributors",
+        "license_id": "CC-BY-4.0",
+        "license_uri": "https://creativecommons.org/licenses/by/4.0/",
+        "license_text": "licenses/CC-BY-4.0-BeatNet.txt",
+        "source_uri": "https://github.com/mjhydri/BeatNet",
+        "citation": "Mojtaba Heydari, Frank Cwitkowitz and Zhiyao Duan. \"BeatNet: CRNN and Particle Filtering for Online Joint Beat, Downbeat and Meter Tracking.\" 22nd International Society for Music Information Retrieval Conference (ISMIR), 2021.",
+        "modifications": null
+      },
+      "pinned": {
+        "sha256": "5878a18c079fa0b0139879b14ed2b5b7595faef8c3d16210aed141fd00fa2d58",
+        "bytes": 1612179,
+        "provenance": {
+          "source": {
+            "repo": "https://github.com/mjhydri/BeatNet",
+            "revision": "81cedd4beeb7235262db80969a0c9ce9a48a0ed4",
+            "url": "https://raw.githubusercontent.com/mjhydri/BeatNet/81cedd4beeb7235262db80969a0c9ce9a48a0ed4/src/BeatNet/models/model_2_weights.pt",
+            "path": "src/BeatNet/models/model_2_weights.pt"
+          }
+        },
+        "date": "2026-08-02"
+      }
+    },
+    "beatnet_model_2_core": {
+      "purpose": "BeatNet fold 2 in the shipped core's format. Not what ships — fold 1 is — but the arm every fold comparison and the averaged activation were measured on; see core/src/tracking/live.hpp.",
+      "license": "CC BY 4.0; attribution and an indication of modification are conditions, and NOTICE.md carries both",
+      "source": {
+        "repo": "https://github.com/mjhydri/BeatNet",
+        "revision": "81cedd4beeb7235262db80969a0c9ce9a48a0ed4",
+        "url": "https://raw.githubusercontent.com/mjhydri/BeatNet/81cedd4beeb7235262db80969a0c9ce9a48a0ed4/src/BeatNet/models/model_2_weights.pt",
+        "path": "src/BeatNet/models/model_2_weights.pt",
+        "note": "converted locally from the pinned beatnet_model_2 checkpoint"
+      },
+      "conversion": {
+        "model_variant": "model_2 (Ballroom)",
+        "source_weights_sha256": "5878a18c079fa0b0139879b14ed2b5b7595faef8c3d16210aed141fd00fa2d58",
+        "exporter": {
+          "repo": "this repository",
+          "revision": null,
+          "version": "models/export_beatnet.py"
+        },
+        "format": "TTBN v1 — 4-byte magic, seven uint32 shapes, then 402325 little-endian float32 in a fixed tensor order",
+        "note": "no ONNX: the network is 0.40 M parameters and 20 MMAC/s, so tiktak_core runs the forward pass itself rather than linking an inference runtime several times the model's size. See the docstring in models/export_beatnet.py.",
+        "preprocessing": {
+          "sample_rate": 22050,
+          "frame_size": 1411,
+          "hop_length": 441,
+          "fps": 50,
+          "bands_per_octave": 24,
+          "f_min": 30,
+          "f_max": 17000,
+          "f_ref": 440,
+          "filters": 136,
+          "features": 272,
+          "compression": "log10(1 + x), stacked with its positive first difference",
+          "filter_normalisation": "unit area"
+        },
+        "io_contract": {
+          "input": {
+            "shape": [
+              272
+            ],
+            "note": "one frame at a time, LSTM state carried"
+          },
+          "outputs": [
+            "beat",
+            "downbeat",
+            "null"
+          ],
+          "note": "softmax over three classes in that order; the published BeatNet.py keeps preds[:2]"
+        },
+        "verified_against_pytorch_max_abs_diff": 3e-06
+      },
+      "file": "beatnet_model_2.ttw",
+      "expected_mb": 1.54,
+      "pinned": {
+        "sha256": "9caec66314cc8487b1662a0020e397341af5c62da7401c23da56c4e94d17c2bb",
+        "bytes": 1609332,
+        "provenance": {
+          "source": {
+            "repo": "https://github.com/mjhydri/BeatNet",
+            "revision": "81cedd4beeb7235262db80969a0c9ce9a48a0ed4",
+            "url": "https://raw.githubusercontent.com/mjhydri/BeatNet/81cedd4beeb7235262db80969a0c9ce9a48a0ed4/src/BeatNet/models/model_2_weights.pt",
+            "path": "src/BeatNet/models/model_2_weights.pt",
+            "note": "converted locally from the pinned beatnet_model_2 checkpoint"
+          },
+          "conversion": {
+            "model_variant": "model_2 (Ballroom)",
+            "source_weights_sha256": "5878a18c079fa0b0139879b14ed2b5b7595faef8c3d16210aed141fd00fa2d58",
+            "exporter": {
+              "repo": "this repository",
+              "revision": null,
+              "version": "models/export_beatnet.py"
+            },
+            "format": "TTBN v1 — 4-byte magic, seven uint32 shapes, then 402325 little-endian float32 in a fixed tensor order",
+            "note": "no ONNX: the network is 0.40 M parameters and 20 MMAC/s, so tiktak_core runs the forward pass itself rather than linking an inference runtime several times the model's size. See the docstring in models/export_beatnet.py.",
+            "preprocessing": {
+              "sample_rate": 22050,
+              "frame_size": 1411,
+              "hop_length": 441,
+              "fps": 50,
+              "bands_per_octave": 24,
+              "f_min": 30,
+              "f_max": 17000,
+              "f_ref": 440,
+              "filters": 136,
+              "features": 272,
+              "compression": "log10(1 + x), stacked with its positive first difference",
+              "filter_normalisation": "unit area"
+            },
+            "io_contract": {
+              "input": {
+                "shape": [
+                  272
+                ],
+                "note": "one frame at a time, LSTM state carried"
+              },
+              "outputs": [
+                "beat",
+                "downbeat",
+                "null"
+              ],
+              "note": "softmax over three classes in that order; the published BeatNet.py keeps preds[:2]"
+            },
+            "verified_against_pytorch_max_abs_diff": 3e-06
+          }
+        },
+        "date": "2026-08-03"
+      },
+      "attribution": {
+        "work": "BeatNet",
+        "creators": [
+          "Mojtaba Heydari",
+          "Frank Cwitkowitz",
+          "Zhiyao Duan"
+        ],
+        "copyright": "Mojtaba Heydari and contributors",
+        "license_id": "CC-BY-4.0",
+        "license_uri": "https://creativecommons.org/licenses/by/4.0/",
+        "license_text": "licenses/CC-BY-4.0-BeatNet.txt",
+        "source_uri": "https://github.com/mjhydri/BeatNet",
+        "citation": "Mojtaba Heydari, Frank Cwitkowitz and Zhiyao Duan. \"BeatNet: CRNN and Particle Filtering for Online Joint Beat, Downbeat and Meter Tracking.\" 22nd International Society for Music Information Retrieval Conference (ISMIR), 2021.",
+        "modifications": "rewritten from the published torch state dict into a flat little-endian float32 weight file by models/export_beatnet.py; weights not retrained, not quantised and not reordered within any tensor"
+      }
+    },
+    "beatnet_model_3": {
+      "purpose": "BeatNet fold checkpoint 3. The three published models hold out GTZAN, Ballroom and Rock Corpus respectively; all three are unseen on RWC, which is in none of BeatNet's five training corpora. Fetched to test whether a better or averaged activation is worth pursuing before any model is built — see docs/ml-models.md.",
+      "license": "CC BY 4.0; the conditions are attribution and an indication of modification, and NOTICE.md carries both",
+      "source": {
+        "repo": "https://github.com/mjhydri/BeatNet",
+        "revision": "81cedd4beeb7235262db80969a0c9ce9a48a0ed4",
+        "url": "https://raw.githubusercontent.com/mjhydri/BeatNet/81cedd4beeb7235262db80969a0c9ce9a48a0ed4/src/BeatNet/models/model_3_weights.pt",
+        "path": "src/BeatNet/models/model_3_weights.pt"
+      },
+      "file": "beatnet_model_3_weights.pt",
+      "expected_mb": 1.54,
+      "attribution": {
+        "work": "BeatNet",
+        "creators": [
+          "Mojtaba Heydari",
+          "Frank Cwitkowitz",
+          "Zhiyao Duan"
+        ],
+        "copyright": "Mojtaba Heydari and contributors",
+        "license_id": "CC-BY-4.0",
+        "license_uri": "https://creativecommons.org/licenses/by/4.0/",
+        "license_text": "licenses/CC-BY-4.0-BeatNet.txt",
+        "source_uri": "https://github.com/mjhydri/BeatNet",
+        "citation": "Mojtaba Heydari, Frank Cwitkowitz and Zhiyao Duan. \"BeatNet: CRNN and Particle Filtering for Online Joint Beat, Downbeat and Meter Tracking.\" 22nd International Society for Music Information Retrieval Conference (ISMIR), 2021.",
+        "modifications": null
+      },
+      "pinned": {
+        "sha256": "0c52a074ea38e8cb4a760ecfa3747c9cf91a1e3cd19f238eed80b0de763989ca",
+        "bytes": 1612179,
+        "provenance": {
+          "source": {
+            "repo": "https://github.com/mjhydri/BeatNet",
+            "revision": "81cedd4beeb7235262db80969a0c9ce9a48a0ed4",
+            "url": "https://raw.githubusercontent.com/mjhydri/BeatNet/81cedd4beeb7235262db80969a0c9ce9a48a0ed4/src/BeatNet/models/model_3_weights.pt",
+            "path": "src/BeatNet/models/model_3_weights.pt"
+          }
+        },
+        "date": "2026-08-02"
+      }
+    },
+    "beatnet_model_3_core": {
+      "purpose": "BeatNet fold 3 in the shipped core's format. Not what ships — fold 1 is — but the arm every fold comparison and the averaged activation were measured on; see core/src/tracking/live.hpp.",
+      "license": "CC BY 4.0; attribution and an indication of modification are conditions, and NOTICE.md carries both",
+      "source": {
+        "repo": "https://github.com/mjhydri/BeatNet",
+        "revision": "81cedd4beeb7235262db80969a0c9ce9a48a0ed4",
+        "url": "https://raw.githubusercontent.com/mjhydri/BeatNet/81cedd4beeb7235262db80969a0c9ce9a48a0ed4/src/BeatNet/models/model_3_weights.pt",
+        "path": "src/BeatNet/models/model_3_weights.pt",
+        "note": "converted locally from the pinned beatnet_model_3 checkpoint"
+      },
+      "conversion": {
+        "model_variant": "model_3 (Rock Corpus)",
+        "source_weights_sha256": "0c52a074ea38e8cb4a760ecfa3747c9cf91a1e3cd19f238eed80b0de763989ca",
+        "exporter": {
+          "repo": "this repository",
+          "revision": null,
+          "version": "models/export_beatnet.py"
+        },
+        "format": "TTBN v1 — 4-byte magic, seven uint32 shapes, then 402325 little-endian float32 in a fixed tensor order",
+        "note": "no ONNX: the network is 0.40 M parameters and 20 MMAC/s, so tiktak_core runs the forward pass itself rather than linking an inference runtime several times the model's size. See the docstring in models/export_beatnet.py.",
+        "preprocessing": {
+          "sample_rate": 22050,
+          "frame_size": 1411,
+          "hop_length": 441,
+          "fps": 50,
+          "bands_per_octave": 24,
+          "f_min": 30,
+          "f_max": 17000,
+          "f_ref": 440,
+          "filters": 136,
+          "features": 272,
+          "compression": "log10(1 + x), stacked with its positive first difference",
+          "filter_normalisation": "unit area"
+        },
+        "io_contract": {
+          "input": {
+            "shape": [
+              272
+            ],
+            "note": "one frame at a time, LSTM state carried"
+          },
+          "outputs": [
+            "beat",
+            "downbeat",
+            "null"
+          ],
+          "note": "softmax over three classes in that order; the published BeatNet.py keeps preds[:2]"
+        },
+        "verified_against_pytorch_max_abs_diff": 2e-06
+      },
+      "file": "beatnet_model_3.ttw",
+      "expected_mb": 1.54,
+      "pinned": {
+        "sha256": "b7f460ca851d6810e4c4c8a7cab23665fe26c846d863b931012355a8ab4059bf",
+        "bytes": 1609332,
+        "provenance": {
+          "source": {
+            "repo": "https://github.com/mjhydri/BeatNet",
+            "revision": "81cedd4beeb7235262db80969a0c9ce9a48a0ed4",
+            "url": "https://raw.githubusercontent.com/mjhydri/BeatNet/81cedd4beeb7235262db80969a0c9ce9a48a0ed4/src/BeatNet/models/model_3_weights.pt",
+            "path": "src/BeatNet/models/model_3_weights.pt",
+            "note": "converted locally from the pinned beatnet_model_3 checkpoint"
+          },
+          "conversion": {
+            "model_variant": "model_3 (Rock Corpus)",
+            "source_weights_sha256": "0c52a074ea38e8cb4a760ecfa3747c9cf91a1e3cd19f238eed80b0de763989ca",
+            "exporter": {
+              "repo": "this repository",
+              "revision": null,
+              "version": "models/export_beatnet.py"
+            },
+            "format": "TTBN v1 — 4-byte magic, seven uint32 shapes, then 402325 little-endian float32 in a fixed tensor order",
+            "note": "no ONNX: the network is 0.40 M parameters and 20 MMAC/s, so tiktak_core runs the forward pass itself rather than linking an inference runtime several times the model's size. See the docstring in models/export_beatnet.py.",
+            "preprocessing": {
+              "sample_rate": 22050,
+              "frame_size": 1411,
+              "hop_length": 441,
+              "fps": 50,
+              "bands_per_octave": 24,
+              "f_min": 30,
+              "f_max": 17000,
+              "f_ref": 440,
+              "filters": 136,
+              "features": 272,
+              "compression": "log10(1 + x), stacked with its positive first difference",
+              "filter_normalisation": "unit area"
+            },
+            "io_contract": {
+              "input": {
+                "shape": [
+                  272
+                ],
+                "note": "one frame at a time, LSTM state carried"
+              },
+              "outputs": [
+                "beat",
+                "downbeat",
+                "null"
+              ],
+              "note": "softmax over three classes in that order; the published BeatNet.py keeps preds[:2]"
+            },
+            "verified_against_pytorch_max_abs_diff": 2e-06
+          }
+        },
+        "date": "2026-08-03"
+      },
+      "attribution": {
+        "work": "BeatNet",
+        "creators": [
+          "Mojtaba Heydari",
+          "Frank Cwitkowitz",
+          "Zhiyao Duan"
+        ],
+        "copyright": "Mojtaba Heydari and contributors",
+        "license_id": "CC-BY-4.0",
+        "license_uri": "https://creativecommons.org/licenses/by/4.0/",
+        "license_text": "licenses/CC-BY-4.0-BeatNet.txt",
+        "source_uri": "https://github.com/mjhydri/BeatNet",
+        "citation": "Mojtaba Heydari, Frank Cwitkowitz and Zhiyao Duan. \"BeatNet: CRNN and Particle Filtering for Online Joint Beat, Downbeat and Meter Tracking.\" 22nd International Society for Music Information Retrieval Conference (ISMIR), 2021.",
+        "modifications": "rewritten from the published torch state dict into a flat little-endian float32 weight file by models/export_beatnet.py; weights not retrained, not quantised and not reordered within any tensor"
+      }
     }
   }
 }

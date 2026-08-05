@@ -62,6 +62,14 @@ MAX_WRONG_OCTAVE_SEC = 4.0
 # settle rather than a lucky second. Same figure as the wrong-level limit, so
 # the two criteria cannot disagree about what "briefly" means.
 SETTLE_SEC = 4.0
+# Nothing before this counts for or against the tracker: it is the grace period
+# a listener would give any device before expecting an answer. Every rate that
+# divides by time has to divide by the time *after* it, which is why it is a
+# name rather than a literal -- `switches_per_five_minutes` divided by whole
+# audio duration for one release, and on a thirty-second excerpt that is a
+# denominator a sixth too large, understating the switch rate by that much on
+# exactly the corpora where clips are shortest.
+WARMUP_SEC = 5.0
 
 
 def _audio_path(ground_truth: pathlib.Path, row: dict[str, str]) -> pathlib.Path:
@@ -70,23 +78,46 @@ def _audio_path(ground_truth: pathlib.Path, row: dict[str, str]) -> pathlib.Path
         return ground_truth / "sources" / "ballroom_audio" / relative
     if row["dataset"] == "gtzan":
         return ground_truth / "audio" / "gtzan-ready" / relative
+    if row["dataset"] == "harmonix":
+        return ground_truth / "audio" / relative
     return ground_truth / relative
+
+
+# The three the ground-truth manifest has always meant. Harmonix is in the same
+# file and has been since before any of these numbers, but was never scored,
+# because reaching it needs asking. That is deliberate and it is why it is a
+# usable holdout: every figure this repository quotes from this manifest was
+# measured without it, so it can still answer a question it has not been used
+# to tune. Adding it to this set would spend that in one commit.
+DEFAULT_CORPORA = frozenset({"ballroom", "gtzan", "smc"})
 
 
 def load_corpus(
     manifest: pathlib.Path,
     music: pathlib.Path,
     include_root_audio: bool,
+    corpora: frozenset[str] | set[str] | None = None,
 ) -> list[dict[str, Any]]:
     ground_truth = manifest.parent
+    wanted = DEFAULT_CORPORA if corpora is None else frozenset(corpora)
     items: list[dict[str, Any]] = []
     with manifest.open(encoding="utf-8-sig", newline="") as handle:
         for row in csv.DictReader(handle):
+            # `audio-aligned` is how a separately prepared manifest — RWC 2.0 —
+            # declares its audio; the named datasets are the ones whose audio
+            # this manifest has always resolved by convention. Harmonix says
+            # `ok`, set by tools/harmonix_validate_ready.py only for the tracks
+            # that passed the alignment gate in HARMONIX_ALIGNMENT.md, which is
+            # why the 235 rejected ones cannot slip in here.
             has_audio = (
                 row["dataset"] in {"ballroom", "gtzan", "smc"}
-                or row["status"] == "audio-aligned"
+                or row["status"] in {"audio-aligned", "ok"}
             )
-            if not has_audio:
+            if not has_audio or (corpora is not None
+                                 and row["dataset"] not in wanted):
+                continue
+            if corpora is None and row["dataset"] not in DEFAULT_CORPORA \
+                    and row["status"] != "audio-aligned":
                 continue
             items.append(
                 {
@@ -208,16 +239,36 @@ def octave_statistics(estimate: Estimate, beats: np.ndarray) -> dict[str, Any]:
     # strength of a lock that was wrong. An earlier note here claimed nothing
     # was lost by this, only misattributed, and that was too strong.
     #
-    # `settled_at` is the honest one: the start of the first locked stretch at
-    # the annotated level that then lasts `SETTLE_SEC`. It is reported beside
-    # `acquired_at` rather than replacing it in the pass criterion, so that the
-    # rates stay comparable with everything measured before it existed — the
-    # difference between the two columns is the size of the problem.
+    # `settled_at` is the honest one: the **start** of the first locked stretch
+    # at the annotated level that then lasts `SETTLE_SEC`, not the moment that
+    # stretch is confirmed. Those differ by `SETTLE_SEC`, and the choice is
+    # deliberate — the question the criterion asks is "when did the tracker
+    # begin doing the right thing", and a listener hears the first correct beat,
+    # not the fourth second of correctness. The consequence has to be stated
+    # rather than left implicit: `settled_at <= 8 s` admits a recording whose
+    # correctness is only *established* at twelve seconds. Anyone comparing this
+    # against a latency figure defined the other way will be out by four
+    # seconds, in our favour.
+    #
+    # It is reported beside `acquired_at` rather than replacing it in the pass
+    # criterion, so the rates stay comparable with everything measured before it
+    # existed — the difference between the two columns is the size of the
+    # problem.
     acquired_at: float | None = None
     settled_at: float | None = None
     same_since: float | None = None
     worst_wrong_run = 0.0
     wrong_since: float | None = None
+    # The longest unbroken stretch at the annotated level, and what the tracker
+    # was doing at a few fixed moments. A share says how much of the time was
+    # right; neither says whether it was right *in one piece*, and a tracker
+    # that is correct for four minutes straight is a different product from one
+    # that is correct for two seconds at a time sixty times over.
+    longest_correct_run = 0.0
+    at_seconds = (5.0, 10.0, 30.0, 60.0)
+    state_at: dict[str, str | None] = {f"state_at_{int(t)}s": None
+                                       for t in at_seconds}
+    pending = list(at_seconds)
 
     observations = zip(*(np.asarray(column)[:count] for column in columns))
     for time_sec, bpm, confidence, spread in observations:
@@ -238,10 +289,21 @@ def octave_statistics(estimate: Estimate, beats: np.ndarray) -> dict[str, Any]:
         if not locked:
             same_since = None  # a release ends the stretch, however right it was
 
-        if time_sec < 5.0:
+        if time_sec < WARMUP_SEC:
             continue
         eligible_samples += 1
+        # What the user would have seen at this moment, silence included. A
+        # tracker that has not locked is showing nothing, which is not a right
+        # answer — so "not locked" is recorded here rather than skipped, and
+        # only then does the loop move on.
+        while pending and float(time_sec) >= pending[0]:
+            state_at[f"state_at_{int(pending.pop(0))}s"] = (
+                tempo_state(float(bpm), local_reference_bpm(beats, float(time_sec)))
+                if locked else "silent")
         if not locked:
+            if same_since is not None:
+                longest_correct_run = max(longest_correct_run,
+                                          float(time_sec) - same_since)
             continue
 
         active_samples += 1
@@ -260,10 +322,16 @@ def octave_statistics(estimate: Estimate, beats: np.ndarray) -> dict[str, Any]:
                 wrong_since = None
             if same_since is None:
                 same_since = float(time_sec)
-            elif (settled_at is None
-                  and float(time_sec) - same_since >= SETTLE_SEC):
-                settled_at = same_since
+            else:
+                longest_correct_run = max(longest_correct_run,
+                                          float(time_sec) - same_since)
+                if (settled_at is None
+                        and float(time_sec) - same_since >= SETTLE_SEC):
+                    settled_at = same_since
         else:
+            if same_since is not None:
+                longest_correct_run = max(longest_correct_run,
+                                          float(time_sec) - same_since)
             same_since = None
             if wrong_since is None:
                 wrong_since = float(time_sec)
@@ -288,7 +356,25 @@ def octave_statistics(estimate: Estimate, beats: np.ndarray) -> dict[str, Any]:
     )
     if wrong_since is not None:
         worst_wrong_run = max(worst_wrong_run, final_time - wrong_since)
+    if same_since is not None:
+        longest_correct_run = max(longest_correct_run, final_time - same_since)
     return {
+        # The share of the time after warm-up when the tracker was showing the
+        # right tempo. Deliberately over *eligible* time, not active time.
+        # `active_state_shares` divides by the time the tracker was locked, so
+        # every second it spent silent is excluded from its own denominator —
+        # which flatters it exactly where a user is worst served, because
+        # silence is not a right answer, it is no answer. The two differ by the
+        # active fraction, and on full-length material that is a large gap.
+        "correct_share_of_eligible": (
+            states["same"] / eligible_samples if eligible_samples else None),
+        # The same denominator in seconds, for the rates that are quoted per
+        # unit of time rather than as shares. Anything divided by whole audio
+        # duration instead is too small by `WARMUP_SEC` per recording -- a sixth
+        # of a thirty-second excerpt.
+        "eligible_sec": max(0.0, final_time - WARMUP_SEC),
+        "longest_correct_run_sec": longest_correct_run,
+        **state_at,
         "switches": within_switches + reacquire_switches,
         "within_switches": within_switches,
         "reacquire_switches": reacquire_switches,
@@ -542,7 +628,8 @@ def _digest(path: pathlib.Path) -> dict | None:
 
 
 def _provenance(binary: pathlib.Path, model: pathlib.Path | None,
-                items: list[dict[str, Any]], repository: pathlib.Path) -> dict:
+                items: list[dict[str, Any]], repository: pathlib.Path,
+                also_models: "tuple[pathlib.Path, ...]" = ()) -> dict:
     def git(*command: str) -> str | None:
         try:
             done = subprocess.run(("git", "-C", str(repository)) + command,
@@ -560,6 +647,13 @@ def _provenance(binary: pathlib.Path, model: pathlib.Path | None,
         "tree_clean": git("status", "--porcelain") == "",
         "binary": _digest(binary),
         "model": _digest(model) if model else None,
+        # Every checkpoint the core averaged, in the order it was given them.
+        # A run that averaged three models and recorded one is a run nobody can
+        # reproduce, and the difference between one and three is the whole
+        # result — so this is present and empty rather than absent, so that its
+        # absence in an older artifact is legible as "this predates ensembles"
+        # rather than as "this used one model".
+        "also_models": [_digest(path) for path in also_models],
         "python": platform.python_version(),
         "platform": platform.system(),
         "corpora": {name: {"files": corpora[name], "annotated": annotated[name]}
@@ -640,6 +734,69 @@ def summarize(mode: str, results: list[dict[str, Any]], wall: float) -> dict:
             "median_settle_sec": _finite_stat(
                 [result["settled_at"] for result in part
                  if result.get("settled_at") is not None], np.median),
+            # P90 beside the median, because a median settle of eight seconds
+            # with a tail at ninety is a different product from one with a tail
+            # at twelve, and the median cannot tell them apart. Computed only
+            # over recordings that settled at all — `never_settled_fraction`
+            # below is the rest, and folding those in as some large number
+            # would invent a latency for a recording that never arrived.
+            "p90_settle_sec": _finite_stat(
+                [result["settled_at"] for result in part
+                 if result.get("settled_at") is not None],
+                lambda xs: np.percentile(xs, 90)),
+            "p90_acquisition_sec": _finite_stat(
+                [result["acquired_at"] for result in part
+                 if result.get("acquired_at") is not None],
+                lambda xs: np.percentile(xs, 90)),
+            # How much of the time after warm-up the tracker was actually right,
+            # counting silence against it. Three denominators, named rather than
+            # left to be inferred, because they answer different questions and
+            # differ by a lot:
+            #
+            #   ..._recording_mean  every recording counted once, whatever its
+            #                       length. The one to quote per corpus.
+            #   ..._time_pooled     every second counted once, so long songs
+            #                       dominate. The one to quote per hour of use.
+            #   correct_share_of_active   the old `active_state_shares.same`:
+            #                       right among the time it was *speaking*.
+            #                       Highest of the three, and the one that
+            #                       flatters, because silence leaves its own
+            #                       denominator.
+            "mean_correct_share_of_eligible": _finite_stat(
+                [result["correct_share_of_eligible"] for result in part
+                 if result.get("correct_share_of_eligible") is not None],
+                np.mean),
+            "correct_share_of_eligible_time_pooled": (
+                sum(result["states"].get("same", 0) for result in part)
+                / sum(result["eligible_samples"] for result in part)
+                if sum(result["eligible_samples"] for result in part) else None),
+            "correct_share_of_active": (
+                sum(result["states"].get("same", 0) for result in part)
+                / sum(result["active_samples"] for result in part)
+                if sum(result["active_samples"] for result in part) else None),
+            # The episode metric, and as of this release the primary one. A
+            # recording is right on average and still unusable if it slips to
+            # the wrong level once for more than `MAX_WRONG_OCTAVE_SEC`; the
+            # Harmonix baseline is 77.5% correct time against 31% usable, and
+            # this fraction is what reconciles those two numbers. Same threshold
+            # as the verdict's octave clause, so the two cannot disagree.
+            "no_wrong_level_episode_fraction": (
+                sum(result["worst_wrong_octave_sec"] <= MAX_WRONG_OCTAVE_SEC
+                    for result in part) / len(part) if part else None),
+            "median_longest_correct_run_sec": _finite_stat(
+                [result.get("longest_correct_run_sec") for result in part], np.median),
+            # Level changes per five minutes, which is the unit a person
+            # notices them in. Over *eligible* time: switches are only counted
+            # after warm-up, so dividing by whole audio duration -- which the
+            # first version of this did -- charges the tracker for a stretch it
+            # was never scored over, and on a thirty-second excerpt that is a
+            # sixth of the denominator. `switches_per_hour` below is the same
+            # thing at a scale nobody experiences, and is left on duration
+            # because every earlier report quoted it that way.
+            "switches_per_five_minutes": (
+                sum(result["switches"] for result in part)
+                / (sum(result["eligible_sec"] for result in part) / 300.0)
+                if sum(result["eligible_sec"] for result in part) else None),
             "never_settled_fraction": (
                 sum(result.get("settled_at") is None for result in part)
                 / len(part) if part else None
@@ -704,6 +861,9 @@ def summarize(mode: str, results: list[dict[str, Any]], wall: float) -> dict:
            if by_corpus[c]["usable_rate"] is not None and by_corpus[c]["n"] >= 30]
     rates = [by_corpus[c]["usable_rate"] for c in big]
     rates_any = [by_corpus[c]["usable_rate_any_octave"] for c in big]
+    rates_strict = [by_corpus[c]["usable_rate_strict"] for c in big]
+    rates_no_episode = [by_corpus[c]["no_wrong_level_episode_fraction"]
+                        for c in big]
     pooled_failures: Counter[str] = Counter()
     for result in scored:
         pooled_failures.update(result.get("reasons", ()))
@@ -723,6 +883,28 @@ def summarize(mode: str, results: list[dict[str, Any]], wall: float) -> dict:
         "usable_rate_any_octave_pooled": (
             sum(result["usable_any_octave"] for result in scored) / len(scored)
             if scored else None
+        ),
+        # Aggregated alongside the other two rather than left per corpus, so a
+        # reader who quotes the headline can see in the same object how much of
+        # it rests on locks that were never at the right level.
+        "usable_rate_strict_macro": (
+            float(np.mean(rates_strict)) if rates_strict else None),
+        "usable_rate_strict_pooled": (
+            sum(result["usable_strict"] for result in scored) / len(scored)
+            if scored else None
+        ),
+        # The share of recordings that never once slipped to the wrong metrical
+        # level for longer than `MAX_WRONG_OCTAVE_SEC`. Promoted to the headline
+        # because average correctness turned out not to be the binding
+        # constraint: the shipped tracker is right 77.5% of the time on Harmonix
+        # and usable on 31% of it, and the difference is single episodes inside
+        # otherwise-correct recordings. Optimising the average would have moved
+        # a number that already passes.
+        "no_wrong_level_episode_macro": (
+            float(np.mean(rates_no_episode)) if rates_no_episode else None),
+        "no_wrong_level_episode_pooled": (
+            sum(result["worst_wrong_octave_sec"] <= MAX_WRONG_OCTAVE_SEC
+                for result in scored) / len(scored) if scored else None
         ),
         "failure_reasons": {
             key: count / len(scored) for key, count in pooled_failures.most_common()
@@ -811,10 +993,30 @@ def main(argv: list[str] | None = None) -> int:
         "--binary", type=pathlib.Path, default=DEFAULT_BINARY
     )
     parser.add_argument("--model", type=pathlib.Path)
+    # Additional checkpoints, averaged with `--model` over one front end by the
+    # core. Repeatable. This is the arm of
+    # eval/PREREGISTERED_ensemble_in_core.md, and it is spelled as an addition
+    # to `--model` rather than as a list so that provenance keeps recording
+    # which single model a baseline run used.
+    #
+    # Do not point it at GTZAN or Ballroom. Folds 1, 2 and 3 hold out GTZAN,
+    # Ballroom and Rock Corpus respectively, so an average of them is
+    # train-on-test on the first two and the resulting rates mean nothing.
+    parser.add_argument("--also-model", type=pathlib.Path, action="append",
+                        default=[], metavar="MODEL")
     parser.add_argument(
         "--mode", choices=("baseline", "model", "both"), default="both"
     )
     parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--corpora", nargs="+",
+                        help="datasets to score, by their name in the manifest. "
+                             "Omitted means the three this manifest has always "
+                             "meant — ballroom, gtzan, smc — so every earlier "
+                             "number stays comparable. `--corpora harmonix` "
+                             "reaches the 581 aligned full-length recordings "
+                             "that no run has scored; see "
+                             "eval/PREREGISTERED_harmonix_ensemble.md before "
+                             "spending them")
     parser.add_argument("--include-root-audio", action="store_true")
     parser.add_argument("--output", type=pathlib.Path)
     parser.add_argument("--seeded", action="store_true",
@@ -849,12 +1051,19 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--workers must be positive")
     if args.mode in {"model", "both"} and args.model is None:
         parser.error("--model is required for model mode")
+    if args.also_model and args.mode == "baseline":
+        parser.error("--also-model needs a mode that runs the model")
 
     extra_flags = tuple(args.extra.split())
     if args.no_anchor:
         extra_flags = ("--live-no-anchor",) + extra_flags
+    # Appended, so `--model` stays the first checkpoint and the baseline arm is
+    # literally the same command with these flags removed.
+    for extra_model in args.also_model:
+        extra_flags += ("--live-model", str(extra_model))
 
-    items = load_corpus(args.manifest, args.music, args.include_root_audio)
+    items = load_corpus(args.manifest, args.music, args.include_root_audio,
+                        corpora=set(args.corpora) if args.corpora else None)
     missing_audio = [str(item["audio"]) for item in items if not item["audio"].is_file()]
     missing_annotations = [
         str(item["annotation"])
@@ -930,7 +1139,8 @@ def main(argv: list[str] | None = None) -> int:
                 ensure_ascii=False), encoding="utf-8")
 
     report = {
-        "provenance": _provenance(args.binary, args.model, items, repository),
+        "provenance": _provenance(args.binary, args.model, items, repository,
+                                  tuple(args.also_model)),
         "protocol": {
             "causal": True,
             "callback_samples": 512,

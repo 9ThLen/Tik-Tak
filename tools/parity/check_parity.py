@@ -38,6 +38,13 @@ from tiktak.tracker import track_beats  # noqa: E402
 
 WEIGHTS = ROOT / "models" / "beatnet_model_1.ttw"
 
+# Which BeatNet fold is being checked. The export path is one script for all
+# three checkpoints, so a layout error would show up on any of them — but the
+# *weights* are what the LSTM carries from frame 0 to frame 15000, and a
+# transposition that happens to be harmless for one fold's numbers is not
+# harmless for another's. Each fold that ships gets its own run.
+CHECKPOINT: pathlib.Path | None = None
+
 # The network's own tolerance, and it needs a different number from the ODF's.
 # Two layers of LSTM carry state from the first frame to the last, so a float32
 # rounding difference in frame 0 is still present, slightly rearranged, in frame
@@ -256,13 +263,15 @@ def check_beatnet(binary: pathlib.Path) -> bool | None:
 
     from eval.beatnet_onnx import WEIGHTS_PATH, BeatNet
 
-    if not WEIGHTS_PATH.is_file():
-        print(f"\nskipping BeatNet: the reference needs {WEIGHTS_PATH.name}")
+    checkpoint = CHECKPOINT or WEIGHTS_PATH
+    if not checkpoint.is_file():
+        print(f"\nskipping BeatNet: the reference needs {checkpoint.name}")
         return None
 
     print(f"\ncomparing {binary} against research/eval/beatnet_onnx.py")
+    print(f"weights: {WEIGHTS.name} against {checkpoint.name}")
     print(f"tolerance: {BEATNET_TOLERANCE:.0e} absolute\n")
-    network = BeatNet(WEIGHTS_PATH)
+    network = BeatNet(checkpoint)
 
     # Different capture rates on purpose: 48 kHz and 44.1 kHz resample to the
     # model's 22050 by different ratios, and 22050 itself takes the path where
@@ -422,6 +431,19 @@ def main() -> int:
         help="path to the dump_beatnet executable",
     )
     parser.add_argument(
+        "--beatnet-weights",
+        type=pathlib.Path,
+        help="the exported .ttw the core loads. Defaults to fold 1. The other "
+             "two folds ship as well, and each needs its own run: one export "
+             "script does not make three sets of weights interchangeable",
+    )
+    parser.add_argument(
+        "--beatnet-checkpoint",
+        type=pathlib.Path,
+        help="the PyTorch checkpoint the reference loads. Defaults to the one "
+             "beside --beatnet-weights, which is what pairs them correctly",
+    )
+    parser.add_argument(
         "--beat-this-binary",
         type=pathlib.Path,
         default=ROOT / "tools" / "parity" / "build" / "dump_beat_this_features",
@@ -434,6 +456,14 @@ def main() -> int:
         help="path to the dump_beat_this executable (needs -DTIKTAK_BUILD_ML=ON)",
     )
     args = parser.parse_args()
+
+    global WEIGHTS, CHECKPOINT
+    if args.beatnet_weights:
+        WEIGHTS = args.beatnet_weights
+        CHECKPOINT = args.beatnet_checkpoint or WEIGHTS.with_name(
+            WEIGHTS.stem + "_weights.pt")
+    elif args.beatnet_checkpoint:
+        CHECKPOINT = args.beatnet_checkpoint
 
     missing = [p for p in (args.binary, args.beats_binary) if not p.exists()]
     if missing:

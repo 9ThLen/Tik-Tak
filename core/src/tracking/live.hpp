@@ -109,36 +109,47 @@ struct LiveConfig {
     // is short the width stops being the thing that matters, which is the
     // right way round, because the width is a belief and the window is
     // evidence.
-    double anchor_width_octaves = 0.1;
-
-    // The width to use instead while the filter and the anchor are at
-    // *different* metrical levels. Zero means "no such rule", which is what
-    // ships until the measurement below says otherwise.
     //
-    // The direction is the whole point and it is the opposite of the obvious
-    // one. Faced with a tracker that loses recordings to the octave, the
-    // natural move is to loosen the anchor when the two disagree, on the
-    // grounds that the anchor may be holding the filter back from a real change.
-    // Measured over three corpora with the tracker's own hysteresis, that is
-    // backwards — during the seconds they disagree, the *anchor* is at the
-    // annotated level three to four times as often as the filter:
+    // That sweep only ever compared 0.10 against 0.20, and it chose between
+    // them on F. Both were wrong questions. Read as the share of recordings a
+    // person could use — which is what the two-point sweep could not see, since
+    // F rewards a recording that is mostly right and a metronome is not — the
+    // maximum is an order of magnitude tighter, and it is tighter on both
+    // corpus families at once:
     //
-    //     disagreeing seconds   share   anchor right   filter right   neither
-    //     RWC-Pop                7.5%       61.2%          13.7%       25.1%
-    //     RWC-Genre             14.3%       53.0%          13.4%       33.6%
-    //     GTZAN                 15.3%       50.2%          18.1%       31.7%
+    //     width   GTZAN family          RWC family (unseen, full songs)
+    //             usable  strict    F   usable  strict    F
+    //     0.10    33.80%    ----  .665  12.45%  10.71%  .596
+    //     0.01    34.41%    ----  .664    ----    ----  ----
+    //     0.02    36.22%  35.01%  .683  14.94%  14.69%  .602
+    //     0.03    36.06%  34.06%  .686  14.94%  13.94%  .608
+    //     0.05    35.34%  31.82%  .679  13.94%  11.96%  .607
     //
-    // So a disagreement is evidence against the cloud, not against the anchor.
-    // Siding with the anchor outright would be worth about 3.6 points of
-    // correctly-levelled seconds on RWC-Pop and 4.9 on GTZAN, which bounds what
-    // this parameter can buy; a third of the disagreements are cases where
-    // neither is right and nothing here reaches those.
+    // 1914 recordings across ballroom, GTZAN and SMC; 328 across the five RWC
+    // sets, none of which BeatNet was trained on. `strict` is the same verdict
+    // with acquisition read as "settled at the annotated level and stayed",
+    // which is the reading that cannot be flattered by a fast wrong lock — and
+    // it separates 0.02 from 0.03 where the loose reading ties them, on both
+    // families and in the same direction. The maximum is broad and flat, so
+    // this is 0.02 rather than a claim that 0.025 is worse.
     //
-    // Why a width rather than an override: the filter is not only choosing a
-    // level, it is also placing beats, and an override would discard the phase
-    // it has along with the period. Narrowing the anchor lets the cloud keep
-    // its phase while its period is pulled.
-    double anchor_width_when_split = 0.0;
+    // 0.03 wins F by 0.003 to 0.006 on both. That is the trade this project has
+    // taken before and takes again: a recording that goes from 0.79 to 0.82 is
+    // not a recording anyone gained, and a recording that crosses the usable
+    // threshold is.
+    //
+    // Measured and rejected: making the width *conditional* on the filter and
+    // the anchor sitting at different metrical levels. During the seconds the
+    // two disagree the anchor is at the annotated level three to four times as
+    // often as the filter (RWC-Pop 61.2% against 13.7%, RWC-Genre 53.0/13.4,
+    // GTZAN 50.2/18.1), so a disagreement is evidence against the cloud and
+    // narrowing the anchor there is the right *direction* — the obvious move,
+    // loosening it, is backwards. It is simply not worth a parameter: narrowing
+    // to 0.01 only when split scored 36.10% / .683 on the GTZAN family and
+    // 14.93% / .605 on RWC, which one flat constant matches or beats
+    // everywhere. A third of the disagreements are cases where neither is
+    // right, and no rule phrased in terms of the two of them reaches those.
+    double anchor_width_octaves = 0.02;
 
     // How decided the estimator has to be before its answer is used, as the
     // gap to the best rival at another metrical level.
@@ -157,12 +168,58 @@ struct LiveConfig {
     // one and the answer may not survive a corpus that is not ballroom.
     double anchor_octave_margin = 0.0;
 
+    // What to do when that margin is *not* cleared: drop the anchor, which is
+    // what shipped and what lost, or hold the octave last chosen confidently.
+    //
+    // The distinction is the whole of `eval/PREREGISTERED_octave_freeze.md`.
+    // The failure recorded above is not of *distrusting* a weak margin, it is
+    // of the response: clearing leaves the filter with the fixed prior over
+    // every tempo, which the same note explains is worse than anchoring the
+    // wrong metrical relative. Holding leaves it with one specific octave the
+    // estimator itself was recently sure of.
+    //
+    // Off by default. This is an experimental arm and nothing has accepted it.
+    bool anchor_octave_freeze = false;
+
+    // How long a hold may outlive the confident anchor that set it.
+    //
+    // The objection to holding at all is in live.cpp beside `clearAnchor()` — a
+    // tempo measured in the first chorus must not outlive the evidence for it —
+    // and this bounds that rather than answering it. Four seconds because that
+    // is `MAX_WRONG_OCTAVE_SEC` in the live benchmark: a hold allowed to run
+    // longer than the definition of a wrong-level episode could turn a short
+    // slip into one that counts.
+    //
+    // Measured from the last *confident* anchor and not from the last frame, so
+    // a long stretch of weak margin expires instead of renewing itself.
+    double anchor_freeze_timeout_sec = 4.0;
+
+    // Publish nothing while the margin is weak.
+    //
+    // A diagnostic bound, not a shippable mode: a tracker that says nothing
+    // spends no time at the wrong metrical level, so this arm can only flatter
+    // an episode metric. It exists to say how much of that metric is reachable
+    // by silence alone, so the arms that do speak can be read against it.
+    bool anchor_margin_abstain = false;
+
     // A stream time this far from where the sample count says it should be
     // means the device dropped or repeated a buffer.
     double discontinuity_tolerance_sec = 0.002;
 
     bool valid() const;
 };
+
+// `bpm` moved by whole octaves to the equivalent nearest `held_bpm`.
+//
+// Free and pure so that the octave freeze's one piece of arithmetic can be
+// tested without constructing audio that produces a particular estimator
+// margin. Returns `bpm` unchanged when either is not positive, so a caller
+// with nothing held is never handed a zero or a NaN.
+//
+// "Nearest" is in log tempo, which is the only scale on which half and double
+// are the same distance away: 60 and 240 are both one octave from 120, and on
+// a linear scale 60 is much closer.
+double octaveNearest(double bpm, double held_bpm);
 
 // ------------------------------- what this path is worth to a person using it
 //
@@ -177,9 +234,19 @@ struct LiveConfig {
 //
 //     front end          ballroom*   GTZAN    SMC   median acquire
 //     spectral flux         5.7%     13.4%   1.4%       6 s
-//     BeatNet activation   57.2%     41.1%   3.2%       5 s
+//     BeatNet activation   60.9%     44.5%   3.2%       5 s
 //
 //     * in this model's training set — see below, and do not quote it
+//
+// The row above is at `anchor_width_octaves` 0.02. At the 0.10 that shipped
+// before the sweep beside that field it read 57.2% / 41.1% / 3.2%, and **four
+// experiments below are still at 0.10 and have not been re-run**: the oracle
+// activation, the anchor on/off pair, the roughening sweep, and the seeded
+// ceiling. Each is a contrast between two arms measured against each other at
+// one width, which is what they are cited for and what they are still worth.
+// None of them can be read as an absolute level any more. Everything with an
+// "as it stands" column — the any-level ceiling, the RWC tables, the strict
+// reading — is at 0.02.
 //
 // The third criterion is matched recall and not the ratio of the two beat
 // counts, which is what it was first written as. A tracker can emit exactly as
@@ -191,7 +258,7 @@ struct LiveConfig {
 // corpora — Ballroom, Beatles, Carnatic, GTZAN and Rock Corpus — and ships
 // three models, holding out GTZAN, Ballroom and Rock Corpus respectively;
 // docs/ml-models.md records both. Model 1 holds out GTZAN, so ballroom is in
-// its training set and its 57.2% is *not an independent estimate*. That is
+// its training set and its 60.9% is *not an independent estimate*. That is
 // weaker than saying it memorised those recordings, which nothing here shows,
 // and it is enough: a number measured on training material cannot be quoted as
 // performance whatever produced it. SMC is in none of the five, so its 3.2% is
@@ -201,7 +268,10 @@ struct LiveConfig {
 // An earlier revision averaged all three into "34.4% usable" and a later one
 // wrote the honest headline as 42.6%, which is the *pooled* rate over all
 // 1914 recordings and therefore has ballroom in it too. Both are wrong for the
-// same reason. The headline is **41.1%, GTZAN, per corpus**.
+// same reason. The headline is **44.5%, GTZAN, per corpus** — and 15.0% on
+// RWC, whose recordings are whole songs rather than thirty-second excerpts and
+// which the model never saw. Neither replaces the other: see the RWC table
+// below for why the same tracker scores three times better on one of them.
 //
 // **Acquisition is not the problem, with one caveat.** It was, and the
 // diagnosis chain in research/eval/README.md is about it; it is fixed. The
@@ -251,74 +321,166 @@ struct LiveConfig {
 // outright rather than modelling one press:
 //
 //     usable        ballroom*   GTZAN    SMC
-//     as it stands     57.2%    41.1%   3.2%
-//     any level        59.0%    46.0%   4.6%
+//     as it stands     60.9%    44.5%   3.2%
+//     any level        62.5%    49.2%   4.1%
 //
-// Five points on GTZAN, and of the GTZAN recordings that fail today only 8.3%
-// become usable at another level.
+// Under five points on GTZAN, and of the GTZAN recordings that fail today only
+// 8.5% become usable at another level.
 //
 // **On whole songs it is the other way round, and that reverses the reading.**
 // RWC 2.0 arrived after the numbers above: 328 full-length recordings, 23.4
 // hours, beats for all five collections, and out of `beatnet_model_1`'s five
-// training corpora — so it is held out, correctly aligned (Beat This! scores
+// training corpora — so it is unseen, correctly aligned (Beat This! scores
 // 0.993 on RWC-Pop, which is train-on-test for *it* and therefore an alignment
 // check rather than a score; Harmonix scored 0.490 on the same check and turned
-// out to be displaced), and not made of thirty-second excerpts:
+// out to be displaced), and not made of thirty-second excerpts. Unseen, not
+// held out: no fold of this model was trained with RWC withheld, so it is a
+// corpus outside the training domain rather than a matched twin of GTZAN, and
+// it carries a domain shift as well as an honesty guarantee.
 //
 //     usable            n    as it stands   any level    F    CMLt
-//     RWC-Pop         100        33.0%        56.0%    0.786  0.703
-//     RWC royalty-free 15        33.3%        40.0%    0.618  0.562
-//     RWC-Genre       102        10.8%        21.6%    0.574  0.432
-//     RWC-Jazz         50         6.0%        12.0%    0.523  0.346
-//     RWC-Classical    61         0.0%         1.6%    0.374  0.155
+//     RWC-Pop         100        39.0%        60.0%    0.799  0.724
+//     RWC royalty-free 15        33.3%        40.0%    0.637  0.574
+//     RWC-Genre       102        12.7%        24.5%    0.583  0.454
+//     RWC-Jazz         50         8.0%        14.0%    0.539  0.371
+//     RWC-Classical    61         0.0%         0.0%    0.352  0.149
 //
-// Beat placement on full-length pop is *better* than on GTZAN — F 0.786 against
-// 0.665 — and the recordings are lost to the metrical level instead. The
+// Beat placement on full-length pop is *better* than on GTZAN — F 0.799 against
+// 0.683 — and the recordings are lost to the metrical level instead. The
 // failure list inverts with it: on RWC-Pop the wrong level is a listed failure
-// on 62% of recordings against too-few-beats on 38%, where GTZAN reads 37.7%
-// against 54.3%.
+// on 53% of recordings against too-few-beats on 36%, where GTZAN reads 32.1%
+// against 50.6%.
 //
 // So "a ×2 control in the product would recover little" was true of excerpts and
-// is false of songs: the oracle level is worth 23 points here against 4.9 on
+// is false of songs: the oracle level is worth 21 points here against 4.7 on
 // GTZAN. It remains an oracle over the whole recording and therefore an upper
 // bound on any control a player could be given, not a forecast of one. But the
 // direction of the work follows the corpus that looks like the product, and
 // this one does: a thirty-second excerpt simply does not last long enough to
 // spend four seconds at the wrong level and then be judged on it.
 //
-// Classical at 0.0% and jazz at 6.0% are not a surprise and not the same
+// Classical at 0.0% and jazz at 8.0% are not a surprise and not the same
 // problem; see the note on sparse material below.
 //
 // **How much of that rests on a lock that was not right.** The acquisition
 // criterion asks when confidence first crossed the threshold, not whether the
 // level it locked to was the right one, and on full-length material the two
 // come apart constantly: a recording acquires inside the eight seconds on the
-// strength of a wrong or momentary lock on 43% of RWC-Pop, 52.9% of RWC-Genre
-// and 62% of RWC-Jazz. Read strictly — acquisition means settling at the
+// strength of a wrong or momentary lock on 35% of RWC-Pop, 39.2% of RWC-Genre
+// and 56% of RWC-Jazz. Read strictly — acquisition means settling at the
 // annotated level and holding for four seconds — the headline moves:
 //
 //     usable            as it stands   read strictly
-//     RWC-Pop               33.0%          28.0%
+//     RWC-Pop               39.0%          38.0%
 //     RWC royalty-free      33.3%          26.7%
-//     RWC-Genre             10.8%           8.8%
-//     RWC-Jazz               6.0%           6.0%
+//     RWC-Genre             12.7%          12.7%
+//     RWC-Jazz               8.0%           8.0%
 //
-// Five points on RWC-Pop, which is worth stating and worth keeping in
-// proportion: the false-start *fraction* is 43% but the headline only falls by
-// five, because most recordings with a false start were already failing on
-// something else. Both columns are reported, and the loose one stays the
-// headline so that every number measured before `settled_at` existed remains
-// comparable with the ones after.
+// A point on RWC-Pop, which is worth stating and worth keeping in proportion:
+// the false-start *fraction* is 35% but the headline barely moves, because
+// almost every recording with a false start was already failing on something
+// else. At the 0.10 width the same two columns read 33.0% and 28.0%, so
+// narrowing the anchor bought most of its gain precisely on the recordings the
+// strict reading used to take away. That rules out one way of being fooled —
+// the criterion getting easier — and not the other: 0.02 was chosen by looking
+// at this corpus, so none of these numbers is an out-of-sample estimate of it.
+// See the note on RWC as a development corpus below. Both columns are reported,
+// and the
+// loose one stays the headline so that every number measured before
+// `settled_at` existed remains comparable with the ones after.
+//
+// **We have been measuring on the weakest of the three published folds.**
+// BeatNet ships three checkpoints. Every number in this comment is fold 1, for
+// no better reason than that it was the first one fetched. Averaging all three
+// activations frame by frame — one front end, so they are already synchronised
+// — beats every one of them, and that is the finding. Measured on Harmonix,
+// 581 full-length recordings, out of all three folds' training and never used
+// to choose anything here:
+//
+//     Harmonix, one seam   usable   strict   any level     F
+//     fold 1, which ships   31.7%    27.5%      52.7%    0.803
+//     fold 2                31.2%    25.8%      51.5%    0.797
+//     fold 3                32.5%    25.6%      52.7%    0.787
+//     mean of the three     38.7%    33.0%      60.2%    0.845
+//     max of the three      28.6%    22.2%      41.1%    0.756
+//
+// The mean beats all three folds on both criteria, every comparison significant
+// after correction, the weakest at p .0006. `max` is worse than any fold, so
+// this is not "any pooling helps": what a mean suppresses and a max keeps is one
+// fold being confident and wrong.
+//
+// This was pre-registered before the corpus was looked at, in
+// research/eval/PREREGISTERED_harmonix_ensemble.md, and **two of its four
+// predictions were wrong** — both in the direction of the ensemble being better
+// than expected. One of them matters here: "fold 1 is the weakest of the three"
+// was measured on RWC, where they spread 14.7 / 18.2 / 18.7, and it **does not
+// replicate**. On Harmonix the three sit inside 1.3 points with fold 1 in the
+// middle. The fold ranking was corpus-specific noise. Do not use it, and do not
+// choose a fold on it.
+//
+// The other wrong prediction was that the margin would shrink out of sample,
+// because RWC had chosen the width and the decision to try averaging. It grew
+// slightly, 5.3 points to 5.5. The premise was wrong rather than the
+// measurement: a width chosen on RWC shifts every arm together, so it biases
+// the absolute level and not a fold-against-mean contrast.
+//
+// **RWC is a development corpus, not an independent estimate.** The width above
+// was chosen by looking at it. An earlier revision of this comment argued that
+// averaging "spends no corpus" because the rule consults no scores — wrong, and
+// worth spelling out because it is a tempting mistake: the rule consults
+// nothing, but the decision to apply the rule was made with those numbers in
+// hand. Harmonix is what the claim above rests on. Full tables, paired counts
+// and corrections for both corpora are in research/results/README.md; do not
+// re-derive them here, because two copies of a number is how one goes stale.
+//
+// Nothing here says the ensemble should ship, and one obvious objection to it
+// cannot even be raised yet. "Does averaging hurt the downbeat?" has no answer
+// through this class, because `LiveTracker` has no downbeat input: the network
+// emits three classes, `observe` takes one number, and the bar lines the live
+// benchmark reports come from the offline resolver rather than from the model's
+// downbeat head at all. So the untested part is not a missing column in the
+// activation file — it is a missing consumer, and supplying one is a feature
+// with its own design, not a measurement that could be slotted in here.
+//
+// The other thing not measured is the cost: three networks is three times the
+// compute, roughly 0.03 real-time on this desktop, which says nothing about a
+// phone. That number has to come from the phone.
+//
+// **And that missing consumer is probably the largest lever left.** On the best
+// configuration measured — this width, this ensemble — here is why the 581
+// Harmonix recordings fail, as shares of the whole corpus, so they overlap:
+//
+//     wrong metrical level over 4 s   49.4%
+//     wrong beats (precision)         24.1%
+//     too few beats (recall)          24.1%
+//     slow to acquire                 17.4%
+//
+// The level is the dominant failure by a factor of two, and forgiving it
+// outright takes the corpus from 38.7% usable to 60.2% — twenty-one points, on
+// full-length songs, against under five on GTZAN excerpts, which simply do not
+// last long enough to drift. Every decoder-side attempt on it has been worth a
+// few points at most: narrowing this anchor bought 2.4 to 6.6, and siding with
+// the anchor during a disagreement was bounded at 3.6 to 4.9. That gap between
+// what tuning reaches and what the oracle is worth is the shape of a problem
+// that needs different *evidence*, not a better search over the same evidence.
+//
+// The evidence exists and is discarded. BeatNet emits beat, downbeat and null
+// at 50 fps; `observe` takes the beat channel and the downbeat probability is
+// dropped on the floor. A bar line every four beats is a direct statement about
+// which of half, one and double is the beat — exactly the quantity that fails
+// here. So "give this class a downbeat input" is not only what the ensemble
+// needs before it can ship; on this evidence it is the first thing to try for
+// the octave, and it is the cheapest, because nothing new has to be trained.
 //
 // Why GTZAN's recordings fail, as a share of all 999 of them — a recording can
-// fail several ways at once, so these overlap and do not sum to the 58.9% that
+// fail several ways at once, so these overlap and do not sum to the 55.5% that
 // fail:
 //
-//     too few beats found     54.3%
-//     wrong beats             51.4%
-//     wrong level over 4 s    37.7%
-//     slow to acquire          9.2%
-//     never acquired           0.5%
+//     too few beats found     50.6%
+//     wrong beats             48.4%
+//     wrong level over 4 s    32.1%
+//     slow to acquire          6.7%
+//     never acquired           0.7%
 //
 // The largest is recall: the tracker is not putting beats where the beats are.
 // That is what the count-ratio version of the criterion was hiding, and an
@@ -370,6 +532,8 @@ struct LiveConfig {
 //     told the beats, as shipped      92.7%    54.6%
 //     told the beats, anchor off      95.3%    59.8%
 //
+//                (every row at anchor width 0.10, which shipped then)
+//
 // Whole corpora: 998 GTZAN and 217 SMC, every genre. An earlier revision quoted
 // 92.2% from a subset that took every sixth recording and then the first 150 of
 // those, which stops at reggae and omits the rock genre entirely on a corpus
@@ -399,6 +563,8 @@ struct LiveConfig {
 //     usable          ballroom   GTZAN    SMC   mean F   tracks that switch level
 //     anchor on         57.2%   41.1%   3.2%    0.665           27.2%
 //     anchor off        38.3%   34.3%   2.8%    0.608           46.8%
+//
+//                       (both arms at anchor width 0.10, which shipped then)
 //
 // **Read the GTZAN column and only that one.** It costs 2.6 points of GTZAN
 // recall to buy 6.8 points of usable recordings — a payout between two and three
@@ -497,6 +663,9 @@ struct LiveConfig {
 //     0.02                 56.3%   40.2%   3.2%    0.659
 //     0.08                 40.4%   30.0%   2.3%    0.615
 //
+//                     (all three at anchor width 0.10, which shipped then;
+//                      this table is `roughening_octaves`, a different knob)
+//
 // Eleven points of GTZAN gone, and SMC — the corpus the widening was *for* —
 // worse too, despite gaining thirteen points of oracle recall. The reason is in
 // the paragraph above: 8.7 noise peaks a second at a median height of 0.0018. A
@@ -548,6 +717,8 @@ struct LiveConfig {
 //     seeded with the whole file's tempo   ballroom*   GTZAN   SMC*
 //     no                                     57.4%     42.6%   3.2%
 //     yes                                    56.6%     44.0%   2.8%
+//
+//                        (both arms at anchor width 0.10, which shipped then)
 //
 // A point and a half on GTZAN, and it moves in different directions on
 // different corpora. The same experiment on spectral flux was already
@@ -627,10 +798,33 @@ public:
     // device, not from a workstation.
     LiveTracker(const LiveConfig& config, const ml::BeatNetWeights& weights);
 
+    // Several checkpoints, their activations averaged over one front end.
+    //
+    // BeatNet publishes three, each withholding a different training corpus,
+    // and averaging them is the largest measured improvement available to the
+    // live path that does not require training anything: on 581 full-length
+    // recordings it takes the share with no wrong-level episode from 40.8% to
+    // 50.6%. The averaging and the reasons for it are in ml/beatnet.hpp; the
+    // tracker is unchanged, which is again what makes before and after
+    // comparable.
+    //
+    // **It costs two corpora.** Folds 1, 2 and 3 hold out GTZAN, Ballroom and
+    // Rock Corpus respectively, so an average of all three is train-on-test on
+    // GTZAN and on Ballroom, and neither can be quoted for a tracker built this
+    // way — 1,697 of the 2,760 annotated recordings on the research machine.
+    // A single fold does not have that problem, which is the one thing it still
+    // has going for it. Anyone comparing an averaged tracker against a
+    // published GTZAN number is comparing against a corpus it was trained on.
+    LiveTracker(const LiveConfig& config,
+                const ml::BeatNetWeights* const* weights, std::size_t count);
+
     const LiveConfig& config() const { return config_; }
 
     // True when the learned front end is the one feeding the filter.
     bool usingModel() const { return model_.has_value(); }
+
+    // How many checkpoints that front end averages. Zero when there is none.
+    std::size_t models() const { return model_ ? model_->networks() : 0; }
 
     // Feeds captured audio. `stream_time_sec` is the time of samples[0], in the
     // same clock the shell schedules output in.
@@ -661,7 +855,21 @@ public:
     // what the round trip measured.
     void gateClick(double heard_time_sec);
 
-    BeatEstimate estimate(double now_sec) const { return filter_.estimate(now_sec); }
+    BeatEstimate estimate(double now_sec) const {
+        BeatEstimate out = filter_.estimate(now_sec);
+        // The abstain arm, and the only place it acts. Silence is expressed as
+        // no confidence rather than as a separate flag, because that is what
+        // every consumer already understands — the hysteresis in this class,
+        // the shell's meter, and the benchmark's lock all read this one number,
+        // and a second way of saying "nothing to report" would have to be
+        // taught to all three.
+        //
+        // The tempo is left in place deliberately. A caller that shows the last
+        // known BPM greyed out is showing what the tracker last believed, which
+        // is honest; zeroing it would claim the tempo had been forgotten.
+        if (abstaining()) out.confidence = 0.0;
+        return out;
+    }
 
     // What the autocorrelation over the activation history currently makes of
     // the tempo, whether or not it is being used. Reported separately from
@@ -672,6 +880,12 @@ public:
     ActivationTempoEstimate tempoFromActivation() const {
         return activation_tempo_.estimate();
     }
+
+    // The octave currently being held, or zero when none is. Exposed for the
+    // tests the octave freeze was pre-registered with: a state machine nothing
+    // can observe is a state machine nothing can check, and the alternative is
+    // inferring it from beat times, which conflates this with the filter.
+    double heldOctaveBpm() const { return held_octave_bpm_; }
 
     // Hands out the next beat to play, once, when it comes within
     // `lookahead_sec` of now. True when `beat_sec` was written.
@@ -738,6 +952,14 @@ private:
 
     bool gatedAt(double frame_time_sec) const;
 
+    // Whether the abstain arm is currently withholding output. Reads the last
+    // margin the observer saw rather than asking the estimator again, because
+    // both callers are const and one of them is on the consumer's thread.
+    bool abstaining() const {
+        return config_.anchor_margin_abstain && has_margin_ &&
+               last_octave_margin_ < config_.anchor_octave_margin;
+    }
+
     // Feeds one already-normalised observation to the filter and, in manual
     // mode, to the phase correlator. What process() and observe() share once
     // each has produced a number the filter can use.
@@ -762,6 +984,18 @@ private:
 
     double manual_bpm_ = 0.0;
     bool acquired_ = false;
+
+    // The octave freeze, and nothing else reads these. Zero means nothing is
+    // held, which is not the same as holding zero — before the first confident
+    // anchor the arm has to behave exactly as the baseline, and that is the
+    // state that says so.
+    double held_octave_bpm_ = 0.0;
+    double held_since_sec_ = 0.0;
+    // The last margin the estimator reported, for the abstain arm alone. Kept
+    // rather than re-asked because `estimate()` is const and is called from the
+    // consumer's thread, not from the one that observes.
+    double last_octave_margin_ = 0.0;
+    bool has_margin_ = false;
 
     double origin_sec_ = 0.0;  // stream time of the ODF's sample zero
     std::size_t consumed_ = 0;

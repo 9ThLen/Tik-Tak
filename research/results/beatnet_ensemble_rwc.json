@@ -1,0 +1,7112 @@
+{
+  "provenance": {
+    "utc": "2026-08-04T14:56:50Z",
+    "commit": "04268b261e1812d2f76b4e9c869e4509f76cbe3f",
+    "tree_clean": true,
+    "python": "3.11.15",
+    "platform": "Windows",
+    "binary": {
+      "name": "dump_analysis.exe",
+      "bytes": 975872,
+      "sha256": "e262c97dd713866b9e383223a2329dcda036b9aef92239feba4ec775b78e9c9c"
+    },
+    "model_1": {
+      "name": "beatnet_model_1.ttw",
+      "bytes": 1609332,
+      "sha256": "812ed11af745885127cfb967e7db847c9bdef44b8e2c80c79cf875f790b978f1"
+    },
+    "model_2": {
+      "name": "beatnet_model_2.ttw",
+      "bytes": 1609332,
+      "sha256": "9caec66314cc8487b1662a0020e397341af5c62da7401c23da56c4e94d17c2bb"
+    },
+    "model_3": {
+      "name": "beatnet_model_3.ttw",
+      "bytes": 1609332,
+      "sha256": "b7f460ca851d6810e4c4c8a7cab23665fe26c846d863b931012355a8ab4059bf"
+    },
+    "arms": [
+      "1",
+      "2",
+      "3",
+      "max",
+      "mean"
+    ],
+    "attempted": 328,
+    "dropped": 0,
+    "dropped_detail": []
+  },
+  "fps": 50.0,
+  "by_arm": {
+    "1": {
+      "n": 328,
+      "usable_rate_macro": 0.14681372549019608,
+      "usable_rate_strict_macro": 0.1393137254901961,
+      "usable_rate_any_octave_macro": 0.24612745098039215,
+      "usable_rate_pooled": 0.18292682926829268,
+      "usable_rate_strict_pooled": 0.17073170731707318,
+      "usable_rate_any_octave_pooled": 0.29878048780487804,
+      "f_measure": 0.612734033070321,
+      "cmlt": 0.47856198476862816,
+      "by_corpus": {
+        "rwc-classical": {
+          "n": 61,
+          "usable_rate": 0.0,
+          "usable_rate_strict": 0.0,
+          "usable_rate_any_octave": 0.0,
+          "f_measure": 0.36696591300456505,
+          "cmlt": 0.15942525617261488,
+          "failure_reasons": {
+            "too_few_beats": 0.9836065573770492,
+            "wrong_octave": 0.9836065573770492,
+            "wrong_beats": 0.9672131147540983,
+            "slow_acquisition": 0.16393442622950818
+          }
+        },
+        "rwc-genre": {
+          "n": 102,
+          "usable_rate": 0.13725490196078433,
+          "usable_rate_strict": 0.13725490196078433,
+          "usable_rate_any_octave": 0.27450980392156865,
+          "f_measure": 0.5929711856045522,
+          "cmlt": 0.45574439274861517,
+          "failure_reasons": {
+            "wrong_octave": 0.7745098039215687,
+            "wrong_beats": 0.6666666666666666,
+            "too_few_beats": 0.6078431372549019,
+            "slow_acquisition": 0.20588235294117646
+          }
+        },
+        "rwc-jazz": {
+          "n": 50,
+          "usable_rate": 0.08,
+          "usable_rate_strict": 0.08,
+          "usable_rate_any_octave": 0.14,
+          "f_measure": 0.5481572339353294,
+          "cmlt": 0.3791225983740408,
+          "failure_reasons": {
+            "too_few_beats": 0.84,
+            "wrong_octave": 0.8,
+            "wrong_beats": 0.72,
+            "slow_acquisition": 0.14
+          }
+        },
+        "rwc-pop": {
+          "n": 100,
+          "usable_rate": 0.37,
+          "usable_rate_strict": 0.34,
+          "usable_rate_any_octave": 0.57,
+          "f_measure": 0.8050162663089147,
+          "cmlt": 0.7278430322842188,
+          "failure_reasons": {
+            "wrong_octave": 0.56,
+            "too_few_beats": 0.38,
+            "wrong_beats": 0.31,
+            "slow_acquisition": 0.09
+          }
+        },
+        "rwc-royalty-free": {
+          "n": 15,
+          "usable_rate": 0.3333333333333333,
+          "usable_rate_strict": 0.26666666666666666,
+          "usable_rate_any_octave": 0.4,
+          "f_measure": 0.6799528596309734,
+          "cmlt": 0.601135278006525,
+          "failure_reasons": {
+            "too_few_beats": 0.6,
+            "wrong_beats": 0.5333333333333333,
+            "wrong_octave": 0.5333333333333333,
+            "slow_acquisition": 0.2
+          }
+        }
+      },
+      "tracks": {
+        "rwc-classical/RWC_C001": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C002": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C003": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C004": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C005": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C006": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C007": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C008": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C009": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C010": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C011": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C012": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C013": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C014": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C015": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C016": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C017": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C018": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C019": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C020": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C021": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C022": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023A": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023B": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023C": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023D": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023E": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C024A": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C024B": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C024C": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C025A": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C025B": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C025C": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C025D": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C026": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C027": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C028": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C029": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C030": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C031": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C032": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C033": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C034": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C035A": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C035B": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C035C": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C036": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C037": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C038": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C039": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C040": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C041": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C042": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C043": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C044": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C045": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C046": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C047": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C048": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C049": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C050": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G001": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G002": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G003": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G004": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G005": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G006": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G007": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G008": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G009": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G010": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G011": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G012": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G013": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G014": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G015": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G016": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G017": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G018": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G019": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G020": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G021": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G022": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G023": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G024": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G025": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G026": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G027": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G028": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G029": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G030": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G031": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G032": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G033": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G034": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G035": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G036": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G037": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G038": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G039": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G040": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G041": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G042": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G043": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G044": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G045": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G046": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G047": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G048": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G049": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G050": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G051": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G052": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G053": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G054": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G055": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G056": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G057": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G058A": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G058B": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G058C": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G059": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G060": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G061": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G062": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G063": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G064": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G065": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G066": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G067": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G068": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G069": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G070": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G071": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G072": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G073": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G074": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G075": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G076": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G077": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G078": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G079": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G080": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G081": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G082": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G083": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G084": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G085": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G086": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G087": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G088": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G089": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G090": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G091": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G092": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G093": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G094": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G095": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G096": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G097": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G098": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G099": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G100": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J001": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J002": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J003": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J004": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J005": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J006": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J007": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J008": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J009": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J010": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J011": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J012": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J013": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J014": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J015": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J016": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J017": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J018": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J019": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J020": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J021": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J022": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J023": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J024": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J025": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J026": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J027": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J028": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J029": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J030": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J031": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J032": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J033": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J034": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J035": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J036": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J037": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J038": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J039": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J040": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J041": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J042": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J043": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J044": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J045": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J046": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J047": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J048": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J049": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J050": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P001": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P002": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P003": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P004": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P005": [
+          true,
+          false
+        ],
+        "rwc-pop/RWC_P006": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P007": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P008": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P009": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P010": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P011": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P012": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P013": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P014": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P015": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P016": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P017": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P018": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P019": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P020": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P021": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P022": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P023": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P024": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P025": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P026": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P027": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P028": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P029": [
+          true,
+          false
+        ],
+        "rwc-pop/RWC_P030": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P031": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P032": [
+          true,
+          false
+        ],
+        "rwc-pop/RWC_P033": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P034": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P035": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P036": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P037": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P038": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P039": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P040": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P041": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P042": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P043": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P044": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P045": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P046": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P047": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P048": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P049": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P050": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P051": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P052": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P053": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P054": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P055": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P056": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P057": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P058": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P059": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P060": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P061": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P062": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P063": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P064": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P065": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P066": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P067": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P068": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P069": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P070": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P071": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P072": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P073": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P074": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P075": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P076": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P077": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P078": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P079": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P080": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P081": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P082": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P083": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P084": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P085": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P086": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P087": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P088": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P089": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P090": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P091": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P092": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P093": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P094": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P095": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P096": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P097": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P098": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P099": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P100": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R001": [
+          true,
+          true
+        ],
+        "rwc-royalty-free/RWC_R002": [
+          true,
+          true
+        ],
+        "rwc-royalty-free/RWC_R003": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R004": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R005": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R006": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R007": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R008": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R009": [
+          true,
+          true
+        ],
+        "rwc-royalty-free/RWC_R010": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R011": [
+          true,
+          true
+        ],
+        "rwc-royalty-free/RWC_R012": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R013": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R014": [
+          true,
+          false
+        ],
+        "rwc-royalty-free/RWC_R015": [
+          false,
+          false
+        ]
+      }
+    },
+    "2": {
+      "n": 328,
+      "usable_rate_macro": 0.18151960784313725,
+      "usable_rate_strict_macro": 0.16156862745098038,
+      "usable_rate_any_octave_macro": 0.2926767920282867,
+      "usable_rate_pooled": 0.21646341463414634,
+      "usable_rate_strict_pooled": 0.19207317073170732,
+      "usable_rate_any_octave_pooled": 0.34146341463414637,
+      "f_measure": 0.6238191947507251,
+      "cmlt": 0.47760511692798513,
+      "by_corpus": {
+        "rwc-classical": {
+          "n": 61,
+          "usable_rate": 0.0,
+          "usable_rate_strict": 0.0,
+          "usable_rate_any_octave": 0.01639344262295082,
+          "f_measure": 0.3916271977599488,
+          "cmlt": 0.1413251861961148,
+          "failure_reasons": {
+            "wrong_beats": 1.0,
+            "wrong_octave": 0.9836065573770492,
+            "too_few_beats": 0.9672131147540983,
+            "slow_acquisition": 0.09836065573770492
+          }
+        },
+        "rwc-genre": {
+          "n": 102,
+          "usable_rate": 0.19607843137254902,
+          "usable_rate_strict": 0.18627450980392157,
+          "usable_rate_any_octave": 0.28431372549019607,
+          "f_measure": 0.5931453893565958,
+          "cmlt": 0.45560929602213834,
+          "failure_reasons": {
+            "wrong_octave": 0.7156862745098039,
+            "wrong_beats": 0.6470588235294118,
+            "too_few_beats": 0.6470588235294118,
+            "slow_acquisition": 0.06862745098039216
+          }
+        },
+        "rwc-jazz": {
+          "n": 50,
+          "usable_rate": 0.12,
+          "usable_rate_strict": 0.12,
+          "usable_rate_any_octave": 0.22,
+          "f_measure": 0.5773666328222745,
+          "cmlt": 0.41700521865539186,
+          "failure_reasons": {
+            "wrong_octave": 0.84,
+            "too_few_beats": 0.76,
+            "wrong_beats": 0.62,
+            "slow_acquisition": 0.04
+          }
+        },
+        "rwc-pop": {
+          "n": 100,
+          "usable_rate": 0.41,
+          "usable_rate_strict": 0.34,
+          "usable_rate_any_octave": 0.65,
+          "f_measure": 0.8087559630578279,
+          "cmlt": 0.7201780577747382,
+          "failure_reasons": {
+            "wrong_octave": 0.56,
+            "too_few_beats": 0.3,
+            "wrong_beats": 0.27,
+            "slow_acquisition": 0.07
+          }
+        },
+        "rwc-royalty-free": {
+          "n": 15,
+          "usable_rate": 0.26666666666666666,
+          "usable_rate_strict": 0.26666666666666666,
+          "usable_rate_any_octave": 0.4,
+          "f_measure": 0.6985786102407789,
+          "cmlt": 0.5795618059943064,
+          "failure_reasons": {
+            "wrong_octave": 0.6,
+            "wrong_beats": 0.5333333333333333,
+            "too_few_beats": 0.5333333333333333,
+            "slow_acquisition": 0.13333333333333333
+          }
+        }
+      },
+      "tracks": {
+        "rwc-classical/RWC_C001": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C002": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C003": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C004": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C005": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C006": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C007": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C008": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C009": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C010": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C011": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C012": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C013": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C014": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C015": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C016": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C017": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C018": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C019": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C020": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C021": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C022": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023A": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023B": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023C": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023D": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023E": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C024A": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C024B": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C024C": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C025A": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C025B": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C025C": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C025D": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C026": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C027": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C028": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C029": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C030": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C031": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C032": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C033": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C034": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C035A": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C035B": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C035C": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C036": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C037": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C038": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C039": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C040": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C041": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C042": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C043": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C044": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C045": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C046": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C047": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C048": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C049": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C050": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G001": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G002": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G003": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G004": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G005": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G006": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G007": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G008": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G009": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G010": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G011": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G012": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G013": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G014": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G015": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G016": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G017": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G018": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G019": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G020": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G021": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G022": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G023": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G024": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G025": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G026": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G027": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G028": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G029": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G030": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G031": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G032": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G033": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G034": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G035": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G036": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G037": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G038": [
+          true,
+          false
+        ],
+        "rwc-genre/RWC_G039": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G040": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G041": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G042": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G043": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G044": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G045": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G046": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G047": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G048": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G049": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G050": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G051": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G052": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G053": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G054": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G055": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G056": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G057": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G058A": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G058B": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G058C": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G059": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G060": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G061": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G062": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G063": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G064": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G065": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G066": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G067": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G068": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G069": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G070": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G071": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G072": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G073": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G074": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G075": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G076": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G077": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G078": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G079": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G080": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G081": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G082": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G083": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G084": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G085": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G086": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G087": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G088": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G089": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G090": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G091": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G092": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G093": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G094": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G095": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G096": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G097": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G098": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G099": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G100": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J001": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J002": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J003": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J004": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J005": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J006": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J007": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J008": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J009": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J010": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J011": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J012": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J013": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J014": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J015": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J016": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J017": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J018": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J019": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J020": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J021": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J022": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J023": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J024": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J025": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J026": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J027": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J028": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J029": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J030": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J031": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J032": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J033": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J034": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J035": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J036": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J037": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J038": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J039": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J040": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J041": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J042": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J043": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J044": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J045": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J046": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J047": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J048": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J049": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J050": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P001": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P002": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P003": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P004": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P005": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P006": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P007": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P008": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P009": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P010": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P011": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P012": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P013": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P014": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P015": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P016": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P017": [
+          true,
+          false
+        ],
+        "rwc-pop/RWC_P018": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P019": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P020": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P021": [
+          true,
+          false
+        ],
+        "rwc-pop/RWC_P022": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P023": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P024": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P025": [
+          true,
+          false
+        ],
+        "rwc-pop/RWC_P026": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P027": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P028": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P029": [
+          true,
+          false
+        ],
+        "rwc-pop/RWC_P030": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P031": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P032": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P033": [
+          true,
+          false
+        ],
+        "rwc-pop/RWC_P034": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P035": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P036": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P037": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P038": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P039": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P040": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P041": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P042": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P043": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P044": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P045": [
+          true,
+          false
+        ],
+        "rwc-pop/RWC_P046": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P047": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P048": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P049": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P050": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P051": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P052": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P053": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P054": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P055": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P056": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P057": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P058": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P059": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P060": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P061": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P062": [
+          true,
+          false
+        ],
+        "rwc-pop/RWC_P063": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P064": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P065": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P066": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P067": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P068": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P069": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P070": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P071": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P072": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P073": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P074": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P075": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P076": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P077": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P078": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P079": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P080": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P081": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P082": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P083": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P084": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P085": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P086": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P087": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P088": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P089": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P090": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P091": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P092": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P093": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P094": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P095": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P096": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P097": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P098": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P099": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P100": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R001": [
+          true,
+          true
+        ],
+        "rwc-royalty-free/RWC_R002": [
+          true,
+          true
+        ],
+        "rwc-royalty-free/RWC_R003": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R004": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R005": [
+          true,
+          true
+        ],
+        "rwc-royalty-free/RWC_R006": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R007": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R008": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R009": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R010": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R011": [
+          true,
+          true
+        ],
+        "rwc-royalty-free/RWC_R012": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R013": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R014": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R015": [
+          false,
+          false
+        ]
+      }
+    },
+    "3": {
+      "n": 328,
+      "usable_rate_macro": 0.18661764705882353,
+      "usable_rate_strict_macro": 0.16421568627450983,
+      "usable_rate_any_octave_macro": 0.2885294117647059,
+      "usable_rate_pooled": 0.21951219512195122,
+      "usable_rate_strict_pooled": 0.19207317073170732,
+      "usable_rate_any_octave_pooled": 0.3445121951219512,
+      "f_measure": 0.611974558183539,
+      "cmlt": 0.47370510745239564,
+      "by_corpus": {
+        "rwc-classical": {
+          "n": 61,
+          "usable_rate": 0.0,
+          "usable_rate_strict": 0.0,
+          "usable_rate_any_octave": 0.0,
+          "f_measure": 0.3590750888474428,
+          "cmlt": 0.13647070628177999,
+          "failure_reasons": {
+            "wrong_beats": 0.9836065573770492,
+            "too_few_beats": 0.9836065573770492,
+            "wrong_octave": 0.9836065573770492,
+            "slow_acquisition": 0.03278688524590164
+          }
+        },
+        "rwc-genre": {
+          "n": 102,
+          "usable_rate": 0.17647058823529413,
+          "usable_rate_strict": 0.1568627450980392,
+          "usable_rate_any_octave": 0.29411764705882354,
+          "f_measure": 0.5860344778304915,
+          "cmlt": 0.4511748367266178,
+          "failure_reasons": {
+            "wrong_octave": 0.7352941176470589,
+            "too_few_beats": 0.6764705882352942,
+            "wrong_beats": 0.6666666666666666,
+            "slow_acquisition": 0.049019607843137254
+          }
+        },
+        "rwc-jazz": {
+          "n": 50,
+          "usable_rate": 0.16,
+          "usable_rate_strict": 0.16,
+          "usable_rate_any_octave": 0.2,
+          "f_measure": 0.5583254738705703,
+          "cmlt": 0.39204305600273237,
+          "failure_reasons": {
+            "wrong_octave": 0.8,
+            "too_few_beats": 0.78,
+            "wrong_beats": 0.68,
+            "slow_acquisition": 0.1
+          }
+        },
+        "rwc-pop": {
+          "n": 100,
+          "usable_rate": 0.41,
+          "usable_rate_strict": 0.34,
+          "usable_rate_any_octave": 0.66,
+          "f_measure": 0.8156141661273582,
+          "cmlt": 0.7284797595397682,
+          "failure_reasons": {
+            "wrong_octave": 0.56,
+            "too_few_beats": 0.31,
+            "wrong_beats": 0.26,
+            "slow_acquisition": 0.04
+          }
+        },
+        "rwc-royalty-free": {
+          "n": 15,
+          "usable_rate": 0.3333333333333333,
+          "usable_rate_strict": 0.3333333333333333,
+          "usable_rate_any_octave": 0.4666666666666667,
+          "f_measure": 0.6380578413021532,
+          "cmlt": 0.5720400040645823,
+          "failure_reasons": {
+            "wrong_octave": 0.6,
+            "wrong_beats": 0.5333333333333333,
+            "too_few_beats": 0.5333333333333333
+          }
+        }
+      },
+      "tracks": {
+        "rwc-classical/RWC_C001": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C002": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C003": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C004": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C005": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C006": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C007": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C008": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C009": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C010": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C011": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C012": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C013": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C014": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C015": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C016": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C017": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C018": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C019": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C020": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C021": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C022": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023A": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023B": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023C": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023D": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023E": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C024A": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C024B": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C024C": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C025A": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C025B": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C025C": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C025D": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C026": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C027": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C028": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C029": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C030": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C031": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C032": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C033": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C034": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C035A": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C035B": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C035C": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C036": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C037": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C038": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C039": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C040": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C041": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C042": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C043": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C044": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C045": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C046": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C047": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C048": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C049": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C050": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G001": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G002": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G003": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G004": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G005": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G006": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G007": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G008": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G009": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G010": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G011": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G012": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G013": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G014": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G015": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G016": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G017": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G018": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G019": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G020": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G021": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G022": [
+          true,
+          false
+        ],
+        "rwc-genre/RWC_G023": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G024": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G025": [
+          true,
+          false
+        ],
+        "rwc-genre/RWC_G026": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G027": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G028": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G029": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G030": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G031": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G032": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G033": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G034": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G035": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G036": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G037": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G038": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G039": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G040": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G041": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G042": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G043": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G044": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G045": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G046": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G047": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G048": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G049": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G050": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G051": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G052": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G053": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G054": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G055": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G056": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G057": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G058A": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G058B": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G058C": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G059": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G060": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G061": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G062": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G063": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G064": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G065": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G066": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G067": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G068": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G069": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G070": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G071": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G072": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G073": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G074": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G075": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G076": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G077": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G078": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G079": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G080": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G081": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G082": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G083": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G084": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G085": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G086": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G087": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G088": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G089": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G090": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G091": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G092": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G093": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G094": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G095": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G096": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G097": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G098": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G099": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G100": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J001": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J002": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J003": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J004": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J005": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J006": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J007": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J008": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J009": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J010": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J011": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J012": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J013": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J014": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J015": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J016": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J017": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J018": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J019": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J020": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J021": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J022": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J023": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J024": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J025": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J026": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J027": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J028": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J029": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J030": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J031": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J032": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J033": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J034": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J035": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J036": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J037": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J038": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J039": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J040": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J041": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J042": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J043": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J044": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J045": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J046": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J047": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J048": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J049": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J050": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P001": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P002": [
+          true,
+          false
+        ],
+        "rwc-pop/RWC_P003": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P004": [
+          true,
+          false
+        ],
+        "rwc-pop/RWC_P005": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P006": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P007": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P008": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P009": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P010": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P011": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P012": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P013": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P014": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P015": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P016": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P017": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P018": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P019": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P020": [
+          true,
+          false
+        ],
+        "rwc-pop/RWC_P021": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P022": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P023": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P024": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P025": [
+          true,
+          false
+        ],
+        "rwc-pop/RWC_P026": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P027": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P028": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P029": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P030": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P031": [
+          true,
+          false
+        ],
+        "rwc-pop/RWC_P032": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P033": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P034": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P035": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P036": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P037": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P038": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P039": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P040": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P041": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P042": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P043": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P044": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P045": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P046": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P047": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P048": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P049": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P050": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P051": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P052": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P053": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P054": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P055": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P056": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P057": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P058": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P059": [
+          true,
+          false
+        ],
+        "rwc-pop/RWC_P060": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P061": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P062": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P063": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P064": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P065": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P066": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P067": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P068": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P069": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P070": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P071": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P072": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P073": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P074": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P075": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P076": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P077": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P078": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P079": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P080": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P081": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P082": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P083": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P084": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P085": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P086": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P087": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P088": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P089": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P090": [
+          true,
+          false
+        ],
+        "rwc-pop/RWC_P091": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P092": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P093": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P094": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P095": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P096": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P097": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P098": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P099": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P100": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R001": [
+          true,
+          true
+        ],
+        "rwc-royalty-free/RWC_R002": [
+          true,
+          true
+        ],
+        "rwc-royalty-free/RWC_R003": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R004": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R005": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R006": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R007": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R008": [
+          true,
+          true
+        ],
+        "rwc-royalty-free/RWC_R009": [
+          true,
+          true
+        ],
+        "rwc-royalty-free/RWC_R010": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R011": [
+          true,
+          true
+        ],
+        "rwc-royalty-free/RWC_R012": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R013": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R014": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R015": [
+          false,
+          false
+        ]
+      }
+    },
+    "mean": {
+      "n": 328,
+      "usable_rate_macro": 0.20647058823529413,
+      "usable_rate_strict_macro": 0.19151960784313726,
+      "usable_rate_any_octave_macro": 0.337431693989071,
+      "usable_rate_pooled": 0.23780487804878048,
+      "usable_rate_strict_pooled": 0.21951219512195122,
+      "usable_rate_any_octave_pooled": 0.38414634146341464,
+      "f_measure": 0.6499190443083831,
+      "cmlt": 0.5099671543748527,
+      "by_corpus": {
+        "rwc-classical": {
+          "n": 61,
+          "usable_rate": 0.0,
+          "usable_rate_strict": 0.0,
+          "usable_rate_any_octave": 0.01639344262295082,
+          "f_measure": 0.39622185796686954,
+          "cmlt": 0.15952399250620808,
+          "failure_reasons": {
+            "wrong_octave": 0.9836065573770492,
+            "too_few_beats": 0.9672131147540983,
+            "wrong_beats": 0.9672131147540983,
+            "slow_acquisition": 0.08196721311475409
+          }
+        },
+        "rwc-genre": {
+          "n": 102,
+          "usable_rate": 0.20588235294117646,
+          "usable_rate_strict": 0.19607843137254902,
+          "usable_rate_any_octave": 0.3333333333333333,
+          "f_measure": 0.6238418411219286,
+          "cmlt": 0.4882345089600264,
+          "failure_reasons": {
+            "wrong_octave": 0.696078431372549,
+            "wrong_beats": 0.5882352941176471,
+            "too_few_beats": 0.5588235294117647,
+            "slow_acquisition": 0.12745098039215685
+          }
+        },
+        "rwc-jazz": {
+          "n": 50,
+          "usable_rate": 0.18,
+          "usable_rate_strict": 0.18,
+          "usable_rate_any_octave": 0.32,
+          "f_measure": 0.6078725368924202,
+          "cmlt": 0.4452898002377058,
+          "failure_reasons": {
+            "wrong_octave": 0.76,
+            "too_few_beats": 0.72,
+            "wrong_beats": 0.6,
+            "slow_acquisition": 0.18
+          }
+        },
+        "rwc-pop": {
+          "n": 100,
+          "usable_rate": 0.44,
+          "usable_rate_strict": 0.39,
+          "usable_rate_any_octave": 0.68,
+          "f_measure": 0.8449544828579134,
+          "cmlt": 0.7618423553919562,
+          "failure_reasons": {
+            "wrong_octave": 0.51,
+            "wrong_beats": 0.24,
+            "too_few_beats": 0.22,
+            "slow_acquisition": 0.08
+          }
+        },
+        "rwc-royalty-free": {
+          "n": 15,
+          "usable_rate": 0.26666666666666666,
+          "usable_rate_strict": 0.26666666666666666,
+          "usable_rate_any_octave": 0.4666666666666667,
+          "f_measure": 0.6988646848214354,
+          "cmlt": 0.6193078418046285,
+          "failure_reasons": {
+            "wrong_beats": 0.5333333333333333,
+            "too_few_beats": 0.5333333333333333,
+            "wrong_octave": 0.5333333333333333,
+            "slow_acquisition": 0.2
+          }
+        }
+      },
+      "tracks": {
+        "rwc-classical/RWC_C001": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C002": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C003": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C004": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C005": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C006": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C007": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C008": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C009": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C010": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C011": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C012": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C013": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C014": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C015": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C016": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C017": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C018": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C019": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C020": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C021": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C022": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023A": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023B": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023C": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023D": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023E": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C024A": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C024B": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C024C": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C025A": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C025B": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C025C": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C025D": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C026": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C027": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C028": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C029": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C030": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C031": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C032": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C033": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C034": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C035A": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C035B": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C035C": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C036": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C037": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C038": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C039": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C040": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C041": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C042": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C043": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C044": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C045": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C046": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C047": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C048": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C049": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C050": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G001": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G002": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G003": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G004": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G005": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G006": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G007": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G008": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G009": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G010": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G011": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G012": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G013": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G014": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G015": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G016": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G017": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G018": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G019": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G020": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G021": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G022": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G023": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G024": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G025": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G026": [
+          true,
+          false
+        ],
+        "rwc-genre/RWC_G027": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G028": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G029": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G030": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G031": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G032": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G033": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G034": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G035": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G036": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G037": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G038": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G039": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G040": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G041": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G042": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G043": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G044": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G045": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G046": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G047": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G048": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G049": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G050": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G051": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G052": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G053": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G054": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G055": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G056": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G057": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G058A": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G058B": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G058C": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G059": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G060": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G061": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G062": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G063": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G064": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G065": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G066": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G067": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G068": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G069": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G070": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G071": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G072": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G073": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G074": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G075": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G076": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G077": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G078": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G079": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G080": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G081": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G082": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G083": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G084": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G085": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G086": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G087": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G088": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G089": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G090": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G091": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G092": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G093": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G094": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G095": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G096": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G097": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G098": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G099": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G100": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J001": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J002": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J003": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J004": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J005": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J006": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J007": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J008": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J009": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J010": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J011": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J012": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J013": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J014": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J015": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J016": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J017": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J018": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J019": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J020": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J021": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J022": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J023": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J024": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J025": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J026": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J027": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J028": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J029": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J030": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J031": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J032": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J033": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J034": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J035": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J036": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J037": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J038": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J039": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J040": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J041": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J042": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J043": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J044": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J045": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J046": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J047": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J048": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J049": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J050": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P001": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P002": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P003": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P004": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P005": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P006": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P007": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P008": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P009": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P010": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P011": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P012": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P013": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P014": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P015": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P016": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P017": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P018": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P019": [
+          true,
+          false
+        ],
+        "rwc-pop/RWC_P020": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P021": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P022": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P023": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P024": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P025": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P026": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P027": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P028": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P029": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P030": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P031": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P032": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P033": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P034": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P035": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P036": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P037": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P038": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P039": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P040": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P041": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P042": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P043": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P044": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P045": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P046": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P047": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P048": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P049": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P050": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P051": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P052": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P053": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P054": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P055": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P056": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P057": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P058": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P059": [
+          true,
+          false
+        ],
+        "rwc-pop/RWC_P060": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P061": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P062": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P063": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P064": [
+          true,
+          false
+        ],
+        "rwc-pop/RWC_P065": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P066": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P067": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P068": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P069": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P070": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P071": [
+          true,
+          false
+        ],
+        "rwc-pop/RWC_P072": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P073": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P074": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P075": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P076": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P077": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P078": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P079": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P080": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P081": [
+          true,
+          false
+        ],
+        "rwc-pop/RWC_P082": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P083": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P084": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P085": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P086": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P087": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P088": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P089": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P090": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P091": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P092": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P093": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P094": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P095": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P096": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P097": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P098": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P099": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P100": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R001": [
+          true,
+          true
+        ],
+        "rwc-royalty-free/RWC_R002": [
+          true,
+          true
+        ],
+        "rwc-royalty-free/RWC_R003": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R004": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R005": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R006": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R007": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R008": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R009": [
+          true,
+          true
+        ],
+        "rwc-royalty-free/RWC_R010": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R011": [
+          true,
+          true
+        ],
+        "rwc-royalty-free/RWC_R012": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R013": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R014": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R015": [
+          false,
+          false
+        ]
+      }
+    },
+    "max": {
+      "n": 328,
+      "usable_rate_macro": 0.15176470588235294,
+      "usable_rate_strict_macro": 0.1443627450980392,
+      "usable_rate_any_octave_macro": 0.21911764705882353,
+      "usable_rate_pooled": 0.18902439024390244,
+      "usable_rate_strict_pooled": 0.17682926829268292,
+      "usable_rate_any_octave_pooled": 0.27134146341463417,
+      "f_measure": 0.5898690127364565,
+      "cmlt": 0.4286442056903457,
+      "by_corpus": {
+        "rwc-classical": {
+          "n": 61,
+          "usable_rate": 0.0,
+          "usable_rate_strict": 0.0,
+          "usable_rate_any_octave": 0.0,
+          "f_measure": 0.36954284418474964,
+          "cmlt": 0.12919116865776667,
+          "failure_reasons": {
+            "wrong_beats": 1.0,
+            "wrong_octave": 0.9836065573770492,
+            "too_few_beats": 0.9672131147540983,
+            "slow_acquisition": 0.13114754098360656
+          }
+        },
+        "rwc-genre": {
+          "n": 102,
+          "usable_rate": 0.14705882352941177,
+          "usable_rate_strict": 0.12745098039215685,
+          "usable_rate_any_octave": 0.17647058823529413,
+          "f_measure": 0.5492197641991591,
+          "cmlt": 0.3812212400192305,
+          "failure_reasons": {
+            "wrong_beats": 0.7647058823529411,
+            "wrong_octave": 0.7156862745098039,
+            "too_few_beats": 0.7058823529411765,
+            "slow_acquisition": 0.14705882352941177
+          }
+        },
+        "rwc-jazz": {
+          "n": 50,
+          "usable_rate": 0.08,
+          "usable_rate_strict": 0.08,
+          "usable_rate_any_octave": 0.1,
+          "f_measure": 0.5333053413907456,
+          "cmlt": 0.3520026524048406,
+          "failure_reasons": {
+            "wrong_beats": 0.86,
+            "too_few_beats": 0.86,
+            "wrong_octave": 0.74,
+            "slow_acquisition": 0.14
+          }
+        },
+        "rwc-pop": {
+          "n": 100,
+          "usable_rate": 0.38,
+          "usable_rate_strict": 0.37,
+          "usable_rate_any_octave": 0.6,
+          "f_measure": 0.7861218857216753,
+          "cmlt": 0.6812281433155024,
+          "failure_reasons": {
+            "wrong_octave": 0.55,
+            "wrong_beats": 0.36,
+            "too_few_beats": 0.31,
+            "slow_acquisition": 0.07
+          }
+        },
+        "rwc-royalty-free": {
+          "n": 15,
+          "usable_rate": 0.3333333333333333,
+          "usable_rate_strict": 0.26666666666666666,
+          "usable_rate_any_octave": 0.4,
+          "f_measure": 0.6424700728179337,
+          "cmlt": 0.540474982970389,
+          "failure_reasons": {
+            "wrong_beats": 0.6,
+            "too_few_beats": 0.5333333333333333,
+            "wrong_octave": 0.4666666666666667,
+            "slow_acquisition": 0.13333333333333333
+          }
+        }
+      },
+      "tracks": {
+        "rwc-classical/RWC_C001": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C002": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C003": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C004": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C005": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C006": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C007": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C008": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C009": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C010": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C011": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C012": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C013": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C014": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C015": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C016": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C017": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C018": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C019": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C020": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C021": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C022": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023A": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023B": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023C": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023D": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C023E": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C024A": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C024B": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C024C": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C025A": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C025B": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C025C": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C025D": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C026": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C027": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C028": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C029": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C030": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C031": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C032": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C033": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C034": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C035A": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C035B": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C035C": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C036": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C037": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C038": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C039": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C040": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C041": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C042": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C043": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C044": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C045": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C046": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C047": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C048": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C049": [
+          false,
+          false
+        ],
+        "rwc-classical/RWC_C050": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G001": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G002": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G003": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G004": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G005": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G006": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G007": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G008": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G009": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G010": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G011": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G012": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G013": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G014": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G015": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G016": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G017": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G018": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G019": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G020": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G021": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G022": [
+          true,
+          false
+        ],
+        "rwc-genre/RWC_G023": [
+          true,
+          false
+        ],
+        "rwc-genre/RWC_G024": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G025": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G026": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G027": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G028": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G029": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G030": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G031": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G032": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G033": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G034": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G035": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G036": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G037": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G038": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G039": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G040": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G041": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G042": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G043": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G044": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G045": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G046": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G047": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G048": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G049": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G050": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G051": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G052": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G053": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G054": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G055": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G056": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G057": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G058A": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G058B": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G058C": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G059": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G060": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G061": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G062": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G063": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G064": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G065": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G066": [
+          true,
+          true
+        ],
+        "rwc-genre/RWC_G067": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G068": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G069": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G070": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G071": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G072": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G073": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G074": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G075": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G076": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G077": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G078": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G079": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G080": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G081": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G082": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G083": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G084": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G085": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G086": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G087": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G088": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G089": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G090": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G091": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G092": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G093": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G094": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G095": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G096": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G097": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G098": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G099": [
+          false,
+          false
+        ],
+        "rwc-genre/RWC_G100": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J001": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J002": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J003": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J004": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J005": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J006": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J007": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J008": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J009": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J010": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J011": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J012": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J013": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J014": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J015": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J016": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J017": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J018": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J019": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J020": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J021": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J022": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J023": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J024": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J025": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J026": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J027": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J028": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J029": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J030": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J031": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J032": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J033": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J034": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J035": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J036": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J037": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J038": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J039": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J040": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J041": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J042": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J043": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J044": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J045": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J046": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J047": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J048": [
+          true,
+          true
+        ],
+        "rwc-jazz/RWC_J049": [
+          false,
+          false
+        ],
+        "rwc-jazz/RWC_J050": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P001": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P002": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P003": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P004": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P005": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P006": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P007": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P008": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P009": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P010": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P011": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P012": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P013": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P014": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P015": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P016": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P017": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P018": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P019": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P020": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P021": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P022": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P023": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P024": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P025": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P026": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P027": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P028": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P029": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P030": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P031": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P032": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P033": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P034": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P035": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P036": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P037": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P038": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P039": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P040": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P041": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P042": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P043": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P044": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P045": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P046": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P047": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P048": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P049": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P050": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P051": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P052": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P053": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P054": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P055": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P056": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P057": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P058": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P059": [
+          true,
+          false
+        ],
+        "rwc-pop/RWC_P060": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P061": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P062": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P063": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P064": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P065": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P066": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P067": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P068": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P069": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P070": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P071": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P072": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P073": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P074": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P075": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P076": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P077": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P078": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P079": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P080": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P081": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P082": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P083": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P084": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P085": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P086": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P087": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P088": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P089": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P090": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P091": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P092": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P093": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P094": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P095": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P096": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P097": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P098": [
+          true,
+          true
+        ],
+        "rwc-pop/RWC_P099": [
+          false,
+          false
+        ],
+        "rwc-pop/RWC_P100": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R001": [
+          true,
+          true
+        ],
+        "rwc-royalty-free/RWC_R002": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R003": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R004": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R005": [
+          true,
+          false
+        ],
+        "rwc-royalty-free/RWC_R006": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R007": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R008": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R009": [
+          true,
+          true
+        ],
+        "rwc-royalty-free/RWC_R010": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R011": [
+          true,
+          true
+        ],
+        "rwc-royalty-free/RWC_R012": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R013": [
+          false,
+          false
+        ],
+        "rwc-royalty-free/RWC_R014": [
+          true,
+          true
+        ],
+        "rwc-royalty-free/RWC_R015": [
+          false,
+          false
+        ]
+      }
+    }
+  },
+  "paired": {
+    "family_size": 8,
+    "correction": "Holm-Bonferroni over every comparison in this table",
+    "comparisons": [
+      {
+        "against": "1",
+        "criterion": "usable",
+        "n": 328,
+        "mean_wins": 25,
+        "mean_loses": 7,
+        "p": 0.0021024015732109547,
+        "p_holm": 0.016819212585687637,
+        "significant_at_05": true
+      },
+      {
+        "against": "1",
+        "criterion": "usable, strictly",
+        "n": 328,
+        "mean_wins": 25,
+        "mean_loses": 9,
+        "p": 0.00904118549078703,
+        "p_holm": 0.0632882984355092,
+        "significant_at_05": false
+      },
+      {
+        "against": "max",
+        "criterion": "usable",
+        "n": 328,
+        "mean_wins": 25,
+        "mean_loses": 9,
+        "p": 0.00904118549078703,
+        "p_holm": 0.0632882984355092,
+        "significant_at_05": false
+      },
+      {
+        "against": "max",
+        "criterion": "usable, strictly",
+        "n": 328,
+        "mean_wins": 23,
+        "mean_loses": 9,
+        "p": 0.020061607006937265,
+        "p_holm": 0.10030803503468633,
+        "significant_at_05": false
+      },
+      {
+        "against": "3",
+        "criterion": "usable, strictly",
+        "n": 328,
+        "mean_wins": 18,
+        "mean_loses": 9,
+        "p": 0.12207812070846558,
+        "p_holm": 0.4883124828338623,
+        "significant_at_05": false
+      },
+      {
+        "against": "2",
+        "criterion": "usable, strictly",
+        "n": 328,
+        "mean_wins": 19,
+        "mean_loses": 10,
+        "p": 0.13604594767093658,
+        "p_holm": 0.4883124828338623,
+        "significant_at_05": false
+      },
+      {
+        "against": "2",
+        "criterion": "usable",
+        "n": 328,
+        "mean_wins": 19,
+        "mean_loses": 12,
+        "p": 0.28104151505976915,
+        "p_holm": 0.5620830301195383,
+        "significant_at_05": false
+      },
+      {
+        "against": "3",
+        "criterion": "usable",
+        "n": 328,
+        "mean_wins": 18,
+        "mean_loses": 12,
+        "p": 0.361594608053565,
+        "p_holm": 0.5620830301195383,
+        "significant_at_05": false
+      }
+    ]
+  }
+}
