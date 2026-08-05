@@ -23,9 +23,44 @@ import numpy as np
 class TempoConfig:
     min_bpm: float = 40.0
     max_bpm: float = 220.0
-    prior_centre_bpm: float = 120.0
+    # 140, not the 120 this carried before, and the difference was measured
+    # rather than chosen. Taken alone a log-normal prior centred at c prefers
+    # t/2 over t once t > c*sqrt(2) — the two are equidistant in log2 when
+    # log2(t/c) = 1/2 — so the pull starts at 170 BPM for a centre of 120 and at
+    # 198 for 140. That single fact was the tracker's largest failure mode: over
+    # 698 ballroom recordings it landed on exactly half the annotated tempo on
+    # 186 of them, and the 120 prior independently prefers the half on 184 of
+    # the same 698. Cause, not correlation.
+    #
+    # Tuned on ballroom, validated on GTZAN, which it was not tuned on:
+    #
+    #             ballroom (698)              GTZAN (999, held out)
+    #     centre  F      CMLt   octave        F      CMLt   octave
+    #     120     0.746  0.553  18.8%         0.769  0.628  14.8%
+    #     140     0.763  0.579  17.0%         0.782  0.649  14.6%
+    #     150     0.772  0.583  16.2%         0.779  0.619  17.5%
+    #
+    # 140 is the only point that improves both. 150 buys more on ballroom and
+    # gives it back on GTZAN, which is what fitting one corpus looks like.
+    #
+    # The move is close to zero sum: two thirds of the half errors it removes
+    # come back as double errors on slower material, and the octave failure
+    # survives at 17%. A global prior can only choose where the half/double
+    # crossover sits, never tell fast music from slow.
+    #
+    # The core is the other half of this number. It carried 140 for a month
+    # while this file still said 120, because the re-centring commit changed
+    # core/src/analysis/tempo.hpp and never came back here — and the parity
+    # gate that exists to catch exactly that had never run in CI. The two
+    # centres must move together or the reference stops being one.
+    prior_centre_bpm: float = 140.0
     # Standard deviation of the prior in octaves. Wide enough not to fight real
     # music, narrow enough to break the octave tie.
+    #
+    # Left at 0.7. Narrowing to 0.6 was the best point on ballroom and lost on
+    # GTZAN, so it is corpus fitting. Widening is worse everywhere: at 1.5 CMLt
+    # falls to 0.390 and at 3.0 to 0.142 — the prior carries real weight, it was
+    # merely aimed wrong.
     prior_width_octaves: float = 0.7
     grid_size: int = 512
 

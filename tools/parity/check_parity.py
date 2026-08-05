@@ -490,6 +490,14 @@ def main() -> int:
     beat_cases.append(("manual 100", make_clip(bpm=100, duration_sec=12, seed=6), 137, 100.0))
     beat_cases.append(("drift 120->140",
                        make_clip(bpm=120, duration_sec=15, tempo_drift=20, seed=7), 137, 0.0))
+    # The one case here where the tracked tempo is *not* the estimated one: the
+    # estimator says 181 and the hypothesis search tracks 90. Every other clip
+    # here tracks its own first-choice candidate, so all of them agreed for a
+    # month while the reference had no hypothesis search at all — it tracked the
+    # estimate directly and nothing noticed. A case that separates the two
+    # numbers is the only thing that checks the search itself.
+    beat_cases.append(("half against the estimate",
+                       make_clip(bpm=90, duration_sec=25, seed=90), 137, 0.0))
     beats_ok = all(compare_beats(name, clip, args.beats_binary, block, hint)
                    for name, clip, block, hint in beat_cases)
 
