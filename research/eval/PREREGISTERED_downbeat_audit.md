@@ -139,3 +139,46 @@ binary; nothing here needs a corpus that has not already been used.
 No live decoder, no core change, no new policy. If the audit passes, the causal
 implementation is a separate pre-registration with the six live metrics; if it
 fails, there is nothing to implement.
+
+---
+
+## Deviations, found after the run, 2026-08-05
+
+Appended, not edited into the text above. These were **not** recorded before the
+result was published, which is itself the defect: the run was reported as an
+answer to this document, and it is an answer to a different decoder.
+
+| registered | run |
+|---|---|
+| "take the **predicted** beat positions" (§ decoder, step 1; arms table) | `audit_one` calls `load_reference_beats` — the **annotated** grid |
+| "accumulate a score over the **last 2–4 bars**" (step 3) | the mean over the **whole recording** |
+| four arms, including `autocorr` | three; `autocorr` never implemented, so **P1 is unmeasured** |
+| seven measured quantities | three reported; bar period accuracy, coverage, false corrections, bars to a stable decision and oracle-gap share were not |
+
+**Which direction each deviation pushes.** The annotated grid *favours*
+`beat-sync` — it is strictly better than what live has — so A2's failure is
+robust to it. The whole-recording window does not: a global mean over a
+four-minute song is diluted by arrangement change in a way a two-bar window is
+not, so "offline sees more, therefore it is a ceiling" holds for an optimal
+decoder and not for this one. That defence was written after the run and is
+withdrawn.
+
+**A further confound, in the unfavourable direction.** `shuffled` is permuted
+independently on the plain grid and on the doubled one, so the null is not
+matched across the comparison it adjudicates: the doubled grid has twice the
+points, the maximum of a noise contrast over (metre, phase) is systematically
+smaller there, and the octave comparison therefore mixes the channel's
+information with the decoder's geometry. A correct null shares one time-shift
+across both grids, preserving their nesting.
+
+**What A2's failure therefore licenses**, stated to the width of the evidence:
+
+> An unnormalised global contrast score, maximised over (metre, phase), gets no
+> octave advantage from the downbeat channel.
+
+Not "the downbeat head contains no octave information". Three of the four
+acceptance conditions were never measured, so this document was not executed and
+cannot close the direction on its own terms. It rejects the decoder it tested.
+
+The metre result is unaffected: it is a comparison between arms reading the
+*same* grid with the *same* decoder, where the geometry cancels.

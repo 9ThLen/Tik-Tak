@@ -543,9 +543,26 @@ metre in {2, 3, 4, 6} and every bar phase, the contrast between the beats that
 would be downbeats and the beats that would not. Then score the same grid
 **doubled** and ask which one the evidence prefers.
 
-Whole-recording rather than over the last few bars, deliberately: it is a
-ceiling. A causal decoder seeing two to four bars cannot extract more than an
-offline one seeing all of them.
+**What was run is not what was registered.** Three deviations, none recorded
+before publishing, all found on re-reading the pre-registration against the
+code:
+
+1. **Annotated beat positions, not predicted ones.** The pre-registration says
+   "take the predicted beat positions" twice; `audit_one` calls
+   `load_reference_beats`. This one favours `beat-sync` — a perfect grid is
+   better than the live tracker's — so it does not rescue a failure.
+2. **Whole-recording accumulation, not "over the last 2–4 bars".** The README
+   originally defended this as a ceiling: a causal decoder seeing two to four
+   bars cannot extract more than an offline one seeing all of them. That is
+   true of an *optimal* offline decoder and false of this one, which takes a
+   global mean and so is diluted by arrangement change, dropouts and a chorus
+   whose downbeat is strong against a verse whose downbeat is not. It was a
+   deviation rationalised after the fact, not a registered choice.
+3. **The `autocorr` arm was never implemented**, so P1 is unmeasured.
+
+Four of the seven named measurements — bar period accuracy, coverage, false
+corrections, bars to a stable decision, share of the oracle gap — were not
+reported either.
 
 | GTZAN, n = 991 | metre | octave separation |
 |---|---:|---:|
@@ -588,19 +605,27 @@ high at every beat, so doubling it manufactures a clean alternation.
 ### Verdict
 
 **A2 fails: the pre-registration asked for at least 15 points over shuffled and
-the result is 8.0 and 4.5 points behind it.** By the terms fixed before the run,
-that closes the downbeat head for octave correction with a documented negative
-rather than motivating another filter.
+the result is 8.0 and 4.5 points behind it.** That rejects **this decoder**, and
+it is the load-bearing sentence of the whole run.
 
-A1 and A3 are unmeasured. Both need the live path, and neither can change a
-verdict that turns on A2 — a decoder cannot recover a share of the oracle gap
-using information the audit says is not there. A1's original purpose was to
-separate "the channel is empty" from "the instrument is wrong", and the audit
-answers that directly instead.
+It does not, on its own, close the head, and an earlier version of this section
+said it did. The claim has to be sized to what was measured:
 
-P1 is also unmeasured: the `autocorr` arm was specified and not implemented, so
-"beat-sync beats autocorr on bar period" is not reported either way. It would
-not move the verdict, and it is recorded as a gap rather than quietly dropped.
+> An unnormalised global contrast score, maximised over (metre, phase), gets no
+> octave advantage from the downbeat channel.
+
+rather than "the downbeat channel contains no octave information". The gap
+between those two is the tilt described above — the null is not a clean null,
+because the two grids are permuted independently and have different lengths, so
+the comparison mixes the channel's information with the decoder's geometry. The
+tilt does not save the result (A2 fails by a wide margin either way) but it does
+bound what the result is about.
+
+A1, A3 and A4 are unmeasured. A1 and A3 need the live path; A4 needs a threshold
+this decoder never earned. So **three of four acceptance conditions were never
+taken, and the fourth was taken with an unregistered grid and an unregistered
+window.** The protocol was not completed, and a verdict on an incomplete
+protocol is a verdict on the decoder, not on the direction.
 
 **P3 predicted exactly this** — "the metre comes back and the `P` against `P/2`
 decision does not" — for the reason `analysis/downbeat.hpp` already records
