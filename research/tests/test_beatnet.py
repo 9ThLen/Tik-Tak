@@ -14,6 +14,8 @@ round.
 """
 
 import numpy as np
+import importlib.util
+
 import pytest
 
 from eval.beatnet_onnx import (
@@ -94,9 +96,17 @@ def test_too_little_audio_is_not_a_crash():
 
 # ------------------------------------------------------- the model, end to end --
 
+# Two things have to be here, and they go missing independently: the weights,
+# which are fetched separately and never in git, and torch, which the reference
+# runs the network through. Naming both is the difference between a skip
+# somebody can act on and one that sends them looking in the wrong place.
+_HAS_TORCH = importlib.util.find_spec("torch") is not None
+
 pytestmark = pytest.mark.skipif(
-    not WEIGHTS_PATH.is_file(),
-    reason="BeatNet weights are not present — see models/README.md")
+    not WEIGHTS_PATH.is_file() or not _HAS_TORCH,
+    reason=("BeatNet weights are not present — see models/README.md"
+            if not WEIGHTS_PATH.is_file()
+            else "the reference runs the network on torch, which is not installed"))
 
 
 @pytest.fixture(scope="module")
