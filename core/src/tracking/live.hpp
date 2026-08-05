@@ -168,12 +168,58 @@ struct LiveConfig {
     // one and the answer may not survive a corpus that is not ballroom.
     double anchor_octave_margin = 0.0;
 
+    // What to do when that margin is *not* cleared: drop the anchor, which is
+    // what shipped and what lost, or hold the octave last chosen confidently.
+    //
+    // The distinction is the whole of `eval/PREREGISTERED_octave_freeze.md`.
+    // The failure recorded above is not of *distrusting* a weak margin, it is
+    // of the response: clearing leaves the filter with the fixed prior over
+    // every tempo, which the same note explains is worse than anchoring the
+    // wrong metrical relative. Holding leaves it with one specific octave the
+    // estimator itself was recently sure of.
+    //
+    // Off by default. This is an experimental arm and nothing has accepted it.
+    bool anchor_octave_freeze = false;
+
+    // How long a hold may outlive the confident anchor that set it.
+    //
+    // The objection to holding at all is in live.cpp beside `clearAnchor()` — a
+    // tempo measured in the first chorus must not outlive the evidence for it —
+    // and this bounds that rather than answering it. Four seconds because that
+    // is `MAX_WRONG_OCTAVE_SEC` in the live benchmark: a hold allowed to run
+    // longer than the definition of a wrong-level episode could turn a short
+    // slip into one that counts.
+    //
+    // Measured from the last *confident* anchor and not from the last frame, so
+    // a long stretch of weak margin expires instead of renewing itself.
+    double anchor_freeze_timeout_sec = 4.0;
+
+    // Publish nothing while the margin is weak.
+    //
+    // A diagnostic bound, not a shippable mode: a tracker that says nothing
+    // spends no time at the wrong metrical level, so this arm can only flatter
+    // an episode metric. It exists to say how much of that metric is reachable
+    // by silence alone, so the arms that do speak can be read against it.
+    bool anchor_margin_abstain = false;
+
     // A stream time this far from where the sample count says it should be
     // means the device dropped or repeated a buffer.
     double discontinuity_tolerance_sec = 0.002;
 
     bool valid() const;
 };
+
+// `bpm` moved by whole octaves to the equivalent nearest `held_bpm`.
+//
+// Free and pure so that the octave freeze's one piece of arithmetic can be
+// tested without constructing audio that produces a particular estimator
+// margin. Returns `bpm` unchanged when either is not positive, so a caller
+// with nothing held is never handed a zero or a NaN.
+//
+// "Nearest" is in log tempo, which is the only scale on which half and double
+// are the same distance away: 60 and 240 are both one octave from 120, and on
+// a linear scale 60 is much closer.
+double octaveNearest(double bpm, double held_bpm);
 
 // ------------------------------- what this path is worth to a person using it
 //
@@ -805,7 +851,21 @@ public:
     // what the round trip measured.
     void gateClick(double heard_time_sec);
 
-    BeatEstimate estimate(double now_sec) const { return filter_.estimate(now_sec); }
+    BeatEstimate estimate(double now_sec) const {
+        BeatEstimate out = filter_.estimate(now_sec);
+        // The abstain arm, and the only place it acts. Silence is expressed as
+        // no confidence rather than as a separate flag, because that is what
+        // every consumer already understands — the hysteresis in this class,
+        // the shell's meter, and the benchmark's lock all read this one number,
+        // and a second way of saying "nothing to report" would have to be
+        // taught to all three.
+        //
+        // The tempo is left in place deliberately. A caller that shows the last
+        // known BPM greyed out is showing what the tracker last believed, which
+        // is honest; zeroing it would claim the tempo had been forgotten.
+        if (abstaining()) out.confidence = 0.0;
+        return out;
+    }
 
     // What the autocorrelation over the activation history currently makes of
     // the tempo, whether or not it is being used. Reported separately from
@@ -816,6 +876,12 @@ public:
     ActivationTempoEstimate tempoFromActivation() const {
         return activation_tempo_.estimate();
     }
+
+    // The octave currently being held, or zero when none is. Exposed for the
+    // tests the octave freeze was pre-registered with: a state machine nothing
+    // can observe is a state machine nothing can check, and the alternative is
+    // inferring it from beat times, which conflates this with the filter.
+    double heldOctaveBpm() const { return held_octave_bpm_; }
 
     // Hands out the next beat to play, once, when it comes within
     // `lookahead_sec` of now. True when `beat_sec` was written.
@@ -882,6 +948,14 @@ private:
 
     bool gatedAt(double frame_time_sec) const;
 
+    // Whether the abstain arm is currently withholding output. Reads the last
+    // margin the observer saw rather than asking the estimator again, because
+    // both callers are const and one of them is on the consumer's thread.
+    bool abstaining() const {
+        return config_.anchor_margin_abstain && has_margin_ &&
+               last_octave_margin_ < config_.anchor_octave_margin;
+    }
+
     // Feeds one already-normalised observation to the filter and, in manual
     // mode, to the phase correlator. What process() and observe() share once
     // each has produced a number the filter can use.
@@ -906,6 +980,18 @@ private:
 
     double manual_bpm_ = 0.0;
     bool acquired_ = false;
+
+    // The octave freeze, and nothing else reads these. Zero means nothing is
+    // held, which is not the same as holding zero — before the first confident
+    // anchor the arm has to behave exactly as the baseline, and that is the
+    // state that says so.
+    double held_octave_bpm_ = 0.0;
+    double held_since_sec_ = 0.0;
+    // The last margin the estimator reported, for the abstain arm alone. Kept
+    // rather than re-asked because `estimate()` is const and is called from the
+    // consumer's thread, not from the one that observes.
+    double last_octave_margin_ = 0.0;
+    bool has_margin_ = false;
 
     double origin_sec_ = 0.0;  // stream time of the ODF's sample zero
     std::size_t consumed_ = 0;

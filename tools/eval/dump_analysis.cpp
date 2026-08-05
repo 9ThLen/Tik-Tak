@@ -350,6 +350,12 @@ int main(int argc, char** argv) {
     double live_anchor_margin = -1.0;
     double live_anchor_window = 0.0;
     double live_anchor_min_window = 0.0;
+    // The arms of eval/PREREGISTERED_octave_freeze.md that need code. The
+    // third, clearing the anchor at a raised threshold, is already reachable
+    // through --live-anchor-margin on its own.
+    bool live_octave_freeze = false;
+    bool live_margin_abstain = false;
+    double live_freeze_timeout = 0.0;
 
     struct Threshold {
         const char* flag;
@@ -378,6 +384,7 @@ int main(int argc, char** argv) {
         {"--live-anchor-margin", &live_anchor_margin},
         {"--live-anchor-window", &live_anchor_window},
         {"--live-anchor-min-window", &live_anchor_min_window},
+        {"--live-freeze-timeout", &live_freeze_timeout},
     };
 
     for (int i = 1; i < argc; ++i) {
@@ -444,6 +451,16 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--live-no-anchor") == 0) {
             live = true;
             live_anchor = false;
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-octave-freeze") == 0) {
+            live = true;
+            live_octave_freeze = true;
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-margin-abstain") == 0) {
+            live = true;
+            live_margin_abstain = true;
             continue;
         }
         // Parsed here rather than in the table above because that table's
@@ -564,6 +581,11 @@ int main(int argc, char** argv) {
                      "  --live-seeded      the same, seeded with the offline tempo\n"
                      "  --live-anchor      the same, holding the octave the activation says\n"
                      "  --live-no-anchor   the same, with that holding turned off\n"
+                     "  --live-octave-freeze     hold the last confidently chosen octave\n"
+                     "                           while --live-anchor-margin is not met\n"
+                     "  --live-freeze-timeout <s>  how long that hold may outlive its anchor\n"
+                     "  --live-margin-abstain    publish nothing while the margin is weak\n"
+                     "                           (a diagnostic bound, not a shippable mode)\n"
                      "  --live-activation <file> [--activation-fps N]\n"
                      "                     drive the particle filter from this activation\n"
                      "  --live-model <file>\n"
@@ -739,6 +761,11 @@ int main(int argc, char** argv) {
         }
         if (live_anchor_margin >= 0.0) {
             live_config.anchor_octave_margin = live_anchor_margin;
+        }
+        live_config.anchor_octave_freeze = live_octave_freeze;
+        live_config.anchor_margin_abstain = live_margin_abstain;
+        if (live_freeze_timeout > 0.0) {
+            live_config.anchor_freeze_timeout_sec = live_freeze_timeout;
         }
         if (live_anchor_window > 0.0) {
             live_config.activation_tempo.window_sec = live_anchor_window;
