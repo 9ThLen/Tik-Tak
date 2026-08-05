@@ -49,10 +49,18 @@ matched-cost policies that spend the same amount of the product's behaviour.
 approved.
 
 Replay uses the **causal** activation stream the live core sees, not an offline
-re-analysis. Before any measurement, one check: beat times produced under replay
-must be **byte-identical** to beat times produced by the live core on the same
-audio. A replay that cannot reproduce the baseline cannot evaluate a change to
-it.
+re-analysis. Before any measurement, replay must reproduce the live core
+**byte-identically** on the same audio, on all five of:
+
+1. beat times;
+2. the published BPM sequence;
+3. the published confidence sequence;
+4. the `measured` BPM sequence from `activation_tempo_.estimate()`;
+5. the extracted proposal-event list, by onset time and sign.
+
+Beat times alone are not enough. Items 2–5 are the actual input to this
+experiment, and a replay that reproduces beats while diverging on the estimator
+would evaluate a decoder on events the product never had.
 
 ---
 
@@ -97,6 +105,11 @@ already uses against the annotated median beat period:
 Ambiguous events are **reported with counts**, never folded into the primary.
 If they outnumber the labelled events the experiment is uninterpretable and that
 is reported as such rather than worked around.
+
+**Proposals before the first lock are excluded from the sample.** Acquisition is
+a separate, already-measured problem, the committed level is not yet a claim
+about anything, and including them would score the decoder on a state it has no
+business ruling on.
 
 ## 2. The window both candidates see
 
@@ -145,6 +158,34 @@ pairs, those admissible on the shorter of the two.**
 
     score(G) = max over the common (m,p) set of z(m,p)
 
+**Degenerate cases, fixed here so they are not decided at a keyboard later.**
+`sd(d)` is the **population** standard deviation over the grid. With
+`ε = 1e-9`:
+
+- `sd(d) < ε` → **every `z(m,p)` on that grid is 0**. A channel with no variance
+  carries no contrast, and I2 constructs exactly this case, so the formula has
+  to answer it rather than divide by zero.
+- `n_on == 0` or `n_off == 0` → that (m, p) is skipped. It cannot arise inside
+  the common set, and the guard is there because a silent `nan` is worse than a
+  redundant branch.
+- **Fewer than 16 committed beats available** at the proposal, or fewer than 4
+  points on the shorter grid, or an empty common (m, p) set → the event is
+  **unanswered**. An unanswered event is **allowed**, is byte-identical to
+  baseline, and is **excluded from A2 and A3** while being **counted in
+  coverage** and **included in A1**, which measures the policy end to end and
+  must pay for its own abstentions.
+
+**Metre 6 is not always reachable, and this is a resolution limit rather than a
+bias.** Sixteen committed beats give the halved grid 8 points, and `N >= 2m`
+then admits {2, 3, 4} but not 6. Because the common set is defined by the
+*shorter* grid, metre 6 drops out of **both** sides of the comparison whenever
+the proposal is a halving — so it costs sensitivity on 6/8 material and cannot
+tilt the octave decision either way. **Coverage is reported broken down by
+annotated metre**, and I7 below constructs the case where the grid does admit 6.
+The window is not widened to rescue it: 24 committed beats is twelve seconds of
+history before a live decision, and buying one metre with that is the wrong
+trade for the thing being built.
+
 When the proposal is `2 * P_c`, the proposed grid is every other committed beat
 and there are two ways to choose which — both are evaluated and the better is
 taken. That maximum over 2 applies to the proposed grid only, and it is
@@ -174,6 +215,38 @@ window length. Four per event, fixed here.
 `Δ > τ` → **veto** the switch. Otherwise → **allow**, which is byte-identical to
 baseline.
 
+### What `veto` does, exactly
+
+The freeze experiment's whole lesson is that the *response* to a signal decides
+the result more than the signal does, so "veto" is not left to mean whichever of
+three plausible things is convenient later. In `core/src/tracking/live.cpp`, at
+the branch that currently reads `filter_.anchorTempo(measured.bpm,
+config_.anchor_width_octaves)`:
+
+    allow:  filter_.anchorTempo(measured.bpm, width);
+
+    veto:   filter_.anchorTempo(
+                octaveNearest(measured.bpm, committed_bpm), width);
+
+`octaveNearest` already exists (`live.cpp:19`) and already carries this meaning
+for the freeze arm. **The veto blocks the metrical level and nothing else:**
+tempo continues to move inside the committed octave — a band drifting 128 → 132
+anchors at 132 under both arms — the phase is never touched, and the anchor is
+never dropped. It is neither `clearAnchor()` nor a freeze. Those are separate
+policies, both already measured, both already rejected.
+
+### When the decision is taken
+
+**Once, at the event onset frame, and held until the event closes.** Not
+re-evaluated per frame: at 50 fps a per-frame decision would let a statistic
+oscillate across `τ` mid-event and produce a policy nobody registered.
+
+Between onset and close, every frame anchors through the branch the onset
+decision selected. When the event closes, the held decision is discarded.
+
+**Fewer than 16 committed beats available at the onset → allow**, i.e. baseline.
+No answer is not evidence, which is the same rule the bar-rate arm used.
+
 The asymmetry is deliberate: the decoder may only ever *block*. It never
 proposes a switch of its own, never touches phase, and never moves tempo inside
 an octave. A decoder that cannot beat baseline while only subtracting behaviour
@@ -192,8 +265,11 @@ cheaper one is what produced the last result.
 On constructed activation tracks, no audio:
 
 - **I1 — iid noise decides nothing.** Over 1000 draws of an iid channel, the
-  mean of `Δ` is within 0.05 of zero and the veto rate is within 2 points of the
-  rate `τ` implies under symmetry. Neither grid wins systematically.
+  mean of `Δ` is within 0.05 of zero and `Δ > 0` on 50% of draws ± 3 points.
+  Stated **at `τ = 0`**, because the invariants run before `τ` exists and a
+  condition phrased in terms of `τ` would be uncheckable when it is needed. Once
+  `τ` is fixed on RWC, its realised veto rate on the same noise is reported as a
+  separate line — after the fact, and not as an acceptance condition.
 - **I2 — a beat-only channel creates no downbeat preference.** A channel high at
   every committed beat and low between yields `|Δ|` below 0.05 — in particular it
   does not prefer the doubled grid, which is exactly what `beat-as-downbeat`
@@ -207,12 +283,58 @@ On constructed activation tracks, no audio:
 - **I6 — the decoder can say allow.** A committed state that is genuinely
   doubled, with a correct proposal, gives `Δ < 0`. A decoder that only ever
   vetoes is a rate limiter with extra steps.
+- **I7 — six is decided when six is reachable.** A 6/8 signal, on a window long
+  enough that both grids admit metre 6, returns metre 6 and the correct sign of
+  `Δ`; and on a 16-beat window against a halving proposal, metre 6 is absent
+  from the common set on **both** grids, so the exclusion is symmetric.
 
 **I1 and I4 are written first.** They are the specific defect the last run had,
 and a decoder that passes I3 and I5 while failing them is the last run again
 wearing a new formula.
 
-## 7. Matched-cost baselines
+## 7. Choosing every free parameter, before any of them is free
+
+### How `τ` is chosen
+
+"`τ` is fixed on RWC" names the corpus and leaves the procedure open, which
+leaves the single largest researcher degree of freedom in this document to be
+settled after the numbers are on screen. The whole procedure, fixed here:
+
+- **Candidate set:** `τ ∈ {0.0, 0.25, 0.5, … , 5.0}`, 21 values on a fixed grid.
+  Nothing outside it, and no refinement pass.
+- **Objective:** maximise `no_wrong_level_episode_fraction` on **RWC**.
+- **Constraints:** A3 holds, and every standing cost gate holds, on RWC. A
+  candidate that violates either is not eligible whatever its objective value.
+- **Tie-break, in order:** greater retained correct locked-time; then lower veto
+  rate; then smaller `τ`.
+
+### How the simple policies' parameters are chosen
+
+Same discipline, same corpus, fixed grids:
+
+| policy | candidate set |
+|---|---|
+| debounce | `D ∈ {0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0}` s |
+| wider margin | `anchor_octave_margin ∈ {0.0, 0.1, … , 0.9}` |
+| rate limit | `N ∈ {5, 10, 20, 30, 60, 120}` s |
+| total ban | no parameter |
+
+Each is chosen to **match the decoder's retained correct locked-time on RWC to
+within 0.5 points**, and among candidates that do, the one with the best
+episode-freeness — the strongest form of each policy, not a convenient one.
+
+### If the match does not survive the transfer
+
+A policy matched on RWC can cost something different on Harmonix, and the word
+"matched" would then be doing work it has not earned.
+
+**If any comparison policy's retained correct locked-time differs from the
+decoder's by more than 0.5 points on Harmonix, the result is "adoption not
+approved".** Not re-tuned, not re-matched, not reported with an asterisk. The
+comparison the primary endpoint rests on would not exist, and manufacturing it
+on the transfer corpus is exactly the move this document is built to prevent.
+
+### The matched-cost comparison itself
 
 A veto policy improves episodes by refusing to move. Against baseline alone that
 reads as a win. So the primary comparison is against simple policies **spending
@@ -228,11 +350,6 @@ The policies:
 | **total ban** | no octave change at all after first lock |
 | **oracle bar** | the annotated bar period — the ceiling, not a candidate |
 
-**Matched on: retained correct locked-time.** Each simple policy's parameter is
-chosen on the development corpus so that its retained correct locked-time equals
-the decoder's within 0.5 points. Then frozen. Nothing is re-tuned on the
-transfer corpus.
-
 **Primary comparison: the decoder against the single best simple policy at
 matched cost.** The rest are diagnostic. This does not create new acceptance
 gates; it replaces "better than doing nothing" with "better than doing less".
@@ -241,7 +358,9 @@ Every result reports all three of these together, never the first alone:
 
 1. how many wrong-level episodes were removed;
 2. how much correct locked time was lost;
-3. how many already-correct states were spoiled.
+3. **how many correct escapes were blocked** — `wrong → correct` events the
+   policy vetoed, which is the only way a block-only policy can spoil a state,
+   and is A3's numerator.
 
 ## 8. Corpora, and an honest statement about holdout
 
@@ -254,6 +373,16 @@ Every result reports all three of these together, never the first alone:
 Formula, normalisation, window, `τ`, and the matched-cost parameters are **all**
 fixed on RWC and committed before Harmonix is read. The commit hash goes in the
 results file.
+
+**The order of work, so that "before" is a fact in the git history and not a
+recollection:**
+
+1. replay, event extraction, and I1–I7 — no corpus touched;
+2. full baseline parity, all five sequences;
+3. RWC; `τ` and every matched-cost parameter chosen by §7's procedure and
+   committed **as numbers, in their own commit**;
+4. Harmonix, opened once, read under those numbers;
+5. GTZAN, diagnostic, reported without gates.
 
 **There is no untouched corpus and this document will not pretend otherwise.**
 RWC, Harmonix and GTZAN have all influenced past decisions. A pass here
@@ -269,9 +398,23 @@ null, and does not carry over.
 | | condition | where |
 |---|---|---|
 | **A1** | at least **one third of the 19.1-point oracle gap** recovered — Harmonix episode-freeness ≥ **47.9%** (baseline 41.5%, oracle-bar 60.59%) — **and** ahead of the best matched-cost policy | transfer |
-| **A2** | veto accuracy on labelled events at least **15 points** over the same policy driven by the shifted null, non-overlapping 95% intervals, clustered by recording | both |
-| **A3** | at most **5%** false veto on committed-correct events | both |
+| **A2** | **balanced accuracy** on labelled events at least **15 points** over the same policy driven by the shifted null, and the lower bound of the paired cluster-bootstrap 95% interval on that difference above **0** | both |
+| **A3** | at most **5%** of `wrong → correct` events vetoed | both |
 | **A4** | `τ` fixed on RWC transfers **as a number**, with A1–A3 holding on Harmonix under it | transfer |
+
+**A2 is balanced accuracy — the mean of the veto rate on `correct → wrong`
+events and the allow rate on `wrong → correct` events — and not plain accuracy.**
+The two classes will not be balanced, and plain accuracy would let a decoder win
+by agreeing with whichever is commoner. A decoder that vetoes everything and a
+decoder that allows everything both score 50% here, which is what a chance level
+is supposed to do.
+
+**A3 counts `wrong → correct` events, not committed-correct ones**, and an
+earlier draft of this table had the wrong denominator. A block-only policy
+cannot damage a committed-correct state at all: vetoing `correct → wrong` is the
+right action, and both ambiguous classes are level-neutral by construction. The
+one thing this policy can break is an escape from a wrong level, so that is what
+the 5% bounds.
 
 **Plus the standing cost gates**, unchanged from the three previous
 pre-registrations so a fourth proposal is judged against the same goalposts, all
@@ -297,11 +440,28 @@ run answered. There is no fifth document.
 ## 10. Statistics
 
 The primary endpoint is **paired per recording**, exact two-sided binomial sign
-test on discordant pairs, α 0.05, Holm-corrected over the family reported.
+test on discordant pairs, α 0.05.
+
+**The Holm family is these three tests and no others**, enumerated here so its
+membership cannot be adjusted after the run:
+
+1. decoder vs **baseline**, Harmonix, `no_wrong_level_episode_fraction`, paired
+   sign test;
+2. decoder vs the **best matched-cost policy**, Harmonix, same endpoint, same
+   test;
+3. decoder vs the **shift-driven control**, Harmonix, balanced accuracy, paired
+   cluster bootstrap.
+
+All three are on the transfer corpus. RWC is development and its tests are
+descriptive. A3 is a bound, not a test. A4 is a conditional restatement of
+A1–A3 and adds none. `oracle bar` is excluded: it cannot be adopted whatever it
+shows, and buying it a correction would only inflate the three that matter.
 
 **Events are clustered by recording and are not treated as independent.** A2 and
 A3 are computed as per-recording rates and aggregated across recordings; the
-per-event counts are reported descriptively and carry no interval. One
+per-event counts are reported descriptively and carry no interval. Intervals on
+A2 come from a **cluster bootstrap resampling recordings, not events**, 10 000
+resamples, paired against the control on the same resampled recordings. One
 pathological recording contributing forty proposals must not be able to decide
 the experiment.
 
@@ -315,8 +475,11 @@ be adopted whatever it shows.
 - **P2.** `Δ_raw` and `Δ` agree in sign on **more than 90%** of events. The null
   subtraction should be correcting a bias, not carrying the signal; if it is
   carrying the signal, `Δ` is measuring the shift and not the channel.
-- **P3.** A3 is the condition most at risk. A decoder that vetoes usefully on
-  wrong-committed states will also veto some correct switches, and 5% is tight.
+- **P3.** A3 is the condition most at risk, and the tension is internal to the
+  decoder rather than between two populations: the same `Δ > τ` that usefully
+  blocks `correct → wrong` also blocks some `wrong → correct`, because in both
+  the evidence favours the committed grid and in the second it is wrong to. 5%
+  is tight against that.
 - **P4.** The best matched-cost simple policy is **debounce**, and it is close.
   Most of what a veto policy buys is available from waiting.
 - **P5.** Ambiguous events outnumber labelled ones on GTZAN and not on RWC —
@@ -336,7 +499,10 @@ be adopted whatever it shows.
 - `Δ` and `Δ_raw` disagreeing on more than 10% of events with `Δ` winning: the
   statistic would be reading its own null rather than the downbeat channel.
 - Ambiguous events dominating both scored corpora.
-- The replay failing byte-identity against the live core.
+- The replay failing byte-identity against the live core on any of the five
+  sequences named in **The system under test**.
+- A comparison policy's cost drifting more than 0.5 points from the decoder's on
+  Harmonix — the matched comparison would not exist, and it is not rebuilt there.
 
 ## 13. What follows either way
 
