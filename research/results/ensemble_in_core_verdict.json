@@ -1,0 +1,144 @@
+{
+  "corpus": "harmonix",
+  "n_paired": 581,
+  "gates": [
+    {
+      "metric": "no wrong-level episode >4 s",
+      "baseline": 0.41480206540447506,
+      "arm": 0.4819277108433735,
+      "passed": true,
+      "requirement": ">= 0.465"
+    },
+    {
+      "metric": "usable, strictly",
+      "baseline": 0.26161790017211706,
+      "arm": 0.2891566265060241,
+      "passed": false,
+      "requirement": ">= 0.3"
+    },
+    {
+      "metric": "correct time (eligible, mean)",
+      "baseline": 0.7754288674353345,
+      "arm": 0.7900730541192639,
+      "passed": true,
+      "requirement": ">= 0.75"
+    },
+    {
+      "metric": "switches / eligible 5 min",
+      "baseline": 4.208133249820215,
+      "arm": 4.460992414225068,
+      "passed": false,
+      "requirement": "not above baseline"
+    },
+    {
+      "metric": "settle P90",
+      "baseline": 36.61000000000002,
+      "arm": 36.81000000000001,
+      "passed": false,
+      "requirement": "not above baseline"
+    },
+    {
+      "metric": "beat F",
+      "baseline": 0.7952791708993274,
+      "arm": 0.830034998505151,
+      "passed": true,
+      "requirement": ">= 0.785"
+    }
+  ],
+  "paired": [
+    {
+      "endpoint": "no wrong-level episode >4 s",
+      "n": 581,
+      "ensemble_wins": 70,
+      "ensemble_loses": 31,
+      "baseline_rate": 0.41480206540447506,
+      "ensemble_rate": 0.4819277108433735,
+      "p": 0.00013082231066914517
+    },
+    {
+      "endpoint": "usable, strictly",
+      "n": 581,
+      "ensemble_wins": 45,
+      "ensemble_loses": 29,
+      "baseline_rate": 0.26161790017211706,
+      "ensemble_rate": 0.2891566265060241,
+      "p": 0.08050685743008212
+    }
+  ],
+  "family": [
+    {
+      "corpus": "harmonix",
+      "endpoint": "no wrong-level episode >4 s",
+      "n": 581,
+      "ensemble_wins": 70,
+      "ensemble_loses": 31,
+      "baseline_rate": 0.41480206540447506,
+      "ensemble_rate": 0.4819277108433735,
+      "p": 0.00013082231066914517,
+      "p_holm": 0.000784933864014871,
+      "significant_at_05": true
+    },
+    {
+      "corpus": "harmonix",
+      "endpoint": "usable, strictly",
+      "n": 581,
+      "ensemble_wins": 45,
+      "ensemble_loses": 29,
+      "baseline_rate": 0.26161790017211706,
+      "ensemble_rate": 0.2891566265060241,
+      "p": 0.08050685743008212,
+      "p_holm": 0.24152057229024637,
+      "significant_at_05": false
+    },
+    {
+      "corpus": "rwc",
+      "endpoint": "no wrong-level episode >4 s",
+      "n": 328,
+      "ensemble_wins": 28,
+      "ensemble_loses": 9,
+      "baseline_rate": 0.2530487804878049,
+      "ensemble_rate": 0.31097560975609756,
+      "p": 0.0025632079923525453,
+      "p_holm": 0.012816039961762726,
+      "significant_at_05": true
+    },
+    {
+      "corpus": "rwc",
+      "endpoint": "usable, strictly",
+      "n": 328,
+      "ensemble_wins": 23,
+      "ensemble_loses": 9,
+      "baseline_rate": 0.1798780487804878,
+      "ensemble_rate": 0.2225609756097561,
+      "p": 0.020061607006937265,
+      "p_holm": 0.08024642802774906,
+      "significant_at_05": false
+    },
+    {
+      "corpus": "smc",
+      "endpoint": "no wrong-level episode >4 s",
+      "n": 217,
+      "ensemble_wins": 26,
+      "ensemble_loses": 31,
+      "baseline_rate": 0.28110599078341014,
+      "ensemble_rate": 0.25806451612903225,
+      "p": 0.5966417603730826,
+      "p_holm": 1.0,
+      "significant_at_05": false
+    },
+    {
+      "corpus": "smc",
+      "endpoint": "usable, strictly",
+      "n": 217,
+      "ensemble_wins": 0,
+      "ensemble_loses": 1,
+      "baseline_rate": 0.03225806451612903,
+      "ensemble_rate": 0.027649769585253458,
+      "p": 1.0,
+      "p_holm": 1.0,
+      "significant_at_05": false
+    }
+  ],
+  "all_gates_passed": false,
+  "primary_met": true
+}
