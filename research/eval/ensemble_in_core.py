@@ -24,15 +24,17 @@ between two statistics computed differently would not be one.
 **Measured, 2026-08-05, commit `fa781bc`, six arms, `tree_clean` true on all
 six, nothing dropped** (581 of 581 Harmonix, 328 of 328 RWC, 217 of 217 SMC).
 
-Getting that flag true takes one deliberate step, and it is worth knowing
-before re-running any of this. The benchmark writes its per-track file *before*
-it computes provenance, so a `--per-track` path inside the repository dirties
-the tree ahead of the flag being read, and then every artifact of that run
-records `tree_clean: false` however clean the code was. Write the outputs
-outside the repository and copy them back afterwards. Re-run this way against
-an earlier dirty-tree pass, the largest disagreement across all three corpora
-and every metric was 1.1e-16 — one unit in the last place, so the flag was the
-only thing that had been wrong.
+Getting that flag true used to take one deliberate step. The benchmark wrote
+its per-track file *before* it computed provenance, so a `--per-track` path
+inside the repository dirtied the tree ahead of the flag being read, and every
+artifact of that run recorded `tree_clean: false` however clean the code was;
+these six arms were run with their outputs written outside the repository and
+copied back to work around it. The benchmark now computes provenance before it
+writes anything, so that step is no longer needed and `--per-track` may point
+straight at `results/per_track/`. The workaround was measured against an
+earlier dirty-tree pass: the largest disagreement across all three corpora and
+every metric was 1.1e-16 — one unit in the last place, so the flag was the only
+thing that had been wrong.
 
 First, the thing that makes the rest readable: every fold-1 arm reproduced the
 recorded baseline of `4422afc` *exactly* — all six Harmonix gate metrics to the
