@@ -341,8 +341,7 @@ struct LiveConfig {
 //
 // Every figure above was measured twice, by
 //
-//     python -m eval.live_corpus_benchmark --model models/beatnet_model_1.ttw \
-//         --include-root-audio --mode model --output results/live_usable.json
+//     python -m eval.live_corpus_benchmark --model models/beatnet_model_1.ttw --include-root-audio --mode model --output results/live_usable.json
 //
 // which writes the commit, the weight file's SHA-256, the per-corpus file
 // counts and whether the tree was clean beside the numbers. Quoting a rate
@@ -352,6 +351,11 @@ struct LiveConfig {
 // identify the binary that produced it, so the artifact only becomes provenance
 // once the tree is clean. The audio is not in the repository (see .gitignore),
 // which is why the numbers are written out here as well.
+//
+// That command stays on one line, however long it is. A backslash at the end of
+// a `//` comment is a line splice: it pulls the following line into the comment.
+// GCC calls that -Wcomment, this build is -Werror, and it stopped the Linux job
+// at the first file that includes this header for as long as it was wrapped.
 //
 // **Where the missing beats go, measured without a decoder and then without a
 // front end.** Two experiments, `research/eval/activation_recall.py` and
