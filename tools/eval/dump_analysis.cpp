@@ -357,6 +357,7 @@ int main(int argc, char** argv) {
     bool live_margin_abstain = false;
     bool live_bar_channel = false;
     double live_bar_margin = 0.0;
+    double live_bar_period = 0.0;
     double live_freeze_timeout = 0.0;
 
     struct Threshold {
@@ -388,6 +389,7 @@ int main(int argc, char** argv) {
         {"--live-anchor-min-window", &live_anchor_min_window},
         {"--live-freeze-timeout", &live_freeze_timeout},
         {"--live-bar-margin", &live_bar_margin},
+        {"--live-bar-period", &live_bar_period},
     };
 
     for (int i = 1; i < argc; ++i) {
@@ -775,6 +777,9 @@ int main(int argc, char** argv) {
         live_config.bar_channel = live_bar_channel;
         if (live_bar_margin > 0.0) {
             live_config.bar_ratio_margin = live_bar_margin;
+        }
+        if (live_bar_period > 0.0) {
+            live_config.bar_period_sec = live_bar_period;
         }
         if (live_freeze_timeout > 0.0) {
             live_config.anchor_freeze_timeout_sec = live_freeze_timeout;

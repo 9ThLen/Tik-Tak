@@ -303,9 +303,16 @@ void LiveTracker::submit(double time_sec, double normalised) {
             double bpm = measured.bpm;
             int octave = 0;
             if (config_.bar_channel) {
+                // A pinned period beats a measured one, which is the whole of
+                // the oracle arm: the same decision rule reading a bar length
+                // it did not have to find.
                 const auto bar = bar_tempo_.estimate();
-                if (bar.answered() &&
-                    barEndorsedOctave(60.0 / measured.bpm, 60.0 / bar.bpm,
+                const double bar_period =
+                    config_.bar_period_sec > 0.0 ? config_.bar_period_sec
+                    : bar.answered()             ? 60.0 / bar.bpm
+                                                 : 0.0;
+                if (bar_period > 0.0 &&
+                    barEndorsedOctave(60.0 / measured.bpm, bar_period,
                                       config_.bar_ratio_margin, &octave)) {
                     // A candidate period of P * 2^k is a tempo of bpm / 2^k.
                     bpm = measured.bpm * std::exp2(-octave);

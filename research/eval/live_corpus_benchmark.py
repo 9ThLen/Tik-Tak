@@ -165,6 +165,26 @@ def load_reference_beats(path: pathlib.Path) -> np.ndarray:
     return load_annotation(path).beats
 
 
+def load_reference_downbeats(path: pathlib.Path) -> np.ndarray:
+    """The annotated bar lines, from either annotation format.
+
+    The same two-format problem `load_reference_beats` has, and it has to be
+    solved the same way rather than by falling through to `load_annotation`:
+    that parser rejects the normalized bundle's header outright, so a caller
+    that only caught the exception would read *no* downbeats on Harmonix and
+    RWC while looking like it had merely found none.
+    """
+    with path.open(encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames and "is_downbeat" in reader.fieldnames:
+            return np.asarray(
+                [float(row["time_seconds"]) for row in reader
+                 if row["is_downbeat"].strip() not in {"", "0"}],
+                dtype=np.float64,
+            )
+    return load_annotation(path).downbeats
+
+
 def local_reference_bpm(beats: np.ndarray, time_sec: float) -> float:
     beats = np.asarray(beats, dtype=np.float64)
     index = int(np.searchsorted(beats, time_sec))
@@ -508,6 +528,35 @@ def verdict(result: dict[str, Any]) -> dict[str, Any]:
             "usable_strict": not strict, "reasons_strict": strict,
             "usable_any_octave": not forgiving,
             "reasons_any_octave": forgiving}
+
+
+def _oracle_bar_flags(item: dict[str, Any], enabled: bool) -> tuple[str, ...]:
+    """`--live-bar-period` for this recording, read from its annotation.
+
+    The `oracle-bar` arm of `eval/PREREGISTERED_downbeat_channel.md`, and the
+    reason it needs per-recording flags at all: every other arm is one
+    configuration for a whole run, and this one is a different number per song.
+
+    The median interval between annotated downbeats, not the mean: a recording
+    with an intro in a different metre, or one whose last bar is clipped by the
+    excerpt, would drag a mean off the length that holds for the rest of it.
+
+    Silent when the recording has fewer than three downbeats. Two give exactly
+    one interval and no way to tell a bar from a mistake, and the arm is
+    supposed to fall back to baseline where it has nothing, not to guess.
+    """
+    if not enabled or not item.get("annotated"):
+        return ()
+    try:
+        downbeats = load_reference_downbeats(item["annotation"])
+    except (OSError, ValueError, KeyError):
+        return ()
+    if downbeats is None or len(downbeats) < 3:
+        return ()
+    period = float(np.median(np.diff(np.asarray(downbeats, dtype=np.float64))))
+    if not math.isfinite(period) or period <= 0.0:
+        return ()
+    return ("--live-bar-period", repr(period))
 
 
 def _score_one(
@@ -1030,6 +1079,15 @@ def main(argv: list[str] | None = None) -> int:
     # separate value that begins with a dash, so the obvious spelling with a
     # space fails outright — and an arm of the central experiment should not
     # depend on remembering that.
+    parser.add_argument("--oracle-bar", action="store_true",
+                        help="hand the tracker each recording's annotated bar "
+                             "length instead of letting it measure one. The "
+                             "oracle arm of eval/PREREGISTERED_downbeat_"
+                             "channel.md — a bound on what the downbeat "
+                             "channel could be worth, not a shippable mode, "
+                             "since nothing in a room knows the bar length in "
+                             "advance. Only does anything alongside "
+                             "--extra=--live-bar-channel")
     parser.add_argument("--no-anchor", action="store_true",
                         help="run the particle filter with the activation-tempo "
                              "anchor off. The anchor is applied on every frame, "
@@ -1120,7 +1178,8 @@ def main(argv: list[str] | None = None) -> int:
         ) as pool:
             futures = [
                 pool.submit(_score_one, item, mode, args.binary, args.model,
-                            args.seeded, extra_flags)
+                            args.seeded,
+                            extra_flags + _oracle_bar_flags(item, args.oracle_bar))
                 for item in items
             ]
             for completed, future in enumerate(

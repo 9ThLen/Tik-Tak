@@ -253,6 +253,15 @@ struct LiveConfig {
     // A bar rate that cannot choose does not get to vote.
     double bar_ratio_margin = 0.15;
 
+    // A bar period handed in rather than measured, seconds. Zero estimates it.
+    //
+    // The `oracle-bar` arm, and a diagnostic bound rather than a mode: nothing
+    // in a room knows the bar length in advance. It exists because if the
+    // measured arm fails the corpus cannot otherwise say whether the downbeat
+    // channel is uninformative or merely hard to read, and those want different
+    // answers — one retires the direction, the other retires the estimator.
+    double bar_period_sec = 0.0;
+
     // A stream time this far from where the sample count says it should be
     // means the device dropped or repeated a buffer.
     double discontinuity_tolerance_sec = 0.002;
