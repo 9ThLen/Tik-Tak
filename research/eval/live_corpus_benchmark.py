@@ -1044,7 +1044,12 @@ def main(argv: list[str] | None = None) -> int:
                              "'--flag'")
     parser.add_argument("--per-track", type=pathlib.Path,
                         help="write one file per mode with every recording's "
-                             "metrics and verdict")
+                             "metrics and verdict. The name is built by "
+                             "appending `.{mode}` to the *stem*, so "
+                             "`runs/x.json` becomes `runs/x.model.json` but a "
+                             "path given without a suffix comes back as "
+                             "`runs/x.model`, not `runs/x.model.json`. Missing "
+                             "parent directories are created")
     args = parser.parse_args(argv)
 
     if args.workers < 1:
@@ -1080,6 +1085,19 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 2
+
+    # Before anything is written, and it has to stay that way. `_provenance`
+    # reads `git status --porcelain` for `tree_clean`, so any output path
+    # inside the repository — `--per-track` most easily, since it is written
+    # per mode inside the loop below — would dirty the tree ahead of the flag
+    # and stamp `tree_clean: false` on every artifact of the run however clean
+    # the code under test was. The git state that matters is the one the
+    # measurement ran at, not the one the run's own outputs left behind. This
+    # also fixes `utc` and the binary and model digests at the start of the
+    # run rather than at the end of it, which is the honest reading of all
+    # three.
+    provenance = _provenance(args.binary, args.model, items, repository,
+                             tuple(args.also_model))
 
     modes = ("baseline", "model") if args.mode == "both" else (args.mode,)
     print(
@@ -1133,14 +1151,19 @@ def main(argv: list[str] | None = None) -> int:
         if args.per_track:
             path = args.per_track.with_name(
                 f"{args.per_track.stem}.{mode}{args.per_track.suffix}")
+            # Every recording has already been analysed by the time we get
+            # here and the report is not written until the modes are done, so
+            # a missing parent directory would throw away the whole run —
+            # hours of it — after all the work and before any output.
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(
                 [{key: value for key, value in result.items()
                   if not isinstance(value, np.ndarray)} for result in results],
                 ensure_ascii=False), encoding="utf-8")
 
     report = {
-        "provenance": _provenance(args.binary, args.model, items, repository,
-                                  tuple(args.also_model)),
+        # Computed before the run, not here; see where it is built.
+        "provenance": provenance,
         "protocol": {
             "causal": True,
             "callback_samples": 512,
