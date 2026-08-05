@@ -436,6 +436,80 @@ none worse, to 84.17% episode-free — by saying nothing on more than half the
 polls, at a cost of thirteen points of correct time and ten of F. It was never a
 candidate, and it is the measured size of what silence buys on this metric.
 
+## The downbeat channel: the evidence works, the estimator over it does not
+
+`{hx,gz}_{baseline,barrate,oracle}.json` with their per-track files. Three arms
+of `eval/PREREGISTERED_downbeat_channel.md`, commit `dce26bb`, `tree_clean` true
+on all six, 581 of 581 Harmonix and 999 of 999 GTZAN. Shipped fold 1 throughout.
+
+`bar-rate` estimates the bar period from BeatNet's downbeat head and uses it to
+pick the beat octave. `oracle-bar` is the same decision rule handed the
+annotated bar length — a bound, never a mode, since nothing in a room knows the
+bar in advance.
+
+| Harmonix | episode-free | strict | correct time | sw / 5 min | settle P90 | F |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline | 41.48% | 26.16% | 77.54% | 4.21 | 36.61 s | 0.7953 |
+| **bar-rate** | **41.48%** | 25.82% | 78.35% | 4.69 | 35.02 s | 0.7929 |
+| oracle-bar | **60.59%** | 33.56% | 84.83% | 1.19 | 23.01 s | 0.7833 |
+
+| GTZAN | episode-free | strict | correct time | sw / 5 min | settle P90 | F |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline | 67.87% | 43.64% | 67.74% | 5.34 | 14.0 s | 0.6854 |
+| bar-rate | 68.37% | 43.54% | 67.87% | 5.55 | 13.0 s | 0.6845 |
+| oracle-bar | 76.18% | 44.94% | 72.93% | 2.98 | 12.0 s | 0.6759 |
+
+**Adoption not approved: `bar-rate` is exactly baseline on the primary
+endpoint.** 41.48% against 41.48%, and a paired sign test of 10 won to 10 lost,
+p = 1.0000. Not "no significant difference" — the same number.
+
+### The diagnosis, which is why the oracle arm was worth its runtime
+
+Both arms fire on almost exactly the same recordings:
+
+| Harmonix | recordings whose tempo it changed | episode-free won | lost | p |
+|---|---:|---:|---:|---:|
+| bar-rate | 247 of 581 | 10 | 10 | 1.0000 |
+| oracle-bar | 243 of 581 | **114** | **3** | <1e-4 |
+
+The decision rule is right, the firing rate is right, and **the estimated bar
+period is no better than a coin about which octave to take.** Handed the true
+bar length instead, the identical rule wins 114 recordings against 3.
+
+So the direction is confirmed and the estimator is retired — the opposite of
+what a measured arm alone would have concluded. Without the oracle this reads
+"the downbeat channel does not decide the octave", which the same run shows is
+false and worth 19.1 points.
+
+### The predictions
+
+| | prediction | outcome | |
+|---|---|---|---|
+| P1 | `bar-rate` clears 46.5%, p<.05 | 41.48%, p = 1.0 | ❌ |
+| P2 | — | retired before the run; true by construction, see the pre-registration's deviations | — |
+| P3 | `oracle-bar` clears 55% | 60.59% | ✅ |
+| P4 | `bar-rate` recovers a third of the way to the oracle | recovers none of it | ❌ |
+| P5 | beat F moves under a point | bar-rate −0.24; oracle −1.20 | ⚠ |
+| P6 | GTZAN moves the same way | +0.50 against +0.00 | ✅ |
+
+P5 is flagged rather than passed: the oracle gives up 1.2 points of F for its
+19.1 of episodes. That is the shape this project has taken before — a recording
+that crosses the usable threshold is worth more than one that goes from 0.79 to
+0.82 — but it is a cost and not a rounding error, and any successor to the
+estimator inherits it.
+
+P6 passes on direction and means little on size, and the per-track counts say
+why: `bar-rate` fires on 95 of 999 GTZAN excerpts against 247 of 581 Harmonix
+songs. The bar estimator needs a twelve-second window before it answers at all,
+which is most of a thirty-second excerpt.
+
+### What this leaves
+
+The bar rate is the thing to replace, not the idea. Nothing here says the
+estimator has to be an autocorrelation over a sparse channel with a
+twelve-second warm-up — that was the cheapest thing that could work, and it is
+the part the oracle now shows is failing.
+
 ## Everything else
 
 `oracle_activation*.json`, `activation_recall.json`, `octave_blame_*.json`,
