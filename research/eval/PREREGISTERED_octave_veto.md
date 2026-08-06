@@ -799,13 +799,10 @@ is used to choose `tau` or a matched-policy parameter.
 ### Operational abort before the RWC result
 
 The first RWC command at implementation commit `6a10e8a` was terminated before
-it wrote an artifact or exposed any metric. The harness kept all completed
-`Future` objects in a list; each retained the full 50 fps payload for every
-policy on that recording, and resident memory grew from roughly 1.4 to 2.1 GB
-while still rising. The replacement removes a completed future from the owning
-set as soon as its scores and event rows have been copied. Candidate grids,
-statistics, gates and corpus order are unchanged. The next clean commit is the
-implementation commit for the actual RWC run.
+it wrote an artifact or exposed any metric. The harness retained the full 50 fps
+payload for every policy on every completed recording, and resident memory grew
+from roughly 1.4 to 2.1 GB while still rising. Candidate grids, statistics,
+gates and corpus order are unchanged.
 
 A second command at `48375f4` exposed the remaining per-recording version of
 the same ownership error and was also terminated before an artifact or metric:
@@ -814,3 +811,14 @@ thread scored it. Scoring and event extraction now happen as the worker consumes
 the policy iterator, so at most one full-resolution policy payload per worker is
 live. Again, this changes storage lifetime only; no experimental number or rule
 was available to react to.
+
+A third command at `65c1923` showed that the first ownership fix was incomplete
+and was likewise terminated before an artifact or metric. Python's
+`as_completed()` snapshots the entire submitted set internally, so deleting a
+completed future from the caller's set did not release it. The corpus runner now
+submits a bounded window of at most `workers` recordings and replaces one only
+after one result has been consumed. A regression test verifies that starting the
+iterator does not consume the whole corpus. This is again a storage-lifetime
+change only; all registered candidates, statistics, gates and corpus order stay
+fixed. The next clean commit is the implementation commit for the actual RWC
+run.

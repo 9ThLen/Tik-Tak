@@ -483,6 +483,39 @@ def score_converged(item: dict[str, Any], replayed: ConvergedReplay) -> dict[str
     return score_estimate(item, Estimate.from_json(replayed.payload), mode="model")
 
 
+def _bounded_results(pool: concurrent.futures.Executor, function: Callable,
+                     items: Iterable[Any], limit: int):
+    """Yield results while retaining at most ``limit`` submitted futures.
+
+    ``as_completed`` snapshots its complete input collection internally, so
+    removing futures from the caller's set does not release their results.  A
+    bounded submission window is required when each result briefly owns a
+    full-resolution live replay.
+    """
+    source = iter(items)
+    pending: set[concurrent.futures.Future] = set()
+    for _ in range(limit):
+        try:
+            item = next(source)
+        except StopIteration:
+            break
+        pending.add(pool.submit(function, item))
+
+    while pending:
+        done, pending = concurrent.futures.wait(
+            pending, return_when=concurrent.futures.FIRST_COMPLETED)
+        while done:
+            future = done.pop()
+            result = future.result()
+            try:
+                item = next(source)
+            except StopIteration:
+                pass
+            else:
+                pending.add(pool.submit(function, item))
+            yield result
+
+
 def run_policy_grid(
     items: Sequence[dict[str, Any]],
     binary: pathlib.Path,
@@ -527,15 +560,7 @@ def run_policy_grid(
 
     started = time.perf_counter()
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-        # A list keeps every completed Future alive until the entire corpus
-        # finishes, and each Future retains all full-resolution replay payloads
-        # returned by ``one``. RWC therefore grew by gigabytes before it was a
-        # quarter complete. Remove each yielded Future from our owning set so
-        # its payload can be released as soon as the arm summaries are copied.
-        futures = {pool.submit(one, item) for item in items}
-        for future in concurrent.futures.as_completed(futures):
-            futures.remove(future)
-            item, rows = future.result()
+        for item, rows in _bounded_results(pool, one, items, workers):
             for name, score, events, pass_count in rows:
                 scores[name].append(score)
                 tracks[name][item["name"]] = events
@@ -609,10 +634,7 @@ def run_direct_flag_grid(
 
     started = time.perf_counter()
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {pool.submit(one, item) for item in items}
-        for future in concurrent.futures.as_completed(futures):
-            futures.remove(future)
-            item, rows = future.result()
+        for item, rows in _bounded_results(pool, one, items, workers):
             for name, score, events in rows:
                 scores[name].append(score)
                 tracks[name][item["name"]] = events

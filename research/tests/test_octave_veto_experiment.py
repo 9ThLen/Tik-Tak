@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import pathlib
 
 import numpy as np
@@ -17,6 +18,7 @@ from eval.octave_veto_experiment import (
     transfer_verdict, verify_cached_parity, write_schedule, run_policy_grid,
     _require_frozen_selection, ambiguity_diagnostic, d1_zero_committed_score,
     event_coverage_by_meter, raw_sign_agreement, apply_protocol_diagnostics,
+    _bounded_results,
 )
 from eval.octave_veto_replay import from_payload
 
@@ -187,6 +189,25 @@ class TestFixedPoint:
         """The corpus runner imports annotation loading from its real module."""
         assert run_policy_grid([], pathlib.Path("binary"), pathlib.Path("weights"),
                                (), corpus="rwc", workers=1) == {}
+
+    def test_corpus_submission_window_does_not_retain_every_future(self) -> None:
+        class CountingItems:
+            seen = 0
+
+            def __iter__(self):
+                for value in range(20):
+                    self.seen += 1
+                    yield value
+
+        items = CountingItems()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            results = _bounded_results(pool, lambda value: value, items, 3)
+            first = next(results)
+            assert first in range(20)
+            # Three initial submissions plus the replacement for the yielded
+            # result. An eager corpus submission would have consumed all 20.
+            assert items.seen == 4
+            assert sorted((first, *results)) == list(range(20))
 
 
 class TestFrozenSelection:
