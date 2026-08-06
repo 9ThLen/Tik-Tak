@@ -856,3 +856,34 @@ the pre-registration names. Three regression tests pin the arithmetic.
 
 Storage and fidelity only. No candidate grid, statistic, gate or corpus order
 changed, and no experimental number was available to react to.
+
+### The fixed point needed a registered rule, 2026-08-06
+
+The schedule seam iterates: vetoing a switch changes which proposals occur
+later, so the schedule and the live state are recomputed until they agree. That
+mechanism is an implementation choice — **this document never mentioned
+convergence** — and its failure mode was therefore undefined. A fifth command
+stopped on it before any artifact or metric.
+
+Measured on 17 RWC recordings across three thresholds, 39 of 48 track-policy
+pairs agree on the **first** pass and the tail is long rather than divergent:
+RWC_C050 settles at 10 passes and RWC_G061 at 15. The limit of 8 was calling
+slow convergence a failure. **Raised to 40**, from that measurement and against
+no outcome; the limit decides only whether a recording is representable by the
+seam, never what the policy does.
+
+A genuine cycle — a schedule repeating one older than the previous pass — is
+possible in principle, and now has a rule fixed before it is met:
+
+> Take the member of the cycle with the **fewest vetoes**, mark the recording
+> `cycled`, and report the count.
+
+Fewest vetoes is the most baseline-like member, so where the seam cannot decide,
+the harness does less rather than more and the resolution cannot flatter the
+policy it is measuring. Dropping the recording instead would exclude exactly
+those where vetoing changes the trajectory most — a selection bias pointing the
+same way as the hypothesis. Exceeding 40 passes without any repeat remains a
+hard error.
+
+Three tests pin the three outcomes apart: slow convergence, a genuine cycle, and
+running out of passes.

@@ -39,7 +39,16 @@ DEBOUNCE_CANDIDATES = (0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0)
 MARGIN_CANDIDATES = tuple(float(x) for x in np.arange(0.0, 1.0, 0.1))
 RATE_LIMIT_CANDIDATES = (5.0, 10.0, 20.0, 30.0, 60.0, 120.0)
 
-MAX_FIXED_POINT_PASSES = 8
+# Raised from 8 after measurement, not after seeing a result. Vetoing a switch
+# changes which proposals occur later, so the schedule and the live state have
+# to be iterated to agreement; 39 of 48 track-policy pairs agree on the first
+# pass, and the tail is long rather than divergent — RWC_C050 settles at 10 and
+# RWC_G061 at 15, both of which the old limit called a failure. 40 leaves room
+# above the longest run seen and still bounds the work.
+#
+# The limit is not a tuning knob: it decides only whether a recording is
+# representable by the offline schedule seam, never what the policy does.
+MAX_FIXED_POINT_PASSES = 40
 SCHEDULE_TIME_DIGITS = 6
 SCHEDULE_BPM_DIGITS = 9
 BOOTSTRAP_SEED = 20260806
@@ -98,6 +107,11 @@ class ConvergedReplay:
     events: TrackEvents
     schedule: tuple[VetoInterval, ...]
     passes: int
+    # True when the iteration entered a genuine cycle rather than settling, and
+    # the schedule below is the cycle's most baseline-like member. Counted and
+    # reported; a run where this is common is a run whose seam cannot represent
+    # the policy, which is a finding and not a nuisance.
+    cycled: bool = False
 
 
 @dataclasses.dataclass
@@ -249,14 +263,46 @@ def converge_replay(initial_payload: dict, name: str,
     """Recompute and apply schedules until policy and live state agree."""
     payload = initial_payload
     applied: tuple[VetoInterval, ...] | None = None
+    # Signatures only, and the schedules they stand for. A handful of intervals
+    # each, so unlike the payloads these are free to keep.
+    history: list[tuple[str, tuple[VetoInterval, ...]]] = []
     for pass_index in range(max_passes + 1):
         replay = from_payload(payload)
         events = evaluate_events(name, replay, reference_beats, meter)
         wanted = build_schedule(events)
+        signature = schedule_signature(wanted)
         if applied is None and not wanted:
             return ConvergedReplay(payload, replay, events, wanted, pass_index)
-        if applied is not None and schedule_signature(wanted) == schedule_signature(applied):
+        if applied is not None and signature == schedule_signature(applied):
             return ConvergedReplay(payload, replay, events, wanted, pass_index)
+
+        # A repeat of something older than the previous pass is a genuine
+        # cycle: vetoing changes which proposals occur, and two schedules can
+        # each imply the other. There is no fixed point to find, and iterating
+        # further only alternates.
+        #
+        # The cycle is resolved toward **the fewest vetoes**. That is the most
+        # baseline-like member, so where the seam cannot decide, the harness
+        # does less rather than more and the resolution cannot flatter the
+        # policy it is measuring. The alternative — dropping the recording —
+        # would exclude exactly the recordings where vetoing changes the
+        # trajectory most, which is a selection bias pointing the same way as
+        # the hypothesis.
+        earlier = next((index for index, (seen, _) in enumerate(history)
+                        if seen == signature), None)
+        if earlier is not None:
+            members = [schedule for _, schedule in history[earlier:]] + [wanted]
+            chosen = min(members, key=len)
+            # Re-derived from the run the chosen schedule actually produced.
+            # Returning this pass's events beside another pass's payload would
+            # score a state that never existed.
+            settled = rerun(chosen)
+            settled_replay = from_payload(settled)
+            return ConvergedReplay(
+                settled, settled_replay,
+                evaluate_events(name, settled_replay, reference_beats, meter),
+                chosen, pass_index, cycled=True)
+        history.append((signature, wanted))
         if pass_index == max_passes:
             break
         payload = rerun(wanted)

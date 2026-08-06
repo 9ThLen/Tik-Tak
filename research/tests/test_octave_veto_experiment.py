@@ -172,7 +172,15 @@ class TestFixedPoint:
         assert len(called) == 1
         assert got.schedule == called[0]
 
-    def test_nonconvergence_is_not_silently_accepted(self) -> None:
+    def test_a_genuine_cycle_resolves_toward_the_fewest_vetoes(self) -> None:
+        """Two schedules that each imply the other have no fixed point.
+
+        Iterating only alternates, so the harness stops and takes the most
+        baseline-like member. Where the seam cannot decide it does *less*, which
+        is the direction that cannot flatter the policy being measured; dropping
+        the recording instead would exclude exactly those where vetoing changes
+        the trajectory most.
+        """
         payload = payload_with_proposal()
         flip = False
 
@@ -181,9 +189,41 @@ class TestFixedPoint:
             flip = not flip
             return (VetoInterval(10.0, 12.0, 120.0),) if flip else ()
 
+        got = converge_replay(payload, "x", reference_beats(),
+                              lambda _: payload, build, max_passes=8)
+        assert got.cycled is True
+        assert got.schedule == ()
+
+    def test_slow_convergence_is_not_mistaken_for_a_cycle(self) -> None:
+        """A repeat of the *previous* pass is the fixed point, not an orbit.
+
+        Measured on RWC, 39 of 48 track-policy pairs settle on the first pass
+        and the tail runs to 15. The old limit of 8 called those failures.
+        """
+        payload = payload_with_proposal()
+        schedules = [
+            (VetoInterval(10.0, 12.0, 120.0),) * n for n in (3, 2, 1, 1, 1)
+        ]
+        step = iter(schedules)
+
+        got = converge_replay(payload, "x", reference_beats(),
+                              lambda _: payload, lambda _: next(step),
+                              max_passes=8)
+        assert got.cycled is False
+        assert len(got.schedule) == 1
+
+    def test_running_out_of_passes_without_repeating_still_raises(self) -> None:
+        count = 0
+
+        def build(_):
+            nonlocal count
+            count += 1
+            return (VetoInterval(float(count), float(count) + 1.0, 120.0),) * count
+
         with pytest.raises(RuntimeError, match="did not converge"):
-            converge_replay(payload, "x", reference_beats(),
-                            lambda _: payload, build, max_passes=2)
+            converge_replay(payload_with_proposal(), "x", reference_beats(),
+                            lambda _: payload_with_proposal(), build,
+                            max_passes=3)
 
     def test_empty_grid_reaches_the_corpus_import_seam(self) -> None:
         """The corpus runner imports annotation loading from its real module."""
