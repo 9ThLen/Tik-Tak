@@ -514,9 +514,16 @@ def run_policy_grid(
     def one(item: dict[str, Any]):
         reference = load_reference_beats(item["annotation"])
         builders = tuple((name, builder) for name, _, builder in policies)
-        return item, list(iter_track_policies(
-            binary, item["audio"], weights, reference, builders,
-            name=item["name"], meter=item.get("meter"), extra=extra))
+        rows = []
+        for name, replayed in iter_track_policies(
+                binary, item["audio"], weights, reference, builders,
+                name=item["name"], meter=item.get("meter"), extra=extra):
+            # Score while this is the sole full-resolution policy payload held
+            # by the worker. Returning a list of ConvergedReplay objects kept
+            # all ~36 50-fps payloads for a long recording alive together.
+            rows.append((name, score_converged(item, replayed),
+                         replayed.events, replayed.passes))
+        return item, rows
 
     started = time.perf_counter()
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
@@ -528,11 +535,11 @@ def run_policy_grid(
         futures = {pool.submit(one, item) for item in items}
         for future in concurrent.futures.as_completed(futures):
             futures.remove(future)
-            item, replays = future.result()
-            for name, replayed in replays:
-                scores[name].append(score_converged(item, replayed))
-                tracks[name][item["name"]] = replayed.events
-                passes[name].append(replayed.passes)
+            item, rows = future.result()
+            for name, score, events, pass_count in rows:
+                scores[name].append(score)
+                tracks[name][item["name"]] = events
+                passes[name].append(pass_count)
 
     wall = time.perf_counter() - started
     out: dict[str, CorpusArm] = {}
@@ -597,7 +604,7 @@ def run_direct_flag_grid(
                 events = evaluate_events(item["name"], replay, reference,
                                          item.get("meter"))
                 converged = ConvergedReplay(payload, replay, events, (), 1)
-                rows.append((name, converged))
+                rows.append((name, score_converged(item, converged), events))
             return item, rows
 
     started = time.perf_counter()
@@ -606,9 +613,9 @@ def run_direct_flag_grid(
         for future in concurrent.futures.as_completed(futures):
             futures.remove(future)
             item, rows = future.result()
-            for name, replayed in rows:
-                scores[name].append(score_converged(item, replayed))
-                tracks[name][item["name"]] = replayed.events
+            for name, score, events in rows:
+                scores[name].append(score)
+                tracks[name][item["name"]] = events
 
     wall = time.perf_counter() - started
     parameters = {name: parameter for name, parameter, _ in policies}

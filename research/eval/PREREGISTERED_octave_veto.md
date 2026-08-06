@@ -806,3 +806,11 @@ while still rising. The replacement removes a completed future from the owning
 set as soon as its scores and event rows have been copied. Candidate grids,
 statistics, gates and corpus order are unchanged. The next clean commit is the
 implementation commit for the actual RWC run.
+
+A second command at `48375f4` exposed the remaining per-recording version of
+the same ownership error and was also terminated before an artifact or metric:
+each worker materialised the full policy grid for one recording before the main
+thread scored it. Scoring and event extraction now happen as the worker consumes
+the policy iterator, so at most one full-resolution policy payload per worker is
+live. Again, this changes storage lifetime only; no experimental number or rule
+was available to react to.
