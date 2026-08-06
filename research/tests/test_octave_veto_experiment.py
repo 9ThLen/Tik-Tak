@@ -638,3 +638,33 @@ class TestCycleDetectionGranularity:
 
         value = _resident_mb()
         assert np.isnan(value) or value > 0.0
+
+
+class TestDegenerateIntervals:
+    """A proposal opening on the last frame has no extent to act on.
+
+    The core requires close > onset and rejects the whole schedule otherwise,
+    which stopped a twelve-hour run seven recordings in. Every schedule builder
+    must therefore drop the empty ones — dropping is behaviour-preserving,
+    because the core skips such an interval before it can apply.
+    """
+
+    def test_a_zero_length_veto_is_not_scheduled(self) -> None:
+        rows = TrackEvents("x", (
+            EventResult(Proposal(10.0, 10.0, 1, 120.0, 240.0),
+                        Decision(True, delta=5.0, delta_raw=5.0), CORRECT_TO_WRONG),
+            EventResult(Proposal(20.0, 22.0, 1, 120.0, 240.0),
+                        Decision(True, delta=5.0, delta_raw=5.0), CORRECT_TO_WRONG),
+        ))
+        got = decoder_schedule(rows, 0.5)
+        assert [row.onset_sec for row in got] == [20.0]
+
+    def test_every_builder_agrees_on_that(self) -> None:
+        rows = TrackEvents("x", (
+            EventResult(Proposal(10.0, 10.0, 1, 120.0, 240.0),
+                        Decision(True, delta=5.0, delta_raw=5.0), CORRECT_TO_WRONG),
+        ))
+        assert decoder_schedule(rows, 0.5) == ()
+        assert debounce_schedule(rows, 1.0) == ()
+        for row in (*rate_limit_schedule(rows, 5.0), *total_ban_schedule(rows)):
+            assert row.close_sec > row.onset_sec

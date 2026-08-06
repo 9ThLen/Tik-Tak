@@ -968,3 +968,23 @@ inside its octave and freezes on a proposal, and an octave is a ratio within 8%
 of a power of two, so a 3:2 tempo relation is not one. The total ban reads the
 publishing lock, latched and never released, because §7 words it as "after first
 lock" and without that it would ban during acquisition.
+
+### A proposal with no extent, 2026-08-06
+
+A tenth command stopped, seven recordings into the corpus: the core rejected a
+schedule on RWC_C010 because one interval had `close == onset`. The core
+requires a positive extent and refuses the whole file otherwise.
+
+A proposal that opens on the **last** locked-and-answered frame of a recording
+has no observed extent. It is still a real proposal — it has a decision and a
+label, and it counts for A2 and A3 — but there is nothing left of the recording
+to act on, so it cannot appear in a schedule.
+
+Every builder now drops empty intervals, and dropping them is
+behaviour-preserving: the core's own `while (time >= close) ++next` skips such
+an interval before it can apply, so it vetoes no frame either way. Counts and
+labels are untouched, which is what A2 and A3 are computed from.
+
+`debounce_schedule` already carried this guard and the other three did not,
+which is the clearest possible sign that it had been met before and fixed in one
+place. A test now asserts it of all four.

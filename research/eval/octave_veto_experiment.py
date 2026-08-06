@@ -200,10 +200,26 @@ def verify_cached_parity(name: str, initial: dict, cached: dict,
 
 def decoder_schedule(events: TrackEvents, tau: float, *,
                      control: bool = False) -> tuple[VetoInterval, ...]:
+    """The vetoed proposals, as intervals the core can apply.
+
+    Zero-length intervals are dropped, and dropping them changes nothing: an
+    interval whose close equals its onset is skipped by the core's own
+    ``while (time >= close) ++next`` before it can ever apply, so it vetoes no
+    frame either way. It exists because a proposal that opens on the last
+    locked-and-answered frame of a recording has no observed extent — real
+    enough to be classified for A2 and A3, with nothing left to act on.
+
+    Without this the core rejected the whole schedule, and a validation error
+    on one recording in 328 stopped a twelve-hour run seven recordings in.
+    ``debounce_schedule`` already carried the same guard, which is the clearest
+    sign this was known in one place and not the other.
+    """
     return tuple(
         VetoInterval(event.proposal.onset_sec, event.proposal.close_sec,
                      event.proposal.committed_bpm)
-        for event in events.events if event.veto(tau, control=control)
+        for event in events.events
+        if event.veto(tau, control=control)
+        and event.proposal.close_sec > event.proposal.onset_sec
     )
 
 
@@ -227,7 +243,7 @@ def rate_limit_schedule(events: TrackEvents, seconds: float) -> tuple[VetoInterv
         proposal = event.proposal
         if proposal.onset_sec - last_allowed >= seconds:
             last_allowed = proposal.onset_sec
-        else:
+        elif proposal.close_sec > proposal.onset_sec:
             vetoed.append(VetoInterval(proposal.onset_sec, proposal.close_sec,
                                        proposal.committed_bpm))
     return tuple(vetoed)
@@ -238,6 +254,10 @@ def total_ban_schedule(events: TrackEvents) -> tuple[VetoInterval, ...]:
         VetoInterval(event.proposal.onset_sec, event.proposal.close_sec,
                      event.proposal.committed_bpm)
         for event in events.events
+        # Empty intervals are dropped by every builder. The core requires
+        # close > onset and rejects the whole schedule otherwise; see
+        # `decoder_schedule` for why a proposal can have no extent.
+        if event.proposal.close_sec > event.proposal.onset_sec
     )
 
 
