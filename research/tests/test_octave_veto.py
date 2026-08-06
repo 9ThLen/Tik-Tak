@@ -19,9 +19,9 @@ import numpy as np
 import pytest
 
 from eval.octave_veto import (Decision, WindowTrack, admissible_metres,
-                              common_metres, doubled_grid, extract_proposals,
-                              halved_grids, judge, octave_k, window_beats,
-                              zscores)
+                              committed_grid, common_metres, doubled_grid,
+                              extract_proposals, halved_grids, judge, octave_k,
+                              window_beats, zscores)
 
 FPS = 50.0
 PERIOD = 0.5  # 120 BPM committed
@@ -319,9 +319,77 @@ class TestEventExtraction:
         assert len(events) == 1
         assert events[0].onset_sec == pytest.approx(4.0)
 
-    def test_an_event_that_onsets_before_the_lock_is_dropped_whole(self) -> None:
+    def test_a_disagreement_still_live_at_the_lock_opens_there(self) -> None:
+        """The committed level becomes a claim at the lock, so the event does too.
+
+        Pre-lock frames are not examined at all under the held-committed
+        definition, so a conflict that was already running when the tracker
+        locked is timestamped at the lock rather than discarded. What the
+        product is publishing at that moment is on screen, and an estimator an
+        octave away from it is about to change what is on screen.
+        """
         ks = [1] * 100 + [0] * 100 + [1] * 100
-        assert extract_proposals(*trace(ks, locked_from=250)) == []
+        events = extract_proposals(*trace(ks, locked_from=250))
+        assert len(events) == 1
+        assert events[0].onset_sec == pytest.approx(5.0)
+
+
+class TestWhatCountsAsAnOctave:
+    """Both defects the smoke run on GTZAN exposed, pinned.
+
+    Neither was visible in the pre-registration, and neither is visible in a
+    synthetic trace built to have octave jumps in it. They needed real replayed
+    traces, which is why the order of work put parity before any corpus.
+    """
+
+    def test_a_three_to_two_tempo_relation_is_not_an_octave_proposal(self) -> None:
+        """`round(log2(r))` alone maps every ratio in (1.41, 2.83) to +1.
+
+        Four of the eight proposals the first GTZAN smoke found were 3:2 —
+        122->176, 87->136, 119->176, 106->176 — and the proposed grid is built
+        as exactly doubled or halved, so those would have been scored against a
+        grid nobody proposed.
+        """
+        assert octave_k(176.0, 122.0) == 0
+        assert octave_k(136.0, 87.0) == 0
+        assert octave_k(176.0, 119.0) == 0
+        # The genuine ones from the same run survive.
+        assert octave_k(83.0, 168.0) == -1
+        assert octave_k(130.0, 67.0) == 1
+        assert octave_k(176.0, 91.0) == 1
+        assert octave_k(97.0, 188.0) == -1
+
+    def test_the_tolerance_is_the_eight_percent_the_labels_use(self) -> None:
+        assert octave_k(120.0 * 2.0 * 1.07, 120.0) == 1
+        assert octave_k(120.0 * 2.0 * 1.09, 120.0) == 0
+
+    def test_the_committed_level_follows_drift_inside_its_octave(self) -> None:
+        """A band moving 128 -> 132 is never a proposal, at any length."""
+        n = 400
+        times = np.arange(n) * 0.02
+        published = np.linspace(128.0, 132.0, n)
+        answered = np.ones(n, dtype=bool)
+        locked = np.ones(n, dtype=bool)
+        assert extract_proposals(times, published, published.copy(),
+                                 answered, locked) == []
+
+    def test_the_committed_level_does_not_chase_the_published_bpm(self) -> None:
+        """The registered instantaneous definition finds nothing on real audio.
+
+        Measured over 7821 locked-and-answered GTZAN frames, `k != 0` on two of
+        them, because the anchor pins the filter to the estimator. Here the
+        published BPM follows the estimator into the new octave and the event
+        still opens, because `committed` froze at the old one.
+        """
+        n = 400
+        times = np.arange(n) * 0.02
+        measured = np.where(np.arange(n) < 200, 120.0, 240.0)
+        published = np.where(np.arange(n) < 202, 120.0, 240.0)  # follows in 40 ms
+        events = extract_proposals(times, published, measured,
+                                   np.ones(n, dtype=bool), np.ones(n, dtype=bool))
+        assert len(events) == 1
+        assert events[0].k == 1
+        assert events[0].committed_bpm == pytest.approx(120.0)
 
     def test_an_unanswered_estimator_proposes_nothing(self) -> None:
         times, committed, measured, answered, locked = trace([1] * 200)
@@ -333,6 +401,55 @@ class TestEventExtraction:
         assert octave_k(60.0, 120.0) == -1
         assert octave_k(132.0, 128.0) == 0
         assert octave_k(0.0, 120.0) == 0
+
+
+class TestCommittedGrid:
+    """A committed beat is a grid position, not a beat the shell played.
+
+    Reading the published list instead left 10 of 22 GTZAN proposals without a
+    window, at onsets as late as 19.6 s with 2 to 11 played beats behind them —
+    because the list is gated by the lock hysteresis, which thins out exactly
+    when confidence is low, which is exactly when an octave conflict happens.
+    Reconstructing raised coverage from 45% to 86%.
+    """
+
+    @staticmethod
+    def _series(n: int = 2000, bpm_value: float = 120.0):
+        times = np.arange(n) * 0.02
+        return times, np.full(n, bpm_value)
+
+    def test_it_rebuilds_sixteen_beats_from_one_played_beat(self) -> None:
+        times, bpm = self._series()
+        played = np.array([30.0])
+        grid = committed_grid(played, times, bpm, onset_sec=31.0)
+        assert len(grid) == 16
+        assert grid[-1] == pytest.approx(30.0)
+        assert np.allclose(np.diff(grid), 0.5)
+
+    def test_it_walks_back_at_the_bpm_of_each_step(self) -> None:
+        """A drifting tempo must not be smeared by one period for the window."""
+        n = 3000
+        times = np.arange(n) * 0.02
+        bpm = np.where(times < 20.0, 100.0, 140.0)
+        grid = committed_grid(np.array([25.0]), times, bpm, onset_sec=25.5)
+        steps = np.diff(grid)
+        assert steps[-1] == pytest.approx(60.0 / 140.0)
+        assert steps[0] == pytest.approx(60.0 / 100.0)
+
+    def test_nothing_after_the_proposal_is_read(self) -> None:
+        times, bpm = self._series()
+        played = np.array([10.0, 20.0, 30.0])
+        grid = committed_grid(played, times, bpm, onset_sec=20.0)
+        assert grid[-1] == pytest.approx(20.0)
+        assert float(grid.max()) <= 20.0
+
+    def test_too_little_history_yields_nothing(self) -> None:
+        times, bpm = self._series(n=200)  # 4 s, and 16 beats need 7.5
+        assert len(committed_grid(np.array([3.9]), times, bpm, 3.95)) == 0
+
+    def test_no_played_beat_at_all_yields_nothing(self) -> None:
+        times, bpm = self._series()
+        assert len(committed_grid(np.zeros(0), times, bpm, 20.0)) == 0
 
 
 class TestWindowIsCausal:

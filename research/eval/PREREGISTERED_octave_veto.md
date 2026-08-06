@@ -609,3 +609,94 @@ exactly the distinction the previous audit could not make.
   I6 gives `Δ = −0.18` where I3 gives `+1.97`. This bounds where `τ` can
   usefully sit and it sharpens P6: if the decoder helps, it will be by allowing,
   and the allows are quiet.
+
+---
+
+## Deviations found during replay, 2026-08-06
+
+Appended, not edited into the text above. Step 2 of the registered order —
+replay and full baseline parity, no corpus opened. `eval/octave_veto_replay.py`
+is the code; 48 tests pass. GTZAN is the diagnostic corpus and no annotation was
+read: every number below is a count or a coverage rate, never a score against
+ground truth.
+
+### Parity holds, and no core change was needed to get it
+
+`dump_analysis --live` *is* the live core, so the five sequences are read rather
+than reimplemented. Two additions turned out to be unnecessary:
+
+- **the downbeat channel** — `--dump-activation` already prints
+  `activation_downbeat`, so `LiveTracker` needs no observer tap;
+- **the lock** — `eval/live_corpus_benchmark.py` already reproduces the
+  publishing hysteresis at 0.25 / 0.02, so "before the first lock" means here
+  exactly what it means in every other live result.
+
+The one change is `--live-sample-hz`, default 1.0, which leaves every published
+number where it was. It is observational by construction — `estimate()` and
+`tempoFromActivation()` are both const and `takeBeat` sits outside the sampling
+guard — and parity is what proves it: on four recordings, the same invocation
+twice is identical, and **the beat list at 50 Hz equals the beat list at 1 Hz**
+while the series grow from 30 samples to 1293.
+
+### 1. The committed level cannot be the published BPM of the moment
+
+Registered: `k(t) = round(log2(measured.bpm / committed.bpm))` with committed
+the published BPM. **That state does not occur.** Over 7821 locked-and-answered
+GTZAN frames:
+
+| `|log2(measured / published)|` | p50 | p90 | p99 | max |
+|---|---:|---:|---:|---:|
+| | 0.009 | 0.030 | 0.074 | 0.521 |
+
+`k != 0` on **two frames out of 7821**. The anchor at 0.02 octaves pins the
+filter to the estimator, so the two never disagree by an octave: the octave
+moves *inside* the estimator and the published BPM follows within a fraction of
+a second. The registered event unit is empty.
+
+**`committed` is therefore a held reference**: it follows the published BPM
+while that stays in the same octave, and freezes the moment an octave away is
+proposed, until the event closes. This is not a new mechanism — it is the state
+the §5 veto action preserves and what `held_octave_bpm_` holds in the core.
+
+### 2. An octave proposal needs an octave tolerance
+
+`round(log2(r))` maps every ratio in (1.41, 2.83) to +1. The first smoke found
+eight proposals and **four were 3:2 relations**, not octaves: 122→176, 87→136,
+119→176, 106→176. §2 builds the proposed grid as *exactly* doubled or halved, so
+those events would have been scored against a grid nobody proposed.
+
+A ratio must now be within **8%** of a power of two — the octave tolerance §1's
+labels already use, so this is not a new free parameter. It keeps all four
+genuine events (168→83, 67→130, 91→176, 188→97) and drops all four 3:2s.
+
+### 3. A committed beat is a grid position, not a beat that was played
+
+§2 asks for "the 16 most recent **committed beats**", and the first
+implementation read the tracker's published beat list. Those differ, and the
+difference is worst exactly where it matters: the published list is gated by the
+lock hysteresis, so it thins out when confidence is low, which is when octave
+conflicts happen. Measured on 100 excerpts, **10 of 22 proposals had between 2
+and 11 played beats** behind them, at onsets as late as 19.6 s, and would have
+fallen to baseline for a reason unrelated to the evidence.
+
+The grid is now walked backwards from the last played beat — real phase, not a
+guess — one period at a time, using the BPM published *at each step* so a
+drifting tempo is not smeared. Still strictly causal. **Coverage rose from 45%
+to 86%**; the remaining 14% are events too early to have 16 beats behind them.
+
+### 4. Two-octave proposals exist and are out of scope
+
+One event with `|k| = 2` appeared in 40 excerpts. §2 admits only the committed
+level and the level proposed, with grids built as exactly doubled or halved, so
+`|k| >= 2` is **excluded and counted**, not silently dropped.
+
+### Feasibility, which is the number step 2 existed to produce
+
+**0.54 proposals per eligible minute** on GTZAN, 22 events over 100 excerpts.
+Projected on RWC's 328 full-length recordings that is roughly **700 events**,
+which is ample for a statistic clustered by recording. `k` runs 18 halvings to 4
+doublings on this sample — the opposite of Harmonix's seven-to-one doubling bias,
+and a reminder that the development corpus was chosen for inverting the profile.
+
+No threshold, no policy and no acceptance condition has been computed. `τ` is
+still unchosen and Harmonix is still unopened.

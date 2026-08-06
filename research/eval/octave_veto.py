@@ -61,6 +61,18 @@ EPS = 1e-9
 CLOSE_AFTER_SEC = 1.0
 MIN_SEPARATION_SEC = 2.0
 
+# How near a power of two a ratio must be to be an *octave* proposal.
+#
+# `round(log2(r))` alone calls everything in (1.41, 2.83) a doubling, and a 3:2
+# tempo relation sits squarely inside it. Measured on GTZAN excerpts, half the
+# proposals found that way were 3:2 — 1.44, 1.48, 1.56, 1.66 — and §2 builds the
+# proposed grid as *exactly* doubled or halved, so those events would be scored
+# against a grid nobody proposed.
+#
+# 8% is the octave tolerance the live benchmark already uses and that §1's
+# labels are written against, so this is not a new free parameter.
+OCTAVE_TOLERANCE = 0.08
+
 
 # --- The score ---------------------------------------------------------------
 
@@ -306,81 +318,154 @@ class Proposal:
     measured_bpm: float
 
 
-def octave_k(measured_bpm: float, committed_bpm: float) -> int:
-    """round(log2(measured / committed)) — which octave apart the two are."""
+def octave_k(measured_bpm: float, committed_bpm: float,
+             tolerance: float = OCTAVE_TOLERANCE) -> int:
+    """Which octave apart the two are, or 0 when they are not an octave apart.
+
+    The registered formula was `round(log2(measured / committed))` and nothing
+    else. That is not enough: it maps every ratio in (1.41, 2.83) to +1, so a
+    3:2 tempo relation is reported as a doubling and the decoder is then asked
+    to score a grid that was never proposed. A ratio has to be *near* a power of
+    two, at the same 8% the labels use.
+    """
     if not (measured_bpm > 0.0) or not (committed_bpm > 0.0):
         return 0
-    return int(round(math.log2(measured_bpm / committed_bpm)))
+    exponent = math.log2(measured_bpm / committed_bpm)
+    k = int(round(exponent))
+    if k == 0 or abs(exponent - k) > math.log2(1.0 + tolerance):
+        return 0
+    return k
 
 
-def extract_proposals(times: np.ndarray, committed_bpm: np.ndarray,
+def extract_proposals(times: np.ndarray, published_bpm: np.ndarray,
                       measured_bpm: np.ndarray, answered: np.ndarray,
                       locked: np.ndarray) -> list[Proposal]:
     """Every octave-switch proposal in one replayed recording.
 
-    The anchor is rewritten from the estimator at every frame. Counting frames
-    would turn one sustained disagreement into hundreds of near-identical events
-    and inflate every count and every interval in the pre-registration, so a
-    maximal run of consecutive frames with the same **sign** of `k` is one
-    event, timestamped at its first frame.
+    **The committed level is a held reference, not the published BPM of the
+    moment**, and the registered definition was the second of those. That
+    definition describes a state which does not occur: measured on GTZAN,
+    `|log2(measured / published)|` has a 99th percentile of 0.074 and a maximum
+    of 0.52 over 7821 locked-and-answered frames, and `k != 0` on two of them.
+    The anchor at 0.02 octaves pins the filter to the estimator, so the two
+    never disagree by an octave — the octave moves *inside* the estimator and
+    the published BPM follows it within a fraction of a second.
 
-    Proposals before the first lock are excluded: acquisition is a separate and
-    already-measured problem, and until then the committed level is not a claim
-    about anything.
+    So `committed` follows the published BPM while it stays in the same octave,
+    and **freezes the moment an octave away is proposed**, until the event
+    closes. That is not a new mechanism: it is exactly the state the veto action
+    in §5 preserves, and exactly what `held_octave_bpm_` holds in the core.
+
+    The rest is as registered. A maximal run of frames of one sign of `k` is one
+    event, timestamped at its first frame — the anchor is rewritten every frame,
+    and counting frames would turn one sustained disagreement into hundreds of
+    near-identical events. Proposals before the first lock are excluded:
+    acquisition is a separate and already-measured problem, and until then the
+    committed level is not a claim about anything.
     """
     times = np.asarray(times, dtype=np.float64)
-    ks = np.array([octave_k(m, c) if a else 0
-                   for m, c, a in zip(measured_bpm, committed_bpm, answered)], dtype=int)
-    signs = np.sign(ks)
-
-    first_lock = None
+    published_bpm = np.asarray(published_bpm, dtype=np.float64)
+    measured_bpm = np.asarray(measured_bpm, dtype=np.float64)
+    answered = np.asarray(answered, dtype=bool)
     locked = np.asarray(locked, dtype=bool)
-    if locked.any():
-        first_lock = float(times[int(np.argmax(locked))])
 
     out: list[Proposal] = []
+    committed = math.nan
     open_at: int | None = None
+    open_sign = 0
     zero_since: float | None = None
+
     for i, t in enumerate(times):
-        sign = signs[i]
+        if not (locked[i] and answered[i]):
+            continue
+        if math.isnan(committed):
+            committed = float(published_bpm[i])
+        sign = int(np.sign(octave_k(float(measured_bpm[i]), committed)))
+
         if open_at is None:
             if sign != 0:
-                open_at = i
-                zero_since = None
+                open_at, open_sign, zero_since = i, sign, None
+            else:
+                # Inside the octave the committed level simply follows, so a
+                # band drifting 128 -> 132 is never a proposal.
+                committed = float(published_bpm[i])
             continue
-        # An event closes on a sign flip, or after CLOSE_AFTER_SEC at k == 0.
-        # Not on the first zero frame: the estimator drops in and out of an
-        # answer far faster than the disagreement it is reporting resolves.
-        flipped = sign != 0 and sign != signs[open_at]
-        if sign == signs[open_at]:
+
+        if sign == open_sign:
             zero_since = None
-        elif sign == 0:
-            if zero_since is None:
-                zero_since = t
+        elif sign == 0 and zero_since is None:
+            # Not closed on the first agreeing frame: the estimator drops in and
+            # out far faster than the disagreement it reports resolves.
+            zero_since = float(t)
+        flipped = sign != 0 and sign != open_sign
         if flipped or (zero_since is not None and t - zero_since >= CLOSE_AFTER_SEC):
-            _emit(out, times, committed_bpm, measured_bpm, ks, open_at,
-                  zero_since if zero_since is not None else t, first_lock)
+            _emit(out, times, committed, measured_bpm, open_at,
+                  zero_since if zero_since is not None else float(t), open_sign)
+            committed = float(published_bpm[i])
             open_at = i if flipped else None
+            open_sign = sign if flipped else 0
             zero_since = None
+
     if open_at is not None:
-        _emit(out, times, committed_bpm, measured_bpm, ks, open_at,
-              float(times[-1]), first_lock)
+        _emit(out, times, committed, measured_bpm, open_at,
+              float(times[-1]), open_sign)
     return out
 
 
-def _emit(out: list[Proposal], times: np.ndarray, committed_bpm: np.ndarray,
-          measured_bpm: np.ndarray, ks: np.ndarray, start: int, close: float,
-          first_lock: float | None) -> None:
-    """Append one event, unless it is pre-lock or too close to the last one."""
+def _emit(out: list[Proposal], times: np.ndarray, committed: float,
+          measured_bpm: np.ndarray, start: int, close: float, sign: int) -> None:
+    """Append one event, unless it is too close to the one before it."""
     onset = float(times[start])
-    if first_lock is None or onset < first_lock:
-        return
     # Merged into the previous event rather than counted again.
     if out and onset - out[-1].onset_sec < MIN_SEPARATION_SEC:
         return
-    out.append(Proposal(onset_sec=onset, close_sec=float(close), k=int(ks[start]),
-                        committed_bpm=float(committed_bpm[start]),
+    out.append(Proposal(onset_sec=onset, close_sec=close,
+                        k=octave_k(float(measured_bpm[start]), committed) or sign,
+                        committed_bpm=committed,
                         measured_bpm=float(measured_bpm[start])))
+
+
+def committed_grid(beats: np.ndarray, times: np.ndarray, bpm: np.ndarray,
+                   onset_sec: float, count: int = WINDOW_BEATS) -> np.ndarray:
+    """The committed grid's last `count` beats, walked back from real phase.
+
+    §2 asks for "the 16 most recent **committed beats** completed at or before
+    the proposal", and the first implementation read the tracker's *published*
+    beat list. Those are not the same thing, and the difference is not academic:
+    the published list is gated by the lock/release hysteresis, so it thins out
+    exactly when confidence is low — which is exactly when an octave conflict
+    happens. Measured on 100 GTZAN excerpts, 10 of 22 proposals had between 2
+    and 11 played beats behind them at onsets as late as 19.6 s, and would have
+    fallen to baseline for a reason that has nothing to do with the evidence.
+
+    A committed beat is a position on the committed grid whether or not the
+    shell played it. So the grid is walked backwards from the last published
+    beat — real phase, not a guess — one period at a time, each step using the
+    BPM the tracker was publishing *at that moment* rather than a single period
+    for the whole window, so that a drifting tempo does not smear the grid.
+
+    Causal throughout: nothing after `onset_sec` is read.
+    """
+    beats = np.asarray(beats, dtype=np.float64)
+    times = np.asarray(times, dtype=np.float64)
+    bpm = np.asarray(bpm, dtype=np.float64)
+    played = beats[beats <= onset_sec]
+    if len(played) == 0 or len(times) == 0:
+        return np.empty(0, dtype=np.float64)
+
+    grid = [float(played[-1])]
+    for _ in range(count - 1):
+        index = int(np.searchsorted(times, grid[-1], side="right")) - 1
+        if index < 0:
+            return np.empty(0, dtype=np.float64)
+        period_bpm = float(bpm[index])
+        if not (period_bpm > 0.0):
+            return np.empty(0, dtype=np.float64)
+        previous = grid[-1] - 60.0 / period_bpm
+        if previous < float(times[0]):
+            return np.empty(0, dtype=np.float64)
+        grid.append(previous)
+    return np.array(grid[::-1], dtype=np.float64)
 
 
 def window_beats(beats: np.ndarray, onset_sec: float,

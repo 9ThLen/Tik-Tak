@@ -350,6 +350,19 @@ int main(int argc, char** argv) {
     double live_anchor_margin = -1.0;
     double live_anchor_window = 0.0;
     double live_anchor_min_window = 0.0;
+
+    // How often the per-second series below are sampled. One a second is what
+    // every experiment before this one was measured at and stays the default,
+    // so nothing already published moves.
+    //
+    // The octave-veto pre-registration needs much finer: it defines a proposal
+    // as a run of frames of one sign of `k`, closing after a second at `k = 0`,
+    // and a series sampled at exactly that period cannot resolve the thing it
+    // is defined by. Fifty is the activation frame rate, which is as fine as
+    // this can usefully go — `estimate()` and `tempoFromActivation()` are both
+    // const and both read state that only moves once a frame, so asking more
+    // often returns the same answer and, crucially, cannot change the run.
+    double live_sample_hz = 1.0;
     // The arms of eval/PREREGISTERED_octave_freeze.md that need code. The
     // third, clearing the anchor at a raised threshold, is already reachable
     // through --live-anchor-margin on its own.
@@ -385,6 +398,7 @@ int main(int argc, char** argv) {
         {"--live-anchor-window", &live_anchor_window},
         {"--live-anchor-min-window", &live_anchor_min_window},
         {"--live-freeze-timeout", &live_freeze_timeout},
+        {"--live-sample-hz", &live_sample_hz},
     };
 
     for (int i = 1; i < argc; ++i) {
@@ -584,6 +598,9 @@ int main(int argc, char** argv) {
                      "  --live-octave-freeze     hold the last confidently chosen octave\n"
                      "                           while --live-anchor-margin is not met\n"
                      "  --live-freeze-timeout <s>  how long that hold may outlive its anchor\n"
+                     "  --live-sample-hz <N>  how often to sample the live series;\n"
+                     "                     1 is the default and what everything before\n"
+                     "                     the octave-veto work was measured at\n"
                      "  --live-margin-abstain    publish nothing while the margin is weak\n"
                      "                           (a diagnostic bound, not a shippable mode)\n"
                      "  --live-activation <file> [--activation-fps N]\n"
@@ -795,13 +812,19 @@ int main(int argc, char** argv) {
         constexpr std::size_t kLiveBlock = 512;
         constexpr double kLookahead = 0.05;
         double now = 0.0;
-        double next_sample = 1.0;
+        const double sample_period =
+            live_sample_hz > 0.0 ? 1.0 / live_sample_hz : 1.0;
+        double next_sample = sample_period;
         const auto poll = [&]() {
             double beat = 0.0;
+            // Outside the sampling guard, deliberately. Beats are handed out on
+            // the block clock and must not depend on how often the series are
+            // read, which is what makes --live-sample-hz observational: the
+            // beat list at 50 Hz has to equal the beat list at 1 Hz.
             while (tracker.takeBeat(now, kLookahead, &beat)) live_beats.push_back(beat);
             if (now >= next_sample) {
-                // Once a second: which of confidence's three factors is low is
-                // the diagnosis, and the product alone cannot say.
+                // Which of confidence's three factors is low is the diagnosis,
+                // and the product alone cannot say.
                 const tiktak::tracking::BeatEstimate e = tracker.estimate(now);
                 live_times.push_back(now);
                 live_bpms.push_back(e.bpm);
@@ -821,7 +844,7 @@ int main(int argc, char** argv) {
                 anchor_bpm.push_back(a.bpm);
                 anchor_confidence.push_back(a.confidence);
                 anchor_margin.push_back(a.octave_margin);
-                next_sample += 1.0;
+                next_sample += sample_period;
             }
         };
 
