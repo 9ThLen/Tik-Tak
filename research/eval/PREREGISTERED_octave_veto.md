@@ -822,3 +822,37 @@ iterator does not consume the whole corpus. This is again a storage-lifetime
 change only; all registered candidates, statistics, gates and corpus order stay
 fixed. The next clean commit is the implementation commit for the actual RWC
 run.
+
+### The parity gate fires, 2026-08-06
+
+A fourth command was terminated before an artifact or metric, and for the first
+time not over storage. The registered parity gate — cached-activation replay
+must reproduce the live core — **failed on every full-length recording tried**:
+0 of 20 RWC, beat counts as far apart as 116 against 74.
+
+That is what the gate is for, and it means the three earlier aborted commands
+could not have produced a valid result either. Their notes attribute them to
+memory ownership; the record is corrected here.
+
+Three independent causes, each sufficient on its own:
+
+1. **Frame release was modelled, not recorded.** A frame is available later than
+   the instant it describes, and by more than the 64 ms feature window: the
+   resampler carries a filter delay and the stream buffers a partial hop. The
+   replay now reads the index of the 512-sample block the model released each
+   frame on. An integer, because the first fix recorded a *time* at nine digits
+   and the seventh block boundary, 0.081269841269…, prints fractionally larger
+   than the clock it is compared against — one frame a block late.
+2. **The activation was truncated.** `beatnet.hpp` returns
+   `(double)p[0] + (double)p[1]` scaled, which is a double; the note in the tool
+   said nine digits round trip a float, which is true and does not apply.
+   Seventeen now.
+3. **The observation timestamps were reconstructed.** `(n * 441.0) / 22050.0`
+   and `n * (1.0 / 50.0)` are different doubles, and the filter integrates over
+   the gaps between observations. The model's own timestamps are handed back.
+
+With all three, **20 of 20 reproduce the live core exactly**, on every series
+the pre-registration names. Three regression tests pin the arithmetic.
+
+Storage and fidelity only. No candidate grid, statistic, gate or corpus order
+changed, and no experimental number was available to react to.

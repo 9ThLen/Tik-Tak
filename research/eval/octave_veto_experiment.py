@@ -296,15 +296,41 @@ def iter_track_policies(
         raise RuntimeError(f"model run produced no beat activation for {track_name}")
     with tempfile.TemporaryDirectory(prefix="tiktak-octave-veto-") as directory:
         activation_path = pathlib.Path(directory) / "beat_activation.txt"
+        emit_path = pathlib.Path(directory) / "activation_emit.txt"
+        times_path = pathlib.Path(directory) / "activation_times.txt"
         schedule_path = pathlib.Path(directory) / "schedule.txt"
-        np.savetxt(activation_path, beat_activation, fmt="%.9g")
+
+        # Three things have to be handed back, not reconstructed, before the
+        # replay is the same run. Each was found by the parity gate below and
+        # each on its own was enough to fail it on every full-length recording
+        # tried — twenty of twenty, with beat counts as far apart as 116 and 74:
+        #
+        #   the values, at seventeen digits, because `beatnet.hpp` returns
+        #   `(double)p[0] + (double)p[1]` scaled, which is a double and not the
+        #   float that nine digits round trips;
+        #
+        #   when each frame was released, as the index of the 512-sample block
+        #   the model handed it over on, because a frame is available later than
+        #   the instant it describes by more than the feature window — the
+        #   resampler and the stream's buffering add their own — and an integer
+        #   avoids the rounding that made a recorded *time* land a block late;
+        #
+        #   the model's own frame timestamps, because `(n * 441.0) / 22050.0`
+        #   and `n * (1.0 / 50.0)` are different doubles and the filter
+        #   integrates over the gaps between them.
+        np.savetxt(activation_path, beat_activation, fmt="%.17g")
+        np.savetxt(emit_path, np.asarray(initial["activation_emit"],
+                                         dtype=np.float64), fmt="%.0f")
+        np.savetxt(times_path, np.asarray(initial["activation_times"],
+                                          dtype=np.float64), fmt="%.17g")
 
         activation_columns = {
             key: initial[key] for key in
             ("activation_times", "activation_beat", "activation_downbeat")
         }
         cached_baseline = run_activation(binary, audio, activation_path,
-                                         extra=list(extra))
+                                         extra=list(extra), emit_path=emit_path,
+                                         times_path=times_path)
         cached_baseline.update(activation_columns)
         verify_cached_parity(track_name, initial, cached_baseline,
                              reference_beats)
@@ -312,7 +338,8 @@ def iter_track_policies(
         def rerun(schedule: tuple[VetoInterval, ...]) -> dict:
             write_schedule(schedule_path, schedule)
             flags = [*extra, "--live-anchor-veto", str(schedule_path)]
-            payload = run_activation(binary, audio, activation_path, extra=flags)
+            payload = run_activation(binary, audio, activation_path, extra=flags,
+                                     emit_path=emit_path, times_path=times_path)
             payload.update(activation_columns)
             return payload
 

@@ -282,6 +282,12 @@ bool nonnegativeFinite(const char* text, double& value) {
     return end != text && *end == '\0' && value >= 0.0 && std::isfinite(value);
 }
 
+// The device-sized buffer the live path is driven in. At namespace scope
+// because the activation dump has to feed the model in exactly these blocks:
+// its emission schedule is what the replay reproduces, and a schedule recorded
+// under a different block size is a schedule for a different run.
+constexpr std::size_t kLiveBlock = 512;
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -352,6 +358,18 @@ int main(int argc, char** argv) {
     // written on it. Off by default so earlier external-activation experiments
     // retain their callback cadence; octave-veto cached replay turns it on.
     bool activation_model_timing = false;
+
+    // Recorded frame-release times, one per activation frame, from a
+    // --dump-activation run on the same audio. Supersedes the analytic delay
+    // in `activation_model_timing`: that modelled only the feature window and
+    // ignored the resampler's filter delay and the stream's own buffering, and
+    // twenty of twenty RWC recordings failed parity under it.
+    std::string activation_emit_path;
+
+    // The model's own frame timestamps, one per activation frame. Supplied
+    // rather than reconstructed because the reconstruction is a different
+    // double: see the note on `activation_times` where it is printed.
+    std::string activation_time_path;
     // The same swap, but made by the core itself rather than handed to it: the
     // tracker computes the activation from the audio through its own front end.
     // --live-activation answers "would a better observation help"; this answers
@@ -510,6 +528,16 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--live-activation") == 0) {
             if (i + 1 >= argc) { std::fprintf(stderr, "--live-activation needs a file\n"); return 2; }
             activation_path = argv[++i];
+            continue;
+        }
+        if (std::strcmp(argv[i], "--activation-times") == 0) {
+            if (i + 1 >= argc) { std::fprintf(stderr, "--activation-times needs a file\n"); return 2; }
+            activation_time_path = argv[++i];
+            continue;
+        }
+        if (std::strcmp(argv[i], "--activation-emit") == 0) {
+            if (i + 1 >= argc) { std::fprintf(stderr, "--activation-emit needs a file\n"); return 2; }
+            activation_emit_path = argv[++i];
             continue;
         }
         if (std::strcmp(argv[i], "--activation-model-timing") == 0) {
@@ -825,6 +853,35 @@ int main(int argc, char** argv) {
         }
         live = true;
     }
+    std::vector<double> activation_emit;
+    if (!activation_emit_path.empty()) {
+        std::string complaint;
+        if (!readSalience(activation_emit_path.c_str(), activation_emit, complaint)) {
+            std::fprintf(stderr, "%s\n", complaint.c_str());
+            return 1;
+        }
+        if (activation_emit.size() != activation.size()) {
+            std::fprintf(stderr,
+                         "--activation-emit has %zu times for %zu frames\n",
+                         activation_emit.size(), activation.size());
+            return 1;
+        }
+    }
+    std::vector<double> activation_frame_times;
+    if (!activation_time_path.empty()) {
+        std::string complaint;
+        if (!readSalience(activation_time_path.c_str(), activation_frame_times,
+                          complaint)) {
+            std::fprintf(stderr, "%s\n", complaint.c_str());
+            return 1;
+        }
+        if (activation_frame_times.size() != activation.size()) {
+            std::fprintf(stderr,
+                         "--activation-times has %zu times for %zu frames\n",
+                         activation_frame_times.size(), activation.size());
+            return 1;
+        }
+    }
     std::vector<double> model_downbeats;
     // Held by value in a deque rather than a vector: BeatNetWeights owns the
     // storage its member pointers point into, so a vector reallocating on push
@@ -913,7 +970,6 @@ int main(int argc, char** argv) {
         // beats fall between checks and are simply never played. A real shell
         // polls once per audio callback, and scoring anything slower would be
         // measuring the harness rather than the tracker.
-        constexpr std::size_t kLiveBlock = 512;
         constexpr double kLookahead = 0.05;
         double now = 0.0;
         const double sample_period =
@@ -970,24 +1026,43 @@ int main(int argc, char** argv) {
             const double frame_sec = 1.0 / activation_fps;
             std::size_t next_frame = 0;
             if (activation_model_timing) {
-                // The model timestamps a frame at its start but cannot emit it
-                // until the whole 64 ms feature window exists. Drive the same
-                // 512-sample callback clock as the audio path and release each
-                // cached frame on the callback where the real model released
-                // it. Its observation timestamp remains the registered frame
-                // time; only availability is delayed.
+                // A frame is timestamped at its start but is not available
+                // until the model has released it, and the two differ by more
+                // than the feature window: the resampler carries a filter delay
+                // and the stream buffers whatever does not fill a hop. The
+                // analytic form below modelled only the window, released frames
+                // early, and failed parity on twenty RWC recordings out of
+                // twenty — identical observations at identical timestamps, but
+                // a different amount of them accumulated whenever the block
+                // clock reached `estimate()` and `takeBeat()`.
+                //
+                // With --activation-emit the schedule is not modelled at all.
+                // It is replayed from what a model fed the same 512-sample
+                // blocks actually did. The observation timestamp is still the
+                // registered frame time; only availability moves.
                 constexpr double kAvailabilityDelay =
                     static_cast<double>(tiktak::ml::BeatNetFeatures::kFrameSize) /
                     tiktak::ml::BeatNetFeatures::kModelRate;
+                const bool recorded = !activation_emit.empty();
+                const bool recorded_times = !activation_frame_times.empty();
+                const auto observation_time = [&](std::size_t frame) {
+                    return recorded_times
+                               ? activation_frame_times[frame]
+                               : static_cast<double>(frame) * frame_sec;
+                };
+                double block_index = 0.0;
                 for (std::size_t pos = 0; pos < samples.size(); pos += kLiveBlock) {
                     const std::size_t take =
                         std::min(kLiveBlock, samples.size() - pos);
                     now += static_cast<double>(take) / rate;
+                    block_index += 1.0;
                     anchor_veto_schedule.decision_time_sec = now;
                     while (next_frame < activation.size() &&
-                           static_cast<double>(next_frame) * frame_sec +
-                               kAvailabilityDelay <= now) {
-                        tracker.observe(static_cast<double>(next_frame) * frame_sec,
+                           (recorded
+                                ? activation_emit[next_frame] <= block_index
+                                : static_cast<double>(next_frame) * frame_sec +
+                                      kAvailabilityDelay <= now)) {
+                        tracker.observe(observation_time(next_frame),
                                         activation[next_frame]);
                         ++next_frame;
                     }
@@ -1176,16 +1251,48 @@ int main(int argc, char** argv) {
         // --live-activation and reproduce the run it came from.
         tiktak::ml::BeatNetActivation activation_pass(rate, model_refs.data(),
                                                       model_refs.size());
-        std::vector<double> at, beat_p, downbeat_p;
+        std::vector<double> at, beat_p, downbeat_p, emit;
         at.reserve(samples.size() / 441);
         beat_p.reserve(at.capacity());
         downbeat_p.reserve(at.capacity());
-        activation_pass.process(samples.data(), samples.size(),
-                                [&](double t, double beat, double downbeat) {
-                                    at.push_back(t);
-                                    beat_p.push_back(beat);
-                                    downbeat_p.push_back(downbeat);
-                                });
+        emit.reserve(at.capacity());
+        // Fed in the tracker's own 512-sample blocks, not the whole file at
+        // once, and each frame is stamped with the block clock it was *released*
+        // on rather than the time it describes.
+        //
+        // Those are not the same instant and the gap is not analytic. A frame
+        // cannot exist before its 64 ms window does, but on top of that the
+        // resampler carries its own filter delay and the feature stream buffers
+        // whatever does not fill a hop. Modelling only the window left the
+        // replay releasing frames early, which changed nothing the filter
+        // observed and everything about what `estimate()` and `takeBeat()` had
+        // accumulated when the block clock reached them: measured on twenty RWC
+        // recordings, **none** reproduced the live core, with beat counts off by
+        // as much as 116 against 80. Recording the schedule removes the model
+        // and the residual with it.
+        {
+            // A block *index*, not a block time. The first version recorded the
+            // clock and printed it at nine significant digits, which is enough
+            // to round trip a float and not a double: the seventh boundary is
+            // 0.081269841269..., prints as 0.0812698413, and comes back
+            // fractionally *larger* than the clock it has to be compared with.
+            // One frame then arrives a block late, and on a filter that is a
+            // different run — visible as an activation replay whose BPM already
+            // disagreed at 0.08 s. An integer has no such edge.
+            std::size_t block_index = 0;
+            for (std::size_t pos = 0; pos < samples.size(); pos += kLiveBlock) {
+                const std::size_t take = std::min(kLiveBlock, samples.size() - pos);
+                ++block_index;
+                activation_pass.process(samples.data() + pos, take,
+                                        [&](double t, double beat, double downbeat) {
+                                            at.push_back(t);
+                                            beat_p.push_back(beat);
+                                            downbeat_p.push_back(downbeat);
+                                            emit.push_back(
+                                                static_cast<double>(block_index));
+                                        });
+            }
+        }
         const auto series = [](const char* name, const std::vector<double>& values,
                                const char* format) {
             std::printf("  \"%s\": [", name);
@@ -1195,13 +1302,30 @@ int main(int argc, char** argv) {
             }
             std::printf("],\n");
         };
-        series("activation_times", at, "%.6f");
-        // BeatNet returns floats. Nine significant digits are enough to round
-        // trip every float exactly; five were adequate for plots but changed
-        // the particle weights when the activation was fed back for policy
-        // replay, defeating the byte-parity gate above that replay.
-        series("activation_beat", beat_p, "%.9g");
-        series("activation_downbeat", downbeat_p, "%.9g");
+        // Seventeen digits, because the replay observes at exactly these
+        // instants. `BeatNetFeatures::frameTimeSec()` is
+        // `(n * 441.0) / 22050.0` — an exact product and one division — while a
+        // replay reconstructing `n * (1.0 / 50.0)` multiplies an already
+        // rounded 0.02 by n and drifts from it in the last bits. The filter
+        // integrates over inter-observation gaps, so that is enough to be a
+        // different run, and it was the last of three reasons activation
+        // replay could not reproduce the live core.
+        series("activation_times", at, "%.17g");
+        // Which 512-sample block released each frame, counted from one. Handed
+        // back through --activation-emit so the replay releases frames when the
+        // model did rather than when their timestamps say they begin.
+        series("activation_emit", emit, "%.0f");
+        // Seventeen, not nine. The note this replaces said BeatNet returns
+        // floats and that nine digits round trip a float exactly. Both halves
+        // are true and the conclusion is not: `beatnet.hpp` computes
+        // `(double)p[0] + (double)p[1]`, scaled by `1 / models`, so what leaves
+        // the callback is a genuine double whose value is generally not
+        // representable as a float. Nine digits therefore truncated it, the
+        // truncation moved the particle weights, and the byte-parity gate on
+        // activation replay could not pass — 0 of 20 RWC recordings, with beat
+        // counts as far apart as 116 against 74. Seventeen round trips a double.
+        series("activation_beat", beat_p, "%.17g");
+        series("activation_downbeat", downbeat_p, "%.17g");
     }
     if (live) {
         std::printf("  \"live_bpm\": %.17g,\n", finiteOrZero(live_bpm));

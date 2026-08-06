@@ -423,3 +423,70 @@ class TestRegisteredSelectionAndVerdict:
                                    "dominates": True})
         assert not verdict["accepted"]
         assert verdict["protocol_diagnostics"]["ambiguity_sink_triggered"]
+
+
+class TestActivationReplayFidelity:
+    """The three reasons cached-activation replay was not the same run.
+
+    Each was found by the registered parity gate and each on its own failed it
+    on every full-length recording tried: twenty of twenty RWC, with beat counts
+    as far apart as 116 against 74. The gate did its job; what it caught is
+    pinned here so a future edit cannot quietly undo one of them.
+    """
+
+    def test_nine_digits_cannot_round_trip_the_activation(self) -> None:
+        """`beatnet.hpp` emits a double, not the float nine digits assume.
+
+        The value is `(double)p[0] + (double)p[1]` scaled by `1 / models`. A sum
+        of two floats in double precision is generally not a float, so the note
+        that "nine significant digits round trip every float" was true and its
+        conclusion was not.
+        """
+        value = float(np.float32(0.41579765)) + float(np.float32(0.13931973))
+        assert float(f"{value:.9g}") != value
+        assert float(f"{value:.17g}") == value
+
+    def test_the_reconstructed_frame_time_is_a_different_double(self) -> None:
+        """`(n * 441.0) / 22050.0` against `n * (1.0 / 50.0)`.
+
+        The first is an exact product and one correctly rounded division; the
+        second multiplies an already rounded 0.02. The filter integrates over
+        the gaps between observations, so the last bits are not cosmetic.
+        """
+        differing = [n for n in range(1, 5000)
+                     if (n * 441.0) / 22050.0 != n * (1.0 / 50.0)]
+        assert differing, "the two expressions agree; the fix would be moot"
+
+    def test_a_recorded_release_time_can_round_up_past_its_block(self) -> None:
+        """Why the release schedule is an integer block index and not a clock.
+
+        The seventh block boundary is 0.081269841269..., which prints at nine
+        significant digits as a fractionally *larger* number. Compared against
+        the clock it came from, `emit <= now` then fails and the frame arrives a
+        block late.
+        """
+        boundary = sum(512.0 / 44100.0 for _ in range(7))
+        assert float(f"{boundary:.9g}") > boundary
+
+    def test_the_replay_is_handed_all_three(self) -> None:
+        import subprocess
+        seen: dict[str, list[str]] = {}
+
+        def fake_run(args, **kwargs):
+            seen["args"] = args
+            return subprocess.CompletedProcess(args, 0, stdout="{}", stderr="")
+
+        original = subprocess.run
+        subprocess.run = fake_run
+        try:
+            from eval.octave_veto_replay import run_activation
+            run_activation(pathlib.Path("bin"), pathlib.Path("a.wav"),
+                           pathlib.Path("act.txt"),
+                           emit_path=pathlib.Path("emit.txt"),
+                           times_path=pathlib.Path("times.txt"))
+        finally:
+            subprocess.run = original
+        args = seen["args"]
+        assert "--activation-emit" in args
+        assert "--activation-times" in args
+        assert "--activation-model-timing" in args

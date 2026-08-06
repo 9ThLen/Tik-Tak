@@ -102,17 +102,29 @@ def run(binary: pathlib.Path, audio: pathlib.Path, weights: pathlib.Path,
 def run_activation(binary: pathlib.Path, audio: pathlib.Path,
                    activation_path: pathlib.Path,
                    sample_hz: float = SAMPLE_HZ,
-                   extra: list[str] | None = None) -> dict:
+                   extra: list[str] | None = None,
+                   emit_path: pathlib.Path | None = None,
+                   times_path: pathlib.Path | None = None) -> dict:
     """Replay cached beat activations through the same live core.
 
     The downbeat head is not needed by C++: Python already used it to build the
     fixed veto schedule.  This is the registered "model once, policies many"
     path; callers must establish parity with ``run`` before trusting it.
+
+    ``emit_path`` carries the recorded frame-release schedule from the same
+    ``--dump-activation`` run.  Without it the core falls back to an analytic
+    availability delay that models only the feature window, ignores the
+    resampler's filter delay and the stream's buffering, and fails parity on
+    every full-length recording tried.
     """
     args = [str(binary), str(audio), "--live-activation", str(activation_path),
             "--activation-fps", repr(SAMPLE_HZ),
             "--live-sample-hz", repr(float(sample_hz)),
             "--activation-model-timing"]
+    if emit_path is not None:
+        args += ["--activation-emit", str(emit_path)]
+    if times_path is not None:
+        args += ["--activation-times", str(times_path)]
     if extra:
         args += list(extra)
     done = subprocess.run(args, capture_output=True, text=True, check=False)
