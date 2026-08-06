@@ -21,6 +21,7 @@ import json
 import math
 import pathlib
 import subprocess
+import sys
 import tempfile
 import time
 from collections.abc import Callable, Iterable, Sequence
@@ -249,6 +250,54 @@ def write_schedule(path: pathlib.Path, schedule: Sequence[VetoInterval]) -> None
     lines.extend(f"{row.onset_sec:.9f} {row.close_sec:.9f} "
                  f"{row.committed_bpm:.12g}" for row in schedule)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _resident_mb() -> float:
+    """This process's working set, without a psutil dependency.
+
+    Returns 0.0 where the call is unavailable rather than raising: this is
+    diagnostic output for a long run, and it must never be the reason one dies.
+    """
+    try:
+        import ctypes
+        import ctypes.wintypes
+
+        class Counters(ctypes.Structure):
+            _fields_ = [("cb", ctypes.wintypes.DWORD),
+                        ("PageFaultCount", ctypes.wintypes.DWORD),
+                        ("PeakWorkingSetSize", ctypes.c_size_t),
+                        ("WorkingSetSize", ctypes.c_size_t),
+                        ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                        ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                        ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                        ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                        ("PagefileUsage", ctypes.c_size_t),
+                        ("PeakPagefileUsage", ctypes.c_size_t)]
+
+        counters = Counters()
+        counters.cb = ctypes.sizeof(counters)
+        handle = ctypes.windll.kernel32.GetCurrentProcess()
+        if not ctypes.windll.psapi.GetProcessMemoryInfo(
+                handle, ctypes.byref(counters), counters.cb):
+            return 0.0
+        return counters.WorkingSetSize / (1024.0 * 1024.0)
+    except Exception:
+        return 0.0
+
+
+def _progress(stage: str, done: int, total: int, started: float) -> None:
+    """One line per recording, to stderr, with elapsed time and memory.
+
+    A corpus run is hours long and had, before this, no way to say where it
+    was. The run that motivated it died with a segmentation fault and a single
+    line of output, so neither how far it got nor how large it had grown could
+    be recovered — and a retry that cannot answer those is not a diagnosis.
+    """
+    elapsed = time.perf_counter() - started
+    rate = elapsed / max(done, 1)
+    print(f"[{stage}] {done}/{total}  {elapsed / 60.0:6.1f} min elapsed  "
+          f"{rate * (total - done) / 60.0:6.1f} min left  "
+          f"rss {_resident_mb():7.0f} MB", file=sys.stderr, flush=True)
 
 
 def write_activation_cache(initial: dict, activation_path: pathlib.Path,
@@ -644,12 +693,15 @@ def run_policy_grid(
         return item, rows
 
     started = time.perf_counter()
+    done_count = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
         for item, rows in _bounded_results(pool, one, items, workers):
             for name, score, events, pass_count in rows:
                 scores[name].append(score)
                 tracks[name][item["name"]] = events
                 passes[name].append(pass_count)
+            done_count += 1
+            _progress(f"{corpus} policies", done_count, len(items), started)
 
     wall = time.perf_counter() - started
     out: dict[str, CorpusArm] = {}
@@ -722,11 +774,14 @@ def run_direct_flag_grid(
             return item, rows
 
     started = time.perf_counter()
+    done_count = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
         for item, rows in _bounded_results(pool, one, items, workers):
             for name, score, events in rows:
                 scores[name].append(score)
                 tracks[name][item["name"]] = events
+            done_count += 1
+            _progress(f"{corpus} margins", done_count, len(items), started)
 
     wall = time.perf_counter() - started
     parameters = {name: parameter for name, parameter, _ in policies}
