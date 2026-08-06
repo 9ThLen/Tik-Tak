@@ -251,6 +251,41 @@ def write_schedule(path: pathlib.Path, schedule: Sequence[VetoInterval]) -> None
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def write_activation_cache(initial: dict, activation_path: pathlib.Path,
+                           emit_path: pathlib.Path,
+                           times_path: pathlib.Path) -> None:
+    """Everything the replay has to be *handed* rather than reconstruct.
+
+    One function, called from both replay paths, because there were two copies
+    of this setup and only one of them was fixed — which the parity gate caught
+    on the very next run. Three things, each of which on its own failed that
+    gate on every full-length recording tried, twenty of twenty, with beat
+    counts as far apart as 116 against 74:
+
+    * **the values, at seventeen digits.** ``beatnet.hpp`` returns
+      ``(double)p[0] + (double)p[1]`` scaled by ``1 / models``. That is a
+      double; the note claiming nine digits round trip a float was true and did
+      not apply.
+    * **when each frame was released**, as the index of the 512-sample block the
+      model handed it over on. A frame becomes available later than the instant
+      it describes by more than its feature window — the resampler carries a
+      filter delay and the stream buffers a partial hop — and an integer index
+      avoids the rounding that made a recorded *time* land a block late.
+    * **the model's own frame timestamps.** ``(n * 441.0) / 22050.0`` and
+      ``n * (1.0 / 50.0)`` are different doubles, and the filter integrates over
+      the gaps between observations.
+    """
+    np.savetxt(activation_path,
+               np.asarray(initial["activation_beat"], dtype=np.float64),
+               fmt="%.17g")
+    np.savetxt(emit_path,
+               np.asarray(initial["activation_emit"], dtype=np.float64),
+               fmt="%.0f")
+    np.savetxt(times_path,
+               np.asarray(initial["activation_times"], dtype=np.float64),
+               fmt="%.17g")
+
+
 ScheduleBuilder = Callable[[TrackEvents], tuple[VetoInterval, ...]]
 ReplayRunner = Callable[[tuple[VetoInterval, ...]], dict]
 
@@ -345,30 +380,7 @@ def iter_track_policies(
         emit_path = pathlib.Path(directory) / "activation_emit.txt"
         times_path = pathlib.Path(directory) / "activation_times.txt"
         schedule_path = pathlib.Path(directory) / "schedule.txt"
-
-        # Three things have to be handed back, not reconstructed, before the
-        # replay is the same run. Each was found by the parity gate below and
-        # each on its own was enough to fail it on every full-length recording
-        # tried — twenty of twenty, with beat counts as far apart as 116 and 74:
-        #
-        #   the values, at seventeen digits, because `beatnet.hpp` returns
-        #   `(double)p[0] + (double)p[1]` scaled, which is a double and not the
-        #   float that nine digits round trips;
-        #
-        #   when each frame was released, as the index of the 512-sample block
-        #   the model handed it over on, because a frame is available later than
-        #   the instant it describes by more than the feature window — the
-        #   resampler and the stream's buffering add their own — and an integer
-        #   avoids the rounding that made a recorded *time* land a block late;
-        #
-        #   the model's own frame timestamps, because `(n * 441.0) / 22050.0`
-        #   and `n * (1.0 / 50.0)` are different doubles and the filter
-        #   integrates over the gaps between them.
-        np.savetxt(activation_path, beat_activation, fmt="%.17g")
-        np.savetxt(emit_path, np.asarray(initial["activation_emit"],
-                                         dtype=np.float64), fmt="%.0f")
-        np.savetxt(times_path, np.asarray(initial["activation_times"],
-                                          dtype=np.float64), fmt="%.17g")
+        write_activation_cache(initial, activation_path, emit_path, times_path)
 
         activation_columns = {
             key: initial[key] for key in
@@ -687,16 +699,20 @@ def run_direct_flag_grid(
         with tempfile.TemporaryDirectory(
                 prefix="tiktak-octave-veto-direct-") as directory:
             activation_path = pathlib.Path(directory) / "beat_activation.txt"
-            np.savetxt(activation_path, beat_activation, fmt="%.9g")
+            emit_path = pathlib.Path(directory) / "activation_emit.txt"
+            times_path = pathlib.Path(directory) / "activation_times.txt"
+            write_activation_cache(initial, activation_path, emit_path, times_path)
             columns = {key: initial[key] for key in
                        ("activation_times", "activation_beat", "activation_downbeat")}
-            baseline = run_activation(binary, item["audio"], activation_path)
+            baseline = run_activation(binary, item["audio"], activation_path,
+                                      emit_path=emit_path, times_path=times_path)
             baseline.update(columns)
             verify_cached_parity(item["name"], initial, baseline, reference)
             rows = []
             for name, _, flags in policies:
                 payload = run_activation(binary, item["audio"], activation_path,
-                                         extra=list(flags))
+                                         extra=list(flags), emit_path=emit_path,
+                                         times_path=times_path)
                 payload.update(columns)
                 replay = from_payload(payload)
                 events = evaluate_events(item["name"], replay, reference,

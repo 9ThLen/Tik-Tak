@@ -132,11 +132,25 @@ class TestSchedules:
 
 
 class TestFixedPoint:
-    def test_nine_digits_round_trip_the_float_activation(self) -> None:
+    def test_nine_digits_round_trip_a_float_but_not_the_activation(self) -> None:
+        """The true half of the claim that cost twenty of twenty on parity.
+
+        Nine significant digits do round trip a float exactly, and the tool's
+        note said so. What it missed is that the activation is not a float:
+        `beatnet.hpp` emits `(double)p[0] + (double)p[1]` scaled, and the sum of
+        two floats in double precision generally is not one.
+        """
         values = np.random.default_rng(9).random(1000, dtype=np.float32)
         restored = np.asarray([float(f"{value:.9g}") for value in values],
                               dtype=np.float32)
         assert np.array_equal(restored, values)
+
+        rng = np.random.default_rng(11)
+        sums = [float(a) + float(b) for a, b in
+                zip(rng.random(1000, dtype=np.float32),
+                    rng.random(1000, dtype=np.float32))]
+        assert any(float(f"{value:.9g}") != value for value in sums)
+        assert all(float(f"{value:.17g}") == value for value in sums)
 
     def test_empty_policy_is_baseline_without_an_extra_run(self) -> None:
         called = []
@@ -530,3 +544,46 @@ class TestActivationReplayFidelity:
         assert "--activation-emit" in args
         assert "--activation-times" in args
         assert "--activation-model-timing" in args
+
+
+class TestBothReplayPathsAreHandedTheCache:
+    """There were two copies of the activation setup and one was fixed.
+
+    The parity gate caught the other on the next run, 26 minutes in. Both paths
+    now call one function; this asserts that neither can drift again.
+    """
+
+    def test_the_cache_writer_emits_all_three_files(self, tmp_path) -> None:
+        from eval.octave_veto_experiment import write_activation_cache
+
+        initial = {"activation_beat": [0.5, 0.25], "activation_emit": [1, 2],
+                   "activation_times": [0.0, 0.02]}
+        act = tmp_path / "a.txt"
+        emit = tmp_path / "e.txt"
+        times = tmp_path / "t.txt"
+        write_activation_cache(initial, act, emit, times)
+        assert act.exists() and emit.exists() and times.exists()
+        assert emit.read_text().split() == ["1", "2"]
+
+    def test_the_values_survive_the_round_trip_exactly(self, tmp_path) -> None:
+        from eval.octave_veto_experiment import write_activation_cache
+
+        value = float(np.float32(0.41579765)) + float(np.float32(0.13931973))
+        initial = {"activation_beat": [value], "activation_emit": [1],
+                   "activation_times": [(1 * 441.0) / 22050.0]}
+        act = tmp_path / "a.txt"
+        times = tmp_path / "t.txt"
+        write_activation_cache(initial, act, tmp_path / "e.txt", times)
+        assert float(act.read_text().strip()) == value
+        assert float(times.read_text().strip()) == (1 * 441.0) / 22050.0
+
+    def test_neither_replay_path_calls_the_core_without_the_cache(self) -> None:
+        """Both call sites pass emit_path and times_path, or the gate fails."""
+        import inspect
+
+        from eval import octave_veto_experiment as module
+
+        source = inspect.getsource(module)
+        calls = source.count("run_activation(")
+        assert calls == source.count("emit_path=") == source.count("times_path=")
+        assert calls >= 4

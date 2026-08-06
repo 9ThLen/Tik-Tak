@@ -887,3 +887,16 @@ hard error.
 
 Three tests pin the three outcomes apart: slow convergence, a genuine cycle, and
 running out of passes.
+
+### The same fix was needed in two places, 2026-08-06
+
+A sixth command stopped, 26 minutes in, on the same parity gate — in the
+**other** replay path. The activation cache was set up twice, once in the
+schedule seam and once in the margin sweep, and only the first was corrected.
+Both now call one function, and a test asserts that every `run_activation` call
+site is handed the cache.
+
+Nothing about the experiment changed. It is recorded because the pattern is the
+point: each of these six stops was caught by a gate written before anyone knew
+it would be needed, and none of them reached a number that could have been
+reacted to.
