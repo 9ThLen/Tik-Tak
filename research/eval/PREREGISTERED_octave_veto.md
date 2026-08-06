@@ -700,3 +700,98 @@ and a reminder that the development corpus was chosen for inverting the profile.
 
 No threshold, no policy and no acceptance condition has been computed. `τ` is
 still unchosen and Harmonix is still unopened.
+
+---
+
+## Clarifications fixed while implementing A1--A4, 2026-08-06
+
+Appended before RWC is opened. These close executable gaps; none changes a
+candidate set, threshold or acceptance bound.
+
+### Stateful replay is a fixed point of the real core
+
+The formula remains implemented once, in `eval/octave_veto.py`. The live core
+gets only an allocation-free anchor resolver and `dump_analysis` accepts fixed
+rows `(onset, close, committed_bpm)`. Python computes a schedule, the real core
+replays it, and Python recomputes the schedule from the resulting live state.
+The arm is accepted as a replay only when the two schedules agree. Eight passes
+is a hard failure limit, not a tuning parameter. This avoids both alternatives
+that would invalidate the experiment: a Python particle filter and a second C++
+implementation of the decision statistic.
+
+The model is evaluated once per recording. Its beat activation is replayed for
+the policy grid, but only after an empty-schedule replay matches the direct model
+run on every `live_*` series and the beat list. A mismatch aborts the recording.
+Activation JSON uses nine significant digits: BeatNet outputs floats, and nine
+round-trip every float exactly; the previous five-digit diagnostic output did
+not meet a byte-parity contract when fed back into the filter.
+Cached replay also preserves **availability time**, not only frame timestamps:
+BeatNet timestamps its first frame at zero but emits it after its 64 ms feature
+window exists. The replay feeds cached frames on the same 512-sample callback
+that the model would have emitted them. This timing mode is opt-in, so it does
+not rewrite earlier `--live-activation` results.
+
+The veto schedule is compared on that **callback clock** as well. Passing the
+model frame's timestamp into the resolver would apply a decision about 64 ms
+after the proposal sample that created it, contradicting the registered
+"at onset" action even while every cached series still matched. The evaluation
+seam therefore uses the current callback time for interval membership and keeps
+the frame timestamp for the tracker observation itself.
+
+### Event close and merge now mean what the prose said
+
+An event closes at the frame where one full second at `k = 0` has been
+confirmed, not at the first zero frame. The onset decision stays latched through
+that debounce. When an onset inside the two-second minimum separation is merged,
+the earlier event's close is extended to cover it; merely dropping the second
+row would leave part of the merged event unprotected.
+
+### The shifted-null control is now an equation
+
+"The same policy driven by the shifted null" means
+
+    delta_control = null(G_committed) - null(G_proposed)
+
+with the same numeric threshold, the same unanswered-allow rule and its own
+stateful fixed-point replay. It is not the full statistic with a second random
+shift; there is no RNG anywhere in the protocol.
+
+### Recording-balanced event aggregation is fixed
+
+For each recording, compute veto sensitivity on `correct -> wrong` events when
+that class exists and allow specificity on `wrong -> correct` events when that
+class exists. Corpus balanced accuracy is half the mean per-recording
+sensitivity plus half the mean per-recording specificity. A3 is one minus the
+mean per-recording specificity. Bootstrap resamples recordings and recomputes
+those two class means; it never pools events first.
+
+### "Standing cost gates on RWC" needed RWC bounds
+
+The absolute Harmonix thresholds cannot be imported: RWC's shipped strict rate
+is about 18%, so requiring Harmonix's 30% during development would silently turn
+the threshold grid into an empty set. On RWC the gates are therefore fixed as
+no-regression against the RWC baseline for strict usability, retained correct
+locked-time, switches per five minutes and settle P90; beat F keeps the standing
+one-point tolerance. Harmonix still uses the five absolute bounds in Section 9.
+
+Within a simple policy family, an exact tie on matched cost and episode rate is
+resolved by the first value in the registered ascending candidate grid. No
+refinement or transfer-corpus rematching is permitted.
+
+Across families, an exact episode-rate tie is resolved in the fixed reporting
+order: debounce, wider margin, rate limit, total ban. This only names which tied
+arm is carried to the paired transfer comparison; it does not add a candidate.
+
+### The transfer commit is executable evidence
+
+The Harmonix command accepts a selection only when its JSON is the sole path
+changed by `HEAD`, and `HEAD^` is the implementation commit named by the RWC
+artifact. Merely checking that the file is tracked at the current revision
+would allow code or thresholds to change in the same commit that freezes the
+selection, defeating the two-stage protocol.
+
+The selected arm also reports P2 sign agreement, ambiguous-versus-labelled
+counts, D1 and answered-event coverage by annotated metre. P2 becomes a sink
+only in the registered conditional case where the decoder wins A1; ambiguity
+becomes a sink only when it dominates both RWC and Harmonix. Neither diagnostic
+is used to choose `tau` or a matched-policy parameter.

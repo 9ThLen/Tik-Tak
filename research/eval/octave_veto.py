@@ -400,7 +400,7 @@ def extract_proposals(times: np.ndarray, published_bpm: np.ndarray,
         flipped = sign != 0 and sign != open_sign
         if flipped or (zero_since is not None and t - zero_since >= CLOSE_AFTER_SEC):
             _emit(out, times, committed, measured_bpm, open_at,
-                  zero_since if zero_since is not None else float(t), open_sign)
+                  float(t), open_sign)
             committed = float(published_bpm[i])
             open_at = i if flipped else None
             open_sign = sign if flipped else 0
@@ -418,6 +418,8 @@ def _emit(out: list[Proposal], times: np.ndarray, committed: float,
     onset = float(times[start])
     # Merged into the previous event rather than counted again.
     if out and onset - out[-1].onset_sec < MIN_SEPARATION_SEC:
+        out[-1] = dataclasses.replace(
+            out[-1], close_sec=max(out[-1].close_sec, close))
         return
     out.append(Proposal(onset_sec=onset, close_sec=close,
                         k=octave_k(float(measured_bpm[start]), committed) or sign,

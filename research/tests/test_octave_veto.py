@@ -296,6 +296,12 @@ class TestEventExtraction:
         assert len(events) == 2
         assert [e.onset_sec for e in events] == pytest.approx([0.0, 6.0])
 
+    def test_close_is_when_the_one_second_agreement_is_confirmed(self) -> None:
+        """The veto stays latched through the close debounce, not just to its start."""
+        events = extract_proposals(*trace([1] * 100 + [0] * 100))
+        assert len(events) == 1
+        assert events[0].close_sec == pytest.approx(3.0)
+
     def test_a_sign_flip_splits_the_event(self) -> None:
         events = extract_proposals(*trace([1] * 200 + [-1] * 200))
         assert [e.k for e in events] == [1, -1]
@@ -307,6 +313,7 @@ class TestEventExtraction:
         ks = [1] * 10 + [0] * 60 + [1] * 60
         events = extract_proposals(*trace(ks))
         assert len(events) == 1
+        assert events[0].close_sec == pytest.approx((len(ks) - 1) * 0.02)
 
     def test_proposals_before_the_first_lock_are_excluded(self) -> None:
         """The exclusion is on the onset, not on any frame of the event.

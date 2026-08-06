@@ -241,16 +241,25 @@ void LiveTracker::submit(double time_sec, double normalised) {
             // that is not trusted: there is nothing to hold either.
             filter_.clearAnchor();
         } else if (measured.octave_margin >= anchor_gate) {
+            double anchor_bpm = measured.bpm;
+            if (config_.anchor_bpm_resolver != nullptr) {
+                const double resolved = config_.anchor_bpm_resolver(
+                    config_.anchor_bpm_resolver_context, time_sec, measured.bpm);
+                if (resolved > 0.0 && std::isfinite(resolved)) {
+                    anchor_bpm = resolved;
+                }
+            }
+
             // One width, unconditionally. Making it depend on whether the
             // filter and the anchor sit at the same metrical level was built,
             // measured on both corpus families, and removed: see
             // LiveConfig::anchor_width_octaves for the numbers and for why the
             // obvious version of that rule points the wrong way.
-            filter_.anchorTempo(measured.bpm, config_.anchor_width_octaves);
+            filter_.anchorTempo(anchor_bpm, config_.anchor_width_octaves);
             // A confident anchor always refreshes the hold, including when it
             // lands on a different octave from the one being held. The freeze
             // exists to survive an absence of evidence, never to outvote it.
-            held_octave_bpm_ = measured.bpm;
+            held_octave_bpm_ = anchor_bpm;
             held_since_sec_ = time_sec;
         } else if (config_.anchor_octave_freeze && held_octave_bpm_ > 0.0) {
             // Weak margin, and an octave recently worth keeping. Move the

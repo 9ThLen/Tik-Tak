@@ -156,6 +156,74 @@ bool readSalience(const char* path, std::vector<double>& out,
     return true;
 }
 
+struct VetoInterval {
+    double onset_sec = 0.0;
+    double close_sec = 0.0;
+    double committed_bpm = 0.0;
+};
+
+// A fixed schedule is the smallest seam that lets the Python experiment replay
+// a stateful policy through the real particle filter. The schedule is rebuilt
+// from each replay until it reaches a fixed point; this class only applies it.
+// It deliberately knows nothing about the decoder or annotations.
+struct AnchorVetoSchedule {
+    std::vector<VetoInterval> intervals;
+    std::size_t next = 0;
+    std::size_t applied_frames = 0;
+    // Proposal onsets are observed on the audio-callback clock. Model frames
+    // carry the start of their 64 ms feature window, so comparing a schedule
+    // with that timestamp would apply every decision roughly one window late.
+    // dump_analysis sets this to the current callback time before observations;
+    // the fallback keeps the seam usable outside cached-model replay.
+    double decision_time_sec = -1.0;
+
+    double resolve(double time_sec, double measured_bpm) {
+        if (decision_time_sec >= 0.0) time_sec = decision_time_sec;
+        while (next < intervals.size() &&
+               time_sec >= intervals[next].close_sec) {
+            ++next;
+        }
+        if (next >= intervals.size()) return measured_bpm;
+        const VetoInterval& interval = intervals[next];
+        if (time_sec < interval.onset_sec) return measured_bpm;
+        ++applied_frames;
+        return tiktak::tracking::octaveNearest(measured_bpm,
+                                               interval.committed_bpm);
+    }
+
+    static double callback(void* context, double time_sec, double measured_bpm) {
+        return static_cast<AnchorVetoSchedule*>(context)->resolve(time_sec,
+                                                                  measured_bpm);
+    }
+};
+
+bool readVetoSchedule(const char* path, AnchorVetoSchedule& schedule,
+                      std::string& error) {
+    std::vector<double> values;
+    if (!readSalience(path, values, error)) return false;
+    if (values.size() % 3 != 0) {
+        error = "anchor veto schedule needs onset, close and committed BPM per row";
+        return false;
+    }
+    schedule.intervals.reserve(values.size() / 3);
+    for (std::size_t i = 0; i < values.size(); i += 3) {
+        const VetoInterval interval{values[i], values[i + 1], values[i + 2]};
+        if (!(interval.onset_sec >= 0.0) ||
+            !(interval.close_sec > interval.onset_sec) ||
+            !(interval.committed_bpm > 0.0)) {
+            error = "invalid anchor veto interval " + std::to_string(i / 3 + 1);
+            return false;
+        }
+        if (!schedule.intervals.empty() &&
+            interval.onset_sec < schedule.intervals.back().close_sec) {
+            error = "anchor veto intervals must be sorted and non-overlapping";
+            return false;
+        }
+        schedule.intervals.push_back(interval);
+    }
+    return true;
+}
+
 // JSON has no way to say "not a number", and a reader that meets NaN either
 // throws or silently invents null. Analysis of silence legitimately produces
 // none of these values, so they are reported as 0 with the empty beat list
@@ -280,6 +348,10 @@ int main(int argc, char** argv) {
     // only way to find out whether that diagnosis was right.
     std::string activation_path;
     double activation_fps = 50.0;
+    // Reproduce when a BeatNet frame becomes available, not only the timestamp
+    // written on it. Off by default so earlier external-activation experiments
+    // retain their callback cadence; octave-veto cached replay turns it on.
+    bool activation_model_timing = false;
     // The same swap, but made by the core itself rather than handed to it: the
     // tracker computes the activation from the audio through its own front end.
     // --live-activation answers "would a better observation help"; this answers
@@ -363,6 +435,10 @@ int main(int argc, char** argv) {
     // const and both read state that only moves once a frame, so asking more
     // often returns the same answer and, crucially, cannot change the run.
     double live_sample_hz = 1.0;
+    // A research replay schedule: onset, close, committed BPM. The decoder
+    // remains in Python as the single implementation of the registered formula;
+    // this file only gives its decisions the real live-core consequences.
+    std::string live_anchor_veto_path;
     // The arms of eval/PREREGISTERED_octave_freeze.md that need code. The
     // third, clearing the anchor at a raised threshold, is already reachable
     // through --live-anchor-margin on its own.
@@ -418,6 +494,15 @@ int main(int argc, char** argv) {
             dump_activation = true;
             continue;
         }
+        if (std::strcmp(argv[i], "--live-anchor-veto") == 0) {
+            if (i + 1 >= argc) {
+                std::fprintf(stderr, "--live-anchor-veto needs a file\n");
+                return 2;
+            }
+            live = true;
+            live_anchor_veto_path = argv[++i];
+            continue;
+        }
         if (std::strcmp(argv[i], "--live") == 0) {
             live = true;
             continue;
@@ -425,6 +510,10 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--live-activation") == 0) {
             if (i + 1 >= argc) { std::fprintf(stderr, "--live-activation needs a file\n"); return 2; }
             activation_path = argv[++i];
+            continue;
+        }
+        if (std::strcmp(argv[i], "--activation-model-timing") == 0) {
+            activation_model_timing = true;
             continue;
         }
         if (std::strcmp(argv[i], "--beat-this") == 0) {
@@ -601,10 +690,12 @@ int main(int argc, char** argv) {
                      "  --live-sample-hz <N>  how often to sample the live series;\n"
                      "                     1 is the default and what everything before\n"
                      "                     the octave-veto work was measured at\n"
+                     "  --live-anchor-veto <file> onset close committed_bpm rows\n"
                      "  --live-margin-abstain    publish nothing while the margin is weak\n"
                      "                           (a diagnostic bound, not a shippable mode)\n"
                      "  --live-activation <file> [--activation-fps N]\n"
                      "                     drive the particle filter from this activation\n"
+                     "  --activation-model-timing  replay BeatNet's frame availability\n"
                      "  --live-model <file>\n"
                      "                     the core computes the activation itself; repeat\n"
                      "                     the flag to average several checkpoints\n"
@@ -711,6 +802,15 @@ int main(int argc, char** argv) {
     // `anchor_*` without the `live_` prefix that the *flags* above use, so the
     // series and the knob that shapes it cannot be confused for each other.
     std::vector<double> anchor_bpm, anchor_confidence, anchor_margin;
+    AnchorVetoSchedule anchor_veto_schedule;
+    if (!live_anchor_veto_path.empty()) {
+        std::string complaint;
+        if (!readVetoSchedule(live_anchor_veto_path.c_str(), anchor_veto_schedule,
+                              complaint)) {
+            std::fprintf(stderr, "%s\n", complaint.c_str());
+            return 1;
+        }
+    }
 
     // The whole live path, driven by an activation from outside instead of by
     // the built-in onset function. The same tracker, the same hysteresis and
@@ -773,6 +873,10 @@ int main(int argc, char** argv) {
             live_config.filter.regeneration = live_regeneration;
         }
         live_config.anchor_tempo = live_anchor;
+        if (!live_anchor_veto_path.empty()) {
+            live_config.anchor_bpm_resolver = &AnchorVetoSchedule::callback;
+            live_config.anchor_bpm_resolver_context = &anchor_veto_schedule;
+        }
         if (live_anchor_width > 0.0) {
             live_config.anchor_width_octaves = live_anchor_width;
         }
@@ -864,22 +968,52 @@ int main(int argc, char** argv) {
             // which beats were right. The accuracy measured through it stands;
             // the count of beats emitted through it did not.
             const double frame_sec = 1.0 / activation_fps;
-            const double block_sec = static_cast<double>(kLiveBlock) / rate;
-            const double last_sec = static_cast<double>(activation.size()) * frame_sec;
             std::size_t next_frame = 0;
-            for (double clock = 0.0; clock < last_sec; clock += block_sec) {
-                while (next_frame < activation.size() &&
-                       static_cast<double>(next_frame) * frame_sec <= clock) {
-                    tracker.observe(static_cast<double>(next_frame) * frame_sec,
-                                    activation[next_frame]);
-                    ++next_frame;
+            if (activation_model_timing) {
+                // The model timestamps a frame at its start but cannot emit it
+                // until the whole 64 ms feature window exists. Drive the same
+                // 512-sample callback clock as the audio path and release each
+                // cached frame on the callback where the real model released
+                // it. Its observation timestamp remains the registered frame
+                // time; only availability is delayed.
+                constexpr double kAvailabilityDelay =
+                    static_cast<double>(tiktak::ml::BeatNetFeatures::kFrameSize) /
+                    tiktak::ml::BeatNetFeatures::kModelRate;
+                for (std::size_t pos = 0; pos < samples.size(); pos += kLiveBlock) {
+                    const std::size_t take =
+                        std::min(kLiveBlock, samples.size() - pos);
+                    now += static_cast<double>(take) / rate;
+                    anchor_veto_schedule.decision_time_sec = now;
+                    while (next_frame < activation.size() &&
+                           static_cast<double>(next_frame) * frame_sec +
+                               kAvailabilityDelay <= now) {
+                        tracker.observe(static_cast<double>(next_frame) * frame_sec,
+                                        activation[next_frame]);
+                        ++next_frame;
+                    }
+                    poll();
                 }
-                now = clock;
-                poll();
+            } else {
+                const double block_sec = static_cast<double>(kLiveBlock) / rate;
+                const double last_sec =
+                    static_cast<double>(activation.size()) * frame_sec;
+                for (double clock = 0.0; clock < last_sec; clock += block_sec) {
+                    anchor_veto_schedule.decision_time_sec = clock;
+                    while (next_frame < activation.size() &&
+                           static_cast<double>(next_frame) * frame_sec <= clock) {
+                        tracker.observe(static_cast<double>(next_frame) * frame_sec,
+                                        activation[next_frame]);
+                        ++next_frame;
+                    }
+                    now = clock;
+                    poll();
+                }
             }
         } else {
             for (std::size_t pos = 0; pos < samples.size(); pos += kLiveBlock) {
                 const std::size_t take = std::min(kLiveBlock, samples.size() - pos);
+                anchor_veto_schedule.decision_time_sec =
+                    now + static_cast<double>(take) / rate;
                 tracker.process(now, samples.data() + pos, take);
                 now += static_cast<double>(take) / rate;
                 poll();
@@ -1062,8 +1196,12 @@ int main(int argc, char** argv) {
             std::printf("],\n");
         };
         series("activation_times", at, "%.6f");
-        series("activation_beat", beat_p, "%.5g");
-        series("activation_downbeat", downbeat_p, "%.5g");
+        // BeatNet returns floats. Nine significant digits are enough to round
+        // trip every float exactly; five were adequate for plots but changed
+        // the particle weights when the activation was fed back for policy
+        // replay, defeating the byte-parity gate above that replay.
+        series("activation_beat", beat_p, "%.9g");
+        series("activation_downbeat", downbeat_p, "%.9g");
     }
     if (live) {
         std::printf("  \"live_bpm\": %.17g,\n", finiteOrZero(live_bpm));
@@ -1078,6 +1216,10 @@ int main(int argc, char** argv) {
         std::printf("  \"live_gated\": %zu,\n", live_stats.gated);
         std::printf("  \"live_beats\": %zu,\n", live_stats.beats);
         std::printf("  \"live_beats_late\": %zu,\n", live_stats.beats_late);
+        std::printf("  \"live_anchor_veto_intervals\": %zu,\n",
+                    anchor_veto_schedule.intervals.size());
+        std::printf("  \"live_anchor_veto_frames\": %zu,\n",
+                    anchor_veto_schedule.applied_frames);
         std::printf("  \"live_seeded\": %s,\n", live_seed ? "true" : "false");
         const auto column = [](const char* name, const std::vector<double>& values) {
             std::printf("  \"%s\": [", name);

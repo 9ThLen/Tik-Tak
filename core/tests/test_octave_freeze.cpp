@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "support.hpp"
@@ -24,6 +25,19 @@ namespace {
 
 constexpr double kRate = 48000.0;
 constexpr double kFps = 50.0;
+
+struct ResolverProbe {
+    std::size_t calls = 0;
+    double factor = 1.0;
+    bool invalid = false;
+};
+
+double resolveAnchor(void* context, double, double measured_bpm) {
+    auto& probe = *static_cast<ResolverProbe*>(context);
+    ++probe.calls;
+    if (probe.invalid) return std::numeric_limits<double>::quiet_NaN();
+    return measured_bpm * probe.factor;
+}
 
 LiveConfig freezeConfig(double margin, bool freeze = true) {
     LiveConfig config = tiktak::tracking::liveConfigFor(kRate);
@@ -120,6 +134,49 @@ TEST(OctaveFreeze, LeavesAnEmptyHoldAlone) {
     // must be handed back exactly what it passed in.
     EXPECT_DOUBLE_EQ(octaveNearest(120.0, 0.0), 120.0);
     EXPECT_DOUBLE_EQ(octaveNearest(0.0, 120.0), 0.0);
+}
+
+TEST(AnchorResolver, ChangesOnlyTheAnchorBpmAtTheExistingSeam) {
+    ResolverProbe probe{0, 0.5, false};
+    LiveConfig config = freezeConfig(0.0, false);
+    config.anchor_bpm_resolver = &resolveAnchor;
+    config.anchor_bpm_resolver_context = &probe;
+    LiveTracker tracker(config);
+
+    driveAlternating(tracker, 120.0, 12.0);
+
+    ASSERT_GT(probe.calls, 0u);
+    EXPECT_NEAR(tracker.heldOctaveBpm(), 60.0, 3.0);
+}
+
+TEST(AnchorResolver, InvalidAnswerFallsBackToTheMeasuredBpm) {
+    ResolverProbe probe{0, 1.0, true};
+    LiveConfig baseline_config = freezeConfig(0.0, false);
+    LiveConfig resolver_config = baseline_config;
+    resolver_config.anchor_bpm_resolver = &resolveAnchor;
+    resolver_config.anchor_bpm_resolver_context = &probe;
+    LiveTracker baseline(baseline_config);
+    LiveTracker resolver(resolver_config);
+
+    driveAlternating(baseline, 120.0, 12.0);
+    driveAlternating(resolver, 120.0, 12.0);
+
+    ASSERT_GT(probe.calls, 0u);
+    EXPECT_DOUBLE_EQ(resolver.heldOctaveBpm(), baseline.heldOctaveBpm());
+}
+
+TEST(AnchorResolver, IsInertWhenTheAnchorIsOff) {
+    ResolverProbe probe{0, 0.5, false};
+    LiveConfig config = freezeConfig(0.0, false);
+    config.anchor_tempo = false;
+    config.anchor_bpm_resolver = &resolveAnchor;
+    config.anchor_bpm_resolver_context = &probe;
+    LiveTracker tracker(config);
+
+    driveAlternating(tracker, 120.0, 12.0);
+
+    EXPECT_EQ(probe.calls, 0u);
+    EXPECT_DOUBLE_EQ(tracker.heldOctaveBpm(), 0.0);
 }
 
 // --------------------------------------------- the arm against the baseline

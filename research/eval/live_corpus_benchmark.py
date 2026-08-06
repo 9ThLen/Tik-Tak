@@ -42,10 +42,11 @@ import numpy as np
 from eval.analysis import Analyser, DEFAULT_BINARY, Estimate
 from eval.annotations import load_annotation
 from eval.harness import evaluate
+from eval.live_level import (OCTAVE_TOLERANCE, local_reference_bpm,
+                             tempo_state)
 
 LOCK_CONFIDENCE = 0.25
 RELEASE_CONFIDENCE = 0.02
-OCTAVE_TOLERANCE = math.log2(1.08)
 ROOT_AUDIO_SUFFIXES = {".wav", ".flac", ".mp3", ".m4a"}
 
 # The per-recording pass mark. See verdict(). These are product thresholds, not
@@ -123,6 +124,7 @@ def load_corpus(
                 {
                     "corpus": row["dataset"],
                     "name": row["track_id"],
+                    "meter": row.get("meter") or None,
                     "audio": _audio_path(ground_truth, row),
                     "annotation": ground_truth / row["annotation_relpath"],
                     "annotated": True,
@@ -190,20 +192,6 @@ def load_reference_downbeats(path: pathlib.Path) -> np.ndarray:
     return load_annotation(path).downbeats
 
 
-def local_reference_bpm(beats: np.ndarray, time_sec: float) -> float:
-    beats = np.asarray(beats, dtype=np.float64)
-    index = int(np.searchsorted(beats, time_sec))
-    start = max(0, index - 5)
-    stop = min(len(beats), index + 6)
-    intervals = np.diff(beats[start:stop])
-    intervals = intervals[
-        np.isfinite(intervals) & (intervals > 0.1) & (intervals < 3.0)
-    ]
-    if len(intervals) == 0:
-        return 0.0
-    return 60.0 / float(np.median(intervals))
-
-
 def _midpoints(beats: np.ndarray) -> np.ndarray:
     """The same grid read at twice its rate: every beat plus every gap's centre.
 
@@ -216,21 +204,6 @@ def _midpoints(beats: np.ndarray) -> np.ndarray:
     if len(beats) < 2:
         return beats
     return np.sort(np.concatenate([beats, 0.5 * (beats[:-1] + beats[1:])]))
-
-
-def tempo_state(bpm: float, reference_bpm: float) -> str:
-    if not (
-        bpm > 0.0
-        and reference_bpm > 0.0
-        and math.isfinite(bpm)
-        and math.isfinite(reference_bpm)
-    ):
-        return "zero"
-    ratio = math.log2(bpm / reference_bpm)
-    for octave, name in ((-1, "half"), (0, "same"), (1, "double")):
-        if abs(ratio - octave) <= OCTAVE_TOLERANCE:
-            return name
-    return "other"
 
 
 def octave_statistics(estimate: Estimate, beats: np.ndarray) -> dict[str, Any]:
@@ -542,13 +515,15 @@ def _score_one(
     model: pathlib.Path | None,
     seeded: bool = False,
     extra: tuple[str, ...] = (),
+    estimate: Estimate | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     try:
-        estimate = Analyser(binary).analyse_live_file(
-            item["audio"], model=model if mode == "model" else None,
-            seeded=seeded, extra=extra,
-        )
+        if estimate is None:
+            estimate = Analyser(binary).analyse_live_file(
+                item["audio"], model=model if mode == "model" else None,
+                seeded=seeded, extra=extra,
+            )
         result: dict[str, Any] = {
             "ok": True,
             "mode": mode,
@@ -629,6 +604,12 @@ def _score_one(
             "error": _without_local_paths(str(error)),
             "wall": time.perf_counter() - started,
         }
+
+
+def score_estimate(item: dict[str, Any], estimate: Estimate,
+                   mode: str = "model") -> dict[str, Any]:
+    """Score an already-completed live replay with the canonical metrics."""
+    return _score_one(item, mode, DEFAULT_BINARY, None, estimate=estimate)
 
 
 # The report is meant to be committed beside the numbers that cite it, so it

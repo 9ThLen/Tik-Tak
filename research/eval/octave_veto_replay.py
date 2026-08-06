@@ -99,6 +99,29 @@ def run(binary: pathlib.Path, audio: pathlib.Path, weights: pathlib.Path,
     return json.loads(done.stdout)
 
 
+def run_activation(binary: pathlib.Path, audio: pathlib.Path,
+                   activation_path: pathlib.Path,
+                   sample_hz: float = SAMPLE_HZ,
+                   extra: list[str] | None = None) -> dict:
+    """Replay cached beat activations through the same live core.
+
+    The downbeat head is not needed by C++: Python already used it to build the
+    fixed veto schedule.  This is the registered "model once, policies many"
+    path; callers must establish parity with ``run`` before trusting it.
+    """
+    args = [str(binary), str(audio), "--live-activation", str(activation_path),
+            "--activation-fps", repr(SAMPLE_HZ),
+            "--live-sample-hz", repr(float(sample_hz)),
+            "--activation-model-timing"]
+    if extra:
+        args += list(extra)
+    done = subprocess.run(args, capture_output=True, text=True, check=False)
+    if done.returncode != 0:
+        raise RuntimeError(f"dump_analysis activation replay failed on {audio.name}: "
+                           f"{done.stderr.strip()[:400]}")
+    return json.loads(done.stdout)
+
+
 def replay(binary: pathlib.Path, audio: pathlib.Path, weights: pathlib.Path,
            sample_hz: float = SAMPLE_HZ) -> Replay:
     payload = run(binary, audio, weights, sample_hz)
@@ -186,6 +209,11 @@ def _same_series(a: dict, b: dict) -> bool:
         elif left != right:
             return False
     return True
+
+
+def same_live_series(a: dict, b: dict) -> bool:
+    """Public parity predicate for cached-activation policy replay."""
+    return _same_series(a, b)
 
 
 def main() -> int:

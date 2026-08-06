@@ -13,6 +13,18 @@
 
 namespace tiktak::tracking {
 
+// Optional research seam at the one point where the activation-tempo estimate
+// becomes an anchor. Returning `measured_bpm` is the shipped behaviour; a
+// resolver may return an octave-equivalent tempo to veto a proposed level
+// change without touching phase or tempo motion inside the octave.
+//
+// A raw function pointer keeps the audio path allocation-free. The callback
+// and its context must outlive the tracker. Product configurations leave both
+// null; this exists so a replay can exercise a policy against the real filter
+// instead of implementing the filter again in a research script.
+using AnchorBpmResolver = double (*)(void* context, double time_sec,
+                                     double measured_bpm);
+
 struct LiveConfig {
     dsp::OdfConfig odf;
     ParticleFilterConfig filter;
@@ -201,6 +213,12 @@ struct LiveConfig {
     // an episode metric. It exists to say how much of that metric is reachable
     // by silence alone, so the arms that do speak can be read against it.
     bool anchor_margin_abstain = false;
+
+    // Research-only override of the BPM written to the anchor. Null is the
+    // shipped path and therefore byte-identical to the code before this seam.
+    // Invalid callback results are ignored and fall back to `measured_bpm`.
+    AnchorBpmResolver anchor_bpm_resolver = nullptr;
+    void* anchor_bpm_resolver_context = nullptr;
 
     // A stream time this far from where the sample count says it should be
     // means the device dropped or repeated a buffer.
