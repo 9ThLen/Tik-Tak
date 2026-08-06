@@ -587,3 +587,54 @@ class TestBothReplayPathsAreHandedTheCache:
         calls = source.count("run_activation(")
         assert calls == source.count("emit_path=") == source.count("times_path=")
         assert calls >= 4
+
+
+class TestCycleDetectionGranularity:
+    """Convergence is exact; cycle detection is not, and they differ on purpose.
+
+    On RWC_C003 every decoder arm settles into a period-2 orbit whose members
+    are bitwise identical — drift 0.000e+00 — so the exact test finds them. The
+    comparison policies do not: debounce builds an interval from every event
+    rather than a thresholded subset, so its schedule moves with the whole event
+    list and wandered forty passes without landing on a float it had seen.
+    """
+
+    def test_a_millisecond_apart_is_the_same_decision(self) -> None:
+        from eval.octave_veto_experiment import decision_signature
+
+        a = (VetoInterval(10.0000001, 12.0000002, 120.0000001),)
+        b = (VetoInterval(10.0, 12.0, 120.0),)
+        assert schedule_signature(a) != schedule_signature(b)
+        assert decision_signature(a) == decision_signature(b)
+
+    def test_two_real_proposals_do_not_merge(self) -> None:
+        """The poll the onsets come from is ~23 ms; the resolution is 1 ms."""
+        from eval.octave_veto_experiment import decision_signature
+
+        a = (VetoInterval(10.000, 12.0, 120.0),)
+        b = (VetoInterval(10.023, 12.0, 120.0),)
+        assert decision_signature(a) != decision_signature(b)
+
+    def test_a_drifting_orbit_is_caught_as_a_cycle(self) -> None:
+        """Alternating decisions whose floats never repeat exactly."""
+        payload = payload_with_proposal()
+        step = 0
+
+        def build(_):
+            nonlocal step
+            step += 1
+            jitter = step * 1e-9
+            if step % 2:
+                return (VetoInterval(10.0 + jitter, 12.0, 120.0),)
+            return ()
+
+        got = converge_replay(payload, "x", reference_beats(),
+                              lambda _: payload, build, max_passes=12)
+        assert got.cycled is True
+        assert got.schedule == ()
+
+    def test_missing_memory_reads_as_absent_not_as_zero(self) -> None:
+        from eval.octave_veto_experiment import _resident_mb
+
+        value = _resident_mb()
+        assert np.isnan(value) or value > 0.0

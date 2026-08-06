@@ -900,3 +900,34 @@ Nothing about the experiment changed. It is recorded because the pattern is the
 point: each of these six stops was caught by a gate written before anyone knew
 it would be needed, and none of them reached a number that could have been
 reacted to.
+
+### Cycle detection needed the right granularity, 2026-08-06
+
+Two more commands stopped. The first died with a segmentation fault, no
+artifact and one line of output, so neither how far it got nor how large it had
+grown could be recovered; both corpus loops now log progress and working set,
+and the retry was made diagnostic rather than merely repeated.
+
+The retry then failed cleanly on RWC_C003, and the diagnosis is worth the
+record. Running that recording through every registered policy:
+
+* **every decoder arm resolves.** Four of them settle into a period-2 orbit and
+  are caught by the cycle rule registered above; the rest converge at pass 0.
+  The alternating members are **bitwise identical** — measured drift
+  0.000e+00 — so exact comparison finds them.
+* **a comparison policy does not.** `debounce` builds a veto interval from
+  *every* event rather than from a thresholded subset, so its schedule moves
+  with the whole event list and wandered forty passes without landing on a
+  float it had already seen, while alternating between two stable **decisions**.
+
+So convergence and cycle detection needed different granularities, and now have
+them. Convergence stays exact. A cycle is recognised on **which proposals are
+blocked, to the millisecond** — far finer than the ~23 ms poll the onsets come
+from, so two real proposals cannot merge, and far coarser than the drift, so one
+proposal cannot fail to match itself. **The resolution rule is unchanged**: take
+the cycle's fewest-veto member, mark the recording, report the count.
+
+Note which side of the experiment this fell on. The policy under test converges;
+the matched-cost comparison is the unstable one. That is worth knowing when the
+comparison is the primary endpoint, and it is recorded here rather than in a
+commit message.

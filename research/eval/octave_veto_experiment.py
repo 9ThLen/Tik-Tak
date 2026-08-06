@@ -52,6 +52,10 @@ RATE_LIMIT_CANDIDATES = (5.0, 10.0, 20.0, 30.0, 60.0, 120.0)
 MAX_FIXED_POINT_PASSES = 40
 SCHEDULE_TIME_DIGITS = 6
 SCHEDULE_BPM_DIGITS = 9
+# Cycle detection only, never convergence. A millisecond is much finer than the
+# ~23 ms poll the onsets are drawn from and much coarser than the drift between
+# two passes that block the same proposals.
+DECISION_TIME_DIGITS = 3
 BOOTSTRAP_SEED = 20260806
 BOOTSTRAP_REPLICATES = 10_000
 
@@ -245,6 +249,33 @@ def schedule_signature(schedule: Sequence[VetoInterval]) -> tuple[tuple[float, .
                  for row in schedule)
 
 
+def decision_signature(schedule: Sequence[VetoInterval]
+                       ) -> tuple[tuple[float, ...], ...]:
+    """What the policy *does*: which proposals it blocks, to the millisecond.
+
+    Used only to recognise a cycle, never to decide convergence — that stays
+    exact. The two need different granularities because they answer different
+    questions.
+
+    Some orbits repeat exactly. On RWC_C003 every decoder arm settles into a
+    period-2 cycle whose alternating members are bitwise identical, drift
+    0.000e+00, and the exact test finds them. The **comparison** policies do
+    not: `debounce_schedule` builds an interval from every event rather than
+    from a thresholded subset, so its schedule moves with the whole event list
+    and can wander through forty passes without ever landing on a float it has
+    seen before. The decisions still alternate between two sets; only the last
+    digits do not.
+
+    A millisecond is far finer than the ~23 ms poll the onsets come from, so two
+    genuinely different proposals cannot merge, and far coarser than the drift,
+    so one proposal cannot fail to match itself.
+    """
+    return tuple((round(row.onset_sec, DECISION_TIME_DIGITS),
+                  round(row.close_sec, DECISION_TIME_DIGITS),
+                  round(row.committed_bpm, DECISION_TIME_DIGITS))
+                 for row in schedule)
+
+
 def write_schedule(path: pathlib.Path, schedule: Sequence[VetoInterval]) -> None:
     lines = ["# onset_sec close_sec committed_bpm"]
     lines.extend(f"{row.onset_sec:.9f} {row.close_sec:.9f} "
@@ -255,8 +286,9 @@ def write_schedule(path: pathlib.Path, schedule: Sequence[VetoInterval]) -> None
 def _resident_mb() -> float:
     """This process's working set, without a psutil dependency.
 
-    Returns 0.0 where the call is unavailable rather than raising: this is
-    diagnostic output for a long run, and it must never be the reason one dies.
+    Returns NaN where the call is unavailable rather than raising or lying:
+    this is diagnostic output for a long run and must never be the reason one
+    dies, but a plausible-looking zero is worse than an obvious absence.
     """
     try:
         import ctypes
@@ -277,12 +309,20 @@ def _resident_mb() -> float:
         counters = Counters()
         counters.cb = ctypes.sizeof(counters)
         handle = ctypes.windll.kernel32.GetCurrentProcess()
-        if not ctypes.windll.psapi.GetProcessMemoryInfo(
-                handle, ctypes.byref(counters), counters.cb):
-            return 0.0
-        return counters.WorkingSetSize / (1024.0 * 1024.0)
+        # K32GetProcessMemoryInfo lives in kernel32 on everything since Windows
+        # 7; the psapi.dll export is the older spelling and is not always
+        # resolvable. Trying only the second printed a confident 0 MB, which is
+        # worse than printing nothing: the first diagnostic run reported a
+        # working set of zero for a process that was clearly not empty.
+        for library, symbol in ((ctypes.windll.kernel32, "K32GetProcessMemoryInfo"),
+                                (ctypes.windll.psapi, "GetProcessMemoryInfo")):
+            call = getattr(library, symbol, None)
+            if call is not None and call(handle, ctypes.byref(counters),
+                                         counters.cb):
+                return counters.WorkingSetSize / (1024.0 * 1024.0)
+        return float("nan")
     except Exception:
-        return 0.0
+        return float("nan")
 
 
 def _progress(stage: str, done: int, total: int, started: float) -> None:
@@ -373,7 +413,7 @@ def converge_replay(initial_payload: dict, name: str,
         # trajectory most, which is a selection bias pointing the same way as
         # the hypothesis.
         earlier = next((index for index, (seen, _) in enumerate(history)
-                        if seen == signature), None)
+                        if seen == decision_signature(wanted)), None)
         if earlier is not None:
             members = [schedule for _, schedule in history[earlier:]] + [wanted]
             chosen = min(members, key=len)
@@ -386,7 +426,7 @@ def converge_replay(initial_payload: dict, name: str,
                 settled, settled_replay,
                 evaluate_events(name, settled_replay, reference_beats, meter),
                 chosen, pass_index, cycled=True)
-        history.append((signature, wanted))
+        history.append((decision_signature(wanted), wanted))
         if pass_index == max_passes:
             break
         payload = rerun(wanted)
