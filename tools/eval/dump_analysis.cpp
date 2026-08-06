@@ -197,6 +197,101 @@ struct AnchorVetoSchedule {
     }
 };
 
+// The registered matched-cost comparison policies, decided **online**.
+//
+// They were first built as fixed schedules, like the decoder, and that does not
+// work: a schedule has to name every proposal in advance, but delaying an
+// octave change shifts the whole trajectory and creates proposals the baseline
+// never had, so the schedule must grow and each growth creates more. Measured
+// on RWC_C003, `debounce_1.5` never reached a fixed point in forty passes, and
+// not for want of precision — its *decisions* kept changing, while every one of
+// the 21 decoder arms settled. The decoder is threshold-gated and contracts;
+// debounce is not and need not.
+//
+// Here they see their own consequences, which is what they would do in the
+// product, and no iteration is involved at all.
+struct OnlineOctavePolicy {
+    enum class Kind { None, Debounce, RateLimit, TotalBan };
+
+    Kind kind = Kind::None;
+    double seconds = 0.0;  // D for debounce, N for the rate limit
+
+    // The held level, and the same rule the decoder's event extraction uses:
+    // it follows the estimator while that stays inside the octave and freezes
+    // the moment an octave away is proposed. Following `measured` rather than
+    // the published BPM matches what `held_octave_bpm_` already does in the
+    // core's freeze arm; the tracker's own published tempo is not reachable
+    // from here without re-entering `estimate()` on the audio thread.
+    double committed_bpm = 0.0;
+    double disagreement_since_sec = -1.0;
+    double last_change_sec = -1.0;
+
+    // Set from the poll loop, like `decision_time_sec`. Only the total ban
+    // reads it: §7 words that policy as "no octave change after first lock",
+    // and without this it would start banning during acquisition, which is a
+    // different and already-measured problem.
+    bool locked = false;
+    double decision_time_sec = -1.0;
+    std::size_t applied_frames = 0;
+
+    // Near a power of two, at the 8% the labels and the live benchmark use.
+    // Plain rounding in log space would call every ratio in (1.41, 2.83) a
+    // doubling, and a 3:2 tempo relation sits inside it.
+    static int octaveIndex(double measured_bpm, double committed_bpm) {
+        if (!(measured_bpm > 0.0) || !(committed_bpm > 0.0)) return 0;
+        const double exponent = std::log2(measured_bpm / committed_bpm);
+        const int k = static_cast<int>(std::lround(exponent));
+        if (k == 0) return 0;
+        return std::fabs(exponent - k) > std::log2(1.08) ? 0 : k;
+    }
+
+    double resolve(double time_sec, double measured_bpm) {
+        const double now = decision_time_sec >= 0.0 ? decision_time_sec : time_sec;
+        if (kind == Kind::None || !(measured_bpm > 0.0)) return measured_bpm;
+        if (!(committed_bpm > 0.0)) {
+            committed_bpm = measured_bpm;
+            return measured_bpm;
+        }
+        if (octaveIndex(measured_bpm, committed_bpm) == 0) {
+            // Inside the octave the level simply follows, so a band drifting
+            // 128 to 132 is never a proposal and never debounced.
+            committed_bpm = measured_bpm;
+            disagreement_since_sec = -1.0;
+            return measured_bpm;
+        }
+        if (disagreement_since_sec < 0.0) disagreement_since_sec = now;
+
+        bool block = false;
+        switch (kind) {
+            case Kind::Debounce:
+                block = (now - disagreement_since_sec) < seconds;
+                break;
+            case Kind::RateLimit:
+                block = last_change_sec >= 0.0 &&
+                        (now - last_change_sec) < seconds;
+                break;
+            case Kind::TotalBan:
+                block = locked;
+                break;
+            case Kind::None:
+                break;
+        }
+        if (block) {
+            ++applied_frames;
+            return tiktak::tracking::octaveNearest(measured_bpm, committed_bpm);
+        }
+        committed_bpm = measured_bpm;
+        last_change_sec = now;
+        disagreement_since_sec = -1.0;
+        return measured_bpm;
+    }
+
+    static double callback(void* context, double time_sec, double measured_bpm) {
+        return static_cast<OnlineOctavePolicy*>(context)->resolve(time_sec,
+                                                                  measured_bpm);
+    }
+};
+
 bool readVetoSchedule(const char* path, AnchorVetoSchedule& schedule,
                       std::string& error) {
     std::vector<double> values;
@@ -370,6 +465,9 @@ int main(int argc, char** argv) {
     // rather than reconstructed because the reconstruction is a different
     // double: see the note on `activation_times` where it is printed.
     std::string activation_time_path;
+
+    // The matched-cost comparison policies, one at a time.
+    OnlineOctavePolicy online_policy;
     // The same swap, but made by the core itself rather than handed to it: the
     // tracker computes the activation from the audio through its own front end.
     // --live-activation answers "would a better observation help"; this answers
@@ -528,6 +626,22 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--live-activation") == 0) {
             if (i + 1 >= argc) { std::fprintf(stderr, "--live-activation needs a file\n"); return 2; }
             activation_path = argv[++i];
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-octave-debounce") == 0) {
+            if (i + 1 >= argc) { std::fprintf(stderr, "--live-octave-debounce needs seconds\n"); return 2; }
+            online_policy.kind = OnlineOctavePolicy::Kind::Debounce;
+            online_policy.seconds = std::atof(argv[++i]);
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-octave-rate-limit") == 0) {
+            if (i + 1 >= argc) { std::fprintf(stderr, "--live-octave-rate-limit needs seconds\n"); return 2; }
+            online_policy.kind = OnlineOctavePolicy::Kind::RateLimit;
+            online_policy.seconds = std::atof(argv[++i]);
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-octave-ban") == 0) {
+            online_policy.kind = OnlineOctavePolicy::Kind::TotalBan;
             continue;
         }
         if (std::strcmp(argv[i], "--activation-times") == 0) {
@@ -933,6 +1047,11 @@ int main(int argc, char** argv) {
         if (!live_anchor_veto_path.empty()) {
             live_config.anchor_bpm_resolver = &AnchorVetoSchedule::callback;
             live_config.anchor_bpm_resolver_context = &anchor_veto_schedule;
+        } else if (online_policy.kind != OnlineOctavePolicy::Kind::None) {
+            // Mutually exclusive: one resolver, and a schedule combined with a
+            // live policy would be two policies reported as one.
+            live_config.anchor_bpm_resolver = &OnlineOctavePolicy::callback;
+            live_config.anchor_bpm_resolver_context = &online_policy;
         }
         if (live_anchor_width > 0.0) {
             live_config.anchor_width_octaves = live_anchor_width;
@@ -982,6 +1101,15 @@ int main(int argc, char** argv) {
             // read, which is what makes --live-sample-hz observational: the
             // beat list at 50 Hz has to equal the beat list at 1 Hz.
             while (tracker.takeBeat(now, kLookahead, &beat)) live_beats.push_back(beat);
+            // The total ban is worded "no octave change after first lock", so
+            // the policy needs the publishing state. Latched with the shipped
+            // hysteresis and never released: what §7 asks about is whether the
+            // tracker has ever settled, not whether it is settled now.
+            if (online_policy.kind == OnlineOctavePolicy::Kind::TotalBan &&
+                !online_policy.locked &&
+                tracker.estimate(now).confidence >= live_config.lock_confidence) {
+                online_policy.locked = true;
+            }
             if (now >= next_sample) {
                 // Which of confidence's three factors is low is the diagnosis,
                 // and the product alone cannot say.
@@ -1057,6 +1185,7 @@ int main(int argc, char** argv) {
                     now += static_cast<double>(take) / rate;
                     block_index += 1.0;
                     anchor_veto_schedule.decision_time_sec = now;
+                    online_policy.decision_time_sec = now;
                     while (next_frame < activation.size() &&
                            (recorded
                                 ? activation_emit[next_frame] <= block_index
@@ -1074,6 +1203,7 @@ int main(int argc, char** argv) {
                     static_cast<double>(activation.size()) * frame_sec;
                 for (double clock = 0.0; clock < last_sec; clock += block_sec) {
                     anchor_veto_schedule.decision_time_sec = clock;
+                    online_policy.decision_time_sec = clock;
                     while (next_frame < activation.size() &&
                            static_cast<double>(next_frame) * frame_sec <= clock) {
                         tracker.observe(static_cast<double>(next_frame) * frame_sec,
@@ -1088,6 +1218,8 @@ int main(int argc, char** argv) {
             for (std::size_t pos = 0; pos < samples.size(); pos += kLiveBlock) {
                 const std::size_t take = std::min(kLiveBlock, samples.size() - pos);
                 anchor_veto_schedule.decision_time_sec =
+                    now + static_cast<double>(take) / rate;
+                online_policy.decision_time_sec =
                     now + static_cast<double>(take) / rate;
                 tracker.process(now, samples.data() + pos, take);
                 now += static_cast<double>(take) / rate;

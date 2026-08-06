@@ -931,3 +931,40 @@ Note which side of the experiment this fell on. The policy under test converges;
 the matched-cost comparison is the unstable one. That is worth knowing when the
 comparison is the primary endpoint, and it is recorded here rather than in a
 commit message.
+
+### The comparison policies moved out of the schedule seam, 2026-08-06
+
+`debounce_1.5` never reached a fixed point on RWC_C003 in forty passes, and the
+diagnosis says the seam was the wrong shape for it rather than the limit being
+too low. Running that recording through all 36 registered policies:
+
+* **all 21 decoder arms resolve** — four into a period-2 orbit whose alternating
+  members are bitwise identical, the rest at pass 0;
+* **a debounce arm does not**, and its *decisions* keep changing, not just its
+  last digits.
+
+The asymmetry has a cause. The decoder is threshold-gated, so the schedule built
+from it is a subset that stops moving once the thresholded events do. Debounce
+acts on **every** proposal: delaying an octave change shifts the trajectory and
+creates proposals the baseline never had, so the schedule must grow and each
+growth creates more. There is no contraction and so no fixed point to find.
+
+**The three comparison policies are therefore decided online**, through the
+`AnchorBpmResolver` seam the core already exposes, as
+`--live-octave-debounce`, `--live-octave-rate-limit` and `--live-octave-ban`.
+They see their own consequences, which is what they would do in the product, and
+no iteration is involved. The core is unchanged: the seam existed already, and
+these are resolvers in the research tool.
+
+Nothing registered moves. The same candidate grids, the same matched-cost rule,
+the same primary comparison. What changes is only that the comparison arms are
+now measured through a mechanism that can represent them — and it is worth
+recording that the instability was on the *comparison* side, never in the policy
+under test.
+
+Two details fixed while implementing, both to match the decoder's own
+definitions rather than to change them: the held level follows the estimator
+inside its octave and freezes on a proposal, and an octave is a ratio within 8%
+of a power of two, so a 3:2 tempo relation is not one. The total ban reads the
+publishing lock, latched and never released, because §7 words it as "after first
+lock" and without that it would ban during acquisition.

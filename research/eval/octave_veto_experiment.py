@@ -917,20 +917,36 @@ def registered_tau_policies() -> tuple[tuple[str, float, ScheduleBuilder], ...]:
     )
 
 
-def registered_simple_schedule_policies(
-) -> tuple[tuple[str, float | None, ScheduleBuilder], ...]:
-    rows: list[tuple[str, float | None, ScheduleBuilder]] = []
+def registered_simple_policies(
+) -> tuple[tuple[str, float | None, tuple[str, ...]], ...]:
+    """The matched-cost comparisons, as live-core flags rather than schedules.
+
+    They were schedules first, and that could not work. A schedule has to name
+    every proposal in advance, but delaying an octave change shifts the whole
+    trajectory and creates proposals the baseline never had, so the schedule
+    grows and each growth creates more. On RWC_C003, `debounce_1.5` never
+    reached a fixed point in forty passes — and not for want of precision: its
+    *decisions* kept changing, while all 21 decoder arms settled, four of them
+    into orbits whose members were bitwise identical.
+
+    The asymmetry has a reason. The decoder is threshold-gated, so a schedule
+    built from it is a subset that stops changing once the thresholded events
+    do. Debounce acts on *every* proposal, so it has no such fixed point to
+    reach and needs none: online, it simply sees its own consequences, which is
+    what it would do in the product.
+    """
+    rows: list[tuple[str, float | None, tuple[str, ...]]] = []
     rows.extend(
         (f"debounce_{seconds:g}", seconds,
-         lambda events, value=seconds: debounce_schedule(events, value))
+         ("--live-octave-debounce", repr(float(seconds))))
         for seconds in DEBOUNCE_CANDIDATES
     )
     rows.extend(
         (f"rate_limit_{seconds:g}", seconds,
-         lambda events, value=seconds: rate_limit_schedule(events, value))
+         ("--live-octave-rate-limit", repr(float(seconds))))
         for seconds in RATE_LIMIT_CANDIDATES
     )
-    rows.append(("total_ban", None, total_ban_schedule))
+    rows.append(("total_ban", None, ("--live-octave-ban",)))
     return tuple(rows)
 
 
@@ -1174,14 +1190,17 @@ def run_rwc(args) -> dict[str, Any]:
         raise RuntimeError("RWC selection requires a clean implementation commit")
     source_commit = _git(repository, "rev-parse", "HEAD")
     items = _load_items(args.manifest, args.music, "rwc")
-    policies = (("baseline", None, lambda _: ()),
-                *registered_tau_policies(),
-                *registered_simple_schedule_policies())
+    # Only the decoder needs the iterated schedule seam. Every comparison
+    # policy is a live-core flag and decides online, which is both what it
+    # would do in the product and the reason the fixed point stopped being
+    # something debounce had to reach.
+    policies = (("baseline", None, lambda _: ()), *registered_tau_policies())
     schedule_arms = run_policy_grid(
         items, args.binary, args.model, policies, corpus="rwc",
         workers=args.workers)
-    margin_arms = run_direct_flag_grid(
-        items, args.binary, args.model, registered_margin_policies(),
+    flag_arms = run_direct_flag_grid(
+        items, args.binary, args.model,
+        (*registered_simple_policies(), *registered_margin_policies()),
         corpus="rwc", workers=args.workers)
 
     baseline = schedule_arms["baseline"]
@@ -1196,9 +1215,7 @@ def run_rwc(args) -> dict[str, Any]:
           lambda events: decoder_schedule(events, tau, control=True)),),
         corpus="rwc", workers=args.workers)[control_name]
 
-    simple_names = [name for name, _, _ in registered_simple_schedule_policies()]
-    simple = [schedule_arms[name] for name in simple_names] + list(margin_arms.values())
-    families = matched_policy_families(simple, decoder)
+    families = matched_policy_families(list(flag_arms.values()), decoder)
     available = [arm for arm in families.values() if arm is not None]
     if not available:
         raise RuntimeError("no matched-cost policy family has a candidate")
@@ -1245,7 +1262,7 @@ def run_rwc(args) -> dict[str, Any]:
         },
         "arms": {
             name: _arm_digest(arm, tau if name == control_name else None)
-            for name, arm in {**schedule_arms, **margin_arms,
+            for name, arm in {**schedule_arms, **flag_arms,
                               control_name: control}.items()
         },
         "selected_decoder_events": _event_rows(decoder),
