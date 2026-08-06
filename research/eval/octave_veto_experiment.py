@@ -520,8 +520,14 @@ def run_policy_grid(
 
     started = time.perf_counter()
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = [pool.submit(one, item) for item in items]
+        # A list keeps every completed Future alive until the entire corpus
+        # finishes, and each Future retains all full-resolution replay payloads
+        # returned by ``one``. RWC therefore grew by gigabytes before it was a
+        # quarter complete. Remove each yielded Future from our owning set so
+        # its payload can be released as soon as the arm summaries are copied.
+        futures = {pool.submit(one, item) for item in items}
         for future in concurrent.futures.as_completed(futures):
+            futures.remove(future)
             item, replays = future.result()
             for name, replayed in replays:
                 scores[name].append(score_converged(item, replayed))
@@ -596,8 +602,9 @@ def run_direct_flag_grid(
 
     started = time.perf_counter()
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = [pool.submit(one, item) for item in items]
+        futures = {pool.submit(one, item) for item in items}
         for future in concurrent.futures.as_completed(futures):
+            futures.remove(future)
             item, rows = future.result()
             for name, replayed in rows:
                 scores[name].append(score_converged(item, replayed))

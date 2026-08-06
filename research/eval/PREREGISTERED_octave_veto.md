@@ -795,3 +795,14 @@ counts, D1 and answered-event coverage by annotated metre. P2 becomes a sink
 only in the registered conditional case where the decoder wins A1; ambiguity
 becomes a sink only when it dominates both RWC and Harmonix. Neither diagnostic
 is used to choose `tau` or a matched-policy parameter.
+
+### Operational abort before the RWC result
+
+The first RWC command at implementation commit `6a10e8a` was terminated before
+it wrote an artifact or exposed any metric. The harness kept all completed
+`Future` objects in a list; each retained the full 50 fps payload for every
+policy on that recording, and resident memory grew from roughly 1.4 to 2.1 GB
+while still rising. The replacement removes a completed future from the owning
+set as soon as its scores and event rows have been copied. Candidate grids,
+statistics, gates and corpus order are unchanged. The next clean commit is the
+implementation commit for the actual RWC run.
