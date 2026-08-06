@@ -521,3 +521,91 @@ asymmetry between adjacent beats — spectral shape, kick against snare, the
 alternation of accent strength. Periodic and phase-based methods lose exactly
 that asymmetry, which is why three of them in a row have now failed on the same
 question.
+
+---
+
+## Deviations found during implementation, 2026-08-06
+
+Appended, not edited into the text above. Everything before this line is what
+was registered; everything below is what implementing the decoder revealed,
+recorded **before any corpus was touched**. `eval/octave_veto.py` and
+`tests/test_octave_veto.py` are the code; 39 tests pass.
+
+### I2 is false as written, and the mechanism matters more than the failure
+
+Registered: *a beat-only channel yields `|Δ|` below 0.05.*
+Measured: **`Δ = −2.02`** at `k = +1`. Not a near miss.
+
+The arithmetic, which is checkable and is in the test file:
+
+- a channel high at every committed beat is **constant** when sampled on the
+  committed grid, so `sd = 0`, every `z` is 0 by §3's own degenerate rule, and
+  `score_committed = 0`;
+- the same channel on the doubled grid alternates high, low, high, low — a
+  perfect metre-2 contrast at `z = 5.57`;
+- so the decoder prefers the doubled grid and **allows** the doubling.
+
+Metre 2 on a grid of half-beats implies a bar every committed beat: 0.50 s, or
+**120 bars a minute** at the 120 BPM this was constructed at. That is not a bar
+in any music this product is for. §3 defines the score as a maximum over
+(metre, phase) with no admissibility constraint, so I2 contradicted §3, and **I2
+is the half that was wrong.**
+
+**The obvious repair is refused, deliberately.** Constraining the implied bar
+period to something musical would decide the octave by arithmetic on the
+committed beat period — the quantity in dispute — and
+`PREREGISTERED_downbeat_channel.md` refused to break its ties with the tempo
+prior for exactly this reason: it converts independent evidence into a
+re-reading of the belief that sank the octave freeze. A constraint that would
+become the decoder's main mechanism, derived from the disputed quantity, is not
+a cleanup.
+
+**What replaces I2**, keeping what it was for:
+
+- **the flat-channel test**, which is the geometry question I2 was actually
+  built to ask, and which holds *exactly*: `Δ == 0.0`, not merely small, in both
+  directions. Geometry alone manufactures nothing.
+- **the beat-only case as a named limitation with a direction**, asserted at its
+  measured value rather than at the predicted one.
+
+### What that limitation predicts, registered now
+
+The failure produces false **allows**, never false vetoes. **A3 cannot see it** —
+A3 bounds vetoes of `wrong → correct` events — and A1 will pay for it silently.
+So two things are added, before the corpus:
+
+- **D1, a diagnostic:** the share of `correct → wrong` doubling events where
+  `score_committed == 0`, i.e. where the committed grid was near-constant and
+  the decoder allowed a wrong doubling for the reason above. Reported per
+  corpus. Not a gate.
+- **P7, a prediction:** D1 is non-trivial — above 5% — on both corpora, because
+  a downbeat channel roughly uniform across beats is what weak-downbeat music
+  produces, and that is common.
+
+If A1 fails and D1 is large, the failure is attributable to this and not to the
+channel being empty. That distinction is worth having in advance, and it is
+exactly the distinction the previous audit could not make.
+
+### Three smaller specification gaps, all closed the same way
+
+1. **Ties between metres were unspecified.** {2, 4} and {3, 6} are each closed
+   under doubling, so a bar pattern at 2 scores identically at 4 and ties are
+   routine rather than exotic. **Ties go to the smaller metre**, because
+   reporting the larger would name a metre the evidence never distinguished.
+2. **`window_beats` is a parameter, not the module constant.** I4 varies the
+   window, and a test that mutates global state to do so is testing the harness.
+3. **The `k = -1` maximum over two alignments is confirmed as the one real
+   asymmetry**, and the null is confirmed as what cancels it: on iid noise
+   `mean(Δ_raw) = −0.19` while `mean(Δ) = −0.02`. That is now its own test.
+
+### Two magnitudes worth having on record before the run
+
+- **The null subtraction is not a small correction.** On the clean 4/4 case
+  `Δ_raw = +0.37` while `Δ = +1.97` — same sign, five times the magnitude. P2
+  predicts sign agreement above 90% and says nothing about magnitude; that was
+  the right thing to predict, and this is why a magnitude prediction would have
+  been wrong.
+- **The allow signal is an order of magnitude weaker than the veto signal.**
+  I6 gives `Δ = −0.18` where I3 gives `+1.97`. This bounds where `τ` can
+  usefully sit and it sharpens P6: if the decoder helps, it will be by allowing,
+  and the allows are quiet.
