@@ -649,3 +649,86 @@ a different experiment from this one.
 experiments, all measured at `anchor_width_octaves` 0.10, which shipped before
 2026-08-03. Each is a contrast between two arms at one width, which is what they
 are cited for and what they are still worth. None is an absolute level any more.
+
+## The octave veto: the decoder is below chance wherever it acts
+
+`octave_veto_rwc.json`, from `eval/octave_veto_experiment.py rwc`, answering
+`eval/PREREGISTERED_octave_veto.md`. RWC, all 328 recordings, shipped fold 1,
+commit `b102324`, tree clean. **Harmonix was never opened.**
+
+The unit is the decision point, not the frame and not the recording: when the
+live tracker actually proposes moving to another octave, does beat-synchronous
+metre evidence correctly allow or veto *that* switch. 1029 proposals on the
+baseline arm, 97-98% of them scoreable at every metre, 678 labelled against 346
+ambiguous — so the experiment is interpretable and the negative is not an
+artefact of unlabelable events.
+
+### A2 fails, and the shape of the failure is the finding
+
+| τ | switches | balanced accuracy | false veto | episode-free |
+|---:|---:|---:|---:|---:|
+| baseline | 1913 | — | — | 0.2744 |
+| 0 | 1367 | **0.4859** | 52.8% | 0.2927 |
+| 0.5 | 1627 | **0.4951** | 30.1% | 0.2835 |
+| 1 | 1844 | **0.4902** | 9.2% | 0.2805 |
+| 1.5 (selected) | 1906 | **0.4998** | 0.6% | 0.2744 |
+| shift control | 1913 | 0.5000 | 0.0% | 0.2744 |
+
+Read the first two columns together. **Balanced accuracy is below chance at
+every threshold where the decoder acts, and reaches exactly 0.5 only as its
+action goes to zero.** The more it does, the worse than chance it is. That is
+not a decoder with a weak signal; it is a decoder with none, whose apparent
+neutrality at the selected threshold is the neutrality of doing nothing.
+
+A2 required a **15-point** margin over the shift-driven control with the
+interval's lower bound above zero. Measured: **−0.0002, 95% CI [−0.0060,
++0.0050]**, p = 1.0, 10 000 cluster-bootstrap resamples over recordings. The
+interval is tight enough to exclude anything above half a point.
+
+**A3 passes, and that is not a defence.** §7 selects τ by episode-freeness
+subject to A3 and the cost gates, and A3's 5% bound on blocked correct escapes
+eliminates every threshold below 1.5 — 52.8%, 30.1%, 9.2% all violate it. What
+survives selection is the threshold at which the decoder vetoes 7 switches out
+of 1913 and leaves every published number equal to baseline to four decimals.
+The constraint that protects correct escapes rules out every setting at which
+this decoder does anything at all.
+
+It is also **behind the best matched-cost policy on the endpoint**: `margin_0.3`
+reaches 0.2927 episode-freeness against the decoder's 0.2744.
+
+### What the comparison policies show on their own
+
+`total_ban` has the best episode rate of any arm, 0.3293, and buys it by cutting
+switches from 1913 to 730 while losing correct locked time, 0.5623 → 0.5286.
+That is exactly the trade the matched-cost design exists to expose, and it is
+the reason "better than baseline" was never allowed to be the endpoint.
+
+### Verdict
+
+**A2 fails on the development corpus.** By the terms fixed before the run, that
+closes the downbeat head for octave correction — permanently and without
+reservation. Every objection raised against the previous audit was answered
+first: predicted grids, a matched null that shifts one track and resamples both
+nested grids from it, real decision points, matched-cost alternatives, a
+standardised score whose null does not depend on grid length. The protocol was
+executed as written. There is no further document.
+
+Two registered predictions also failed, and both are recorded rather than
+dropped. **P2** asked for over 90% sign agreement between `Δ` and `Δ_raw`;
+measured 80.7% on 996 events, which says the null subtraction is carrying
+weight rather than correcting a bias. **P7** predicted D1 above 5% — the share
+of doubling proposals on a committed-correct state where the committed grid is
+constant, the mechanism I2's failure exposed. Measured **0 of 170**. That
+limitation, registered as the thing most likely to sink A1, never occurred on
+real music at all.
+
+### What this leaves
+
+Not the octave. The line that ran from the anchor margin through the octave
+freeze, the bar-rate arm, the downbeat audit and now this one is closed: **the
+metrical level is not recoverable from BeatNet's own outputs**, by any reading
+of them that has been tried, and what remains is a different front end.
+
+The metre survives untouched — 82.9% on full-length songs against a 30.1% null —
+and it is evidence about bar-line placement, where the offline resolver scores
+0.417 F on GTZAN. A different experiment, and one that must not touch BPM.
