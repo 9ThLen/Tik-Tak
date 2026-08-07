@@ -794,3 +794,62 @@ One tractable piece is separable: **13.8% of Harmonix's surviving failures are
 slow acquisition alone**, with precision and recall both already good. That is
 39 recordings failing on a stopwatch rather than on the tracking, and it is the
 one part of this picture that does not need a new observation.
+
+## Acquisition was measured on a grid too coarse to see it
+
+`acquisition_50hz_per_track_harmonix.json` beside
+`octave_ceiling_per_track_harmonix.json`. Same binary, same model, same
+recordings; the only difference is `--live-sample-hz`, which changes how often
+the harness reads the tracker and nothing about the tracker. **Beat counts are
+identical on all 581 recordings**, which is what makes the comparison a
+measurement question rather than a behavioural one.
+
+`acquired_at` is reconstructed in Python from the polled confidence series, and
+every live number in this repository was polled **once a second**. The bar for
+`slow_acquisition` is eight seconds. Re-read at 50 Hz:
+
+| | 1 Hz | 50 Hz |
+|---|---:|---:|
+| Harmonix usable | 30.98% | **36.49%** |
+| of the 39 slow-acquisition-only failures, now under 8 s | — | **29** |
+| median shift in `acquired_at` on those | — | **−4.74 s** |
+
+**This is not quantisation, and the first diagnosis of it was wrong.** A
+one-second grid can misplace a threshold crossing by at most one second; these
+move by nearly five, and one by fifteen. The mechanism is aliasing: confidence
+fluctuates across the 0.25 threshold, and a once-a-second sampler keeps landing
+in the gaps. On `0925_sweetdisposition`, **zero of the six polls between 4 s and
+10 s** catch it at 1 Hz and the first catch is at 16.02 s; at 50 Hz, 33 of 258
+polls in the same window are over threshold and the first is at 4.18 s.
+
+### Verified against something that needs no sampling at all
+
+The tracker's beat list is exact. On ten of the moved recordings, when the first
+beat was actually handed out:
+
+| track | 1 Hz | 50 Hz | first beat |
+|---|---:|---:|---:|
+| 0099_forgetyou | 9.01 | 4.272 | **4.281** |
+| 0132_iceicebaby | 10.01 | 4.133 | **4.443** |
+| 0418_inthedark | 12.00 | 4.133 | **4.401** |
+| 0344_beautifullife | 8.01 | 4.087 | **4.111** |
+| 0925_sweetdisposition | 16.02 | 4.180 | **5.832** |
+| 0324_yeah3x | 12.00 | 4.830 | 11.583 |
+| 0434_lights | 8.01 | 7.825 | 8.276 |
+
+Eight of ten start playing under the bar. So the 1 Hz figure was wrong by
+seconds, and the 50 Hz figure is close but still an approximation — it reports a
+confidence crossing, and two of the ten crossed without publishing.
+
+### What this costs and what it implies
+
+Every live result here inherits a `usable_rate` that is too low, by 5.5 points
+on Harmonix, for a reason that has nothing to do with the tracker. Comparisons
+*between* arms measured the same way are unaffected — the error is common to all
+of them — but absolute rates are not, and neither is any claim of the form "the
+tracker acquires slowly".
+
+**`acquired_at` should be derived from the beat list rather than from a sampled
+confidence series.** The beat list is what a listener hears, it is exact, and it
+is independent of how often anything is polled. That changes published numbers
+and is a decision rather than a fix, so it is recorded here and not applied.
