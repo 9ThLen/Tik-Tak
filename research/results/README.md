@@ -732,3 +732,65 @@ of them that has been tried, and what remains is a different front end.
 The metre survives untouched — 82.9% on full-length songs against a 30.1% null —
 and it is evidence about bar-line placement, where the offline resolver scores
 0.417 F on GTZAN. A different experiment, and one that must not touch BPM.
+
+## What a perfect octave would actually buy
+
+`octave_ceiling_per_track_{rwc,harmonix}.json`, from
+`eval.live_corpus_benchmark --per-track` on the shipped configuration. No new
+mechanism, no hypothesis: a re-cut of what the benchmark already computes.
+
+`usable_any_octave` scores each recording at **whichever octave reading came
+closest**. It is therefore the exact ceiling on everything the closed octave line
+was reaching for — anchor margin, octave freeze, bar rate, downbeat audit,
+octave veto. Usable means precision and recall both at or above 0.80 with
+acquisition inside the limit.
+
+| corpus | n | usable | at best octave | the octave buys | still fails |
+|---|---:|---:|---:|---:|---:|
+| RWC-Pop | 100 | 39.0% | 60.0% | +21.0 | **40.0%** |
+| Harmonix | 581 | 31.0% | 51.3% | +20.3 | **48.7%** |
+| GTZAN | 999 | 44.5% | 49.2% | +4.7 | 50.8% |
+| RWC-Genre | 102 | 12.7% | 24.5% | +11.8 | 75.5% |
+| RWC-Jazz | 50 | 8.0% | 14.0% | +6.0 | 86.0% |
+| **RWC-Classical** | 61 | 0.0% | 0.0% | **+0.0** | **100%** |
+| SMC | 217 | 3.2% | 4.1% | +0.9 | 95.9% |
+
+**The 23 points quoted from RWC is the best case, not the typical one.** It is
+roughly RWC-Pop's 21. On GTZAN a perfect octave is worth 4.7 points, and on
+RWC-Classical it is worth **nothing at all**: not one of those 61 recordings
+becomes usable at any reading of the level.
+
+### What survives it
+
+Among recordings that fail at their own best octave — 283 of 581 on Harmonix,
+230 of 328 on RWC:
+
+| reason set | Harmonix | RWC |
+|---|---:|---:|
+| too few beats **and** wrong beats | 44.2% | 63.9% |
+| both, plus slow acquisition | 14.8% | 17.8% |
+| too few beats alone | 18.7% | 8.7% |
+| slow acquisition alone | 13.8% | 3.9% |
+| wrong beats alone | 1.1% | 2.6% |
+
+**Recall is the dominant survivor: `too_few_beats` appears in 84.8% of Harmonix's
+and 93.5% of RWC's.** Precision follows at 60.4% and 84.3%, and precision alone
+is almost nonexistent — 1.1% and 2.6%. The two fail together far more often than
+either fails apart.
+
+### What this settles
+
+The metrical level was never the binding constraint on most material. Solving it
+perfectly takes Harmonix from 31.0% to 51.3% and leaves half the corpus failing
+because the beat grid is simultaneously too sparse and in the wrong places.
+
+So the closing sentence of the octave-veto section above — "what remains is a
+different front end" — is right in form and wrong in aim. A front end better at
+the **octave** has a 51.3% ceiling on Harmonix and a 0.0% ceiling on classical.
+Any successor should be pre-registered against **beat-grid recall**, which is a
+different question with different acceptance conditions.
+
+One tractable piece is separable: **13.8% of Harmonix's surviving failures are
+slow acquisition alone**, with precision and recall both already good. That is
+39 recordings failing on a stopwatch rather than on the tracking, and it is the
+one part of this picture that does not need a new observation.
