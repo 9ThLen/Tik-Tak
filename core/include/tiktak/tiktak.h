@@ -766,6 +766,28 @@ TT_API int tt_live_take_beat(tt_live* live, double now_sec, double lookahead_sec
 TT_API void tt_live_seed_tempo(tt_live* live, double bpm, double spread_octaves);
 
 /*
+ * The ×2 / ÷2 control: which multiple of the pulse the user says is the beat,
+ * in whole octaves. +1 doubles, -1 halves, 0 leaves it to the tracker.
+ * Returns 1 when the press was taken, 0 when it was refused.
+ *
+ * A press is a claim about the *multiple*, not about the tempo, and is stored
+ * as one — so a band drifting from 128 to 132 is still followed, at 66. It
+ * outranks the tracker's own octave for as long as it is set: the tracker
+ * re-decides the level continuously, and a control that only nudged the
+ * estimate would be overruled within about a second.
+ *
+ * Refused, changing nothing, in three cases: in manual mode, where the tempo is
+ * already the user's and tt_live_set_manual_tempo is the way to change it;
+ * before the tracker has an estimate to move; and when doubling or halving
+ * would leave the configured BPM range. The last is refused rather than clamped
+ * so that a press either means what it says or visibly does nothing.
+ *
+ * Survives tt_live_reset, which forgets audio and not the user.
+ */
+TT_API int tt_live_set_octave_offset(tt_live* live, int octaves);
+TT_API int tt_live_octave_offset(const tt_live* live);
+
+/*
  * Manual mode: the tempo is the user's and the room is asked only where the
  * beat falls. 0 goes back to tracking the tempo too.
  *

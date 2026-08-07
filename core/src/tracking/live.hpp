@@ -905,6 +905,18 @@ public:
     // inferring it from beat times, which conflates this with the filter.
     double heldOctaveBpm() const { return held_octave_bpm_; }
 
+    // The tempo the filter is currently anchored to, or zero when it is not
+    // anchored at all. Exposed for the same reason as heldOctaveBpm above: the
+    // alternative is inferring it from where the beats came out, which cannot
+    // separate what was decided from how fast the cloud got there.
+    //
+    // It is what submit() last wrote, so it is where the user's octave — and
+    // any anchor_bpm_resolver — actually lands. A test that asserts on the beat
+    // times instead can pass while the decision is an octave out, because a
+    // cloud pulled toward an unrepresentable tempo piles up against the range
+    // clamp and looks merely slow.
+    double anchoredTempo() const { return filter_.anchoredTempo(); }
+
     // Hands out the next beat to play, once, when it comes within
     // `lookahead_sec` of now. True when `beat_sec` was written.
     //
@@ -917,6 +929,70 @@ public:
     // Concentrates the cloud on a known tempo — an offline analysis of the same
     // song, or a tempo the user typed.
     void seedTempo(double bpm, double spread_octaves = 0.05);
+
+    // Which multiple of the pulse the *user* says is the beat, in whole
+    // octaves: +1 behind a ×2 control, −1 behind ÷2, 0 for leaving it to the
+    // tracker. True when the press was taken.
+    //
+    // **Why an integer and not a tempo.** Somebody pressing ×2 is not claiming
+    // the tempo is 240; they are claiming the beat is the other multiple of a
+    // pulse neither of us disputes. That is also the split the measurements
+    // show — the estimator is good at the pulse and unreliable about the
+    // multiple, which is what this whole file is about. So the offset rides on
+    // whatever the estimator currently says rather than remembering a number
+    // from the instant of the press: a band drifting 128 → 132 is still
+    // followed, at 66, where a remembered absolute tempo would have frozen at
+    // 64 and slowly gone wrong.
+    //
+    // **Why it has to live here rather than in a shell.** seedTempo() moves the
+    // cloud and nothing else, and submit() writes an anchor from the estimator
+    // on every submitted frame — fifty a second with BeatNet, off an estimate
+    // refreshed once a second. A control that only moved the cloud would be
+    // pulled back to the estimator's octave within about a second, which looks
+    // exactly like a button that does not work. The offset is applied where the
+    // anchor is written, so it outranks it for as long as it is set.
+    //
+    // It also outranks LiveConfig::anchor_bpm_resolver, which is applied first.
+    // That seam carries automatic octave policies; this carries a person's
+    // decision, and the person wins.
+    //
+    // **What it is worth.** The ceiling on it is measured: scored at whichever
+    // octave came closest, usable goes from 39.0% to 60.0% on RWC-Pop and from
+    // 31.0% to 51.3% on Harmonix — the corpora made of whole songs, which is
+    // the shape of the product. Read those as an upper bound and not as a
+    // forecast: the oracle corrects a whole recording at once, and a person
+    // presses a button at a moment. On thirty-second excerpts the same ceiling
+    // is 4.7 points, which is why this is worth building now and would not have
+    // looked it on GTZAN alone.
+    //
+    // **When it refuses**, changing nothing:
+    //
+    // - Manual mode. The period there is pinned to a typed number and the
+    //   anchor is switched off entirely, so a ×2 is a request for a different
+    //   typed number: setManualTempo is where that goes, and answering it here
+    //   would leave two places holding the period.
+    // - Before the estimator has answered at all. The offset rides on an
+    //   estimate, and there is nothing on screen yet to disagree with.
+    // - When the shifted tempo leaves the filter's configured range. Refused
+    //   rather than clamped: clamping would accept the press and then anchor
+    //   somewhere nobody asked for, with the cloud piled against a boundary and
+    //   nothing in the output saying so.
+    //
+    // **That last case is a real limitation and not a corner.** The default
+    // range is 40 to 220 BPM, so ×2 is unavailable above 110 and ÷2 below 80 —
+    // and a tracker sitting on the eighths of a 120 BPM song is at 240, outside
+    // the range, which is why the error a shell will actually see is the
+    // tracker at 120 with ÷2 available and not the other way round. Widening
+    // the range is a config decision that moves the prior and the resample
+    // clamp under every published number, so it wants its own measurement
+    // rather than being changed here. A shell should treat a refusal as "this
+    // control is not available right now" and show it as such, because a
+    // control that silently does nothing is worse than one visibly greyed out.
+    //
+    // Survives reset(), which forgets audio and not the user — the same rule
+    // that keeps a pinned manual tempo across one, read the same way round.
+    bool setOctaveOffset(int octaves);
+    int octaveOffset() const { return octave_offset_; }
 
     // Manual mode: the tempo is the user's and the room is asked only where the
     // beat falls. Zero goes back to tracking the tempo too.
@@ -983,6 +1059,22 @@ private:
     // each has produced a number the filter can use.
     void submit(double time_sec, double normalised);
 
+    // `bpm` moved by the user's whole octaves — see setOctaveOffset.
+    //
+    // submit() has five anchor branches. Two clear the anchor and have nothing
+    // to move. Two write one and call this. The fifth — the weak-margin freeze
+    // — writes one and deliberately does *not*: it anchors toward
+    // held_octave_bpm_, which a calling branch wrote and setOctaveOffset moves
+    // with the press, so the offset is already in it and applying it again
+    // would double it.
+    //
+    // That asymmetry is why this is a named function with a test per branch
+    // rather than a multiplication written out at each site. A fix landing in
+    // one branch of several is the mistake this work has already made three
+    // times, and the branch that must *not* have it is the one a later reader
+    // is most likely to "fix".
+    double withUserOctave(double bpm) const;
+
     LiveConfig config_;
     dsp::Odf odf_;
     BeatParticleFilter filter_;
@@ -1002,6 +1094,10 @@ private:
 
     double manual_bpm_ = 0.0;
     bool acquired_ = false;
+
+    // The user's octave, in whole octaves from the estimator's. Zero is "the
+    // tracker decides", which is the state every recording starts in.
+    int octave_offset_ = 0;
 
     // The octave freeze, and nothing else reads these. Zero means nothing is
     // held, which is not the same as holding zero — before the first confident

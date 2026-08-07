@@ -167,6 +167,31 @@ void BeatParticleFilter::unpinPeriod() {
     drawFromPrior();
 }
 
+void BeatParticleFilter::scalePeriod(double factor) {
+    if (!(factor > 0.0) || factor == 1.0 || pinned_) return;
+
+    const std::size_t n = period_.size();
+    for (std::size_t i = 0; i < n; ++i) {
+        period_[i] = std::min(max_period_, std::max(min_period_, period_[i] * factor));
+
+        // The beat that was coming next is still on the grid, but at a shorter
+        // period it need no longer be the *nearest* one: at half the period a
+        // beat 0.9 periods away is 1.8 of the new ones away, and the beat in
+        // between it and now is the one to play. Walking back by whole new
+        // periods stays on the same grid and restores "next".
+        const double ahead = next_beat_[i] - last_time_sec_;
+        if (ahead > period_[i]) {
+            next_beat_[i] -= std::floor(ahead / period_[i]) * period_[i];
+        }
+    }
+
+    // The beat charge is scaled by this, so leaving it behind would price a
+    // predicted beat at the rate the cloud is no longer running at.
+    mean_period_ = std::min(max_period_, std::max(min_period_, mean_period_ * factor));
+
+    // weight_ is untouched, deliberately. See the declaration.
+}
+
 void BeatParticleFilter::anchorTempo(double bpm, double width_octaves) {
     if (!(bpm > 0.0) || !(width_octaves > 0.0)) {
         anchor_bpm_ = 0.0;

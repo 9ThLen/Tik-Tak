@@ -250,6 +250,10 @@ void LiveTracker::submit(double time_sec, double normalised) {
                 }
             }
 
+            // After the resolver and not before: that seam carries automatic
+            // octave policies, and a person's decision outranks one.
+            anchor_bpm = withUserOctave(anchor_bpm);
+
             // One width, unconditionally. Making it depend on whether the
             // filter and the anchor sit at the same metrical level was built,
             // measured on both corpus families, and removed: see
@@ -271,6 +275,11 @@ void LiveTracker::submit(double time_sec, double normalised) {
             // multiple of the pulse is the beat and never over the pulse. And
             // the phase is not touched — this writes an anchor, which is a
             // prior over period, and nothing here reaches where a beat falls.
+            //
+            // No withUserOctave here, and that is not an omission: the hold was
+            // written by a branch that applied it, and setOctaveOffset moves the
+            // hold with it, so octaveNearest already lands on the user's octave.
+            // Applying it again would double it. See LiveTracker::withUserOctave.
             filter_.anchorTempo(octaveNearest(measured.bpm, held_octave_bpm_),
                                 config_.anchor_width_octaves);
         } else if (config_.anchor_octave_freeze) {
@@ -279,7 +288,8 @@ void LiveTracker::submit(double time_sec, double normalised) {
             // weak anchor is what ships, and refusing to anchor at the start of
             // a recording is the arm that already lost.
             held_octave_bpm_ = 0.0;
-            filter_.anchorTempo(measured.bpm, config_.anchor_width_octaves);
+            filter_.anchorTempo(withUserOctave(measured.bpm),
+                                config_.anchor_width_octaves);
         } else {
             // Dropped rather than held. An anchor is a claim that the metrical
             // level is known, and when the estimator stops saying so the claim
@@ -409,6 +419,57 @@ void LiveTracker::seedTempo(double bpm, double spread_octaves) {
     filter_.seedTempo(bpm, spread_octaves);
 }
 
+double LiveTracker::withUserOctave(double bpm) const {
+    if (octave_offset_ == 0 || !(bpm > 0.0)) return bpm;
+    return bpm * std::exp2(static_cast<double>(octave_offset_));
+}
+
+bool LiveTracker::setOctaveOffset(int octaves) {
+    if (octaves == octave_offset_) return true;
+
+    // Manual mode holds the period as a pin, and submit() switches the anchor
+    // off there entirely — so there is nothing here for this to act on, and
+    // acting anyway would leave two places holding one period.
+    if (manual_bpm_ > 0.0) return false;
+
+    // The offset rides on the estimator, so there has to be an estimate to ride
+    // on. This is also the honest answer before acquisition: nothing is being
+    // claimed yet, so there is nothing to correct.
+    const ActivationTempoEstimate measured = activation_tempo_.estimate();
+    if (!measured.answered()) return false;
+
+    const double shifted = measured.bpm * std::exp2(static_cast<double>(octaves));
+    if (!(shifted >= config_.filter.min_bpm) || !(shifted <= config_.filter.max_bpm)) {
+        // Refused, not clamped. Clamping would accept the press and then anchor
+        // at a tempo nobody asked for, with the cloud piled against a boundary
+        // and nothing in the output to say so.
+        return false;
+    }
+
+    // In tempo. The cloud is scaled by its reciprocal, periods being the other
+    // way up.
+    const double bpm_factor = std::exp2(static_cast<double>(octaves - octave_offset_));
+    octave_offset_ = octaves;
+
+    // The hold carries whatever offset was in force when it was written. Left
+    // alone it would outvote the press on every weak-margin frame until the
+    // next confident one — and on the material where the octave is actually in
+    // doubt, that is most of them.
+    if (held_octave_bpm_ > 0.0) held_octave_bpm_ *= bpm_factor;
+
+    // Heard on the next beat rather than after the cloud migrates. The anchor
+    // would get there on its own, but only over seconds, and a control that
+    // takes seconds reads as one that did not work. Phase and weights are
+    // untouched by this — see BeatParticleFilter::scalePeriod.
+    filter_.scalePeriod(1.0 / bpm_factor);
+
+    // takeBeat's stutter guard is half of this, and until a locked beat
+    // refreshes it, it is half of the period the tracker is no longer running
+    // at. At ×2 the first doubled beat lands exactly on that bound.
+    held_period_sec_ /= bpm_factor;
+    return true;
+}
+
 void LiveTracker::setManualTempo(double bpm) {
     if (!(bpm > 0.0)) {
         if (!(manual_bpm_ > 0.0)) return;
@@ -462,7 +523,15 @@ void LiveTracker::reset() {
     activation_tempo_.reset();
     sync_.reset();
     acquired_ = false;
-    // The hold is a conclusion about audio, and goes with the audio.
+    // octave_offset_ is deliberately not cleared, by the same rule as the pin
+    // above: a reset forgets audio, not the user. It is also the safer way
+    // round in practice — reset() is what a shell reaches for after a capture
+    // discontinuity, and a dropout that silently undid somebody's ×2 would look
+    // like the tracker changing its mind on its own.
+    //
+    // The hold, by contrast, is a conclusion about audio and goes with it. The
+    // offset re-applies to whatever the next confident anchor turns out to be,
+    // which is the point of storing it as an octave rather than as a tempo.
     held_octave_bpm_ = 0.0;
     held_since_sec_ = 0.0;
     last_octave_margin_ = 0.0;

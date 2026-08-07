@@ -1170,6 +1170,32 @@ TEST(LiveApi, SeedingAndResetting) {
     EXPECT_EQ(stats.frames, 0u);
 }
 
+TEST(LiveApi, TheOctaveControlCrossesTheBoundary) {
+    tt_live_config cfg;
+    tt_live_config_defaults(&cfg, 48000.0);
+    Live live{cfg};
+    ASSERT_NE(live.handle, nullptr);
+
+    // Nothing to move yet, and the shell is told so rather than left to assume
+    // the press landed.
+    EXPECT_EQ(tt_live_set_octave_offset(live.handle, 1), 0);
+    EXPECT_EQ(tt_live_octave_offset(live.handle), 0);
+
+    const auto audio = tiktak::test::clickTrack(100.0, 20.0, 48000.0, 0.5);
+    tt_live_process(live.handle, 0.0, audio.data(), audio.size());
+
+    ASSERT_EQ(tt_live_set_octave_offset(live.handle, -1), 1);
+    EXPECT_EQ(tt_live_octave_offset(live.handle), -1);
+
+    tt_live_estimate estimate;
+    tt_live_estimate_get(live.handle, 20.0, &estimate);
+    EXPECT_NEAR(estimate.bpm, 50.0, 10.0);
+
+    // A reset forgets audio, not the user.
+    tt_live_reset(live.handle);
+    EXPECT_EQ(tt_live_octave_offset(live.handle), -1);
+}
+
 TEST(LiveApi, RejectsWhatTheCoreRejects) {
     tt_status status = TT_OK;
     EXPECT_EQ(tt_live_create(nullptr, &status), nullptr);
@@ -1188,6 +1214,8 @@ TEST(LiveApi, NullHandleIsHarmless) {
     tt_live_gate_click(nullptr, 1.0);
     tt_live_seed_tempo(nullptr, 120.0, 0.05);
     tt_live_set_manual_tempo(nullptr, 120.0);
+    EXPECT_EQ(tt_live_set_octave_offset(nullptr, 1), 0);
+    EXPECT_EQ(tt_live_octave_offset(nullptr), 0);
     tt_live_reset(nullptr);
     EXPECT_EQ(tt_live_take_beat(nullptr, 0.0, 0.1, &beat), 0);
     EXPECT_EQ(tt_live_manual_tempo(nullptr), 0.0);

@@ -333,6 +333,40 @@ public:
     // tracking::PhaseSync handing over the offset it correlated out.
     void seedPhase(double next_beat_sec);
 
+    // The same grid read at a different multiple of the pulse: every particle's
+    // period is scaled by `factor`, and every phase is left exactly where it
+    // was. The complement of seedPhase, which moves the phase and leaves the
+    // periods.
+    //
+    // This is what a ×2 or ÷2 control needs, and it is deliberately not
+    // seedTempo(). That one re-draws the cloud: it randomises the phase and
+    // flattens the weights, so a listener asking for the beat to be counted
+    // differently would instead hear the click stop, confidence fall through
+    // the release threshold, and the tracker re-acquire. At the moment of that
+    // press nothing about the grid is in doubt except which of its multiples is
+    // the beat, and that is the only thing this changes.
+    //
+    // Phase survives because the grid does: at twice the rate the beat that was
+    // coming next is still a beat, and at half the rate it is the one that is
+    // kept. Only which beat is *next* has to be restored, and it is restored by
+    // walking back along that same grid.
+    //
+    // The weights survive too, so the cloud is not re-drawn and has nothing to
+    // re-acquire. Reported confidence still moves, and correctly: phase
+    // agreement is a spread measured as a fraction of a beat, so the same
+    // absolute uncertainty is a larger fraction of a shorter one. What must not
+    // happen — and does not — is a collapse through the release threshold, with
+    // the click stopping because somebody asked for it to be counted
+    // differently.
+    //
+    // Periods leaving the configured range are clamped, as everything else
+    // producing a period here clamps. A caller that would rather refuse than
+    // clamp has to check before calling; LiveTracker::setOctaveOffset does.
+    //
+    // Does nothing while pinned. The period there is a number somebody typed,
+    // and scaling it would quietly mean a tempo they did not type.
+    void scalePeriod(double factor);
+
     // One ODF frame: `onset` is expected already normalised for level (see
     // tracking::LiveTracker), non-negative, order of magnitude 1.
     void observe(double time_sec, double onset);

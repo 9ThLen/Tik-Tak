@@ -32,6 +32,7 @@ add_executable(tiktak_core_tests
     test_activation_tempo.cpp
     test_live.cpp
     test_octave_freeze.cpp
+    test_octave_offset.cpp
     test_sync.cpp
     test_tempo.cpp
     test_tracker.cpp

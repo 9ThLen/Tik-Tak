@@ -833,6 +833,15 @@ void tt_live_seed_tempo(tt_live* live, double bpm, double spread_octaves) {
     if (live) live->impl.seedTempo(bpm, spread_octaves > 0.0 ? spread_octaves : 0.05);
 }
 
+int tt_live_set_octave_offset(tt_live* live, int octaves) {
+    if (!live) return 0;
+    return live->impl.setOctaveOffset(octaves) ? 1 : 0;
+}
+
+int tt_live_octave_offset(const tt_live* live) {
+    return live ? live->impl.octaveOffset() : 0;
+}
+
 void tt_live_set_manual_tempo(tt_live* live, double bpm) {
     if (live) live->impl.setManualTempo(bpm);
 }
