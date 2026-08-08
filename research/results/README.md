@@ -1207,3 +1207,90 @@ The remaining recall on full-length songs is **in front of the decoder**, and
 and 93.5% on RWC. Both now point at the same place: the causal front end. The
 one measured candidate for a better observation, Beat This!, is not causal, so
 it does not apply to this path, and no causal replacement has been measured.
+
+## What a perfect front end would buy, what causality costs, and what a room does
+
+Three measurements, run together because each was about to be used to justify
+building something.
+
+### 1. A perfect observation nearly triples the usable rate — and leaves the octave
+
+`oracle_usable_rwc.json`. The oracle bump from `oracle_activation`, scored
+through `live_corpus_benchmark._score_one`. All 328 RWC recordings, no failures.
+
+| corpus | n | usable | recall | what still fails |
+|---|---:|---|---|---|
+| RWC-Pop | 100 | 0.440 → **0.810** | 0.802 → 0.980 | `wrong_octave` **100%** |
+| RWC royalty-free | 15 | 0.333 → 0.867 | 0.624 → 0.958 | `wrong_octave` 100% |
+| RWC-Genre | 102 | 0.137 → 0.569 | 0.590 → 0.838 | `wrong_octave` 93% |
+| RWC-Jazz | 50 | 0.100 → 0.520 | 0.511 → 0.853 | `wrong_octave` 92% |
+| RWC-Classical | 61 | 0.000 → 0.033 | 0.355 → 0.560 | `wrong_octave` 83% |
+| **all** | 328 | **0.207 → 0.549** | 0.600 → 0.837 | `wrong_octave` **90%** |
+
+**A caveat that belongs beside the octave column and not below it.** The oracle
+activation is a pulse of *equal height* on every beat, so it removes precisely
+the amplitude difference that tells a level from its double. Some of that 90% is
+the instrument, not the tracker. The recall and precision columns are the
+trustworthy ones; the octave residual needs an accented-oracle control before it
+is read as a finding.
+
+### 2. Beat This! keeps its advantage without seeing the future
+
+`beat_this_causal_gtzan.json`, 100 GTZAN recordings.
+
+| the model may hear past a beat | F |
+|---|---:|
+| the whole file | 0.8767 |
+| at most 5 s | 0.8689 |
+| at most 3 s | 0.8660 |
+| at most 2 s | 0.8633 |
+| at most 1 s | 0.8459 |
+
+**One second of lookahead costs 3.1 points of F.** The +0.102 advantage over
+BeatNet-through-this-tracker is the model, not the bidirectionality; a causal
+version would still be roughly +0.07 ahead. `beat_this.onnx` is `final0` and
+trained on GTZAN, so the level is not quotable and the shape is the result. At a
+one-second step the 1.5 s and 1 s arms read the same prefix, so there are five
+distinct points, not six.
+
+### 3. A real room, and a simulation that gets the shape and not the size
+
+Six Harmonix tracks played through a speaker and captured on a phone at 48 kHz
+with the room noise deliberately kept. Four aligned; two are reported void
+rather than aligned by hand.
+
+| track | bpm | F clean → room |
+|---|---:|---|
+| `0116_goodies` | 101 | 0.976 → **0.984** |
+| `0132_iceicebaby` | 118 | 0.896 → 0.635 |
+| `0466_onthedarkside` | 218 | 0.810 → 0.337 |
+| `0707_halfwaygone` | 217 | 0.951 → **0.151** |
+
+`0116_goodies` is the control that makes the rest readable: 0.984 in the room,
+through the same alignment, decode and scorer. A broken pipeline cannot score
+0.98 against untouched annotations, so the others' collapse is the room.
+
+**The simulation reproduces the ordering and understates the damage tenfold:**
+
+| tempo band | simulated drop | real drop |
+|---|---:|---:|
+| 100 bpm | +0.029 | −0.007 |
+| 118 bpm | +0.034 | +0.261 |
+| 190–300 bpm | **+0.081** | **+0.473 and +0.800** |
+
+Both agree that nothing happens at 100 BPM — simulated −0.017 against a real
+−0.007 on the same recording — and both make fast material worse. The mechanism
+is right and the magnitude is not, so `room_degradation.py` can say *which*
+material is at risk and must not be used to predict a rate. The likely gap is
+the direct-to-reverberant ratio: the synthetic tail carries 0.7 of the direct
+path's energy, and a phone across a room from a speaker hears far more than
+that, before any microphone response or phone-side processing.
+
+### What these three change together
+
+The oracle budget said the decoder costs 0.7 to 2.0 points on full-length songs
+and the work is all in the front end. **That is true of clean files and false in
+a room.** On fast material the room costs 0.80 of F — more than the front end,
+the decoder and the octave combined. Any claim about where the live path loses
+its beats now has to say whether it is talking about a decoded file or a
+microphone, because on this evidence they are different problems.
