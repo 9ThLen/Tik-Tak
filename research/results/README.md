@@ -1253,44 +1253,83 @@ trained on GTZAN, so the level is not quotable and the shape is the result. At a
 one-second step the 1.5 s and 1 s arms read the same prefix, so there are five
 distinct points, not six.
 
-### 3. A real room, and a simulation that gets the shape and not the size
+### 3. A real room, and a simulation that predicts neither the size nor the shape
 
 Six Harmonix tracks played through a speaker and captured on a phone at 48 kHz
-with the room noise deliberately kept. Four aligned; two are reported void
-rather than aligned by hand.
+with the room noise deliberately kept. Five aligned; one is void.
 
-| track | bpm | F clean → room |
-|---|---:|---|
-| `0116_goodies` | 101 | 0.976 → **0.984** |
-| `0132_iceicebaby` | 118 | 0.896 → 0.635 |
-| `0466_onthedarkside` | 218 | 0.810 → 0.337 |
-| `0707_halfwaygone` | 217 | 0.951 → **0.151** |
+| track | annotated bpm | F clean → room | room fails by |
+|---|---:|---|---|
+| `0837_nottonight` | 87.0 | 0.974 → 0.555 | recall, octave |
+| `0116_goodies` | 102.0 | 0.976 → **0.984** | — |
+| `0132_iceicebaby` | 115.7 | 0.896 → 0.635 | recall |
+| `0707_halfwaygone` | 125.0 | 0.951 → **0.151** | recall |
+| `0466_onthedarkside` | 172.0 | 0.810 → 0.337 | recall, octave |
+
+Across the five, mean F 0.922 → 0.532 and usable 0.80 → 0.20.
 
 `0116_goodies` is the control that makes the rest readable: 0.984 in the room,
 through the same alignment, decode and scorer. A broken pipeline cannot score
 0.98 against untouched annotations, so the others' collapse is the room.
 
-**The simulation reproduces the ordering and understates the damage tenfold:**
+**The simulation understates the damage by a factor of ten.** Its worst cell —
+RT60 0.8 s at 10 dB SNR — costs 0.036 of mean F and takes usable from 0.402 to
+0.274. The real captures cost **0.390** of mean F. That comparison uses no
+tempo column and is the finding. The likely gap is the direct-to-reverberant
+ratio: the synthetic tail carries 0.7 of the direct path's energy, and a phone
+across a room from a speaker hears far more than that, before any microphone
+response or phone-side processing. The five are not a random sample and are
+easier than the sweep's subsample (clean F 0.922 against 0.804), which makes
+the gap larger rather than smaller.
 
-| tempo band | simulated drop | real drop |
+**It does not predict which recordings are damaged either, and an earlier
+version of this section said it did.** That claim came from a tempo column
+taken from `live_bpm` in `octave_ceiling_per_track_harmonix.json`, which is the
+value the live tracker *held at the end of the file* — on `0707_halfwaygone` it
+reads 217 for a song that is 125 BPM and that the same run tracked at 125 for
+390 beats. Against the annotated tempo the two columns agree within 2% on only
+51% of the subsample, and both orderings dissolve:
+
+| annotated tempo | simulated drop | published as |
 |---|---:|---:|
-| 100 bpm | +0.029 | −0.007 |
-| 118 bpm | +0.034 | +0.261 |
-| 190–300 bpm | **+0.081** | **+0.473 and +0.800** |
+| 0–100 (n=37) | +0.048 | +0.029 |
+| 100–140 (n=63) | +0.025 | +0.034 |
+| 140–190 (n=15) | +0.057 | +0.046 |
+| 190–300 (n=2) | +0.023 | **+0.081** |
 
-Both agree that nothing happens at 100 BPM — simulated −0.017 against a real
-−0.007 on the same recording — and both make fast material worse. The mechanism
-is right and the magnitude is not, so `room_degradation.py` can say *which*
-material is at risk and must not be used to predict a rate. The likely gap is
-the direct-to-reverberant ratio: the synthetic tail carries 0.7 of the direct
-path's energy, and a phone across a room from a speaker hears far more than
-that, before any microphone response or phone-side processing.
+The real five are not ordered by tempo either — the slowest loses 0.42, the next
+loses nothing, and the largest loss is at 125 BPM. Spearman is −0.60 on n=5,
+where nothing short of ±1.00 would mean anything. **So the mechanism story —
+that a reverb tail covers the next beat when beats are short — has no support
+here, and neither does "the simulation gets the shape".** What is left is one
+number: a real room costs about ten times what the simulation says, and what
+distinguishes a `0116_goodies` from a `0707_halfwaygone` is not known.
+
+The void recording is worth reading rather than skipping. `0875_redbelt`'s
+windows split into two camps 1.21 beats apart — 2.741 s from the coherent sum,
+3.300 s from what the recordist recalls. Scored at both, outside the accepted
+set, it gives room F **0.490** and **0.100**. The ambiguity reaches the
+conclusion whole, so the recording stays void; the sensitivity check is in the
+artifact under `sensitivity`.
+
+`0837_nottonight` was void in the first run and is not any more. It contains two
+takes — playback was restarted about 15 s in — and no constant offset can
+describe a file holding the same music twice. Discarding the abandoned take
+puts the restart at 14.714 s and the alignment then passes its own unchanged
+test. The four recordings that already scored carry no session notes and
+reproduce to the digit, which is the control on that change.
 
 ### What these three change together
 
 The oracle budget said the decoder costs 0.7 to 2.0 points on full-length songs
 and the work is all in the front end. **That is true of clean files and false in
-a room.** On fast material the room costs 0.80 of F — more than the front end,
-the decoder and the octave combined. Any claim about where the live path loses
-its beats now has to say whether it is talking about a decoded file or a
-microphone, because on this evidence they are different problems.
+a room.** Four of five real captures lost between 0.26 and 0.80 of F — more than
+the front end, the decoder and the octave combined. Any claim about where the
+live path loses its beats now has to say whether it is talking about a decoded
+file or a microphone, because on this evidence they are different problems.
+
+The corollary is about method, not about rooms: **the tempo of a recording comes
+from its annotations.** A tracker's own reading is an outcome, and using it as a
+covariate lets the thing being measured choose the axis it is measured on. The
+first version of this section did that and produced a monotone table in both
+arms that is not there.

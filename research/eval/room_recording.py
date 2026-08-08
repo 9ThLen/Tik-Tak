@@ -343,36 +343,55 @@ def measure_one(item: dict, capture_path: pathlib.Path, binary: pathlib.Path,
 
     out: dict = {"name": item["name"], "corpus": item["corpus"],
                  "capture": str(capture_path), "alignment": alignment}
+
+    def score_at(start_sample: int) -> dict:
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "aligned.wav"
+            soundfile.write(str(path), capture[max(0, start_sample):], int(rate_b))
+            arms = {"room": str(path), "clean": str(item["audio"])}
+            scored_arms = {}
+            for arm, audio in arms.items():
+                done = subprocess.run(
+                    [str(binary), audio, "--live", "--live-model", str(model),
+                     "--live-sample-hz", repr(SAMPLE_HZ)],
+                    capture_output=True, text=True, encoding="utf-8",
+                    errors="replace", check=False)
+                if done.returncode != 0:
+                    raise RuntimeError(done.stderr.strip()[:200])
+                scored = _score_one(
+                    item, "model", binary, model,
+                    estimate=Estimate.from_json(json.loads(done.stdout)))
+                scored_arms[arm] = {
+                    "usable": bool(scored.get("usable", False)),
+                    "reasons": list(scored.get("reasons", [])),
+                    "f_measure": scored.get("f_measure"),
+                    "p70": scored.get("p70"),
+                    "r70": scored.get("r70"),
+                    "acquired_at": scored.get("acquired_at"),
+                    "switches": scored.get("switches"),
+                    "correct_share_of_eligible":
+                        scored.get("correct_share_of_eligible"),
+                }
+        return scored_arms
+
     if not alignment["drift_ok"]:
         out["void"] = ("no constant offset fits: see agreeing_windows against "
                        "windows, and slipped_windows for whether the dissent is "
                        "a periodic-correlation slip or a clock disagreement")
+        # A void recording may still be scored at each candidate offset, and
+        # saying so is worth more than saying nothing: if the candidates land
+        # in the same place, the ambiguity does not reach the conclusion. This
+        # never enters the summary and never becomes an accepted measurement --
+        # the gate refused the recording and the gate stands.
+        candidates = note.get("sensitivity_offsets") or []
+        if candidates:
+            out["sensitivity"] = {
+                f"{float(candidate):.3f}":
+                    score_at(int(round(float(candidate) * rate_b)))
+                for candidate in candidates}
         return out
 
-    with tempfile.TemporaryDirectory() as directory:
-        path = pathlib.Path(directory) / "aligned.wav"
-        soundfile.write(str(path), trimmed, int(rate_b))
-        arms = {"room": str(path), "clean": str(item["audio"])}
-        for arm, audio in arms.items():
-            done = subprocess.run(
-                [str(binary), audio, "--live", "--live-model", str(model),
-                 "--live-sample-hz", repr(SAMPLE_HZ)],
-                capture_output=True, text=True, encoding="utf-8",
-                errors="replace", check=False)
-            if done.returncode != 0:
-                raise RuntimeError(done.stderr.strip()[:200])
-            scored = _score_one(item, "model", binary, model,
-                                estimate=Estimate.from_json(json.loads(done.stdout)))
-            out[arm] = {
-                "usable": bool(scored.get("usable", False)),
-                "reasons": list(scored.get("reasons", [])),
-                "f_measure": scored.get("f_measure"),
-                "p70": scored.get("p70"),
-                "r70": scored.get("r70"),
-                "acquired_at": scored.get("acquired_at"),
-                "switches": scored.get("switches"),
-                "correct_share_of_eligible": scored.get("correct_share_of_eligible"),
-            }
+    out.update(score_at(start))
     return out
 
 

@@ -1,7 +1,26 @@
 {
-  "commit": "28afe9a4fbcd0e6c2088af8b4b206e8df84032a3",
+  "commit": "d229de891d26d3d4266d3d90d9a3a28ca91aebf2",
   "notes": "phone microphone, room noise deliberately kept, six Harmonix tracks through a speaker",
   "captures": "D:\\Programs\\D\\Tik-tak\\music\\\u0437\u0430\u043f\u0438\u0441\u0438 \u0437 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0443",
+  "capture_notes": {
+    "0837_nottonnight.m4a": {
+      "skip_sec": 14.0,
+      "search_lo_sec": 0.0,
+      "search_hi_sec": 6.0,
+      "why": "The person who made the recording reports playback started about 1 s in and was restarted at about 15 s. Two takes of the same music are in one file and no constant offset describes it, so the abandoned take is discarded. 14.0 and not 15.0 because the summed correlation of the first run put the restart at 14.714, and cutting past the restart would remove the head of the good take and need a negative offset, which cannot be expressed."
+    },
+    "0875 redbelt.m4a": {
+      "skip_sec": 0.0,
+      "search_lo_sec": 0.0,
+      "search_hi_sec": 8.0,
+      "why": "Reported as starting about 3 s in, with heavy room noise. Two of the seven windows of the first run returned 29.51 s -- the edge of the 30 s search, which is a window failing rather than answering. The bound is narrowed to the range the session can actually have had; agreement is still judged at 30 ms, one part in 270 of it.",
+      "sensitivity_offsets": [
+        2.741,
+        3.3
+      ],
+      "sensitivity_why": "Still void inside the bound: the windows split into two camps, 2.741 (the coherent sum) and 3.300 (what the recordist recalls), 1.21 beats apart at 130 BPM. Scored at both, outside the accepted set, to show whether the ambiguity reaches the conclusion."
+    }
+  },
   "matched": {
     "0116_goodies.m4a": "0116_goodies",
     "046_onthedarkside.m4a": "0466_onthedarkside",
@@ -13,20 +32,20 @@
   "failures": [],
   "summary": {
     "clean": {
-      "n": 4,
-      "usable_rate": 0.75,
-      "mean_f": 0.9083667727011384,
-      "mean_r70": 0.8980353081110812,
-      "mean_p70": 0.9210951648946171
+      "n": 5,
+      "usable_rate": 0.8,
+      "mean_f": 0.9215890098082424,
+      "mean_r70": 0.9156113450804144,
+      "mean_p70": 0.9295366823744093
     },
     "room": {
-      "n": 4,
-      "usable_rate": 0.25,
-      "mean_f": 0.5267494530497416,
-      "mean_r70": 0.49197320742523054,
-      "mean_p70": 0.6281369647183112
+      "n": 5,
+      "usable_rate": 0.2,
+      "mean_f": 0.5323181066339007,
+      "mean_r70": 0.543813307724222,
+      "mean_p70": 0.5904216596867369
     },
-    "voided": 2
+    "voided": 1
   },
   "records": [
     {
@@ -36,6 +55,10 @@
       "alignment": {
         "offset_sec": 1.2704380048065433,
         "quality": 0.22297362378896987,
+        "search_sec": [
+          0.0,
+          30.0
+        ],
         "fits": [
           18.321284244595326,
           18.321598106415127,
@@ -50,6 +73,8 @@
         "slipped_windows": 3,
         "drift_sec": 0.0023339531211834436,
         "drift_ok": true,
+        "skip_sec": 0.0,
+        "note": "",
         "captured_sec": 132.46689583333333
       },
       "room": {
@@ -80,6 +105,10 @@
       "alignment": {
         "offset_sec": 0.7586233763997217,
         "quality": 0.19152693026195408,
+        "search_sec": [
+          0.0,
+          30.0
+        ],
         "fits": [
           0.7612282751684938,
           0.7581133857371093,
@@ -94,6 +123,8 @@
         "slipped_windows": 0,
         "drift_sec": 0.0003232330660669316,
         "drift_ok": true,
+        "skip_sec": 0.0,
+        "note": "",
         "captured_sec": 165.149375
       },
       "room": {
@@ -130,6 +161,10 @@
       "alignment": {
         "offset_sec": 2.0799100440839315,
         "quality": 0.25641280351970874,
+        "search_sec": [
+          0.0,
+          30.0
+        ],
         "fits": [
           2.0790173467856463,
           2.079477902120112,
@@ -144,6 +179,8 @@
         "slipped_windows": 0,
         "drift_sec": 0.0008287399852945683,
         "drift_ok": true,
+        "skip_sec": 0.0,
+        "note": "",
         "captured_sec": 196.16941666666668
       },
       "room": {
@@ -175,25 +212,54 @@
       "corpus": "harmonix",
       "capture": "D:\\Programs\\D\\Tik-tak\\music\\\u0437\u0430\u043f\u0438\u0441\u0438 \u0437 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0443\\0837_nottonnight.m4a",
       "alignment": {
-        "offset_sec": 14.713929364126232,
-        "quality": 0.1643900545109663,
+        "offset_sec": 0.7140312237607077,
+        "quality": 0.18602771760581485,
+        "search_sec": [
+          0.0,
+          6.0
+        ],
         "fits": [
-          15.749295986644848,
-          12.379502209676607,
-          8.248536168876633,
-          27.122257907361277,
-          17.472390029097042,
-          0.9191893863569324,
-          0.5799179582654208
+          1.7492959866448472,
+          3.8892630937004005,
+          0.712985053175896,
+          2.4387877269516425,
+          3.4723900290970415,
+          0.7160837121054625,
+          0.72075674780507
         ],
         "windows": 7,
-        "agreeing_windows": 0,
-        "slipped_windows": 3,
-        "drift_sec": 0.0,
-        "drift_ok": false,
-        "captured_sec": 159.04472916666666
+        "agreeing_windows": 3,
+        "slipped_windows": 1,
+        "drift_sec": 0.01039749023192377,
+        "drift_ok": true,
+        "skip_sec": 14.0,
+        "note": "The person who made the recording reports playback started about 1 s in and was restarted at about 15 s. Two takes of the same music are in one file and no constant offset describes it, so the abandoned take is discarded. 14.0 and not 15.0 because the summed correlation of the first run put the restart at 14.714, and cutting past the restart would remove the head of the good take and need a negative offset, which cannot be expressed.",
+        "captured_sec": 159.04464583333333
       },
-      "void": "no constant offset fits: see agreeing_windows against windows, and slipped_windows for whether the dissent is a periodic-correlation slip or a clock disagreement"
+      "room": {
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ],
+        "f_measure": 0.5545927209705372,
+        "p70": 0.43956043956043955,
+        "r70": 0.7511737089201878,
+        "acquired_at": 4.043,
+        "switches": 6,
+        "correct_share_of_eligible": 0.012332857328313645
+      },
+      "clean": {
+        "usable": true,
+        "reasons": [],
+        "f_measure": 0.974477958236659,
+        "p70": 0.963302752293578,
+        "r70": 0.9859154929577465,
+        "acquired_at": 4.04,
+        "switches": 1,
+        "correct_share_of_eligible": 0.9933333333333333
+      }
     },
     {
       "name": "0875_redbelt",
@@ -202,23 +268,81 @@
       "alignment": {
         "offset_sec": 2.7410977428394934,
         "quality": 0.19362886895369694,
+        "search_sec": [
+          0.0,
+          8.0
+        ],
         "fits": [
-          21.76012177115234,
+          6.521092939933061,
           3.3001291598759668,
           3.3002425595185163,
-          29.509980293578607,
-          29.50976839381384,
+          2.7408748210446445,
+          2.741107462667269,
           3.6610809384734653,
           1.3608946634881252
         ],
         "windows": 7,
-        "agreeing_windows": 0,
-        "slipped_windows": 7,
+        "agreeing_windows": 2,
+        "slipped_windows": 5,
         "drift_sec": 0.0,
         "drift_ok": false,
+        "skip_sec": 0.0,
+        "note": "Reported as starting about 3 s in, with heavy room noise. Two of the seven windows of the first run returned 29.51 s -- the edge of the 30 s search, which is a window failing rather than answering. The bound is narrowed to the range the session can actually have had; agreement is still judged at 30 ms, one part in 270 of it.",
         "captured_sec": 137.39622916666667
       },
-      "void": "no constant offset fits: see agreeing_windows against windows, and slipped_windows for whether the dissent is a periodic-correlation slip or a clock disagreement"
+      "void": "no constant offset fits: see agreeing_windows against windows, and slipped_windows for whether the dissent is a periodic-correlation slip or a clock disagreement",
+      "sensitivity": {
+        "2.741": {
+          "room": {
+            "usable": false,
+            "reasons": [
+              "wrong_beats",
+              "too_few_beats"
+            ],
+            "f_measure": 0.4897119341563786,
+            "p70": 0.5336322869955157,
+            "r70": 0.4524714828897338,
+            "acquired_at": 4.181,
+            "switches": 1,
+            "correct_share_of_eligible": 0.7305135951661631
+          },
+          "clean": {
+            "usable": true,
+            "reasons": [],
+            "f_measure": 0.9795158286778398,
+            "p70": 0.9598540145985401,
+            "r70": 1.0,
+            "acquired_at": 4.04,
+            "switches": 0,
+            "correct_share_of_eligible": 1.0
+          }
+        },
+        "3.300": {
+          "room": {
+            "usable": false,
+            "reasons": [
+              "wrong_beats",
+              "too_few_beats"
+            ],
+            "f_measure": 0.10020876826722337,
+            "p70": 0.1111111111111111,
+            "r70": 0.09125475285171103,
+            "acquired_at": 4.043,
+            "switches": 5,
+            "correct_share_of_eligible": 0.6905339805825242
+          },
+          "clean": {
+            "usable": true,
+            "reasons": [],
+            "f_measure": 0.9795158286778398,
+            "p70": 0.9598540145985401,
+            "r70": 1.0,
+            "acquired_at": 4.04,
+            "switches": 0,
+            "correct_share_of_eligible": 1.0
+          }
+        }
+      }
     },
     {
       "name": "0132_iceicebaby",
@@ -227,6 +351,10 @@
       "alignment": {
         "offset_sec": 2.2619665720923727,
         "quality": 0.28834162589354256,
+        "search_sec": [
+          0.0,
+          30.0
+        ],
         "fits": [
           2.2606794538912816,
           2.2611502561533445,
@@ -241,6 +369,8 @@
         "slipped_windows": 0,
         "drift_sec": 0.001549074424767924,
         "drift_ok": true,
+        "skip_sec": 0.0,
+        "note": "",
         "captured_sec": 156.13670833333333
       },
       "room": {

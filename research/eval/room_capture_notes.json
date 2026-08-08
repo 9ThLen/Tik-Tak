@@ -9,6 +9,8 @@
     "skip_sec": 0.0,
     "search_lo_sec": 0.0,
     "search_hi_sec": 8.0,
-    "why": "Reported as starting about 3 s in, with heavy room noise. Two of the seven windows of the first run returned 29.51 s -- the edge of the 30 s search, which is a window failing rather than answering. The bound is narrowed to the range the session can actually have had; agreement is still judged at 30 ms, one part in 270 of it."
+    "why": "Reported as starting about 3 s in, with heavy room noise. Two of the seven windows of the first run returned 29.51 s -- the edge of the 30 s search, which is a window failing rather than answering. The bound is narrowed to the range the session can actually have had; agreement is still judged at 30 ms, one part in 270 of it.",
+    "sensitivity_offsets": [2.741, 3.3],
+    "sensitivity_why": "Still void inside the bound: the windows split into two camps, 2.741 (the coherent sum) and 3.300 (what the recordist recalls), 1.21 beats apart at 130 BPM. Scored at both, outside the accepted set, to show whether the ambiguity reaches the conclusion."
   }
 }
