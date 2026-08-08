@@ -43,6 +43,13 @@ clean baseline on the same recordings, not the level.
    `room_degradation.py` uses. Write the list down; it has to be the same
    twenty for every condition.
 
+   If a property of the music is used to pick instead — tempo, say — take it
+   from the annotations, `60 / median(diff(reference beats))`, and from nothing
+   else. The six recordings this repository has were picked for a tempo spread
+   reaching 300 BPM using `live_bpm` from a results file, which is the value the
+   tracker held at the end of the file. The set that came back is 87 to 172 BPM
+   and the fast end was never recorded at all.
+
 2. **Establish the clean baseline first**, by running the ordinary benchmark on
    those twenty files. Everything below is read as a difference from it, so a
    run without it is not interpretable.

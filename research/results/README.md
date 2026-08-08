@@ -1299,7 +1299,11 @@ reads 217 for a song that is 125 BPM and that the same run tracked at 125 for
 
 The real five are not ordered by tempo either — the slowest loses 0.42, the next
 loses nothing, and the largest loss is at 125 BPM. Spearman is −0.60 on n=5,
-where nothing short of ±1.00 would mean anything. **So the mechanism story —
+where nothing short of ±1.00 would mean anything. The same bad column also chose
+the six: they were picked for a spread reaching 300 BPM and the set that came
+back is 87 to 172, so **fast material was never recorded**, and the two arms
+disagree hardest in exactly the band that has two tracks in simulation and none
+on tape. **So the mechanism story —
 that a reverb tail covers the next beat when beats are short — has no support
 here, and neither does "the simulation gets the shape".** What is left is one
 number: a real room costs about ten times what the simulation says, and what
