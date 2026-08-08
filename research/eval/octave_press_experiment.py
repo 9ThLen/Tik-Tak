@@ -216,6 +216,16 @@ def summarise(records: list[dict]) -> dict:
             "refusals_total": int(sum(r[arm]["refusals"] for r in records)),
         }
 
+    # The first run's design fault, checked rather than hoped away. The arms are
+    # matched on press *times*, not on presses that landed, so a guard that
+    # refuses one direction more than the other leaves A2 comparing arms that
+    # did different amounts of work.
+    landed_press = out["press"]["presses_total"]
+    landed_random = out["press_random"]["presses_total"]
+    gap = (abs(landed_press - landed_random) / max(1, landed_press))
+    out["accepted_press_gap"] = float(gap)
+    out["A2_confounded_by_press_count"] = bool(gap > 0.10)
+
     a1 = paired_bootstrap(records, "press", "baseline", PRIMARY)
     a2 = paired_bootstrap(records, "press", "press_random", PRIMARY)
     a3 = paired_bootstrap(records, "press", "baseline", CO_PRIMARY)
