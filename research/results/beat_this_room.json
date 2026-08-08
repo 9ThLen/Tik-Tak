@@ -1,0 +1,190 @@
+{
+  "commit": "2434c0d545f5261751c264d7ee735e66920ea85f",
+  "clean": false,
+  "corpora": [
+    "harmonix"
+  ],
+  "room": [
+    {
+      "name": "0116_goodies",
+      "clean": {
+        "frames": 6511,
+        "auc": 0.9999916917759659,
+        "mean_salience": 0.9997404260723006,
+        "median_floor": 5.414119480867033e-06,
+        "half_height_width_sec": 0.05023041474654271,
+        "between_beat_ratio": 1.0902254358797754e-05,
+        "through_tracker": {
+          "f_measure": 0.9976470588235293,
+          "p70": 0.9953051643192489,
+          "r70": 1.0,
+          "usable": true,
+          "reasons": []
+        }
+      },
+      "room": {
+        "frames": 6624,
+        "auc": 0.9995441353692278,
+        "mean_salience": 0.9852074815467263,
+        "median_floor": 4.0378442059123714e-05,
+        "half_height_width_sec": 0.09317972350230216,
+        "between_beat_ratio": 0.0021328843115003622,
+        "through_tracker": {
+          "f_measure": 0.9603729603729604,
+          "p70": 0.9493087557603687,
+          "r70": 0.9716981132075472,
+          "usable": true,
+          "reasons": []
+        }
+      },
+      "auc_drop": 0.00044755640673810326
+    },
+    {
+      "name": "0132_iceicebaby",
+      "clean": {
+        "frames": 7685,
+        "auc": 0.9990037778259635,
+        "mean_salience": 0.9931914402894834,
+        "median_floor": 3.7748922890546975e-06,
+        "half_height_width_sec": 0.047889273356400364,
+        "between_beat_ratio": 0.00017449540313712797,
+        "through_tracker": {
+          "f_measure": 0.9858657243816255,
+          "p70": 0.9721254355400697,
+          "r70": 1.0,
+          "usable": true,
+          "reasons": []
+        }
+      },
+      "room": {
+        "frames": 7807,
+        "auc": 0.981448097184777,
+        "mean_salience": 0.8679216682085394,
+        "median_floor": 0.004306119258760292,
+        "half_height_width_sec": 0.07301038062283581,
+        "between_beat_ratio": 1.149035881714757,
+        "through_tracker": {
+          "f_measure": 0.777583187390543,
+          "p70": 0.7602739726027398,
+          "r70": 0.7956989247311828,
+          "usable": false,
+          "reasons": [
+            "wrong_beats",
+            "too_few_beats"
+          ]
+        }
+      },
+      "auc_drop": 0.01755568064118651
+    },
+    {
+      "name": "0466_onthedarkside",
+      "clean": {
+        "frames": 8176,
+        "auc": 0.9992433768692943,
+        "mean_salience": 0.9918339114284368,
+        "median_floor": 0.00010008805436831674,
+        "half_height_width_sec": 0.05462414578587583,
+        "between_beat_ratio": 0.045125399229606594,
+        "through_tracker": {
+          "f_measure": 0.9399773499433748,
+          "p70": 0.918141592920354,
+          "r70": 0.962877030162413,
+          "usable": true,
+          "reasons": []
+        }
+      },
+      "room": {
+        "frames": 8258,
+        "auc": 0.8618144595304046,
+        "mean_salience": 0.5060879125652813,
+        "median_floor": 0.0014087134548379805,
+        "half_height_width_sec": 0.05594533029612637,
+        "between_beat_ratio": 0.23835355967182992,
+        "through_tracker": {
+          "f_measure": 0.5709923664122138,
+          "p70": 0.8348214285714286,
+          "r70": 0.43387470997679817,
+          "usable": false,
+          "reasons": [
+            "too_few_beats",
+            "wrong_octave"
+          ]
+        }
+      },
+      "auc_drop": 0.13742891733888973
+    },
+    {
+      "name": "0707_halfwaygone",
+      "clean": {
+        "frames": 9676,
+        "auc": 1.0,
+        "mean_salience": 0.9999082379409902,
+        "median_floor": 3.570641189774549e-06,
+        "half_height_width_sec": 0.038560411311053165,
+        "between_beat_ratio": 7.180986073281852e-06,
+        "through_tracker": {
+          "f_measure": 0.9805447470817121,
+          "p70": 0.9618320610687023,
+          "r70": 1.0,
+          "usable": true,
+          "reasons": []
+        }
+      },
+      "room": {
+        "frames": 9809,
+        "auc": 0.9032594050181864,
+        "mean_salience": 0.7505834234216725,
+        "median_floor": 0.013273994901090793,
+        "half_height_width_sec": 0.09136246786632195,
+        "between_beat_ratio": 14.790199893362626,
+        "through_tracker": {
+          "f_measure": 0.5482233502538071,
+          "p70": 0.526829268292683,
+          "r70": 0.5714285714285714,
+          "usable": false,
+          "reasons": [
+            "wrong_beats",
+            "too_few_beats"
+          ]
+        }
+      },
+      "auc_drop": 0.09674059498181364
+    },
+    {
+      "name": "0837_nottonight",
+      "clean": {
+        "frames": 7738,
+        "auc": 1.0,
+        "mean_salience": 0.9997806356765327,
+        "median_floor": 2.6456370630122705e-06,
+        "half_height_width_sec": 0.036818181818181035,
+        "between_beat_ratio": 6.23147216032133e-06,
+        "through_tracker": {
+          "f_measure": 0.9906976744186046,
+          "p70": 0.9815668202764977,
+          "r70": 1.0,
+          "usable": true,
+          "reasons": []
+        }
+      },
+      "room": {
+        "frames": 7953,
+        "auc": 0.99763335837716,
+        "mean_salience": 0.931936874391439,
+        "median_floor": 0.0002688391428939525,
+        "half_height_width_sec": 0.055545454545453364,
+        "between_beat_ratio": 0.3513440128666628,
+        "through_tracker": {
+          "f_measure": 0.9111617312072894,
+          "p70": 0.8849557522123894,
+          "r70": 0.9389671361502347,
+          "usable": false,
+          "reasons": [
+            "wrong_octave"
+          ]
+        }
+      },
+      "auc_drop": 0.002366641622839949
+    }
+  ]
+}

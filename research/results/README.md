@@ -1524,6 +1524,69 @@ criterion is different — training does not need the exact room, it needs a
 distribution containing it — and that criterion is end-to-end: train with it,
 evaluate on real captures. That test is not this one and was not run.
 
+### 7. The front end is worth more in a room than anywhere else
+
+Registered in `PREREGISTERED_beat_this_front_end.md`. Beat This!'s activation
+driven through the **same** `LiveTracker` BeatNet is driven through, so the
+decoder is constant and only the observation differs.
+
+**The delivery control first.** The Beat This! arm reaches the tracker through
+`--live-activation` on an analytic availability delay, while the shipped path
+uses BeatNet's recorded release schedule. BeatNet's own activation through the
+same replay seam scores 0.5413 against 0.5323 — **the delivery path is worth
++0.009**, so the comparison below is between models and not between seams.
+
+| track | BeatNet room | Beat This! room | clean, Beat This! |
+|---|---:|---:|---:|
+| `0116_goodies` | 0.984 | 0.960 | 0.998 |
+| `0132_iceicebaby` | 0.635 | **0.778** | 0.986 |
+| `0466_onthedarkside` | 0.337 | **0.571** | 0.940 |
+| `0707_halfwaygone` | 0.151 | **0.548** | 0.981 |
+| `0837_nottonight` | 0.555 | **0.911** | 0.991 |
+| **mean** | 0.5413 | **0.7536** | 0.9792 |
+
+**+0.212 of F in a room, with the decoder held constant.** That is the largest
+single improvement measured anywhere in this repository, and it is on real
+captures rather than on a corpus. The worst recording goes from 0.151 to 0.548.
+
+**And the room still costs the better model 0.226.** Beat This! falls from 0.979
+to 0.754. The registered reading of question 1 holds as written: on the two
+tracks where BeatNet's AUC fell by ≥0.10, Beat This!'s fell by 0.137 and 0.097,
+both more than half — **the room damages any front end, and no model choice
+avoids needing room data.** Both statements are true at once and neither
+replaces the other.
+
+The activation tells the same story more directly. On `0707_halfwaygone` the
+room floor is 0.0133 under Beat This! against **0.2049** under BeatNet — fifteen
+times lower — and salience 0.751 against 0.480. The gaps still fill, but far
+less.
+
+**On clean files, decoder held constant, 100 GTZAN recordings by stride:**
+
+| front end | mean F | usable |
+|---|---:|---:|
+| BeatNet | 0.6813 | 0.48 |
+| Beat This! | **0.8196** | **0.68** |
+
+**+0.138 of F and +20 points of usable.** Registered threshold was 0.03, so
+question 2 comes back "not settled rather than closed": GTZAN is in `final0`'s
+training set, so this is an upper bound and no available corpus is certainly
+outside it. What it does establish is that the +0.102 struck from
+[section 2](#2-what-a-perfect-front-end-would-buy-what-causality-costs-and-what-a-room-does)
+was not inflated by the decoder swap — held constant, the gap is larger, not
+smaller.
+
+Two faults in the registration, recorded rather than adjusted:
+
+* **AUC drop was the wrong statistic to hang question 1 on.** It is a difference
+  between two numbers both near 1.000, and it says "damaged similarly" while the
+  absolute floor differs fifteenfold and the beats recovered differ by 0.212.
+  The registered reading is reported above as registered; it is answering a
+  narrower question than the one that mattered.
+* **`between_beat_ratio` divides by the flanking beats** and returns 14.79 on
+  one Beat This! room arm, where a few intervals have near-zero flanks. As a
+  level it is unreadable in that regime; only its clean-versus-room direction is.
+
 ### What these three change together
 
 The oracle budget said the decoder costs 0.7 to 2.0 points on full-length songs
