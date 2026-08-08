@@ -222,7 +222,11 @@ def main() -> int:
             print(f"{label} not found: {path}", file=sys.stderr)
             return 1
 
-    items = load_corpus(args.manifest, args.music, False)
+    # The corpus filter goes to load_corpus and not only to the check below.
+    # Without it the loader falls back to DEFAULT_CORPORA, which is ballroom,
+    # gtzan and smc -- so Harmonix, whose rows say `ok` rather than
+    # `audio-aligned`, is silently dropped.
+    items = load_corpus(args.manifest, args.music, False, frozenset(args.corpora))
     seen = sorted({item["corpus"] for item in items})
     missing = [c for c in args.corpora if c not in seen]
     if missing:
