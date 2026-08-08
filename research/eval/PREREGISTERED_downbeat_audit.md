@@ -182,3 +182,94 @@ cannot close the direction on its own terms. It rejects the decoder it tested.
 
 The metre result is unaffected: it is a comparison between arms reading the
 *same* grid with the *same* decoder, where the geometry cancels.
+
+---
+
+## The causal arm, registered 2026-08-08, before it was run
+
+"Not in scope" above says a causal decoder would be a separate pre-registration.
+This is it, and it is deliberately small, because it is this protocol with **one
+factor changed** rather than a new question.
+
+The audit measured the metre over a whole recording and called that a ceiling:
+"a causal decoder seeing two to four bars cannot beat what an offline one seeing
+all of them extracts". It found the metre carried decisively — 82.9% on Harmonix
+and 60.8% on GTZAN against a shuffled null of 30.1% and 23.5% — and the octave
+not carried at all. Commit `44c8c56` then built the causal reader. The question
+registered here is the one that commit's own message says is unmeasured:
+**how much of the metre survives the trailing window?**
+
+### What changes, and what does not
+
+Changed: the decision is made over the last **32 beats the live tracker actually
+handed out**, re-made on every beat, by `analysis::resolveMeter` inside the
+shipping core — not over the whole recording by the audit's Python decoder.
+
+Unchanged, and taken from above without amendment: the corpora (GTZAN and
+Harmonix), the metre-accuracy definition, and both controls. `shuffled` permutes
+the downbeat channel across frames; `beat_as_downbeat` feeds the beat channel
+where the downbeat channel belongs. A result that does not clear both is not a
+result.
+
+### Three differences that are not the factor under test, and are confounds
+
+Named now so they cannot be offered afterwards as explanations for a bad number.
+
+1. **The grid is the tracker's, not the annotation's.** The audit scored the
+   annotated beat grid. The live path scores the beats it found, which on this
+   material is right about two thirds of the time. A causal metre read off a
+   wrong grid is wrong for a reason that has nothing to do with causality.
+   Handled by reporting the causal accuracy **restricted to recordings the
+   tracker tracked at the annotated level**, beside the unrestricted figure, and
+   treating the restricted one as the answer to the registered question.
+2. **The decoder is not the audit's.** `resolveMeter` has metre priors, a
+   minimum salience range and two margin gates; the audit's decoder had none of
+   these and always answered. So a lower number could be the window or could be
+   the gates. Separated by reporting coverage — the share of recordings that
+   answer at all — and by scoring **only among those that answer**, alongside
+   the share of all.
+3. **Gating.** Not a confound here: the harness plays no click, so no frame is
+   withheld. Recorded because it will be one in the product, and the figure
+   below is therefore an upper bound on what a shell with an audible click sees.
+
+### What is measured
+
+- **M1 metre accuracy, causal** — share of recordings whose held
+  `beats_per_bar` at the end of the recording matches the annotated one.
+- **M2 metre accuracy, causal, per decision point** — share of handed-out beats
+  whose current held metre is correct. M1 is a verdict, M2 is what a listener
+  watching a display experiences, and the two can disagree.
+- **M3 coverage** — share of recordings that answer at all.
+- **M4 bars to a stable answer** — beats before the held metre stops changing.
+- **M5 switches** — how many times the held metre changes per recording. A
+  decoder that reaches the right answer by flickering through every candidate
+  is not usable however good M1 is.
+
+### Acceptance
+
+There is nothing to adopt: the mechanism already ships behind a default-off
+flag, and this decides whether it is worth turning on and measuring further.
+
+- **C1.** On both corpora, M1 restricted to correctly-tracked recordings clears
+  `shuffled` by at least **15 points** with non-overlapping 95% intervals.
+- **C2.** It clears `beat_as_downbeat` by at least **10 points** on both.
+- **C3.** M1 restricted retains at least **two thirds** of the audit's
+  whole-recording figure on the same corpus — 55.3% of Harmonix's 82.9%, 40.5%
+  of GTZAN's 60.8%.
+
+Failing C1 or C2 means the causal window is reading the grid rather than the
+channel, and the flag should stay off. Failing C3 alone means the evidence is
+there and the window is too short, which is a parameter sweep and not a dead
+end — and the sweep would then need its own registration, because
+`window_beats` would have been chosen after seeing the result.
+
+### Predictions
+
+- **P5.** M1 restricted lands **below** the audit's whole-recording figure on
+  both corpora, because a 32-beat window is strictly less evidence. Named
+  because the opposite result would mean something is wrong with one of the two
+  measurements rather than that causality is free.
+- **P6.** M2 is below M1: early windows are short and wrong, and they are
+  counted in M2 and not in M1.
+- **P7.** The unrestricted M1 is well below the restricted one, by roughly the
+  share of recordings tracked at the wrong level.
