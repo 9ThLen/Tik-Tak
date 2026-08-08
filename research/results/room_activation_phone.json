@@ -1,0 +1,255 @@
+{
+  "commit": "4cfb67961a38b77515b13178c1be372f4c795579",
+  "clean": false,
+  "failures": [],
+  "survivor": "0116_goodies",
+  "verdicts": {
+    "front_end": {
+      "fires_on_collapsed": [
+        "0466_onthedarkside",
+        "0707_halfwaygone"
+      ],
+      "fires_on_survivor": false,
+      "explains": true,
+      "note": ""
+    },
+    "decoder": {
+      "fires_on_collapsed": [
+        "0132_iceicebaby",
+        "0837_nottonight"
+      ],
+      "fires_on_survivor": true,
+      "explains": false,
+      "note": "also fires on the recording that survived, so it describes the room and not the failure"
+    },
+    "doubling": {
+      "fires_on_collapsed": [
+        "0132_iceicebaby",
+        "0466_onthedarkside",
+        "0707_halfwaygone",
+        "0837_nottonight"
+      ],
+      "fires_on_survivor": true,
+      "explains": false,
+      "note": "also fires on the recording that survived, so it describes the room and not the failure"
+    },
+    "gain_control": {
+      "fires_on_collapsed": [
+        "0132_iceicebaby",
+        "0466_onthedarkside",
+        "0707_halfwaygone"
+      ],
+      "fires_on_survivor": true,
+      "explains": false,
+      "note": "also fires on the recording that survived, so it describes the room and not the failure"
+    },
+    "per_track": {
+      "0116_goodies": {
+        "front_end": false,
+        "decoder": true,
+        "doubling": true,
+        "gain_control": true
+      },
+      "0132_iceicebaby": {
+        "front_end": false,
+        "decoder": true,
+        "doubling": true,
+        "gain_control": true
+      },
+      "0466_onthedarkside": {
+        "front_end": true,
+        "decoder": false,
+        "doubling": true,
+        "gain_control": true
+      },
+      "0707_halfwaygone": {
+        "front_end": true,
+        "decoder": false,
+        "doubling": true,
+        "gain_control": true
+      },
+      "0837_nottonight": {
+        "front_end": false,
+        "decoder": true,
+        "doubling": true,
+        "gain_control": false
+      }
+    }
+  },
+  "records": [
+    {
+      "name": "0116_goodies",
+      "beats": 217,
+      "clean": {
+        "frames": 6509,
+        "auc": 0.9996546087566839,
+        "mean_salience": 0.9504610355132525,
+        "median_floor": 0.0005135468672960997,
+        "half_height_width_sec": 0.05483870967741818,
+        "between_beat_ratio": 0.05034198519799484
+      },
+      "room": {
+        "frames": 6622,
+        "auc": 0.9973052808007579,
+        "mean_salience": 0.8841584168317136,
+        "median_floor": 0.024620343814603984,
+        "half_height_width_sec": 0.09640552995391499,
+        "between_beat_ratio": 0.4859860949892448
+      },
+      "cross": {
+        "lag_sec": 0.0,
+        "peak": 0.6883727842574079,
+        "at_zero_lag": 0.6883727842574079
+      },
+      "level": {
+        "slope": 0.3591571967312288,
+        "intercept_db": -31.32469359276492,
+        "blocks": 130,
+        "clean_range_db": 18.158878326416016,
+        "room_range_db": 17.759843826293945
+      }
+    },
+    {
+      "name": "0132_iceicebaby",
+      "beats": 289,
+      "clean": {
+        "frames": 7683,
+        "auc": 0.98900652386309,
+        "mean_salience": 0.8566656572676393,
+        "median_floor": 0.000702746789812636,
+        "half_height_width_sec": 0.056955017301036845,
+        "between_beat_ratio": 0.7290080242080262
+      },
+      "room": {
+        "frames": 7806,
+        "auc": 0.9395540123696741,
+        "mean_salience": 0.6784531259635354,
+        "median_floor": 0.09540301188826561,
+        "half_height_width_sec": 0.11840830449826738,
+        "between_beat_ratio": 0.884170525493685
+      },
+      "cross": {
+        "lag_sec": 0.0,
+        "peak": 0.4923878119688566,
+        "at_zero_lag": 0.4923878119688566
+      },
+      "level": {
+        "slope": 0.4123985332562288,
+        "intercept_db": -30.437263552727437,
+        "blocks": 153,
+        "clean_range_db": 16.569629669189453,
+        "room_range_db": 13.041589736938477
+      }
+    },
+    {
+      "name": "0466_onthedarkside",
+      "beats": 439,
+      "clean": {
+        "frames": 8175,
+        "auc": 0.9831407398411807,
+        "mean_salience": 0.8163132560121401,
+        "median_floor": 0.0030483020018436946,
+        "half_height_width_sec": 0.08528473804100047,
+        "between_beat_ratio": 0.2777756359565004
+      },
+      "room": {
+        "frames": 8256,
+        "auc": 0.868231387262634,
+        "mean_salience": 0.49246937398011703,
+        "median_floor": 0.1737115979194641,
+        "half_height_width_sec": 0.16651480637812857,
+        "between_beat_ratio": 0.8736338749512452
+      },
+      "cross": {
+        "lag_sec": 0.0,
+        "peak": 0.3207768130931431,
+        "at_zero_lag": 0.3207768130931431
+      },
+      "level": {
+        "slope": 0.356695393038515,
+        "intercept_db": -31.76068284908519,
+        "blocks": 160,
+        "clean_range_db": 35.76222229003906,
+        "room_range_db": 23.878711700439453
+      }
+    },
+    {
+      "name": "0707_halfwaygone",
+      "beats": 389,
+      "clean": {
+        "frames": 9674,
+        "auc": 0.9994256527236746,
+        "mean_salience": 0.9222273308152918,
+        "median_floor": 0.0006991963582549943,
+        "half_height_width_sec": 0.05964010282776223,
+        "between_beat_ratio": 0.04642211959136029
+      },
+      "room": {
+        "frames": 9807,
+        "auc": 0.8415299911890948,
+        "mean_salience": 0.48049683303447743,
+        "median_floor": 0.20492885820567608,
+        "half_height_width_sec": 0.18796915167094716,
+        "between_beat_ratio": 1.0870218716627393
+      },
+      "cross": {
+        "lag_sec": -0.4399999999999906,
+        "peak": 0.30666916744573375,
+        "at_zero_lag": 0.052271314626698547
+      },
+      "level": {
+        "slope": 0.6969045204611002,
+        "intercept_db": -29.63510665045747,
+        "blocks": 193,
+        "clean_range_db": 23.575725555419922,
+        "room_range_db": 23.37350845336914
+      }
+    },
+    {
+      "name": "0837_nottonight",
+      "beats": 220,
+      "clean": {
+        "frames": 7737,
+        "auc": 0.9998701717840011,
+        "mean_salience": 0.9414662666254403,
+        "median_floor": 0.0002983465552688358,
+        "half_height_width_sec": 0.049999999999998934,
+        "between_beat_ratio": 0.02122510582812664
+      },
+      "room": {
+        "frames": 7951,
+        "auc": 0.9572014010011203,
+        "mean_salience": 0.7446189480833709,
+        "median_floor": 0.09024358168244362,
+        "half_height_width_sec": 0.09963636363636151,
+        "between_beat_ratio": 0.9727488223618443
+      },
+      "cross": {
+        "lag_sec": 0.019999999999999574,
+        "peak": 0.44747951496145705,
+        "at_zero_lag": 0.4129167004508259
+      },
+      "level": {
+        "slope": 0.7806883995198267,
+        "intercept_db": -28.21831351714195,
+        "blocks": 153,
+        "clean_range_db": 34.95403289794922,
+        "room_range_db": 32.38048553466797
+      }
+    }
+  ],
+  "orderings": {
+    "n": 5,
+    "statistics_examined": 8,
+    "spearman": {
+      "auc_drop": 0.8999999999999998,
+      "room_auc": -0.8999999999999998,
+      "room_salience": -0.8999999999999998,
+      "room_floor": 0.8999999999999998,
+      "room_between_beat": 0.7,
+      "room_width": 0.8999999999999998,
+      "cross_peak": -0.9999999999999999,
+      "level_slope": 0.19999999999999998
+    }
+  }
+}

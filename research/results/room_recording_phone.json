@@ -1,5 +1,5 @@
 {
-  "commit": "d229de891d26d3d4266d3d90d9a3a28ca91aebf2",
+  "commit": "4cfb67961a38b77515b13178c1be372f4c795579",
   "notes": "phone microphone, room noise deliberately kept, six Harmonix tracks through a speaker",
   "captures": "D:\\Programs\\D\\Tik-tak\\music\\\u0437\u0430\u043f\u0438\u0441\u0438 \u0437 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0443",
   "capture_notes": {
@@ -77,6 +77,7 @@
         "note": "",
         "captured_sec": 132.46689583333333
       },
+      "aligned_audio": "D:\\Programs\\D\\Tik-tak\\music\\room-aligned\\0116_goodies.wav",
       "room": {
         "usable": true,
         "reasons": [],
@@ -127,6 +128,7 @@
         "note": "",
         "captured_sec": 165.149375
       },
+      "aligned_audio": "D:\\Programs\\D\\Tik-tak\\music\\room-aligned\\0466_onthedarkside.wav",
       "room": {
         "usable": false,
         "reasons": [
@@ -183,6 +185,7 @@
         "note": "",
         "captured_sec": 196.16941666666668
       },
+      "aligned_audio": "D:\\Programs\\D\\Tik-tak\\music\\room-aligned\\0707_halfwaygone.wav",
       "room": {
         "usable": false,
         "reasons": [
@@ -236,6 +239,7 @@
         "note": "The person who made the recording reports playback started about 1 s in and was restarted at about 15 s. Two takes of the same music are in one file and no constant offset describes it, so the abandoned take is discarded. 14.0 and not 15.0 because the summed correlation of the first run put the restart at 14.714, and cutting past the restart would remove the head of the good take and need a negative offset, which cannot be expressed.",
         "captured_sec": 159.04464583333333
       },
+      "aligned_audio": "D:\\Programs\\D\\Tik-tak\\music\\room-aligned\\0837_nottonight.wav",
       "room": {
         "usable": false,
         "reasons": [
@@ -373,6 +377,7 @@
         "note": "",
         "captured_sec": 156.13670833333333
       },
+      "aligned_audio": "D:\\Programs\\D\\Tik-tak\\music\\room-aligned\\0132_iceicebaby.wav",
       "room": {
         "usable": false,
         "reasons": [

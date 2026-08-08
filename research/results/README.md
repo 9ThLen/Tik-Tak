@@ -1323,6 +1323,72 @@ puts the restart at 14.714 s and the alignment then passes its own unchanged
 test. The four recordings that already scored carry no session notes and
 reproduce to the digit, which is the control on that change.
 
+### 4. What the room does to the activation
+
+Registered in `research/eval/PREREGISTERED_room_diagnosis.md` before any
+activation was dumped, with the reading of each candidate fixed there.
+`room_activation.py`, on the five aligned captures, against the clean files.
+
+| track | F clean → room | AUC clean → room | salience | floor | width | between beats | level slope | cross peak |
+|---|---|---|---:|---:|---:|---:|---:|---:|
+| `0116_goodies` | 0.976 → **0.984** | 1.000 → **0.997** | 0.950 → 0.884 | 0.0005 → 0.025 | 0.055 → 0.096 | 0.05 → **0.49** | 0.36 | **0.688** |
+| `0132_iceicebaby` | 0.896 → 0.635 | 0.989 → 0.940 | 0.857 → 0.678 | 0.0007 → 0.095 | 0.057 → 0.118 | 0.73 → 0.88 | 0.41 | 0.492 |
+| `0837_nottonight` | 0.974 → 0.555 | 1.000 → 0.957 | 0.941 → 0.745 | 0.0003 → 0.090 | 0.050 → 0.100 | 0.02 → 0.97 | 0.78 | 0.447 |
+| `0466_onthedarkside` | 0.810 → 0.337 | 0.983 → 0.868 | 0.816 → 0.492 | 0.0030 → 0.174 | 0.085 → 0.167 | 0.28 → 0.87 | 0.36 | 0.321 |
+| `0707_halfwaygone` | 0.951 → **0.151** | 0.999 → **0.842** | 0.922 → 0.480 | 0.0007 → **0.205** | 0.060 → 0.188 | 0.05 → **1.09** | 0.70 | 0.307 |
+
+**The damage is in the observation.** The registered discriminability test is
+the only candidate that survives its falsifier: AUC falls by 0.115 and 0.157 on
+the two worst recordings and by 0.003 on the one that survived. Underneath it,
+every part of the beat channel degrades at once — the beats lose half their
+height, the floor between them rises **fifty to three hundred fold**, the peaks
+roughly double in width, and on the three worst the loudest thing between two
+beats is as tall as the beats themselves (0.87, 0.97, 1.09; 1.09 means it is
+taller). None of this is a timing error: the cross-correlation lag is 0.000 on
+four of the five.
+
+**The phone's gain control is ruled out, and cleanly.** It is real — every
+capture compresses, slopes 0.36 to 0.78 — but it runs *backwards* against the
+damage: the recording that survived is the most compressed of the five, and the
+worst-hit is among the least. Spearman +0.20. This is what the falsifier was
+registered for.
+
+Two registered rules did not work, and are recorded rather than adjusted:
+
+* The **decoder** candidate's falsifier is ill-posed. It is defined as "the
+  observation survived", and the control recording is the one whose observation
+  survived, so it fires there by construction and the rule rejects it. The
+  rejection carries no information. It should have been conditioned on the F
+  loss.
+* The **doubling** threshold was written as a rise of ≥0.15 where a level was
+  needed. Every capture rises by more than that, including the survivor, so it
+  is rejected — while the level separates the survivor (0.49) from the four
+  collapsed (0.87 to 1.09) perfectly. The threshold stands as registered.
+
+**Every observation statistic orders the damage; the one non-observation
+statistic does not.**
+
+| statistic | Spearman against F lost |
+|---|---:|
+| cross-correlation peak against the clean activation | **−1.00** |
+| AUC drop / room AUC / room salience / room floor / peak width | ±0.90 |
+| between-beat height | +0.70 |
+| level slope (gain control) | +0.20 |
+
+How much the room activation still *resembles* the clean one ranks the five
+exactly. Eight statistics were examined, so that −1.00 is p = 0.017 alone and
+0.13 after correcting for the eight, and none of them was the registered
+primary: it is suggestive and it is not established. The consistency across
+five statistics that measure different things is worth more here than any one
+coefficient.
+
+**What this means for the live path.** The tracker is not making bad decisions
+about a good observation in a room; it is being handed an activation in which
+the beats and the gaps have nearly the same height. That points the work at the
+front end for microphone input — preprocessing, or a model that has heard a
+room — and it says the decoder-side ideas that keep being proposed will run on
+noise again, exactly as in the earlier salience-versus-decoder finding.
+
 ### What these three change together
 
 The oracle budget said the decoder costs 0.7 to 2.0 points on full-length songs

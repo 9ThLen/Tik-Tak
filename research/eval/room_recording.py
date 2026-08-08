@@ -308,7 +308,8 @@ def align(original: np.ndarray, capture: np.ndarray, rate_a: float,
 
 
 def measure_one(item: dict, capture_path: pathlib.Path, binary: pathlib.Path,
-                model: pathlib.Path, note: dict | None = None) -> dict:
+                model: pathlib.Path, note: dict | None = None,
+                write_aligned: pathlib.Path | None = None) -> dict:
     import soundfile
 
     note = note or {}
@@ -391,6 +392,17 @@ def measure_one(item: dict, capture_path: pathlib.Path, binary: pathlib.Path,
                 for candidate in candidates}
         return out
 
+    if write_aligned is not None:
+        # The aligned capture is the expensive artifact here -- it took a
+        # person, a speaker and a room, and until now it lived in a temporary
+        # directory and was deleted. Anything asking a further question of
+        # these recordings would have to re-derive it and could re-derive it
+        # differently, so it is written where the next script can read it.
+        write_aligned.mkdir(parents=True, exist_ok=True)
+        kept = write_aligned / f"{item['name']}.wav"
+        soundfile.write(str(kept), capture[max(0, start):], int(rate_b))
+        out["aligned_audio"] = str(kept)
+
     out.update(score_at(start))
     return out
 
@@ -414,6 +426,10 @@ def main(argv: list[str] | None = None) -> int:
         help="JSON, capture filename -> {skip_sec, search_lo_sec, "
              "search_hi_sec, why}: what the person who made the recording "
              "observed about the session, not fitted values")
+    parser.add_argument(
+        "--write-aligned", type=pathlib.Path,
+        help="keep each aligned capture here as <track>.wav, so a later "
+             "measurement reads the same audio this one scored")
     args = parser.parse_args(argv)
 
     capture_notes: dict = {}
@@ -444,7 +460,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {capture.name}  ->  {name}", file=sys.stderr)
         try:
             records.append(measure_one(item, capture, args.binary, args.model,
-                                       capture_notes.get(capture.name)))
+                                       capture_notes.get(capture.name),
+                                       args.write_aligned))
         except Exception as error:  # noqa: BLE001
             failures.append({"capture": capture.name, "error": str(error)[:300]})
         print(f"{len(records) + len(failures)}/{len(captures)}",
