@@ -1,0 +1,172 @@
+{
+  "commit": "48b8a6dd75e27b1e7c328ee9c20dd386c25c4436",
+  "notes": "session 2: sweep, silence and two tracks with nothing moved between them",
+  "captures": "D:\\Programs\\D\\Tik-tak\\music\\room-session2",
+  "capture_notes": {
+    "0707_halfwaygone.m4a": {
+      "sensitivity_offsets": [
+        0.476,
+        0.91
+      ],
+      "sensitivity_why": "Void: four of seven windows agree with each other on 0.476 while the coherent sum peaks at 0.910, 0.9 beats away at 125 BPM. Scored at both, outside the accepted set."
+    }
+  },
+  "matched": {
+    "0116_goodies.m4a": "0116_goodies",
+    "0707_halfwaygone.m4a": "0707_halfwaygone"
+  },
+  "failures": [],
+  "summary": {
+    "clean": {
+      "n": 1,
+      "usable_rate": 1.0,
+      "mean_f": 0.9764150943396226,
+      "mean_r70": 0.9764150943396226,
+      "mean_p70": 0.9764150943396226
+    },
+    "room": {
+      "n": 1,
+      "usable_rate": 1.0,
+      "mean_f": 0.9384965831435078,
+      "mean_r70": 0.9716981132075472,
+      "mean_p70": 0.9074889867841409
+    },
+    "voided": 1
+  },
+  "records": [
+    {
+      "name": "0116_goodies",
+      "corpus": "harmonix",
+      "capture": "D:\\Programs\\D\\Tik-tak\\music\\room-session2\\0116_goodies.m4a",
+      "alignment": {
+        "offset_sec": 1.149002168024812,
+        "quality": 0.2460992363582722,
+        "search_sec": [
+          0.0,
+          30.0
+        ],
+        "fits": [
+          15.84923190234593,
+          1.1487741877053308,
+          19.671092525443804,
+          19.670759915215008,
+          1.148946104660781,
+          1.1499397502116953,
+          1.1497502277302538
+        ],
+        "windows": 7,
+        "agreeing_windows": 4,
+        "slipped_windows": 1,
+        "drift_sec": 0.0013361325240896053,
+        "drift_ok": true,
+        "skip_sec": 0.0,
+        "note": "",
+        "captured_sec": 137.879
+      },
+      "aligned_audio": "D:\\Programs\\D\\Tik-tak\\music\\room-session2-aligned\\0116_goodies.wav",
+      "room": {
+        "usable": true,
+        "reasons": [],
+        "f_measure": 0.9384965831435078,
+        "p70": 0.9074889867841409,
+        "r70": 0.9716981132075472,
+        "acquired_at": 4.043,
+        "switches": 1,
+        "correct_share_of_eligible": 0.9638771824202288
+      },
+      "clean": {
+        "usable": true,
+        "reasons": [],
+        "f_measure": 0.9764150943396226,
+        "p70": 0.9764150943396226,
+        "r70": 0.9764150943396226,
+        "acquired_at": 4.04,
+        "switches": 0,
+        "correct_share_of_eligible": 0.9966623400704617
+      }
+    },
+    {
+      "name": "0707_halfwaygone",
+      "corpus": "harmonix",
+      "capture": "D:\\Programs\\D\\Tik-tak\\music\\room-session2\\0707_halfwaygone.m4a",
+      "alignment": {
+        "offset_sec": 0.909721836880724,
+        "quality": 0.11929854955823492,
+        "search_sec": [
+          0.0,
+          30.0
+        ],
+        "fits": [
+          0.4756391659555077,
+          0.47637737164896266,
+          0.4760788690291682,
+          0.473339291071927,
+          24.422021092532464,
+          0.9101428932165261,
+          0.910335994395895
+        ],
+        "windows": 7,
+        "agreeing_windows": 2,
+        "slipped_windows": 5,
+        "drift_sec": 0.0,
+        "drift_ok": false,
+        "skip_sec": 0.0,
+        "note": "",
+        "captured_sec": 194.6089375
+      },
+      "void": "no constant offset fits: see agreeing_windows against windows, and slipped_windows for whether the dissent is a periodic-correlation slip or a clock disagreement",
+      "sensitivity": {
+        "0.476": {
+          "room": {
+            "usable": false,
+            "reasons": [
+              "wrong_beats",
+              "too_few_beats"
+            ],
+            "f_measure": 0.34009360374414976,
+            "p70": 0.4144486692015209,
+            "r70": 0.28835978835978837,
+            "acquired_at": 4.043,
+            "switches": 0,
+            "correct_share_of_eligible": 0.6638956119120277
+          },
+          "clean": {
+            "usable": true,
+            "reasons": [],
+            "f_measure": 0.9505208333333334,
+            "p70": 0.9358974358974359,
+            "r70": 0.9656084656084656,
+            "acquired_at": 4.203,
+            "switches": 4,
+            "correct_share_of_eligible": 0.98251016134992
+          }
+        },
+        "0.910": {
+          "room": {
+            "usable": false,
+            "reasons": [
+              "wrong_beats",
+              "too_few_beats"
+            ],
+            "f_measure": 0.20394736842105263,
+            "p70": 0.26956521739130435,
+            "r70": 0.164021164021164,
+            "acquired_at": 4.043,
+            "switches": 0,
+            "correct_share_of_eligible": 0.5994093450058011
+          },
+          "clean": {
+            "usable": true,
+            "reasons": [],
+            "f_measure": 0.9505208333333334,
+            "p70": 0.9358974358974359,
+            "r70": 0.9656084656084656,
+            "acquired_at": 4.203,
+            "switches": 4,
+            "correct_share_of_eligible": 0.98251016134992
+          }
+        }
+      }
+    }
+  ]
+}
