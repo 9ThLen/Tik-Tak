@@ -448,6 +448,12 @@ int main(int argc, char** argv) {
     // the live path's confidence was measured down to, and swapping it is the
     // only way to find out whether that diagnosis was right.
     std::string activation_path;
+    // The model's second channel, cached beside the first. Supplying it as a
+    // separate file is what makes the controls possible: a shuffled or
+    // substituted downbeat channel is a different file through the same
+    // binary, so the arms differ in the evidence and in nothing else.
+    std::string downbeat_path;
+    bool live_bars = false;
     double activation_fps = 50.0;
     // Reproduce when a BeatNet frame becomes available, not only the timestamp
     // written on it. Off by default so earlier external-activation experiments
@@ -621,6 +627,15 @@ int main(int argc, char** argv) {
         }
         if (std::strcmp(argv[i], "--live") == 0) {
             live = true;
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-downbeat") == 0) {
+            if (i + 1 >= argc) { std::fprintf(stderr, "--live-downbeat needs a file\n"); return 2; }
+            downbeat_path = argv[++i];
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-bars") == 0) {
+            live_bars = true;
             continue;
         }
         if (std::strcmp(argv[i], "--live-activation") == 0) {
@@ -934,6 +949,10 @@ int main(int argc, char** argv) {
     // handed out. Scoring anything else would be scoring a tracker that does
     // not exist.
     std::vector<double> live_beats;
+    std::vector<double> live_bar_positions;
+    std::vector<double> live_bar_meters;
+    std::vector<double> live_bar_confident;
+    int live_beats_per_bar = 0;
     double live_bpm = 0.0;
     double live_confidence = 0.0;
     double live_tempo_spread_octaves = 0.0;
@@ -966,6 +985,28 @@ int main(int argc, char** argv) {
             return 1;
         }
         live = true;
+    }
+    std::vector<double> downbeat_activation;
+    if (!downbeat_path.empty()) {
+        std::string complaint;
+        if (!readSalience(downbeat_path.c_str(), downbeat_activation, complaint)) {
+            std::fprintf(stderr, "%s\n", complaint.c_str());
+            return 1;
+        }
+        if (activation_path.empty()) {
+            std::fprintf(stderr,
+                         "--live-downbeat is the second channel of a cached "
+                         "activation and needs --live-activation for the first\n");
+            return 1;
+        }
+        if (downbeat_activation.size() != activation.size()) {
+            std::fprintf(stderr,
+                         "--live-downbeat has %zu frame(s) against %zu in "
+                         "--live-activation; they are two channels of one "
+                         "stream and a mismatch is a different recording\n",
+                         downbeat_activation.size(), activation.size());
+            return 1;
+        }
     }
     std::vector<double> activation_emit;
     if (!activation_emit_path.empty()) {
@@ -1060,6 +1101,7 @@ int main(int argc, char** argv) {
             live_config.anchor_octave_margin = live_anchor_margin;
         }
         live_config.anchor_octave_freeze = live_octave_freeze;
+        live_config.bar_tracking = live_bars;
         live_config.anchor_margin_abstain = live_margin_abstain;
         if (live_freeze_timeout > 0.0) {
             live_config.anchor_freeze_timeout_sec = live_freeze_timeout;
@@ -1100,7 +1142,21 @@ int main(int argc, char** argv) {
             // the block clock and must not depend on how often the series are
             // read, which is what makes --live-sample-hz observational: the
             // beat list at 50 Hz has to equal the beat list at 1 Hz.
-            while (tracker.takeBeat(now, kLookahead, &beat)) live_beats.push_back(beat);
+            while (tracker.takeBeat(now, kLookahead, &beat)) {
+                live_beats.push_back(beat);
+                // One per beat, in the same order, so the two columns can be
+                // read together. -1 is "nothing decided yet", which is a state
+                // and not a position.
+                live_bar_positions.push_back(
+                    static_cast<double>(tracker.barPosition()));
+                // The held metre as it stood when this beat was handed out. The
+                // final one alone cannot say whether the answer was reached
+                // early and kept or arrived on the last bar, and it cannot see
+                // a decoder that flickers through every candidate on its way.
+                live_bar_meters.push_back(
+                    static_cast<double>(tracker.beatsPerBar()));
+                live_bar_confident.push_back(tracker.meterConfident() ? 1.0 : 0.0);
+            }
             // The total ban is worded "no octave change after first lock", so
             // the policy needs the publishing state. Latched with the shipped
             // hysteresis and never released: what §7 asks about is whether the
@@ -1191,8 +1247,14 @@ int main(int argc, char** argv) {
                                 ? activation_emit[next_frame] <= block_index
                                 : static_cast<double>(next_frame) * frame_sec +
                                       kAvailabilityDelay <= now)) {
-                        tracker.observe(observation_time(next_frame),
-                                        activation[next_frame]);
+                        if (downbeat_activation.empty()) {
+                            tracker.observe(observation_time(next_frame),
+                                            activation[next_frame]);
+                        } else {
+                            tracker.observe(observation_time(next_frame),
+                                            activation[next_frame],
+                                            downbeat_activation[next_frame]);
+                        }
                         ++next_frame;
                     }
                     poll();
@@ -1206,8 +1268,16 @@ int main(int argc, char** argv) {
                     online_policy.decision_time_sec = clock;
                     while (next_frame < activation.size() &&
                            static_cast<double>(next_frame) * frame_sec <= clock) {
-                        tracker.observe(static_cast<double>(next_frame) * frame_sec,
-                                        activation[next_frame]);
+                        if (downbeat_activation.empty()) {
+                            tracker.observe(
+                                static_cast<double>(next_frame) * frame_sec,
+                                activation[next_frame]);
+                        } else {
+                            tracker.observe(
+                                static_cast<double>(next_frame) * frame_sec,
+                                activation[next_frame],
+                                downbeat_activation[next_frame]);
+                        }
                         ++next_frame;
                     }
                     now = clock;
@@ -1231,6 +1301,7 @@ int main(int argc, char** argv) {
         live_confidence = final.confidence;
         live_tempo_spread_octaves = final.tempo_spread_octaves;
         live_stats = tracker.stats();
+        live_beats_per_bar = tracker.beatsPerBar();
         beats = live_beats;
     }
 
@@ -1494,6 +1565,12 @@ int main(int argc, char** argv) {
         column("live_anchor_bpm", anchor_bpm);
         column("live_anchor_confidence", anchor_confidence);
         column("live_anchor_margin", anchor_margin);
+        // Per beat rather than per sample, and therefore not affected by
+        // --live-sample-hz: a bar position belongs to a beat, not to a clock.
+        std::printf("  \"live_beats_per_bar\": %d,\n", live_beats_per_bar);
+        column("live_bar_positions", live_bar_positions);
+        column("live_bar_meters", live_bar_meters);
+        column("live_bar_confident", live_bar_confident);
     }
     std::printf("  \"beats_per_bar\": %d,\n", beats_per_bar);
     std::printf("  \"downbeat_strength\": %.17g,\n", finiteOrZero(strength));
