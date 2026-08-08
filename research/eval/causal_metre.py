@@ -50,6 +50,16 @@ from eval.octave_veto_replay import run, run_activation  # noqa: E402
 
 ARMS = ("beat_sync", "shuffled", "beat_as_downbeat")
 
+# The tolerance every beat-level agreement in this repository uses.
+DOWNBEAT_TOLERANCE_SEC = 0.070
+
+# `random_phase` is not an arm of the core: it is `beat_sync`'s own metre and
+# settled grid with the bar line moved to a phase drawn from a seeded generator.
+# With the metre almost always four a random phase is right one time in four, so
+# this and not a shuffle is what the phase result has to clear -- the lesson the
+# metre arm's missing constant baseline taught, applied before the run.
+PHASE_NULL = "random_phase"
+
 # The metres resolveMeter considers. Anything else in an annotation is outside
 # the hypothesis set and cannot be got right, so it is excluded from scoring
 # rather than counted as a failure of the window.
@@ -142,15 +152,98 @@ def measure_one(item: dict, binary: pathlib.Path, weights: pathlib.Path,
                 sample_hz=SAMPLE_HZ,
                 extra=["--live-bars", "--live-downbeat", str(downbeat_path)],
                 emit_path=emit_path, times_path=times_path)
-            out[arm] = read_arm(payload, baseline_beats, true_metre)
+            out[arm] = read_arm(payload, baseline_beats, true_metre,
+                                reference_downbeats=downbeats)
 
     return out
 
 
-def read_arm(payload: dict, baseline_beats: np.ndarray, true_metre: int) -> dict:
+def score_phase(beats: np.ndarray, positions: np.ndarray, meters: np.ndarray,
+                reference_downbeats: np.ndarray,
+                shift: int = 0) -> dict:
+    """F1 and F2 from the pre-registration's bar-phase addition.
+
+    Only beats after the metre first settled are scored: before that there is no
+    phase to be right or wrong about, and counting the unsettled prefix would
+    mix "had not decided yet" into "decided wrong".
+
+    `shift` rotates the bar line by that many positions, which is how the
+    `random_phase` null is built — the same metre, the same settled grid, a
+    different bar line.
+    """
+    empty = {"f1": None, "precision": None, "recall": None,
+             "phase_correct_share": None, "scored_beats": 0, "downbeats": 0}
+    if len(beats) == 0 or len(beats) != len(positions) or len(meters) != len(beats):
+        return empty
+    if len(reference_downbeats) < 2:
+        return empty
+
+    decided = meters > 0
+    if not decided.any():
+        return empty
+    first = int(np.argmax(decided))
+    beats = beats[first:]
+    positions = positions[first:]
+    meters = meters[first:]
+    usable = (positions >= 0) & (meters > 0)
+    if not usable.any():
+        return empty
+    beats = beats[usable]
+    positions = positions[usable]
+    meters = meters[usable]
+
+    shifted = np.mod(positions - shift, meters)
+
+    # Only downbeats inside the span the tracker actually covered: a recording
+    # whose first eight bars went by before the metre settled has not missed
+    # them, it was not asked about them.
+    span_low, span_high = beats[0], beats[-1]
+    inside = reference_downbeats[(reference_downbeats >= span_low - DOWNBEAT_TOLERANCE_SEC)
+                                 & (reference_downbeats <= span_high + DOWNBEAT_TOLERANCE_SEC)]
+    if len(inside) == 0:
+        return empty
+
+    claimed = beats[shifted == 0]
+    if len(claimed) == 0:
+        return {**empty, "f1": 0.0, "precision": 0.0, "recall": 0.0,
+                "phase_correct_share": 0.0,
+                "scored_beats": int(len(beats)), "downbeats": int(len(inside))}
+
+    def nearest(values: np.ndarray, targets: np.ndarray) -> np.ndarray:
+        index = np.clip(np.searchsorted(targets, values), 1, len(targets) - 1)
+        left = np.abs(values - targets[index - 1])
+        right = np.abs(targets[index] - values)
+        return np.minimum(left, right)
+
+    hit = nearest(claimed, inside) <= DOWNBEAT_TOLERANCE_SEC
+    precision = float(np.mean(hit))
+    found = nearest(inside, claimed) <= DOWNBEAT_TOLERANCE_SEC
+    recall = float(np.mean(found))
+    f1 = (2.0 * precision * recall / (precision + recall)
+          if precision + recall > 0 else 0.0)
+
+    # F2: the share of scored beats whose position agrees with the annotated bar
+    # phase. Derived from where the bar lines are rather than from a metre
+    # label, so it needs no annotation column that may not exist.
+    to_downbeat = nearest(beats, inside)
+    should_be_zero = to_downbeat <= DOWNBEAT_TOLERANCE_SEC
+    agree = (shifted == 0) == should_be_zero
+    return {
+        "f1": f1,
+        "precision": precision,
+        "recall": recall,
+        "phase_correct_share": float(np.mean(agree)),
+        "scored_beats": int(len(beats)),
+        "downbeats": int(len(inside)),
+    }
+
+
+def read_arm(payload: dict, baseline_beats: np.ndarray, true_metre: int,
+             reference_downbeats: np.ndarray | None = None) -> dict:
     """One arm's answer, and the invariant that makes the arms comparable."""
     beats = np.asarray(payload.get("beats", []), dtype=np.float64)
     meters = np.asarray(payload.get("live_bar_meters", []), dtype=np.float64)
+    positions = np.asarray(payload.get("live_bar_positions", []), dtype=np.float64)
     final = int(payload.get("live_beats_per_bar", 0))
 
     # The beat grid must not depend on the downbeat file. Checked, not assumed:
@@ -177,6 +270,36 @@ def read_arm(payload: dict, baseline_beats: np.ndarray, true_metre: int) -> dict
 
     switches = int(np.sum(answered[1:] != answered[:-1])) if len(answered) > 1 else 0
 
+    phase: dict = {}
+    if reference_downbeats is not None:
+        phase["actual"] = score_phase(beats, positions, meters, reference_downbeats)
+        if final > 0:
+            # The null: the same metre and the same settled grid with the bar
+            # line placed uniformly at random. Computed as the mean over *all*
+            # `final` rotations rather than by drawing one, which is the exact
+            # expectation with no sampling noise and needs no seed.
+            #
+            # Rotation zero is included, and that is the point. An earlier
+            # version excluded it "so the null cannot be the arm itself", which
+            # made it not a random phase but a guaranteed-different one: it
+            # scored exactly 0.0 whenever the arm was right, so it measured the
+            # arm's correctness instead of baselining it. A uniform phase is
+            # right one time in `final`, and that is the number to clear.
+            rotations = [
+                score_phase(beats, positions, meters, reference_downbeats,
+                            shift=shift)
+                for shift in range(final)
+            ]
+            valid = [r for r in rotations if r["f1"] is not None]
+            phase[PHASE_NULL] = (
+                {**valid[0],
+                 "f1": float(np.mean([r["f1"] for r in valid])),
+                 "precision": float(np.mean([r["precision"] for r in valid])),
+                 "recall": float(np.mean([r["recall"] for r in valid])),
+                 "phase_correct_share": float(
+                     np.mean([r["phase_correct_share"] for r in valid]))}
+                if valid else {"f1": None})
+
     return {
         "final_metre": final,
         "beats_identical": identical,
@@ -185,6 +308,7 @@ def read_arm(payload: dict, baseline_beats: np.ndarray, true_metre: int) -> dict
         "correct_share_of_beats": correct_points,
         "stable_after_beats": int(stable_after),
         "switches": switches,
+        "phase": phase,
     }
 
 
@@ -198,6 +322,31 @@ def wilson(successes: int, total: int) -> tuple[float, float]:
     centre = (p + z * z / (2 * total)) / denom
     half = z * np.sqrt(p * (1 - p) / total + z * z / (4 * total * total)) / denom
     return (max(0.0, centre - half), min(1.0, centre + half))
+
+
+def phase_block(subset: list[dict], arm: str, key: str = "actual") -> dict:
+    """F1 and F2 over the recordings where the arm produced a phase at all."""
+    scores = [r[arm]["phase"][key] for r in subset
+              if r[arm].get("phase", {}).get(key, {}).get("f1") is not None]
+    if not scores:
+        return {"f1": None, "f1_n": 0, "f1_ci": None,
+                "precision": None, "recall": None, "phase_correct_share": None}
+    f1 = np.asarray([s["f1"] for s in scores], dtype=np.float64)
+    # A mean of per-recording F-measures, and a bootstrap over recordings for
+    # its interval: Wilson is for a proportion and these are not one.
+    boot = np.asarray([
+        np.mean(f1[np.random.default_rng(seed).integers(0, len(f1), len(f1))])
+        for seed in range(2000)
+    ])
+    return {
+        "f1": float(f1.mean()),
+        "f1_n": int(len(f1)),
+        "f1_ci": [float(np.percentile(boot, 2.5)), float(np.percentile(boot, 97.5))],
+        "precision": float(np.mean([s["precision"] for s in scores])),
+        "recall": float(np.mean([s["recall"] for s in scores])),
+        "phase_correct_share": float(
+            np.mean([s["phase_correct_share"] for s in scores])),
+    }
 
 
 def summarise(records: list[dict]) -> dict:
@@ -265,7 +414,9 @@ def summarise(records: list[dict]) -> dict:
                     if restricted else None),
                 "beats_identical": (
                     int(sum(1 for r in rows if r[arm]["beats_identical"]))),
+                **phase_block(restricted, arm),
             }
+        block[PHASE_NULL] = phase_block(restricted, "beat_sync", key=PHASE_NULL)
         out[corpus] = block
     return out
 
