@@ -273,3 +273,77 @@ end — and the sweep would then need its own registration, because
   counted in M2 and not in M1.
 - **P7.** The unrestricted M1 is well below the restricted one, by roughly the
   share of recordings tracked at the wrong level.
+
+### The metre arm answered, and the corpora cannot carry it, 2026-08-08
+
+Run on GTZAN (991 scored, 727 restricted) and Harmonix (579 scored, 491
+restricted), commit `dbdd619`, clean tree, all arms byte-identical on beats.
+
+|  | GTZAN | Harmonix |
+|---|---:|---:|
+| always-4 | **0.949** | **0.976** |
+| `beat_sync` | 0.867 | 0.894 |
+| `beat_as_downbeat` | 0.791 | 0.729 |
+| `shuffled` | 0.492 | 0.499 |
+
+C1 passes on both, by 37.5 and 39.5 points. C3 passes on both, and the causal
+figure is *above* the whole-recording audit's — falsifying P5. C2 fails on GTZAN
+at 7.6 points against a registered 10 and passes on Harmonix at 16.5.
+
+**None of that is the result.** The restricted sets are 690 of 727 and 479 of 491
+in four, so answering "4" and nothing else scores 0.949 and 0.976 — eight points
+above the decoder on both. Off the majority metre there are **49 recordings in
+1218**, and on them `beat_sync` scores 0.189 and 0.250 against `shuffled`'s 0.108
+and 0.333. At those counts nothing is distinguishable from anything.
+
+Two things follow, and the second is why this section exists rather than a
+verdict line.
+
+**The constant baseline was missing from C1–C3, and that is a fault in this
+registration.** It was written the same day and compares only against shuffles
+and substitutions, both of which a metre prior clears without deciding anything.
+Same shape as the octave veto's "A3 passing is not a defence". It now appears in
+the harness summary so no later run can omit it, and the reading applies
+backwards: the audit's own 0.608 on GTZAN was compared against a shuffled 0.235
+and never against the 0.949.
+
+**The metre was the wrong endpoint for this material.** If 96% of the corpus is
+in four, then the bar question on this corpus is almost entirely *which beat
+starts the bar*, and this arm did not measure it. `analysis/downbeat.hpp` has
+said all along that phase is the failure a listener notices — "a metronome
+accenting beat 3 is worse than one accenting nothing" — and both the original
+audit and this arm inherited an endpoint that cannot see it.
+
+### Bar phase, added 2026-08-08 after seeing the above
+
+Registered as an addition and not a substitution: the metre numbers above stand
+and are reported whatever this says. It is being added **after** seeing the
+metre result, for a reason stated plainly — the corpus composition that makes
+metre unanswerable was discovered in the run, not before it. That ordering is a
+weakness and it is recorded rather than hidden.
+
+**F1 bar-line agreement.** Of the beats the tracker handed out at bar position 0,
+the share that fall within 70 ms of an annotated downbeat (precision), and of the
+annotated downbeats inside the tracked span, the share matched by one (recall).
+Reported as F-measure. Restricted, as above, to recordings tracked at the
+annotated level, and computed only over beats after the metre first settled.
+
+**F2 phase-correct share.** Per beat, whether its position agrees with the
+annotated bar phase; averaged over the recording. What a listener watching a
+display experiences, where F1 is a verdict.
+
+**The null is not a shuffle this time.** With the metre almost always four, a
+decoder that picks a bar phase uniformly at random is right one time in four, so
+`random_phase` — the tracker's own metre and settled grid with the phase drawn
+from a seeded generator — is the baseline that has to be cleared. `shuffled` and
+`beat_as_downbeat` are still run and still reported.
+
+**Conditions.** F1 clears `random_phase` by at least **20 points** on both
+corpora with non-overlapping 95% intervals, and clears `beat_as_downbeat` by at
+least **10**. Failing either leaves the flag off and closes the causal bar with
+a documented negative, since metre has already failed to separate from a
+constant.
+
+**P8.** F1 lands well below the metre figures — around 0.4 to 0.6 — because
+phase is the harder half and because the offline resolver's own phase margin was
+measured at AUC 0.713 for predicting agreement, which is weak.
