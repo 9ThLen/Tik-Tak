@@ -27,6 +27,18 @@ and a part-per-thousand difference is 0.2 s over a three-minute song, which is
 three beats. A constant offset is fine and is corrected; a drifting one is not
 correctable by a constant and the run is void.
 
+## What the session notes are for
+
+`--capture-notes` carries what the person holding the phone observed: roughly
+when playback started, and whether a take was abandoned and restarted. Both are
+facts about the session that no amount of correlation can recover — a file
+containing two takes of the same music has no constant offset at all — and
+neither is a fitted value. They bound where the answer may be looked for and
+discard audio that is not part of the take. **They do not touch the acceptance
+test**: `drift_ok` still requires a third of the windows to land within 30 ms
+of the summed answer and the two ends of the recording to agree, and inside an
+8 s bound that is still agreement to one part in 270.
+
 ## What it does not do
 
 It does not resample the capture to remove drift. That would be repairing the
@@ -153,7 +165,8 @@ def envelope(mono: np.ndarray, rate: float) -> np.ndarray:
 
 
 def correlation_curve(reference: np.ndarray, capture: np.ndarray,
-                      max_lag_sec: float = MAX_OFFSET_SEC) -> np.ndarray:
+                      max_lag_sec: float = MAX_OFFSET_SEC,
+                      min_lag_sec: float = 0.0) -> np.ndarray:
     """Normalised cross-correlation against lag, bounded and unit-scaled.
 
     Bounded because a short reference window correlated against a whole capture
@@ -161,6 +174,13 @@ def correlation_curve(reference: np.ndarray, capture: np.ndarray,
     from these recordings returned 120, 99 and 79 seconds where the answer was
     0.76. Unit-scaled so that windows of different loudness contribute equally
     when several are summed.
+
+    `min_lag_sec` exists only so a caller who knows something about the session
+    can say so. The lag is where playback started, which the person holding the
+    phone observed; a bound is that observation, not a fitted parameter. It
+    narrows where the answer may be found and changes nothing about whether the
+    answer is accepted — `drift_ok` is unchanged, and a window agreeing to
+    30 ms inside even an 8 s bound is agreeing to under one part in a hundred.
     """
     if len(reference) == 0 or len(capture) == 0:
         return np.zeros(0, dtype=np.float64)
@@ -173,7 +193,12 @@ def correlation_curve(reference: np.ndarray, capture: np.ndarray,
     limit = min(len(capture), max(2, int(max_lag_sec * ENVELOPE_HZ)))
     curve = correlation[:limit]
     norm = float(np.linalg.norm(reference) * np.linalg.norm(capture))
-    return curve / norm if norm > 0 else curve
+    curve = curve / norm if norm > 0 else curve
+    # Sliced, not masked: refine() reads the two neighbours of the peak, and a
+    # sentinel would make the parabola through them meaningless. The caller
+    # adds min_lag_sec back.
+    low = max(0, int(min_lag_sec * ENVELOPE_HZ))
+    return curve[low:] if low < len(curve) else curve[:0]
 
 
 def refine(curve: np.ndarray) -> tuple[float, float]:
@@ -197,7 +222,8 @@ def refine(curve: np.ndarray) -> tuple[float, float]:
 
 
 def align(original: np.ndarray, capture: np.ndarray, rate_a: float,
-          rate_b: float, beat_sec: float = 0.0) -> dict:
+          rate_b: float, beat_sec: float = 0.0,
+          search: tuple[float, float] = (0.0, MAX_OFFSET_SEC)) -> dict:
     """One constant offset, found by summing the evidence from every window.
 
     The offset is the same everywhere by construction — the recorder started
@@ -222,6 +248,7 @@ def align(original: np.ndarray, capture: np.ndarray, rate_a: float,
     a = envelope(original, rate_a)
     b = envelope(capture, rate_b)
 
+    low, high = search
     windows = 7
     span = len(a) // (windows + 1)
     curves, fits, centres = [], [], []
@@ -230,22 +257,23 @@ def align(original: np.ndarray, capture: np.ndarray, rate_a: float,
         stop = start + 2 * span
         if span <= 0 or stop > len(a) or start >= len(b):
             continue
-        curve = correlation_curve(a[start:stop], b[start:])
+        curve = correlation_curve(a[start:stop], b[start:], high, low)
         if len(curve) == 0:
             continue
         curves.append(curve)
-        fits.append(refine(curve)[0])
+        fits.append(refine(curve)[0] + low)
         centres.append((start + span) / ENVELOPE_HZ)
 
     if not curves:
         return {"offset_sec": 0.0, "quality": 0.0, "fits": [], "windows": 0,
                 "agreeing_windows": 0, "slipped_windows": 0,
                 "drift_sec": float("inf"), "drift_ok": False,
-                "note": "too short to fit"}
+                "search_sec": [low, high], "note": "too short to fit"}
 
     width = min(len(c) for c in curves)
     total = np.sum([c[:width] for c in curves], axis=0)
     offset, quality = refine(total)
+    offset += low
 
     fits = np.asarray(fits)
     centres = np.asarray(centres)
@@ -265,6 +293,7 @@ def align(original: np.ndarray, capture: np.ndarray, rate_a: float,
     return {
         "offset_sec": offset,
         "quality": quality / len(curves),
+        "search_sec": [low, high],
         "fits": [float(f) for f in fits],
         "windows": int(len(fits)),
         "agreeing_windows": int(agreeing.sum()),
@@ -279,17 +308,31 @@ def align(original: np.ndarray, capture: np.ndarray, rate_a: float,
 
 
 def measure_one(item: dict, capture_path: pathlib.Path, binary: pathlib.Path,
-                model: pathlib.Path) -> dict:
+                model: pathlib.Path, note: dict | None = None) -> dict:
     import soundfile
 
+    note = note or {}
     original, rate_a = read_audio(pathlib.Path(item["audio"]))
     capture, rate_b = read_audio(capture_path)
+
+    # A false start is not a room, and no constant offset describes a recording
+    # that contains the same music twice. Discarding the abandoned take is the
+    # only way to get one; the amount is what the person who made the recording
+    # says it was, and it is recorded here so the reader can see it was applied.
+    skip = float(note.get("skip_sec", 0.0))
+    if skip > 0.0:
+        capture = capture[min(len(capture), int(round(skip * rate_b))):]
 
     from eval.live_corpus_benchmark import load_reference_beats
     reference = load_reference_beats(item["annotation"])
     beat_sec = (float(np.median(np.diff(reference)))
                 if len(reference) > 4 else 0.0)
-    alignment = align(original, capture, float(rate_a), float(rate_b), beat_sec)
+    search = (float(note.get("search_lo_sec", 0.0)),
+              float(note.get("search_hi_sec", MAX_OFFSET_SEC)))
+    alignment = align(original, capture, float(rate_a), float(rate_b), beat_sec,
+                      search)
+    alignment["skip_sec"] = skip
+    alignment["note"] = note.get("why", "")
     offset = alignment["offset_sec"]
 
     # Trimmed so sample zero of the written file is sample zero of the original,
@@ -347,7 +390,16 @@ def main(argv: list[str] | None = None) -> int:
         help="directory of room recordings, each named <track>.wav")
     parser.add_argument("--notes", type=str, default="",
                         help="speaker, microphone, room, distance, levels")
+    parser.add_argument(
+        "--capture-notes", type=pathlib.Path,
+        help="JSON, capture filename -> {skip_sec, search_lo_sec, "
+             "search_hi_sec, why}: what the person who made the recording "
+             "observed about the session, not fitted values")
     args = parser.parse_args(argv)
+
+    capture_notes: dict = {}
+    if args.capture_notes:
+        capture_notes = json.loads(args.capture_notes.read_text(encoding="utf-8"))
 
     items = {i["name"]: i for i in
              load_corpus(args.manifest, args.music, False, frozenset(args.corpora))}
@@ -372,7 +424,8 @@ def main(argv: list[str] | None = None) -> int:
         # against the wrong annotations.
         print(f"  {capture.name}  ->  {name}", file=sys.stderr)
         try:
-            records.append(measure_one(item, capture, args.binary, args.model))
+            records.append(measure_one(item, capture, args.binary, args.model,
+                                       capture_notes.get(capture.name)))
         except Exception as error:  # noqa: BLE001
             failures.append({"capture": capture.name, "error": str(error)[:300]})
         print(f"{len(records) + len(failures)}/{len(captures)}",
@@ -395,7 +448,7 @@ def main(argv: list[str] | None = None) -> int:
         "commit": subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
                                  text=True, cwd=repository).stdout.strip(),
         "notes": args.notes, "captures": str(args.captures),
-        "matched": matched,
+        "capture_notes": capture_notes, "matched": matched,
         "failures": failures, "summary": summary, "records": records,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)

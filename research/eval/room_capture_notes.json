@@ -1,0 +1,14 @@
+{
+  "0837_nottonnight.m4a": {
+    "skip_sec": 14.0,
+    "search_lo_sec": 0.0,
+    "search_hi_sec": 6.0,
+    "why": "The person who made the recording reports playback started about 1 s in and was restarted at about 15 s. Two takes of the same music are in one file and no constant offset describes it, so the abandoned take is discarded. 14.0 and not 15.0 because the summed correlation of the first run put the restart at 14.714, and cutting past the restart would remove the head of the good take and need a negative offset, which cannot be expressed."
+  },
+  "0875 redbelt.m4a": {
+    "skip_sec": 0.0,
+    "search_lo_sec": 0.0,
+    "search_hi_sec": 8.0,
+    "why": "Reported as starting about 3 s in, with heavy room noise. Two of the seven windows of the first run returned 29.51 s -- the edge of the 30 s search, which is a window failing rather than answering. The bound is narrowed to the range the session can actually have had; agreement is still judged at 30 ms, one part in 270 of it."
+  }
+}
