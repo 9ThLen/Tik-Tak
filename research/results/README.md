@@ -853,3 +853,103 @@ tracker acquires slowly".
 confidence series.** The beat list is what a listener hears, it is exact, and it
 is independent of how often anything is polled. That changes published numbers
 and is a decision rather than a fix, so it is recorded here and not applied.
+
+## The causal bar: phase carries, metre cannot be measured here, and the gate fails
+
+`causal_metre_gtzan.json` and `causal_metre_harmonix.json`, from
+`eval.causal_metre`, answering the causal arm registered in
+`eval/PREREGISTERED_downbeat_audit.md` on 2026-08-08. Commit `676059d`, clean
+tree. GTZAN 991 scored of 999 (one corpus defect, `jazz.00054` is not a WAV),
+Harmonix 579 of 581, no failures. **All arms published byte-identical beat lists
+on every recording**, which is the invariant that makes them comparable: the bar
+decision reads a channel nothing else reads and writes nothing back.
+
+The mechanism under test is `44c8c56` — `analysis::resolveMeter` over the last
+32 beats the live tracker handed out, re-resolved every beat, inside the
+shipping core. The arms differ in one file: the downbeat channel.
+
+### The metre, and why these corpora cannot answer it
+
+| | GTZAN | Harmonix |
+|---|---:|---:|
+| **always answer 4** | **0.949** | **0.976** |
+| `beat_sync` | 0.867 | 0.894 |
+| `beat_as_downbeat` | 0.791 | 0.729 |
+| `shuffled` | 0.492 | 0.499 |
+
+Restricted to recordings the tracker tracked at the annotated level, which is
+what the registration made the answer.
+
+C1 passes on both by 37.5 and 39.5 points, so the decoder is reading structure
+and not level. C3 passes, and the causal figure is *above* the whole-recording
+audit's 0.608 and 0.829 — which falsifies prediction P5 outright.
+
+**None of that survives the constant.** 690 of 727 restricted GTZAN recordings
+and 479 of 491 Harmonix ones are in four, so answering "4" and nothing else
+beats the decoder by eight points on both. Off the majority metre there are
+**49 recordings in 1218**, and there `beat_sync` scores 0.189 and 0.250 against
+`shuffled`'s 0.108 and 0.333. Nothing is distinguishable from anything at those
+counts.
+
+That baseline was missing from C1–C3, which were written the same day and
+compare only against shuffles and substitutions — both of which a metre prior
+clears without deciding anything. The same reading applies backwards: the
+original audit's 0.608 was compared against a shuffled 0.235 and never against
+the 0.949.
+
+### The phase, which is what the material actually varies
+
+Registered as an addition after the metre result, for a reason stated in the
+protocol: the corpus composition that makes metre unanswerable was discovered
+in the run. F1 is bar-line agreement at 70 ms over the beats after the metre
+settled; the null is the mean over all rotations of the same grid, which is the
+exact expectation of a uniformly random bar line.
+
+| | GTZAN F1 | Harmonix F1 |
+|---|---:|---:|
+| `beat_sync` | **0.522** [0.492, 0.552] | **0.606** [0.581, 0.631] |
+| `beat_as_downbeat` | 0.329 [0.305, 0.353] | 0.516 [0.491, 0.541] |
+| `random_phase` | 0.209 [0.203, 0.214] | 0.217 [0.212, 0.221] |
+| `shuffled` | 0.193 [0.178, 0.208] | 0.207 [0.200, 0.214] |
+
+**The contrast inside a single run is the finding.** Same recordings, same
+decoder, same channel: the metre cannot separate from a constant because the
+corpus has almost no metre variation, and the phase separates from its own null
+by 31.3 and 38.9 points because a bar line has four places to be and the corpus
+does not decide which. Both the original audit and the causal metre arm measured
+the half of the problem this material holds fixed.
+
+P8 predicted 0.4 to 0.6 and it came in at 0.522 and 0.606.
+
+### Verdict: the flag stays off
+
+The registered condition was "clears `random_phase` by at least 20 points on
+both corpora *and* clears `beat_as_downbeat` by at least 10. Failing either
+leaves the flag off." The first holds by 31.3 and 38.9. The second holds on
+GTZAN at 19.3 and **fails on Harmonix at 9.0**. So the condition fails, and
+`bar_tracking` stays off with a documented negative.
+
+**A fact about that control, recorded and not used to overturn the result.**
+`ml/beatnet.hpp` computes `beat = p[0] + p[1]` and `downbeat = p[1]`, so the
+beat channel *contains* the downbeat channel additively. `beat_as_downbeat` is
+therefore not the wrong evidence with the right shape; it is the right evidence
+with the rest of the beat channel added to it, and a large gap was never
+available. That was knowable from the code before the run and it is a fault in
+the 10-point bar rather than a reason to move it now.
+
+**What a clean control would be**, if this is picked up again: `p[0]` alone —
+beat-but-not-downbeat — which is `beat − downbeat` and computable from the two
+channels already dumped, with no new model pass. It would need its own
+registration, precisely because it is being named after a failure.
+
+### What this leaves
+
+The bar mechanism ships, off, tested, and costing nothing. What is now known:
+
+- a causal 32-beat window is **not** the limitation — it beats whole-recording
+  reads of the same channel on both corpora;
+- the phase signal is real and roughly half of what a perfect bar line would be;
+- **GTZAN and Harmonix cannot evaluate a metre decision at all**, and any future
+  claim about metre needs a corpus with metre in it;
+- the click gate remains untested here, because the harness plays no click, so
+  every figure above is an upper bound for a shell with audible output.
