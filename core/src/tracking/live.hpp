@@ -993,21 +993,26 @@ public:
     //   would leave two places holding the period.
     // - Before the estimator has answered at all. The offset rides on an
     //   estimate, and there is nothing on screen yet to disagree with.
-    // - When the shifted tempo leaves the filter's configured range. Refused
-    //   rather than clamped: clamping would accept the press and then anchor
-    //   somewhere nobody asked for, with the cloud piled against a boundary and
-    //   nothing in the output saying so.
+    // - When the shifted beat period would be shorter than two evidence
+    //   windows. That is the only refusal left, and it is physical: two beats
+    //   inside one observation cannot be separated by any filter, so there is
+    //   nothing there to track.
     //
-    // **That last case is a real limitation and not a corner.** The default
-    // range is 40 to 220 BPM, so ×2 is unavailable above 110 and ÷2 below 80 —
-    // and a tracker sitting on the eighths of a 120 BPM song is at 240, outside
-    // the range, which is why the error a shell will actually see is the
-    // tracker at 120 with ÷2 available and not the other way round. Widening
-    // the range is a config decision that moves the prior and the resample
-    // clamp under every published number, so it wants its own measurement
-    // rather than being changed here. A shell should treat a refusal as "this
-    // control is not available right now" and show it as such, because a
-    // control that silently does nothing is worse than one visibly greyed out.
+    // **`min_bpm`..`max_bpm` is deliberately not consulted.** It used to be, and
+    // it was measured: on RWC the guard refused **57.8% of a simulated
+    // listener's presses, 342 of them ×2 against 125 down**, because ×2 is
+    // unavailable above 110 BPM and a tracker sitting on the eighths of a
+    // 120 BPM song is at 240. The control could not work while the belief about
+    // what tempo music is likely to be outranked a person saying otherwise —
+    // and BeatParticleFilter::pinPeriod already recorded, for a typed tempo,
+    // that it should not. So the range *moves with the press* rather than
+    // blocking it: see BeatParticleFilter::setOctaveShift, and note it shifts
+    // rather than widens, so no width anywhere changes and an unpressed arm is
+    // unaffected.
+    //
+    // A shell should still treat a refusal as "this control is not available"
+    // and grey it out, because a control that silently does nothing is worse
+    // than one visibly unavailable.
     //
     // Survives reset(), which forgets audio and not the user — the same rule
     // that keeps a pinned manual tempo across one, read the same way round.

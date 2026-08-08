@@ -185,6 +185,69 @@ TEST(ScalePeriod, NamesTheNearestBeatAndNotOneItSkipped) {
     EXPECT_LT(after.next_beat_sec, now + period + 1e-9);
 }
 
+TEST(OctaveShift, ZeroIsExactlyTheConfiguredWorld) {
+    // The guarantee the whole design rests on: with no press, nothing about the
+    // filter differs from a filter that has never heard of this feature. Shifted
+    // and not widened is what buys it -- a wider range would coarsen estimate()'s
+    // 48 log-period bins and raise confidence for a cloud that had not moved.
+    ParticleFilterConfig config;
+    BeatParticleFilter untouched(config);
+    BeatParticleFilter shifted(config);
+    shifted.setOctaveShift(2);
+    shifted.setOctaveShift(0);
+
+    const double now = driveFilter(untouched, kBpm, 20.0);
+    driveFilter(shifted, kBpm, 20.0);
+
+    const BeatEstimate a = untouched.estimate(now);
+    const BeatEstimate b = shifted.estimate(now);
+    EXPECT_DOUBLE_EQ(a.bpm, b.bpm);
+    EXPECT_DOUBLE_EQ(a.next_beat_sec, b.next_beat_sec);
+    EXPECT_DOUBLE_EQ(a.confidence, b.confidence);
+    EXPECT_EQ(shifted.octaveShift(), 0);
+}
+
+TEST(OctaveShift, DoesNotCompound) {
+    // Always computed from the configured world. Two up then one down has to
+    // land exactly where one up did, not three octaves away.
+    ParticleFilterConfig config;
+    BeatParticleFilter a(config);
+    BeatParticleFilter b(config);
+    a.setOctaveShift(1);
+    b.setOctaveShift(2);
+    b.setOctaveShift(-1);
+    b.setOctaveShift(1);
+
+    const double now = driveFilter(a, 2.0 * kBpm, 20.0);
+    driveFilter(b, 2.0 * kBpm, 20.0);
+    EXPECT_DOUBLE_EQ(a.estimate(now).bpm, b.estimate(now).bpm);
+    EXPECT_EQ(a.octaveShift(), b.octaveShift());
+}
+
+TEST(OctaveShift, LetsTheCloudLiveOutsideTheConfiguredRange) {
+    // 400 BPM against a configured maximum of 220. Without the shift the clamp
+    // would hold every particle at 220 and the tracker would look merely slow.
+    ParticleFilterConfig config;
+    BeatParticleFilter filter(config);
+    filter.setOctaveShift(1);
+    filter.seedTempo(400.0, 0.02);
+    EXPECT_NEAR(filter.estimate(0.0).bpm, 400.0, 20.0);
+
+    BeatParticleFilter clamped(config);
+    clamped.seedTempo(400.0, 0.02);
+    EXPECT_NEAR(clamped.estimate(0.0).bpm, config.max_bpm, 1.0);
+}
+
+TEST(OctaveShift, DoesNothingWhilePinned) {
+    // The pin already fixes the period; moving a range around it could only
+    // drift off a number somebody typed.
+    ParticleFilterConfig config;
+    BeatParticleFilter filter(config);
+    filter.pinPeriod(60.0 / kBpm);
+    filter.setOctaveShift(1);
+    EXPECT_NEAR(filter.estimate(1.0).bpm, kBpm, 1e-9);
+}
+
 TEST(ScalePeriod, DoesNothingWhilePinned) {
     // The pinned period is a number somebody typed, and scaling it would
     // quietly mean a tempo they did not type.
@@ -218,20 +281,55 @@ TEST(OctaveOffset, RefusesInManualMode) {
     EXPECT_EQ(tracker.octaveOffset(), 0);
 }
 
-TEST(OctaveOffset, RefusesRatherThanClampingOutOfRange) {
-    // Clamping would accept the press and then anchor at a tempo nobody asked
-    // for. The default range is 40..220, so ×2 from 100 is fine and ×2 twice is
-    // not.
+TEST(OctaveOffset, TheConfiguredRangeDoesNotOverruleThePress) {
+    // The behaviour this test used to assert -- refuse anything outside
+    // min_bpm..max_bpm -- was measured on RWC and refused 57.8% of a simulated
+    // listener's presses, 342 of them x2, because x2 is unavailable above 110.
+    // The range is a belief about what tempo music is likely to be, and
+    // pinPeriod already records that such a belief does not overrule a person.
+    // So it moves with the press.
+    //
+    // 100 doubled twice is 400, which is well outside the configured 40..220
+    // and must now be taken.
+    LiveTracker tracker(offsetConfig());
+    double now = driveAlternating(tracker, kBpm, 20.0);
+    ASSERT_TRUE(tracker.tempoFromActivation().answered());
+
+    ASSERT_TRUE(tracker.setOctaveOffset(1));
+    EXPECT_TRUE(tracker.setOctaveOffset(2));
+    EXPECT_EQ(tracker.octaveOffset(), 2);
+
+    now = driveAlternating(tracker, kBpm, 8.0, now + 1.0 / kFps);
+    const double measured = tracker.tempoFromActivation().bpm;
+    // And it reaches the anchor rather than piling against a boundary.
+    EXPECT_NEAR(tracker.anchoredTempo(), 4.0 * measured, 1e-9);
+    EXPECT_GT(tracker.estimate(now).bpm, 2.0 * kBpm);
+}
+
+TEST(OctaveOffset, StillRefusesWhatNoFilterCouldTrack) {
+    // The one refusal left, and it is physical: two beats inside a single
+    // evidence window cannot be separated by any filter, so there is nothing
+    // there to track. At 48 kHz the window is 2048 samples, so the floor is
+    // about 703 BPM and three octaves above 100 is 800.
     LiveTracker tracker(offsetConfig());
     driveAlternating(tracker, kBpm, 20.0);
     ASSERT_TRUE(tracker.tempoFromActivation().answered());
 
-    ASSERT_TRUE(tracker.setOctaveOffset(1));
-    EXPECT_FALSE(tracker.setOctaveOffset(2));
-    EXPECT_EQ(tracker.octaveOffset(), 1);
+    EXPECT_FALSE(tracker.setOctaveOffset(3));
+    EXPECT_EQ(tracker.octaveOffset(), 0);
+}
 
-    EXPECT_FALSE(tracker.setOctaveOffset(-2));
-    EXPECT_EQ(tracker.octaveOffset(), 1);
+TEST(OctaveOffset, ADownwardPressIsNotBoundedAtAll) {
+    // There is no physical floor on how slow a pulse can be -- only a belief,
+    // and beliefs do not overrule a person. 100 halved twice is 25, below the
+    // configured 40.
+    LiveTracker tracker(offsetConfig());
+    double now = driveAlternating(tracker, kBpm, 20.0);
+    ASSERT_TRUE(tracker.setOctaveOffset(-2));
+
+    now = driveAlternating(tracker, kBpm, 8.0, now + 1.0 / kFps);
+    const double measured = tracker.tempoFromActivation().bpm;
+    EXPECT_NEAR(tracker.anchoredTempo(), 0.25 * measured, 1e-9);
 }
 
 TEST(OctaveOffset, SettingWhatIsAlreadySetIsAcceptedAndChangesNothing) {

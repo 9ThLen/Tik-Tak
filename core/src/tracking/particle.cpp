@@ -78,12 +78,26 @@ BeatParticleFilter::BeatParticleFilter(const ParticleFilterConfig& config)
       scratch_beat_(config.particles),
       min_period_(60.0 / config.max_bpm),
       max_period_(60.0 / config.min_bpm),
+      configured_min_period_(60.0 / config.max_bpm),
+      configured_max_period_(60.0 / config.min_bpm),
+      prior_centre_bpm_(config.prior_centre_bpm),
       window_mean_(windowMean(config.beat_window)) {
     drawFromPrior();
 }
 
+void BeatParticleFilter::setOctaveShift(int octaves) {
+    if (pinned_) return;
+    octave_shift_ = octaves;
+    // Always from the configured world, never compounded off the last shift:
+    // two presses up and one down has to land exactly where one press up did.
+    const double factor = std::exp2(static_cast<double>(octaves));
+    min_period_ = configured_min_period_ / factor;
+    max_period_ = configured_max_period_ / factor;
+    prior_centre_bpm_ = config_.prior_centre_bpm * factor;
+}
+
 void BeatParticleFilter::drawFromPrior() {
-    const double centre = std::log2(config_.prior_centre_bpm);
+    const double centre = std::log2(prior_centre_bpm_);
     const std::size_t n = period_.size();
     for (std::size_t i = 0; i < n; ++i) {
         double a = 0.0;
@@ -109,7 +123,7 @@ void BeatParticleFilter::reset() {
     // way: it *was* heard, and it was heard in the audio being forgotten.
     anchor_bpm_ = 0.0;
     anchor_width_octaves_ = 0.0;
-    mean_period_ = pinned_ ? min_period_ : 60.0 / config_.prior_centre_bpm;
+    mean_period_ = pinned_ ? min_period_ : 60.0 / prior_centre_bpm_;
     charge_ema_ = 0.0;
     onset_ema_ = 0.0;
     on_beat_ema_ = 0.0;
@@ -163,7 +177,7 @@ void BeatParticleFilter::unpinPeriod() {
     pinned_ = false;
     min_period_ = free_min_period_;
     max_period_ = free_max_period_;
-    mean_period_ = 60.0 / config_.prior_centre_bpm;
+    mean_period_ = 60.0 / prior_centre_bpm_;
     drawFromPrior();
 }
 
@@ -272,7 +286,7 @@ void BeatParticleFilter::observe(double time_sec, double onset) {
     // of the anchored octave — see anchorTempo().
     const bool anchored = anchor_bpm_ > 0.0;
     const double prior_centre =
-        std::log2(anchored ? anchor_bpm_ : config_.prior_centre_bpm);
+        std::log2(anchored ? anchor_bpm_ : prior_centre_bpm_);
     const double prior_width =
         anchored ? anchor_width_octaves_ : config_.prior_width_octaves;
     const double prior_scale =
@@ -429,7 +443,7 @@ void BeatParticleFilter::resample() {
             next_beat_[i] = last_time_sec_ + rng_.uniform() * min_period_;
         }
     } else {
-        const double centre = std::log2(config_.prior_centre_bpm);
+        const double centre = std::log2(prior_centre_bpm_);
         for (std::size_t i = 0; i < fresh; ++i) {
             double a = 0.0;
             double b = 0.0;

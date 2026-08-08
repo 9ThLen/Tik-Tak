@@ -516,17 +516,25 @@ bool LiveTracker::setOctaveOffset(int octaves) {
     if (!measured.answered()) return false;
 
     const double shifted = measured.bpm * std::exp2(static_cast<double>(octaves));
-    if (!(shifted >= config_.filter.min_bpm) || !(shifted <= config_.filter.max_bpm)) {
-        // Refused, not clamped. Clamping would accept the press and then anchor
-        // at a tempo nobody asked for, with the cloud piled against a boundary
-        // and nothing in the output to say so.
-        return false;
-    }
+
+    // The only refusal left, and it is physical rather than a belief about
+    // music. Two beats a single evidence window apart fall inside one
+    // observation, so no filter can separate them and there is nothing there to
+    // track. `min_bpm`..`max_bpm` is *not* consulted: that range says what tempo
+    // music is likely to be, and BeatParticleFilter::pinPeriod already records
+    // that such a belief has no business overruling a person. A press is the
+    // same kind of statement as a typed tempo, so the range moves with it
+    // instead of blocking it — see BeatParticleFilter::setOctaveShift.
+    if (!(60.0 / shifted >= 4.0 * evidence_half_sec_)) return false;
 
     // In tempo. The cloud is scaled by its reciprocal, periods being the other
     // way up.
     const double bpm_factor = std::exp2(static_cast<double>(octaves - octave_offset_));
     octave_offset_ = octaves;
+
+    // Before the cloud moves, so there is somewhere for it to move to. The
+    // other order squashes it back against the boundary it was leaving.
+    filter_.setOctaveShift(octaves);
 
     // The hold carries whatever offset was in force when it was written. Left
     // alone it would outvote the press on every weak-margin frame until the

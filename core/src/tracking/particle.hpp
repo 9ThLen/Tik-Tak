@@ -333,6 +333,37 @@ public:
     // tracking::PhaseSync handing over the offset it correlated out.
     void seedPhase(double next_beat_sec);
 
+    // Moves the filter's whole tempo world by whole octaves: the representable
+    // range and the prior centre, together, by the same factor. `0` restores
+    // exactly what the configuration asked for.
+    //
+    // **For a decision that came from a person, and for nothing else.**
+    // ParticleFilterConfig's min_bpm and max_bpm are a belief about what tempo
+    // music is likely to be at — pinPeriod already says as much, and already
+    // says that belief "has no business overruling a number somebody typed".
+    // A ×2 press is the same kind of statement, so it gets the same treatment.
+    // Nothing automatic calls this.
+    //
+    // **Shifted and not widened, which is the whole design.** Widening looks
+    // simpler and quietly corrupts the measurement: estimate() bins log-period
+    // into a fixed 48 bins spanning min_period_ to max_period_, so a wider
+    // range means coarser bins, and coarser bins collect more weight per bin
+    // and report a cloud as more concentrated than it is. Confidence would rise
+    // for a cloud that had not moved, and every comparison against an arm that
+    // had not pressed would be contaminated. Shifting keeps every width — bin,
+    // prior, range — exactly as configured, and only says which octave they are
+    // centred on.
+    //
+    // The prior centre moves with the range for the same reason it exists: it
+    // is a claim about which pulse is the beat, and the user has just made a
+    // better-informed one. Leaving it behind would have the prior pulling back
+    // toward the octave the press rejected.
+    //
+    // Does nothing while pinned: the pin already fixes the period, and moving a
+    // range around it could only drift off a number somebody typed.
+    void setOctaveShift(int octaves);
+    int octaveShift() const { return octave_shift_; }
+
     // The same grid read at a different multiple of the pulse: every particle's
     // period is scaled by `factor`, and every phase is left exactly where it
     // was. The complement of seedPhase, which moves the phase and leaves the
@@ -397,6 +428,15 @@ private:
 
     double min_period_ = 0.0;
     double max_period_ = 0.0;
+    // What the configuration asked for, before any user octave. Kept so that
+    // setOctaveShift is always computed from the configured world rather than
+    // compounded off the last shift.
+    double configured_min_period_ = 0.0;
+    double configured_max_period_ = 0.0;
+    // The prior centre in force, which is the configured one moved by the
+    // user's octave. Read everywhere config_.prior_centre_bpm used to be.
+    double prior_centre_bpm_ = 0.0;
+    int octave_shift_ = 0;
     double window_mean_ = 0.0;  // mean of the beat window over uniform phase
 
     // Manual mode. While pinned the two bounds above are the same number, and
