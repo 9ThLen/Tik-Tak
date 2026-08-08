@@ -1,0 +1,271 @@
+{
+  "commit": "28afe9a4fbcd0e6c2088af8b4b206e8df84032a3",
+  "notes": "phone microphone, room noise deliberately kept, six Harmonix tracks through a speaker",
+  "captures": "D:\\Programs\\D\\Tik-tak\\music\\\u0437\u0430\u043f\u0438\u0441\u0438 \u0437 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0443",
+  "matched": {
+    "0116_goodies.m4a": "0116_goodies",
+    "046_onthedarkside.m4a": "0466_onthedarkside",
+    "0707_halfwaygone.m4a": "0707_halfwaygone",
+    "0837_nottonnight.m4a": "0837_nottonight",
+    "0875 redbelt.m4a": "0875_redbelt",
+    "0_132_iceicebaby.m4a": "0132_iceicebaby"
+  },
+  "failures": [],
+  "summary": {
+    "clean": {
+      "n": 4,
+      "usable_rate": 0.75,
+      "mean_f": 0.9083667727011384,
+      "mean_r70": 0.8980353081110812,
+      "mean_p70": 0.9210951648946171
+    },
+    "room": {
+      "n": 4,
+      "usable_rate": 0.25,
+      "mean_f": 0.5267494530497416,
+      "mean_r70": 0.49197320742523054,
+      "mean_p70": 0.6281369647183112
+    },
+    "voided": 2
+  },
+  "records": [
+    {
+      "name": "0116_goodies",
+      "corpus": "harmonix",
+      "capture": "D:\\Programs\\D\\Tik-tak\\music\\\u0437\u0430\u043f\u0438\u0441\u0438 \u0437 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0443\\0116_goodies.m4a",
+      "alignment": {
+        "offset_sec": 1.2704380048065433,
+        "quality": 0.22297362378896987,
+        "fits": [
+          18.321284244595326,
+          18.321598106415127,
+          6.849998060474212,
+          15.970490812450075,
+          1.2699629525839038,
+          1.2709359003941045,
+          1.2707409369576315
+        ],
+        "windows": 7,
+        "agreeing_windows": 3,
+        "slipped_windows": 3,
+        "drift_sec": 0.0023339531211834436,
+        "drift_ok": true,
+        "captured_sec": 132.46689583333333
+      },
+      "room": {
+        "usable": true,
+        "reasons": [],
+        "f_measure": 0.9836829836829836,
+        "p70": 0.9723502304147466,
+        "r70": 0.9952830188679245,
+        "acquired_at": 4.043,
+        "switches": 0,
+        "correct_share_of_eligible": 0.9985880138060872
+      },
+      "clean": {
+        "usable": true,
+        "reasons": [],
+        "f_measure": 0.9764150943396226,
+        "p70": 0.9764150943396226,
+        "r70": 0.9764150943396226,
+        "acquired_at": 4.04,
+        "switches": 0,
+        "correct_share_of_eligible": 0.9966623400704617
+      }
+    },
+    {
+      "name": "0466_onthedarkside",
+      "corpus": "harmonix",
+      "capture": "D:\\Programs\\D\\Tik-tak\\music\\\u0437\u0430\u043f\u0438\u0441\u0438 \u0437 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0443\\046_onthedarkside.m4a",
+      "alignment": {
+        "offset_sec": 0.7586233763997217,
+        "quality": 0.19152693026195408,
+        "fits": [
+          0.7612282751684938,
+          0.7581133857371093,
+          25.628516289615128,
+          0.7551699056482135,
+          0.7586404314412936,
+          0.7598869854000044,
+          0.7606291513195077
+        ],
+        "windows": 7,
+        "agreeing_windows": 6,
+        "slipped_windows": 0,
+        "drift_sec": 0.0003232330660669316,
+        "drift_ok": true,
+        "captured_sec": 165.149375
+      },
+      "room": {
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ],
+        "f_measure": 0.33743409490333914,
+        "p70": 0.6956521739130435,
+        "r70": 0.22273781902552203,
+        "acquired_at": 4.043,
+        "switches": 13,
+        "correct_share_of_eligible": 0.17220279720279721
+      },
+      "clean": {
+        "usable": false,
+        "reasons": [
+          "too_few_beats"
+        ],
+        "f_measure": 0.8104738154613467,
+        "p70": 0.876010781671159,
+        "r70": 0.7540603248259861,
+        "acquired_at": 5.875,
+        "switches": 2,
+        "correct_share_of_eligible": 0.767867603983597
+      }
+    },
+    {
+      "name": "0707_halfwaygone",
+      "corpus": "harmonix",
+      "capture": "D:\\Programs\\D\\Tik-tak\\music\\\u0437\u0430\u043f\u0438\u0441\u0438 \u0437 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0443\\0707_halfwaygone.m4a",
+      "alignment": {
+        "offset_sec": 2.0799100440839315,
+        "quality": 0.25641280351970874,
+        "fits": [
+          2.0790173467856463,
+          2.079477902120112,
+          2.0799691851530437,
+          2.0806611013629395,
+          2.080195941716809,
+          2.0798111298165196,
+          2.080008760555021
+        ],
+        "windows": 7,
+        "agreeing_windows": 7,
+        "slipped_windows": 0,
+        "drift_sec": 0.0008287399852945683,
+        "drift_ok": true,
+        "captured_sec": 196.16941666666668
+      },
+      "room": {
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ],
+        "f_measure": 0.1505016722408027,
+        "p70": 0.20454545454545456,
+        "r70": 0.11904761904761904,
+        "acquired_at": 4.501,
+        "switches": 1,
+        "correct_share_of_eligible": 0.5551835966105241
+      },
+      "clean": {
+        "usable": true,
+        "reasons": [],
+        "f_measure": 0.9505208333333334,
+        "p70": 0.9358974358974359,
+        "r70": 0.9656084656084656,
+        "acquired_at": 4.203,
+        "switches": 4,
+        "correct_share_of_eligible": 0.98251016134992
+      }
+    },
+    {
+      "name": "0837_nottonight",
+      "corpus": "harmonix",
+      "capture": "D:\\Programs\\D\\Tik-tak\\music\\\u0437\u0430\u043f\u0438\u0441\u0438 \u0437 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0443\\0837_nottonnight.m4a",
+      "alignment": {
+        "offset_sec": 14.713929364126232,
+        "quality": 0.1643900545109663,
+        "fits": [
+          15.749295986644848,
+          12.379502209676607,
+          8.248536168876633,
+          27.122257907361277,
+          17.472390029097042,
+          0.9191893863569324,
+          0.5799179582654208
+        ],
+        "windows": 7,
+        "agreeing_windows": 0,
+        "slipped_windows": 3,
+        "drift_sec": 0.0,
+        "drift_ok": false,
+        "captured_sec": 159.04472916666666
+      },
+      "void": "no constant offset fits: see agreeing_windows against windows, and slipped_windows for whether the dissent is a periodic-correlation slip or a clock disagreement"
+    },
+    {
+      "name": "0875_redbelt",
+      "corpus": "harmonix",
+      "capture": "D:\\Programs\\D\\Tik-tak\\music\\\u0437\u0430\u043f\u0438\u0441\u0438 \u0437 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0443\\0875 redbelt.m4a",
+      "alignment": {
+        "offset_sec": 2.7410977428394934,
+        "quality": 0.19362886895369694,
+        "fits": [
+          21.76012177115234,
+          3.3001291598759668,
+          3.3002425595185163,
+          29.509980293578607,
+          29.50976839381384,
+          3.6610809384734653,
+          1.3608946634881252
+        ],
+        "windows": 7,
+        "agreeing_windows": 0,
+        "slipped_windows": 7,
+        "drift_sec": 0.0,
+        "drift_ok": false,
+        "captured_sec": 137.39622916666667
+      },
+      "void": "no constant offset fits: see agreeing_windows against windows, and slipped_windows for whether the dissent is a periodic-correlation slip or a clock disagreement"
+    },
+    {
+      "name": "0132_iceicebaby",
+      "corpus": "harmonix",
+      "capture": "D:\\Programs\\D\\Tik-tak\\music\\\u0437\u0430\u043f\u0438\u0441\u0438 \u0437 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0443\\0_132_iceicebaby.m4a",
+      "alignment": {
+        "offset_sec": 2.2619665720923727,
+        "quality": 0.28834162589354256,
+        "fits": [
+          2.2606794538912816,
+          2.2611502561533445,
+          3.0321538820678535,
+          2.262354168882556,
+          2.2627449340307537,
+          2.2622267010065182,
+          2.2619744454107553
+        ],
+        "windows": 7,
+        "agreeing_windows": 6,
+        "slipped_windows": 0,
+        "drift_sec": 0.001549074424767924,
+        "drift_ok": true,
+        "captured_sec": 156.13670833333333
+      },
+      "room": {
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ],
+        "f_measure": 0.6353790613718412,
+        "p70": 0.64,
+        "r70": 0.6308243727598566,
+        "acquired_at": 4.768,
+        "switches": 5,
+        "correct_share_of_eligible": 0.9337038507344184
+      },
+      "clean": {
+        "usable": true,
+        "reasons": [],
+        "f_measure": 0.8960573476702509,
+        "p70": 0.8960573476702509,
+        "r70": 0.8960573476702509,
+        "acquired_at": 4.133,
+        "switches": 1,
+        "correct_share_of_eligible": 0.9734540911930044
+      }
+    }
+  ]
+}
