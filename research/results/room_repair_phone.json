@@ -1,0 +1,571 @@
+{
+  "commit": "d4936a9f82dcbd786beb6650c868f8161f266566",
+  "clean": false,
+  "failures": [],
+  "parity_ok": true,
+  "summary": {
+    "n": 5,
+    "baseline_mean_f": 0.5323181066339007,
+    "ceiling_mean_f": 0.9215890098082425,
+    "half_gap_target": 0.7269535582210715,
+    "arms": {
+      "baseline": {
+        "mean_f": 0.5323181066339007,
+        "delta_vs_baseline": 0.0,
+        "share_of_gap": 0.0,
+        "usable_rate": 0.2,
+        "survivor_f": 0.9836829836829836,
+        "disqualified": false
+      },
+      "replay": {
+        "mean_f": 0.5323181066339007,
+        "delta_vs_baseline": 0.0,
+        "share_of_gap": 0.0,
+        "usable_rate": 0.2,
+        "survivor_f": 0.9836829836829836,
+        "disqualified": false
+      },
+      "audio_gate": {
+        "mean_f": 0.49818326234702887,
+        "delta_vs_baseline": -0.0341348442868718,
+        "share_of_gap": -0.08768917483561289,
+        "usable_rate": 0.0,
+        "survivor_f": 0.7146171693735499,
+        "disqualified": true
+      },
+      "audio_dereverb": {
+        "mean_f": 0.348128136753458,
+        "delta_vs_baseline": -0.18418996988044267,
+        "share_of_gap": -0.47316654899826904,
+        "usable_rate": 0.0,
+        "survivor_f": 0.4054669703872438,
+        "disqualified": true
+      },
+      "audio_both": {
+        "mean_f": 0.43759395203675994,
+        "delta_vs_baseline": -0.09472415459714073,
+        "share_of_gap": -0.2433373617825138,
+        "usable_rate": 0.2,
+        "survivor_f": 0.8111888111888111,
+        "disqualified": true
+      },
+      "act_subtract_floor": {
+        "mean_f": 0.5204342616092806,
+        "delta_vs_baseline": -0.011883845024620032,
+        "share_of_gap": -0.030528469833507287,
+        "usable_rate": 0.2,
+        "survivor_f": 0.9883449883449883,
+        "disqualified": false
+      },
+      "act_normalise": {
+        "mean_f": 0.48279035383239444,
+        "delta_vs_baseline": -0.04952775280150623,
+        "share_of_gap": -0.12723209568870436,
+        "usable_rate": 0.0,
+        "survivor_f": 0.79445727482679,
+        "disqualified": true
+      },
+      "act_sharpen": {
+        "mean_f": 0.44649259899157345,
+        "delta_vs_baseline": -0.08582550764232721,
+        "share_of_gap": -0.22047758243027155,
+        "usable_rate": 0.0,
+        "survivor_f": 0.8674698795180724,
+        "disqualified": true
+      }
+    }
+  },
+  "records": [
+    {
+      "name": "0116_goodies",
+      "baseline": {
+        "f_measure": 0.9836829836829836,
+        "p70": 0.9723502304147466,
+        "r70": 0.9952830188679245,
+        "usable": true,
+        "reasons": [],
+        "beats": 219
+      },
+      "audio_gate": {
+        "f_measure": 0.7146171693735499,
+        "p70": 0.7031963470319634,
+        "r70": 0.7264150943396226,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ],
+        "beats": 220
+      },
+      "audio_dereverb": {
+        "f_measure": 0.4054669703872438,
+        "p70": 0.3920704845814978,
+        "r70": 0.419811320754717,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ],
+        "beats": 229
+      },
+      "audio_both": {
+        "f_measure": 0.8111888111888111,
+        "p70": 0.8018433179723502,
+        "r70": 0.8207547169811321,
+        "usable": true,
+        "reasons": [],
+        "beats": 218
+      },
+      "parity": {
+        "ok": true,
+        "baseline_beats": 6623,
+        "replay_beats": 6623,
+        "max_abs_diff": 0.0
+      },
+      "replay": {
+        "f_measure": 0.9836829836829836,
+        "p70": 0.9723502304147466,
+        "r70": 0.9952830188679245,
+        "usable": true,
+        "reasons": [],
+        "beats": 219
+      },
+      "act_subtract_floor": {
+        "f_measure": 0.9883449883449883,
+        "p70": 0.9769585253456221,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": [],
+        "beats": 219
+      },
+      "act_normalise": {
+        "f_measure": 0.79445727482679,
+        "p70": 0.7782805429864253,
+        "r70": 0.8113207547169812,
+        "usable": false,
+        "reasons": [
+          "wrong_beats"
+        ],
+        "beats": 223
+      },
+      "act_sharpen": {
+        "f_measure": 0.8674698795180724,
+        "p70": 0.8866995073891626,
+        "r70": 0.8490566037735849,
+        "usable": false,
+        "reasons": [
+          "slow_acquisition"
+        ],
+        "beats": 203
+      }
+    },
+    {
+      "name": "0132_iceicebaby",
+      "baseline": {
+        "f_measure": 0.6353790613718412,
+        "p70": 0.64,
+        "r70": 0.6308243727598566,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ],
+        "beats": 275
+      },
+      "audio_gate": {
+        "f_measure": 0.7806691449814127,
+        "p70": 0.8108108108108109,
+        "r70": 0.7526881720430108,
+        "usable": false,
+        "reasons": [
+          "too_few_beats"
+        ],
+        "beats": 261
+      },
+      "audio_dereverb": {
+        "f_measure": 0.44283121597096187,
+        "p70": 0.4485294117647059,
+        "r70": 0.43727598566308246,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ],
+        "beats": 273
+      },
+      "audio_both": {
+        "f_measure": 0.5099457504520796,
+        "p70": 0.5145985401459854,
+        "r70": 0.5053763440860215,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ],
+        "beats": 274
+      },
+      "parity": {
+        "ok": true,
+        "baseline_beats": 7806,
+        "replay_beats": 7806,
+        "max_abs_diff": 0.0
+      },
+      "replay": {
+        "f_measure": 0.6353790613718412,
+        "p70": 0.64,
+        "r70": 0.6308243727598566,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ],
+        "beats": 275
+      },
+      "act_subtract_floor": {
+        "f_measure": 0.6946107784431138,
+        "p70": 0.7837837837837838,
+        "r70": 0.6236559139784946,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ],
+        "beats": 222
+      },
+      "act_normalise": {
+        "f_measure": 0.5555555555555556,
+        "p70": 0.5387205387205387,
+        "r70": 0.5734767025089605,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ],
+        "beats": 298
+      },
+      "act_sharpen": {
+        "f_measure": 0.4461538461538462,
+        "p70": 0.7837837837837838,
+        "r70": 0.3118279569892473,
+        "usable": false,
+        "reasons": [
+          "slow_acquisition",
+          "wrong_beats",
+          "too_few_beats"
+        ],
+        "beats": 111
+      }
+    },
+    {
+      "name": "0466_onthedarkside",
+      "baseline": {
+        "f_measure": 0.33743409490333914,
+        "p70": 0.6956521739130435,
+        "r70": 0.22273781902552203,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ],
+        "beats": 141
+      },
+      "audio_gate": {
+        "f_measure": 0.28428093645484953,
+        "p70": 0.5089820359281437,
+        "r70": 0.19721577726218098,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ],
+        "beats": 167
+      },
+      "audio_dereverb": {
+        "f_measure": 0.1943462897526502,
+        "p70": 0.4074074074074074,
+        "r70": 0.12761020881670534,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ],
+        "beats": 137
+      },
+      "audio_both": {
+        "f_measure": 0.19689119170984457,
+        "p70": 0.38513513513513514,
+        "r70": 0.13225058004640372,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ],
+        "beats": 150
+      },
+      "parity": {
+        "ok": true,
+        "baseline_beats": 8257,
+        "replay_beats": 8257,
+        "max_abs_diff": 0.0
+      },
+      "replay": {
+        "f_measure": 0.33743409490333914,
+        "p70": 0.6956521739130435,
+        "r70": 0.22273781902552203,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ],
+        "beats": 141
+      },
+      "act_subtract_floor": {
+        "f_measure": 0.16237623762376238,
+        "p70": 0.5540540540540541,
+        "r70": 0.0951276102088167,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ],
+        "beats": 74
+      },
+      "act_normalise": {
+        "f_measure": 0.34309623430962344,
+        "p70": 0.43006993006993005,
+        "r70": 0.2853828306264501,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ],
+        "beats": 288
+      },
+      "act_sharpen": {
+        "f_measure": 0.16247582205029013,
+        "p70": 0.4883720930232558,
+        "r70": 0.09744779582366589,
+        "usable": false,
+        "reasons": [
+          "slow_acquisition",
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ],
+        "beats": 86
+      }
+    },
+    {
+      "name": "0707_halfwaygone",
+      "baseline": {
+        "f_measure": 0.1505016722408027,
+        "p70": 0.20454545454545456,
+        "r70": 0.11904761904761904,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ],
+        "beats": 221
+      },
+      "audio_gate": {
+        "f_measure": 0.15202702702702703,
+        "p70": 0.2102803738317757,
+        "r70": 0.11904761904761904,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ],
+        "beats": 216
+      },
+      "audio_dereverb": {
+        "f_measure": 0.24050632911392406,
+        "p70": 0.2992125984251969,
+        "r70": 0.20105820105820105,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ],
+        "beats": 256
+      },
+      "audio_both": {
+        "f_measure": 0.23414634146341462,
+        "p70": 0.3037974683544304,
+        "r70": 0.19047619047619047,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ],
+        "beats": 237
+      },
+      "parity": {
+        "ok": true,
+        "baseline_beats": 9808,
+        "replay_beats": 9808,
+        "max_abs_diff": 0.0
+      },
+      "replay": {
+        "f_measure": 0.1505016722408027,
+        "p70": 0.20454545454545456,
+        "r70": 0.11904761904761904,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ],
+        "beats": 221
+      },
+      "act_subtract_floor": {
+        "f_measure": 0.1951219512195122,
+        "p70": 0.33548387096774196,
+        "r70": 0.13756613756613756,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ],
+        "beats": 155
+      },
+      "act_normalise": {
+        "f_measure": 0.24123422159887795,
+        "p70": 0.25671641791044775,
+        "r70": 0.2275132275132275,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ],
+        "beats": 336
+      },
+      "act_sharpen": {
+        "f_measure": 0.4274509803921569,
+        "p70": 0.8257575757575758,
+        "r70": 0.28835978835978837,
+        "usable": false,
+        "reasons": [
+          "slow_acquisition",
+          "too_few_beats"
+        ],
+        "beats": 132
+      }
+    },
+    {
+      "name": "0837_nottonight",
+      "baseline": {
+        "f_measure": 0.5545927209705372,
+        "p70": 0.43956043956043955,
+        "r70": 0.7511737089201878,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ],
+        "beats": 367
+      },
+      "audio_gate": {
+        "f_measure": 0.559322033898305,
+        "p70": 0.4376657824933687,
+        "r70": 0.7746478873239436,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ],
+        "beats": 380
+      },
+      "audio_dereverb": {
+        "f_measure": 0.45748987854251005,
+        "p70": 0.40213523131672596,
+        "r70": 0.5305164319248826,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ],
+        "beats": 284
+      },
+      "audio_both": {
+        "f_measure": 0.4357976653696498,
+        "p70": 0.37209302325581395,
+        "r70": 0.5258215962441315,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ],
+        "beats": 304
+      },
+      "parity": {
+        "ok": true,
+        "baseline_beats": 7952,
+        "replay_beats": 7952,
+        "max_abs_diff": 0.0
+      },
+      "replay": {
+        "f_measure": 0.5545927209705372,
+        "p70": 0.43956043956043955,
+        "r70": 0.7511737089201878,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ],
+        "beats": 367
+      },
+      "act_subtract_floor": {
+        "f_measure": 0.5617173524150268,
+        "p70": 0.45375722543352603,
+        "r70": 0.7370892018779343,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ],
+        "beats": 349
+      },
+      "act_normalise": {
+        "f_measure": 0.47960848287112556,
+        "p70": 0.3675,
+        "r70": 0.6901408450704225,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ],
+        "beats": 401
+      },
+      "act_sharpen": {
+        "f_measure": 0.32891246684350134,
+        "p70": 0.3780487804878049,
+        "r70": 0.29107981220657275,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ],
+        "beats": 164
+      }
+    }
+  ]
+}

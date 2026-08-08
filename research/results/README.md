@@ -1400,6 +1400,75 @@ front end for microphone input — preprocessing, or a model that has heard a
 room — and it says the decoder-side ideas that keep being proposed will run on
 noise again, exactly as in the earlier salience-versus-decoder finding.
 
+### 5. The room damage does not come back out — and `LiveTracker` is not the place
+
+Registered in `research/eval/PREREGISTERED_room_repair.md`, constants fixed
+there and none swept. Six arms on the five aligned captures: three transforming
+the audio before BeatNet, three transforming the activation before
+`LiveTracker`. Baseline 0.5323, clean ceiling 0.9216, half-gap target 0.7270.
+
+**Replay parity is exact** — 6623 beats against 6623, maximum difference 0.0,
+on all five — so the activation arms measured the repair and not the replay.
+
+| arm | mean F | Δ | usable | survivor | |
+|---|---:|---:|---:|---:|---|
+| baseline (room) | 0.5323 | — | 0.20 | 0.984 | |
+| replay, untouched | 0.5323 | +0.0000 | 0.20 | 0.984 | parity |
+| `act_subtract_floor` | 0.5204 | −0.0119 | 0.20 | 0.988 | |
+| `audio_gate` | 0.4982 | −0.0341 | 0.00 | 0.715 | disqualified |
+| `act_normalise` | 0.4828 | −0.0495 | 0.00 | 0.794 | disqualified |
+| `act_sharpen` | 0.4465 | −0.0858 | 0.00 | 0.867 | disqualified |
+| `audio_both` | 0.4376 | −0.0947 | 0.20 | 0.811 | disqualified |
+| `audio_dereverb` | 0.3481 | −0.1842 | 0.00 | 0.405 | disqualified |
+
+**Not one arm helps, and five of six are disqualified for wrecking the
+recording that already worked.** By the registered trichotomy this is the last
+row: the damage is not removable by cheap post-hoc processing on either side,
+and the answer is a model that has heard a room. **So `LiveTracker` does not
+need fixing for this** — an observation model that subtracts the risen floor is
+the most direct decoder-side answer to the diagnosis, it is `act_subtract_floor`,
+and it moves the mean by −0.012.
+
+That also settles the argument the split was built to settle. The claim that all
+room damage reaches the tracker through the activation is true and does not
+imply the front end is where the repair goes; here neither side takes it out,
+which no amount of reasoning about what `LiveTracker` can see would have told
+us.
+
+**What the per-track numbers add, and what they do not.**
+
+| track | baseline | best arm | worst arm |
+|---|---:|---:|---:|
+| `0116_goodies` | 0.984 | 0.988 `subtract_floor` | 0.405 `dereverb` |
+| `0132_iceicebaby` | 0.635 | **0.781** `audio_gate` | 0.443 `dereverb` |
+| `0837_nottonight` | 0.555 | 0.562 `subtract_floor` | 0.329 `sharpen` |
+| `0466_onthedarkside` | 0.337 | 0.343 `normalise` | 0.162 `subtract_floor` |
+| `0707_halfwaygone` | 0.151 | **0.427** `act_sharpen` | 0.151 baseline |
+
+The transforms move individual recordings a great deal — the worst capture
+nearly triples under `act_sharpen`, and `audio_gate` is worth +0.146 on
+`iceicebaby` — but each helps a *different* recording and each pays for it
+somewhere else. `act_sharpen` takes `0707` from 0.151 to 0.427 while taking
+`0837` from 0.555 to 0.329.
+
+That is the signature of a transform whose right strength depends on the
+recording, and it is a **hypothesis for new data, not a result**. Choosing per
+recording, or sweeping strength, on these same five would be fitting the set the
+answer is read on; the registration says so and it is worth repeating here,
+because the temptation is exactly proportional to how good 0.151 → 0.427 looks.
+
+**Where this points.** A model that has heard a room. The five captures are the
+only real room data in the repository, and
+[section 3](#3-a-real-room-and-a-simulation-that-predicts-neither-the-size-nor-the-shape)
+found the synthetic room understates the damage tenfold and does not predict
+which recordings suffer — so augmenting training with `room_degradation.py`'s
+impulse responses would be training on the wrong distribution. Real captures are
+needed, and they are needed as *training* data now and not only as a
+measurement.
+
+The artifact records `clean: false`: the script under test was untracked when it
+ran, which is the change itself, and the commit that follows it is that script.
+
 ### What these three change together
 
 The oracle budget said the decoder costs 0.7 to 2.0 points on full-length songs
