@@ -313,3 +313,78 @@ not by a person either — and the remaining work is the one the ceiling
 measurement already pointed at: **beat-grid recall**, which is a listed failure
 on 84.8% of Harmonix's and 93.5% of RWC's surviving failures and is not an octave
 problem at all.
+
+---
+
+## Re-run with the range guard removed, registered 2026-08-08
+
+The first run failed and is recorded in `results/README.md`: A1 +2.1 against
++5.0, A2 +0.9 against +4.0 with a lower bound of zero, A3 +0.013 against +0.05,
+and cost gate C1 failing with mean F down 0.0615. It also measured why —
+**57.8% of presses refused, 342 of them ×2** — which §11 had named in advance as
+the condition under which "the range guard, not the listener, is the binding
+constraint".
+
+`77e7bae` removes that guard for the user and only for the user: a press moves
+the filter's tempo range and prior centre by the same octave, so the range still
+says what tempo music is likely to be and simply stops outranking a person about
+which octave it is in. **Shifted, not widened**, because `estimate()` bins
+log-period into a fixed 48 bins across the range, so widening would coarsen the
+bins and raise confidence for a cloud that had not moved — contaminating every
+comparison against an arm that had not pressed.
+
+**This is a new experiment, not a repeat.** The mechanism under test changed, so
+the earlier verdict stands as a verdict on the earlier mechanism.
+
+### What does not change
+
+**The gates.** A1 +5.0, A2 +4.0, A3 +0.05, C1 ≤ 0.010 of mean F, C2, C3, C4, and
+the Holm family of exactly A1/A2/A3. Moving a bar after failing it is the thing
+this whole practice exists to prevent, and the bar was set against a measured
+ceiling that has not moved either.
+
+Also unchanged: `NOTICE_SEC = 2.0`, `MAX_PRESSES = 3`, RWC as development,
+Harmonix untouched unless RWC passes, 50 Hz everywhere.
+
+### A precondition, checked before anything is read
+
+**The `baseline` arm must reproduce the previous run's `baseline` exactly** — the
+same `usable` verdict on all 328 recordings and the same mean F to
+floating-point equality. `77e7bae` claims to change nothing when no press
+happens, and the unit tests assert it on a synthetic cloud; this is the same
+claim on 328 real recordings, and it costs nothing because the arm is run
+anyway. **If it fails, the run is void** and the leak is found before any
+endpoint is looked at.
+
+### What is expected to be different, registered now
+
+- **P9.** The refusal rate collapses from 57.8% to under 5%. What remains should
+  be the physical floor alone — a beat period shorter than two evidence windows,
+  about 703 BPM at 48 kHz — which needs a press from above 350 BPM and should be
+  rare. If refusals stay high, something other than the guard is refusing and
+  the diagnosis in the first run was wrong.
+- **P10.** `press_random` gets *worse* than it was, not better. It can now
+  reach octaves that were previously refused, so a wrong press does more damage.
+  A2 is therefore an easier test than it was, and if A2 still fails the result
+  is stronger rather than weaker.
+- **P11.** C1 still fails. Mean F fell 0.0615 in the first run and fell in
+  *every* press arm including the random one, so the damage is from perturbing
+  the filter rather than from being refused. Removing the guard lets more
+  presses land, which should make this worse. Named now because C1 failing again
+  would otherwise look like a discovery.
+
+### The design fault from the first run, and what is done about it
+
+The arms were matched on press *times* and not on presses that landed, so
+`press_random` got 451 accepted to `press`'s 341. With the guard gone that gap
+should close on its own, but it is not assumed: **accepted-press counts per arm
+are reported beside every endpoint**, and if they differ by more than 10% the A2
+margin is reported as confounded rather than as a result.
+
+### What would make this uninterpretable
+
+- The baseline precondition failing.
+- Refusals staying above 20%, which would mean the mechanism change did not do
+  what `77e7bae` says it does.
+- Accepted presses differing between `press` and `press_random` by more than
+  10%, which would leave A2 comparing arms that did different amounts of work.
