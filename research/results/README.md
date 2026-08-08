@@ -1135,3 +1135,75 @@ that has never reproduced, while its purpose — detect a leak from `77e7bae` �
 met. The mechanism of the original discrepancy is **unknown**, its effect on the
 first run's published figures is one recording of 328 with the verdict unchanged
 and mean F moved by 0.00006, and it stays on the record unexplained.
+
+## Where the recall is lost, on the corpora that look like the product
+
+`oracle_activation_rwc.json` and `oracle_activation_harmonix.json`, from
+`eval.oracle_activation`. No new mechanism and no hypothesis: the existing
+oracle harness, pointed at the two full-length corpora it had never been run
+on. Recall at 70 ms after a five-second warm-up; the oracle arm feeds the filter
+a pulse at every annotated beat and nothing else, through the same
+`LiveTracker.observe` seam.
+
+| corpus | n | real | oracle | front end costs | **decoder costs** |
+|---|---:|---:|---:|---:|---:|
+| Harmonix | 581 | 80.7 | 99.3 | 18.6 | **0.7** |
+| RWC-Pop | 100 | 80.2 | 98.0 | 17.8 | **2.0** |
+| RWC royalty-free | 15 | 62.4 | 95.8 | 33.4 | 4.2 |
+| GTZAN *(published)* | 998 | 66.7 | 92.7 | 26.0 | 7.3 |
+| RWC-Genre | 102 | 59.0 | 83.8 | 24.8 | 16.2 |
+| RWC-Jazz | 50 | 51.1 | 85.3 | 34.2 | 14.7 |
+| RWC-Classical | 61 | 35.5 | 56.0 | 20.5 | **44.0** |
+| SMC *(published)* | 217 | 26.1 | 54.6 | 29.0 | 45.4 |
+
+### The cascade A/B is answered before it was run
+
+`tracking/live.hpp` has carried this for a long time: BeatNet's paper reports
+0.754 beat F on GTZAN from their two-level cascade against 0.666 from the same
+activation through this tracker, and "the A/B that would make it a measurement
+is the next piece of work". The measurement above makes it unnecessary for the
+material the product is for. **On 681 full-length pop and rock recordings the
+decoder loses between 0.7 and 2.0 points.** A better decoder cannot recover
+what is not being lost, and porting a cascade would have been building for two
+points on pop.
+
+The 45-point decoder loss that made it look urgent is an SMC number, and
+RWC-Classical reproduces it at 44.0. That is not a different corpus of songs, it
+is a different kind of material: the decoder's loss tracks tempo irregularity
+and essentially nothing else — rho −0.66, −0.82 and −0.65 on pop, genre and
+jazz, and −0.01 on classical only because its median spread is 0.197 and the
+axis has stopped discriminating. Harmonix's median spread is **0.000**.
+
+### What that last number means, and its limit
+
+Harmonix is produced music, most of it cut to a click, so a decoder is being
+asked the easiest question there is. That is not a flaw in the measurement — it
+is the situation the product's first scenario is in, a user playing a released
+track. It does **not** transfer to a band rehearsing, and nothing here measures
+that case.
+
+### Two knobs already in the core, unswept on real audio
+
+With a perfect observation, dropping the anchor and loosening the filter both
+recover a large share of the decoder's remaining loss on irregular material:
+
+| | shipped | no anchor | roughening 0.08 |
+|---|---:|---:|---:|
+| RWC-Classical | 56.0 | 64.8 | **68.8** |
+| RWC-Jazz | 85.3 | 86.1 | 90.0 |
+| RWC-Genre | 83.8 | 87.9 | 87.8 |
+| Harmonix | 99.3 | 99.6 | 99.3 |
+
+Both are oracle-fed, so they say the filter is under-agile for irregular tempo
+and not that loosening it survives a noisy observation — a more agile cloud also
+chases noise, and that has not been measured here. It is worth a sweep on the
+real activation before any new decoder is considered, and it is worth nothing
+at all for the product's main case, where the numbers are already 99.3.
+
+### What this settles
+
+The remaining recall on full-length songs is **in front of the decoder**, and
+`too_few_beats` was already the dominant surviving failure — 84.8% on Harmonix
+and 93.5% on RWC. Both now point at the same place: the causal front end. The
+one measured candidate for a better observation, Beat This!, is not causal, so
+it does not apply to this path, and no causal replacement has been measured.
