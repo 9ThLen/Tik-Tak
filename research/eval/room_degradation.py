@@ -104,7 +104,12 @@ def degrade(mono: np.ndarray, rate: float, rt60: float, snr_db: float,
     out = mono.astype(np.float64)
     if rt60 > 0.0:
         response = impulse_response(rt60, rate, rng)
-        out = np.convolve(out, response)[: len(mono)]
+        # FFT and not np.convolve. A 0.4 s tail at 44.1 kHz is 17 640 taps, and
+        # direct convolution against a four-minute recording is 10^11
+        # multiply-adds -- minutes per condition per recording, which is not a
+        # slow measurement but an unfinishable one.
+        from scipy.signal import fftconvolve
+        out = fftconvolve(out, response)[: len(mono)]
     if np.isfinite(snr_db):
         signal_rms = float(np.sqrt(np.mean(out * out)))
         noise = pink_noise(len(out), rng)
