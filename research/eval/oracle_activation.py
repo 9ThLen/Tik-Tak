@@ -56,6 +56,12 @@ WINDOW_SEC = 0.070
 WARMUP_SEC = 5.0
 MODEL = REPOSITORY / "models" / "beatnet_model_1.ttw"
 
+# Overridden from the command line so a worktree can point at the main tree's
+# weights and binary. Module-level because `one` runs in a thread pool and takes
+# only the item; set once in main() before any work is submitted.
+_binary = DEFAULT_BINARY
+_model = MODEL
+
 # The filter's tempo agility: how far every resampled particle's period is
 # allowed to wander, in octaves. The core ships 0.01. Swept here because the
 # oracle result made agility the question — if a knob we already have recovers
@@ -107,7 +113,7 @@ def matched(reference: np.ndarray, found: np.ndarray) -> int:
 
 
 def run(arguments: list[str]) -> dict | None:
-    done = subprocess.run([str(DEFAULT_BINARY), *arguments], capture_output=True,
+    done = subprocess.run([str(_binary), *arguments], capture_output=True,
                           text=True, encoding="utf-8", errors="replace")
     if done.returncode != 0:
         return None
@@ -123,7 +129,7 @@ def one(item: dict) -> dict | None:
     if len(reference) < 8:
         return None
 
-    real = run([str(item["audio"]), "--live", "--live-model", str(MODEL)])
+    real = run([str(item["audio"]), "--live", "--live-model", str(_model)])
     if real is None:
         return None
     duration = float(real.get("duration_sec") or reference[-1] + 1.0)
@@ -197,13 +203,35 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=120)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--output", type=pathlib.Path)
+    # RWC 2.0 arrived with its own manifest and its own audio root, and the
+    # budget this script measures has only ever been read on thirty-second
+    # excerpts and on SMC. Reaching the full-length corpora needs nothing but
+    # these two paths.
+    parser.add_argument("--manifest", type=pathlib.Path,
+                        default=REPOSITORY / "music" / "ground-truth" / "manifest.csv")
+    parser.add_argument("--music", type=pathlib.Path,
+                        default=REPOSITORY / "music")
+    parser.add_argument("--binary", type=pathlib.Path, default=DEFAULT_BINARY)
+    parser.add_argument("--model", type=pathlib.Path, default=MODEL)
     args = parser.parse_args()
 
-    items = load_corpus(REPOSITORY / "music" / "ground-truth" / "manifest.csv",
-                        REPOSITORY / "music", False)
+    global _binary, _model
+    _binary, _model = args.binary, args.model
+    for label, path in (("binary", _binary), ("model", _model)):
+        if not path.exists():
+            print(f"{label} not found: {path}", file=sys.stderr)
+            return 1
+
+    items = load_corpus(args.manifest, args.music, False)
+    seen = sorted({item["corpus"] for item in items})
+    missing = [c for c in args.corpora if c not in seen]
+    if missing:
+        print(f"{missing} not in {args.manifest}; it holds {seen}",
+              file=sys.stderr)
+        return 1
     report: dict = {
         "provenance": provenance(
-            REPOSITORY, {"binary": DEFAULT_BINARY, "model": MODEL},
+            REPOSITORY, {"binary": _binary, "model": _model},
             corpora=args.corpora, limit=args.limit,
             roughening_sweep=list(ROUGHENING_SWEEP)),
         "fps": FPS, "window_sec": WINDOW_SEC, "warmup_sec": WARMUP_SEC,
