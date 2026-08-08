@@ -210,6 +210,130 @@ struct AnchorVetoSchedule {
 //
 // Here they see their own consequences, which is what they would do in the
 // product, and no iteration is involved at all.
+// The listener of eval/PREREGISTERED_octave_press.md, sections 1 to 3.
+//
+// Driven from the poll loop and not from the anchor resolver, for a reason that
+// is not stylistic: a press re-seeds the cloud and moves the anchor, and doing
+// that from inside `submit` would re-enter the filter while it is mid-frame. It
+// is also where a shell would do it — a person presses a button between
+// callbacks, not inside one.
+//
+// Two shapes. `Press` is online, and has to be: its own presses change which
+// stretches are at the wrong level afterwards, so the set of press times cannot
+// be computed in advance. That is the same fixed-point problem the veto's
+// comparison policies had, and it was expensive to learn once. `Scheduled`
+// replays a list of (time, k) taken from a `Press` run, which is exactly what
+// the registered `press_random` and `press_delayed` controls are.
+struct SimulatedListener {
+    enum class Kind { None, Press, Scheduled };
+
+    Kind kind = Kind::None;
+    double notice_sec = 2.0;
+    int max_presses = 3;
+    // Everything else here warms up for five seconds; before that there is
+    // nothing on screen to be wrong about.
+    double warmup_sec = 5.0;
+
+    // Annotated beat times. The listener knows the metrical level and nothing
+    // else, and this is how it knows it.
+    std::vector<double> reference;
+
+    // For the controls: when to press and which way, decided elsewhere.
+    std::vector<double> scheduled_time;
+    std::vector<double> scheduled_k;
+    std::size_t next_scheduled = 0;
+
+    double wrong_since_sec = -1.0;
+    double last_press_sec = -1.0;
+    int presses = 0;
+    int refusals = 0;
+    std::vector<double> press_time;
+    std::vector<double> press_k;
+    std::vector<double> press_accepted;
+
+    // The annotated local tempo: 60 over the median inter-beat interval within
+    // four beats either side. Local rather than whole-recording because a
+    // listener hears the tempo now, and a song that changes tempo has not made
+    // its opening wrong.
+    double referenceBpm(double t) const {
+        if (reference.size() < 2) return 0.0;
+        const auto it = std::lower_bound(reference.begin(), reference.end(), t);
+        const auto index = static_cast<std::ptrdiff_t>(it - reference.begin());
+        const auto count = static_cast<std::ptrdiff_t>(reference.size());
+        const std::ptrdiff_t low = std::max<std::ptrdiff_t>(0, index - 4);
+        const std::ptrdiff_t high = std::min<std::ptrdiff_t>(count - 1, index + 4);
+        if (high - low < 1) return 0.0;
+        std::vector<double> gaps;
+        gaps.reserve(static_cast<std::size_t>(high - low));
+        for (std::ptrdiff_t i = low + 1; i <= high; ++i) {
+            const double gap = reference[static_cast<std::size_t>(i)] -
+                               reference[static_cast<std::size_t>(i - 1)];
+            if (gap > 0.0) gaps.push_back(gap);
+        }
+        if (gaps.empty()) return 0.0;
+        std::sort(gaps.begin(), gaps.end());
+        const double median = gaps[gaps.size() / 2];
+        return median > 0.0 ? 60.0 / median : 0.0;
+    }
+
+    // How many whole octaves the published tempo is from the annotated level,
+    // and 0 when it is either right or wrong in a way no octave button fixes.
+    // The second clause is what keeps a 3:2 error from being credited to a
+    // control that cannot address it.
+    int wrongLevel(double t, double published_bpm) const {
+        const double ref = referenceBpm(t);
+        if (!(ref > 0.0) || !(published_bpm > 0.0)) return 0;
+        const double r = std::log2(published_bpm / ref);
+        const int k = -static_cast<int>(std::lround(r));
+        if (k == 0) return 0;
+        return std::fabs(r + k) > std::log2(1.08) ? 0 : k;
+    }
+
+    void record(double now, int k, bool accepted) {
+        press_time.push_back(now);
+        press_k.push_back(static_cast<double>(k));
+        press_accepted.push_back(accepted ? 1.0 : 0.0);
+        // A refusal still costs the listener its notice period. Somebody whose
+        // button does nothing does not press it fifty times a second.
+        last_press_sec = now;
+        if (accepted) {
+            ++presses;
+        } else {
+            ++refusals;
+        }
+    }
+
+    void tick(double now, tiktak::tracking::LiveTracker& tracker) {
+        if (kind == Kind::None) return;
+
+        if (kind == Kind::Scheduled) {
+            while (next_scheduled < scheduled_time.size() &&
+                   now >= scheduled_time[next_scheduled]) {
+                const int k = static_cast<int>(scheduled_k[next_scheduled]);
+                ++next_scheduled;
+                if (k == 0) continue;
+                const bool ok =
+                    tracker.setOctaveOffset(tracker.octaveOffset() + k);
+                record(now, k, ok);
+            }
+            return;
+        }
+
+        if (now < warmup_sec) return;
+        const int k = wrongLevel(now, tracker.estimate(now).bpm);
+        if (k == 0) {
+            wrong_since_sec = -1.0;
+            return;
+        }
+        if (wrong_since_sec < 0.0) wrong_since_sec = now;
+        if (now - wrong_since_sec < notice_sec) return;
+        if (presses >= max_presses) return;
+        if (last_press_sec >= 0.0 && now - last_press_sec < notice_sec) return;
+
+        record(now, k, tracker.setOctaveOffset(tracker.octaveOffset() + k));
+    }
+};
+
 struct OnlineOctavePolicy {
     enum class Kind { None, Debounce, RateLimit, TotalBan };
 
@@ -454,6 +578,9 @@ int main(int argc, char** argv) {
     // binary, so the arms differ in the evidence and in nothing else.
     std::string downbeat_path;
     bool live_bars = false;
+    SimulatedListener listener;
+    std::string press_reference_path;
+    std::string press_schedule_path;
     double activation_fps = 50.0;
     // Reproduce when a BeatNet frame becomes available, not only the timestamp
     // written on it. Off by default so earlier external-activation experiments
@@ -627,6 +754,26 @@ int main(int argc, char** argv) {
         }
         if (std::strcmp(argv[i], "--live") == 0) {
             live = true;
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-press") == 0) {
+            if (i + 2 >= argc) {
+                std::fprintf(stderr, "--live-press needs notice_sec and max_presses\n");
+                return 2;
+            }
+            listener.kind = SimulatedListener::Kind::Press;
+            listener.notice_sec = std::atof(argv[++i]);
+            listener.max_presses = std::atoi(argv[++i]);
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-press-reference") == 0) {
+            if (i + 1 >= argc) { std::fprintf(stderr, "--live-press-reference needs a file\n"); return 2; }
+            press_reference_path = argv[++i];
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-press-schedule") == 0) {
+            if (i + 1 >= argc) { std::fprintf(stderr, "--live-press-schedule needs a file\n"); return 2; }
+            press_schedule_path = argv[++i];
             continue;
         }
         if (std::strcmp(argv[i], "--live-downbeat") == 0) {
@@ -953,6 +1100,7 @@ int main(int argc, char** argv) {
     std::vector<double> live_bar_meters;
     std::vector<double> live_bar_confident;
     int live_beats_per_bar = 0;
+    int live_octave_offset = 0;
     double live_bpm = 0.0;
     double live_confidence = 0.0;
     double live_tempo_spread_octaves = 0.0;
@@ -986,6 +1134,44 @@ int main(int argc, char** argv) {
         }
         live = true;
     }
+    if (!press_reference_path.empty()) {
+        std::string complaint;
+        if (!readSalience(press_reference_path.c_str(), listener.reference,
+                          complaint)) {
+            std::fprintf(stderr, "%s\n", complaint.c_str());
+            return 1;
+        }
+        std::sort(listener.reference.begin(), listener.reference.end());
+    }
+    if (!press_schedule_path.empty()) {
+        // Two columns, time then k, one press per line: what a Press run
+        // realised, replayed as the registered controls.
+        std::vector<double> flat;
+        std::string complaint;
+        if (!readSalience(press_schedule_path.c_str(), flat, complaint)) {
+            std::fprintf(stderr, "%s\n", complaint.c_str());
+            return 1;
+        }
+        if (flat.size() % 2 != 0) {
+            std::fprintf(stderr,
+                         "--live-press-schedule holds %zu value(s); it is pairs "
+                         "of time and k\n", flat.size());
+            return 1;
+        }
+        for (std::size_t i = 0; i + 1 < flat.size(); i += 2) {
+            listener.scheduled_time.push_back(flat[i]);
+            listener.scheduled_k.push_back(flat[i + 1]);
+        }
+        listener.kind = SimulatedListener::Kind::Scheduled;
+    }
+    if (listener.kind == SimulatedListener::Kind::Press &&
+        listener.reference.size() < 2) {
+        std::fprintf(stderr,
+                     "--live-press needs --live-press-reference: the listener "
+                     "knows the metrical level and has no other way to\n");
+        return 1;
+    }
+
     std::vector<double> downbeat_activation;
     if (!downbeat_path.empty()) {
         std::string complaint;
@@ -1137,6 +1323,9 @@ int main(int argc, char** argv) {
             live_sample_hz > 0.0 ? 1.0 / live_sample_hz : 1.0;
         double next_sample = sample_period;
         const auto poll = [&]() {
+            // Before the beats are taken, so a press decided at this instant
+            // reaches the grid this instant rather than one block late.
+            listener.tick(now, tracker);
             double beat = 0.0;
             // Outside the sampling guard, deliberately. Beats are handed out on
             // the block clock and must not depend on how often the series are
@@ -1302,6 +1491,7 @@ int main(int argc, char** argv) {
         live_tempo_spread_octaves = final.tempo_spread_octaves;
         live_stats = tracker.stats();
         live_beats_per_bar = tracker.beatsPerBar();
+        live_octave_offset = tracker.octaveOffset();
         beats = live_beats;
     }
 
@@ -1567,6 +1757,15 @@ int main(int argc, char** argv) {
         column("live_anchor_margin", anchor_margin);
         // Per beat rather than per sample, and therefore not affected by
         // --live-sample-hz: a bar position belongs to a beat, not to a clock.
+        // What the simulated listener did, so the controls can be built from
+        // what a Press run actually realised and S2/S3 can be scored without
+        // re-deriving either.
+        std::printf("  \"live_press_count\": %d,\n", listener.presses);
+        std::printf("  \"live_press_refusals\": %d,\n", listener.refusals);
+        column("live_press_times", listener.press_time);
+        column("live_press_k", listener.press_k);
+        column("live_press_accepted", listener.press_accepted);
+        std::printf("  \"live_octave_offset\": %d,\n", live_octave_offset);
         std::printf("  \"live_beats_per_bar\": %d,\n", live_beats_per_bar);
         column("live_bar_positions", live_bar_positions);
         column("live_bar_meters", live_bar_meters);
