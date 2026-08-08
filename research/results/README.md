@@ -1246,12 +1246,23 @@ is read as a finding.
 | at most 2 s | 0.8633 |
 | at most 1 s | 0.8459 |
 
-**One second of lookahead costs 3.1 points of F.** The +0.102 advantage over
-BeatNet-through-this-tracker is the model, not the bidirectionality; a causal
-version would still be roughly +0.07 ahead. `beat_this.onnx` is `final0` and
-trained on GTZAN, so the level is not quotable and the shape is the result. At a
-one-second step the 1.5 s and 1 s arms read the same prefix, so there are five
-distinct points, not six.
+**One second of lookahead costs 3.1 points of F.** That is the result, and it is
+sound because all five arms share one postprocessor and differ only in how much
+audio the model had heard.
+
+~~The +0.102 advantage over BeatNet-through-this-tracker is the model, not the
+bidirectionality; a causal version would still be roughly +0.07 ahead.~~ **That
+sentence was wrong and is struck rather than deleted.** These arms decode with
+Beat This!'s own `beats_and_downbeats` (`beat_this_causal.py:94`), while the
+BeatNet figure it is compared against is an activation driven through
+`LiveTracker`. The comparison therefore changes the model *and* the decoder at
+once, and neither share is separable from it. Attributing +0.07 to the model is
+not supported by this run. Separating it needs Beat This!'s activation through
+the same `LiveTracker`, on a corpus `final0` did not train on — this one is
+GTZAN, which it did, so the level was never quotable either.
+
+At a one-second step the 1.5 s and 1 s arms read the same prefix, so there are
+five distinct points, not six.
 
 ### 3. A real room, and a simulation that predicts neither the size nor the shape
 
