@@ -37,6 +37,7 @@ add_library(tiktak_core STATIC
     src/tracking/particle.cpp
     src/tracking/activation_tempo.cpp
     src/tracking/live.cpp
+    src/tracking/bar.cpp
     src/tracking/sync.cpp
     src/render/click.cpp
     src/render/metronome.cpp

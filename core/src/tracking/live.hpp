@@ -7,6 +7,7 @@
 
 #include "dsp/odf.hpp"
 #include "ml/beatnet.hpp"
+#include "tracking/bar.hpp"
 #include "tracking/activation_tempo.hpp"
 #include "tracking/particle.hpp"
 #include "tracking/sync.hpp"
@@ -223,6 +224,15 @@ struct LiveConfig {
     // A stream time this far from where the sample count says it should be
     // means the device dropped or repeated a buffer.
     double discontinuity_tolerance_sec = 0.002;
+
+    // Decide the bar length and bar line from the model's downbeat channel.
+    //
+    // Off by default because turning it on makes the beat path allocate — see
+    // LiveTracker::beatsPerBar. It changes nothing about the beat grid either
+    // way: the bar decision reads the downbeat channel, which no other part of
+    // this tracker consumes, and writes nothing back.
+    bool bar_tracking = false;
+    BarTracker::Config bar;
 
     bool valid() const;
 };
@@ -867,6 +877,16 @@ public:
     // both — mixing them feeds the filter two clocks and two scales.
     void observe(double time_sec, double activation);
 
+    // The same seam with the model's second channel attached: `downbeat` is
+    // P(this frame is a bar line), on the same scale and the same clock.
+    //
+    // A separate overload rather than a defaulted argument, so that the
+    // single-argument form keeps meaning exactly what it meant — no downbeat
+    // evidence, therefore no bar — instead of quietly meaning "the downbeat
+    // probability is zero everywhere", which is a claim rather than an
+    // absence.
+    void observe(double time_sec, double activation, double downbeat);
+
     // Tells the tracker when its own click will reach the microphone — that is
     // the moment the click is *heard*, output latency and room delay already
     // added by the caller. The core cannot compute it: only the shell knows
@@ -994,6 +1014,57 @@ public:
     bool setOctaveOffset(int octaves);
     int octaveOffset() const { return octave_offset_; }
 
+    // ------------------------------------------------------------ the bar
+    //
+    // Bar length and bar line, from the downbeat channel the model has always
+    // emitted and this class used to drop on the floor. See tracking/bar.hpp
+    // for the decision itself, which is analysis::resolveMeter's and not a
+    // second copy of it, and for the click-gate limitation.
+    //
+    // Off unless LiveConfig::bar_tracking is set, and off by default for one
+    // concrete reason: resolving allocates, so process() stops being
+    // allocation-free the moment this is on. That is a real cost to a shell
+    // running it from an audio callback and it is not being hidden behind a
+    // default. It is also a temporary shape — the resolution wants to move to
+    // a seam the consumer's thread drives — and until it has, the guarantee in
+    // this class's own comment holds only with this off.
+    //
+    // Requires the learned front end. With spectral flux there is no downbeat
+    // channel, and these report no answer rather than a guess.
+
+    // 0 when nothing has been decided. The user's meter when one is set.
+    int beatsPerBar() const;
+
+    // Where the last beat handed out by takeBeat sits in its bar, 0 for a bar
+    // line. -1 before anything has been decided, or before any beat.
+    int barPosition() const;
+
+    // Both margins clear, on the most recent window. A shell should gate a bar
+    // display on this rather than on beatsPerBar() alone: a bar length with a
+    // coin-toss phase accents beat three, which is worse than accenting
+    // nothing. Always true while the meter is the user's.
+    bool meterConfident() const;
+
+    // The last window's answer in full, for diagnostics. Its margins are fresh
+    // even when beatsPerBar() is reporting an older decision.
+    const analysis::DownbeatResult& meterResult() const { return bar_.result(); }
+
+    // The user's answer to "how many beats to a bar, and which one is next".
+    // `beats_per_bar` of 0 hands the question back to the tracker.
+    //
+    // `position_of_next_beat` is what the next beat handed out will be called:
+    // 0 means the next beat is a bar line, which is the "tap on the one"
+    // gesture a shell will offer. It is taken modulo the meter.
+    //
+    // Outranks the resolver for as long as it is set, for the same reason
+    // setOctaveOffset outranks the anchor — and, like it, survives reset(),
+    // because a reset forgets audio and not the user. Unlike it, this is never
+    // refused: a meter is a statement about counting and there is no range for
+    // it to fall outside of.
+    void setMeter(int beats_per_bar, int position_of_next_beat = 0);
+    void clearMeter() { setMeter(0); }
+    bool meterIsManual() const { return manual_beats_per_bar_ > 0; }
+
     // Manual mode: the tempo is the user's and the room is asked only where the
     // beat falls. Zero goes back to tracking the tempo too.
     //
@@ -1059,6 +1130,10 @@ private:
     // each has produced a number the filter can use.
     void submit(double time_sec, double normalised);
 
+    // A beat has left takeBeat, played or skipped. Advances the bar numbering
+    // and, when bar tracking is on, is where the resolution happens.
+    void noteBeat(double beat_sec, double now_sec);
+
     // `bpm` moved by the user's whole octaves — see setOctaveOffset.
     //
     // submit() has five anchor branches. Two clear the anchor and have nothing
@@ -1098,6 +1173,19 @@ private:
     // The user's octave, in whole octaves from the estimator's. Zero is "the
     // tracker decides", which is the state every recording starts in.
     int octave_offset_ = 0;
+
+    BarTracker bar_;
+    // Beats handed out, ever. The numbering bar positions are counted in, and
+    // monotone across everything except reset() so that a bar line decided
+    // from past beats can name a future one by arithmetic alone.
+    long long beat_index_ = 0;
+    bool has_beat_index_ = false;
+
+    // The user's meter. Zero is "the tracker decides".
+    int manual_beats_per_bar_ = 0;
+    // Index of a beat the user called a bar line. Only meaningful while
+    // manual_beats_per_bar_ is positive.
+    long long manual_downbeat_index_ = 0;
 
     // The octave freeze, and nothing else reads these. Zero means nothing is
     // held, which is not the same as holding zero — before the first confident

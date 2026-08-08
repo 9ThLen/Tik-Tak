@@ -1196,6 +1196,36 @@ TEST(LiveApi, TheOctaveControlCrossesTheBoundary) {
     EXPECT_EQ(tt_live_octave_offset(live.handle), -1);
 }
 
+TEST(LiveApi, TheUsersMeterCrossesTheBoundary) {
+    // Only the manual half is reachable from C: the automatic one reads the
+    // model's downbeat channel, and the C surface feeds audio rather than
+    // activations. That half is covered in test_bar.cpp.
+    tt_live_config cfg;
+    tt_live_config_defaults(&cfg, 48000.0);
+    EXPECT_EQ(cfg.bar_tracking, 0) << "every published live number was measured "
+                                      "with this off; the default has to stay there";
+    Live live{cfg};
+    ASSERT_NE(live.handle, nullptr);
+
+    EXPECT_EQ(tt_live_beats_per_bar(live.handle), 0);
+    EXPECT_EQ(tt_live_bar_position(live.handle), -1);
+    EXPECT_EQ(tt_live_meter_is_manual(live.handle), 0);
+
+    const auto audio = tiktak::test::clickTrack(120.0, 20.0, 48000.0, 0.5);
+    tt_live_process(live.handle, 0.0, audio.data(), audio.size());
+    double beat = 0.0;
+    while (tt_live_take_beat(live.handle, 20.0, 0.05, &beat)) {}
+
+    tt_live_set_meter(live.handle, 4, 0);
+    EXPECT_EQ(tt_live_meter_is_manual(live.handle), 1);
+    EXPECT_EQ(tt_live_beats_per_bar(live.handle), 4);
+    EXPECT_EQ(tt_live_meter_confident(live.handle), 1);
+
+    tt_live_set_meter(live.handle, 0, 0);
+    EXPECT_EQ(tt_live_meter_is_manual(live.handle), 0);
+    EXPECT_EQ(tt_live_beats_per_bar(live.handle), 0);
+}
+
 TEST(LiveApi, RejectsWhatTheCoreRejects) {
     tt_status status = TT_OK;
     EXPECT_EQ(tt_live_create(nullptr, &status), nullptr);
@@ -1216,6 +1246,11 @@ TEST(LiveApi, NullHandleIsHarmless) {
     tt_live_set_manual_tempo(nullptr, 120.0);
     EXPECT_EQ(tt_live_set_octave_offset(nullptr, 1), 0);
     EXPECT_EQ(tt_live_octave_offset(nullptr), 0);
+    tt_live_set_meter(nullptr, 4, 0);
+    EXPECT_EQ(tt_live_beats_per_bar(nullptr), 0);
+    EXPECT_EQ(tt_live_bar_position(nullptr), -1);
+    EXPECT_EQ(tt_live_meter_confident(nullptr), 0);
+    EXPECT_EQ(tt_live_meter_is_manual(nullptr), 0);
     tt_live_reset(nullptr);
     EXPECT_EQ(tt_live_take_beat(nullptr, 0.0, 0.1, &beat), 0);
     EXPECT_EQ(tt_live_manual_tempo(nullptr), 0.0);

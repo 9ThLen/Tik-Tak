@@ -764,6 +764,7 @@ tiktak::tracking::LiveConfig resolve(const tt_live_config& in) {
     if (in.gate_after_sec > 0.0) out.gate_after_sec = in.gate_after_sec;
     if (in.lock_confidence > 0.0) out.lock_confidence = in.lock_confidence;
     if (in.release_confidence > 0.0) out.release_confidence = in.release_confidence;
+    out.bar_tracking = in.bar_tracking != 0;
     return out;
 }
 
@@ -781,6 +782,7 @@ void tt_live_config_defaults(tt_live_config* cfg, double sample_rate) {
     cfg->gate_after_sec = defaults.gate_after_sec;
     cfg->lock_confidence = defaults.lock_confidence;
     cfg->release_confidence = defaults.release_confidence;
+    cfg->bar_tracking = defaults.bar_tracking ? 1 : 0;
 }
 
 tt_live* tt_live_create(const tt_live_config* cfg, tt_status* status) {
@@ -840,6 +842,26 @@ int tt_live_set_octave_offset(tt_live* live, int octaves) {
 
 int tt_live_octave_offset(const tt_live* live) {
     return live ? live->impl.octaveOffset() : 0;
+}
+
+int tt_live_beats_per_bar(const tt_live* live) {
+    return live ? live->impl.beatsPerBar() : 0;
+}
+
+int tt_live_bar_position(const tt_live* live) {
+    return live ? live->impl.barPosition() : -1;
+}
+
+int tt_live_meter_confident(const tt_live* live) {
+    return live && live->impl.meterConfident() ? 1 : 0;
+}
+
+void tt_live_set_meter(tt_live* live, int beats_per_bar, int position_of_next_beat) {
+    if (live) live->impl.setMeter(beats_per_bar, position_of_next_beat);
+}
+
+int tt_live_meter_is_manual(const tt_live* live) {
+    return live && live->impl.meterIsManual() ? 1 : 0;
 }
 
 void tt_live_set_manual_tempo(tt_live* live, double bpm) {

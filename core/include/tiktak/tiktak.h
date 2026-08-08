@@ -714,6 +714,13 @@ typedef struct tt_live_config {
        musician does when the band drops out for a bar. 0 -> 0.35 / 0.15.      */
     double lock_confidence;
     double release_confidence;
+    /* Decide the bar length and bar line from the model's downbeat channel.
+       0 is off, which is the default and what every published live number was
+       measured with. Turning it on makes tt_live_take_beat allocate — see
+       tt_live_beats_per_bar — and needs the learned front end, since spectral
+       flux has no downbeat channel to read. It changes nothing about the beat
+       grid either way. */
+    int bar_tracking;
 } tt_live_config;
 
 TT_API void tt_live_config_defaults(tt_live_config* cfg, double sample_rate);
@@ -786,6 +793,41 @@ TT_API void tt_live_seed_tempo(tt_live* live, double bpm, double spread_octaves)
  */
 TT_API int tt_live_set_octave_offset(tt_live* live, int octaves);
 TT_API int tt_live_octave_offset(const tt_live* live);
+
+/*
+ * The bar, when tt_live_config.bar_tracking is on.
+ *
+ * tt_live_beats_per_bar is 0 until something has been decided; tt_live_bar_position
+ * is where the beat most recently handed out by tt_live_take_beat sits in its
+ * bar, 0 for a bar line, and -1 before there is an answer or a beat.
+ *
+ * Gate a display on tt_live_meter_confident and not on the bar length alone.
+ * A bar length with a coin-toss phase accents beat three, and a metronome
+ * accenting beat three is worse than one accenting nothing.
+ *
+ * Costs an allocation per beat inside tt_live_take_beat, which is why the flag
+ * exists and defaults off. A shell calling take_beat from an audio callback
+ * should not turn it on until that has moved.
+ */
+TT_API int tt_live_beats_per_bar(const tt_live* live);
+TT_API int tt_live_bar_position(const tt_live* live);
+TT_API int tt_live_meter_confident(const tt_live* live);
+
+/*
+ * The user's own answer: how many beats to a bar, and what to call the next
+ * one. `position_of_next_beat` of 0 means the next beat handed out is a bar
+ * line, which is the "tap on the one" gesture. `beats_per_bar` of 0 hands the
+ * question back to the tracker.
+ *
+ * Outranks the tracker's own decision for as long as it is set, and needs
+ * neither bar_tracking nor the learned front end: counting is arithmetic, and
+ * a user who has told us the meter has supplied the evidence themselves. It is
+ * never refused, and it survives tt_live_reset, continuing the count across one
+ * rather than restarting the bar.
+ */
+TT_API void tt_live_set_meter(tt_live* live, int beats_per_bar,
+                              int position_of_next_beat);
+TT_API int tt_live_meter_is_manual(const tt_live* live);
 
 /*
  * Manual mode: the tempo is the user's and the room is asked only where the

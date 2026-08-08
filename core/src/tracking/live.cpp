@@ -13,7 +13,7 @@ bool LiveConfig::valid() const {
            release_confidence < lock_confidence && discontinuity_tolerance_sec > 0.0 &&
            activation_tempo.valid() && anchor_width_octaves > 0.0 &&
            anchor_octave_margin >= 0.0 && anchor_octave_margin <= 1.0 &&
-           anchor_freeze_timeout_sec > 0.0;
+           anchor_freeze_timeout_sec > 0.0 && (!bar_tracking || bar.valid());
 }
 
 double octaveNearest(double bpm, double held_bpm) {
@@ -57,7 +57,7 @@ ParticleFilterConfig LiveTracker::resolveFilter(const LiveConfig& config) {
 
 LiveTracker::LiveTracker(const LiveConfig& config)
     : config_(config), odf_(config.odf), filter_(resolveFilter(config)), sync_(config.sync),
-      activation_tempo_(config.activation_tempo),
+      activation_tempo_(config.activation_tempo), bar_(config.bar),
       evidence_half_sec_(0.5 * static_cast<double>(config.odf.frameSize) /
                          config.odf.sampleRate) {
     gate_start_.fill(std::numeric_limits<double>::infinity());
@@ -144,12 +144,18 @@ void LiveTracker::process(double stream_time_sec, const float* samples, std::siz
         // What the gate can still prevent is the click moving the filter,
         // which is the failure that matters: a tracker that locks onto itself.
         // What it cannot prevent is the model having heard it.
-        model_->process(samples, n, [&](double frame_sec, double beat, double) {
+        model_->process(samples, n, [&](double frame_sec, double beat, double downbeat) {
             ++stats_.frames;
             const double time_sec = origin_sec_ + frame_sec;
             if (gatedAt(time_sec)) {
                 ++stats_.gated;
                 return;
+            }
+            // The third channel, which this callback used to discard. It goes
+            // nowhere near the filter: the bar decision reads it, and nothing
+            // reads the bar decision back into the beat grid.
+            if (config_.bar_tracking) {
+                bar_.observe(time_sec, std::min(1.0, std::max(0.0, downbeat)));
             }
             submit(time_sec, std::min(1.0, std::max(0.0, beat)));
         });
@@ -323,6 +329,18 @@ void LiveTracker::observe(double time_sec, double activation) {
     submit(time_sec, std::min(1.0, std::max(0.0, activation)));
 }
 
+void LiveTracker::observe(double time_sec, double activation, double downbeat) {
+    // Read the gate before observe() consumes it, so the bar evidence is
+    // withheld on exactly the frames the beat evidence is. Not an optimisation:
+    // the accent is derived from the bar decision, so letting an accented click
+    // into this channel would let it confirm the bar line that placed it. See
+    // tracking/bar.hpp.
+    const bool gated = gatedAt(time_sec);
+    observe(time_sec, activation);
+    if (gated || !config_.bar_tracking) return;
+    bar_.observe(time_sec, std::min(1.0, std::max(0.0, downbeat)));
+}
+
 bool LiveTracker::takeBeat(double now_sec, double lookahead_sec, double* beat_sec) {
     // The abstain arm, and the only other place it acts. "Publish nothing"
     // has to mean the clicks too — a tracker that reported no confidence and
@@ -405,18 +423,77 @@ bool LiveTracker::takeBeat(double now_sec, double lookahead_sec, double* beat_se
         ++stats_.beats_late;
         last_beat_sec_ = candidate;
         published_ = true;
+        // Counted in the bar numbering even though it was not played. It was a
+        // beat on the grid; skipping it here would move every later beat one
+        // position round the bar, which is the phase error a listener notices
+        // first.
+        noteBeat(candidate, now_sec);
         return false;
     }
 
     last_beat_sec_ = candidate;
     published_ = true;
     ++stats_.beats;
+    noteBeat(candidate, now_sec);
     if (beat_sec != nullptr) *beat_sec = candidate;
     return true;
 }
 
+void LiveTracker::noteBeat(double beat_sec, double now_sec) {
+    if (has_beat_index_) {
+        ++beat_index_;
+    } else {
+        has_beat_index_ = true;
+    }
+    if (!config_.bar_tracking) return;
+    bar_.addBeat(beat_sec, beat_index_);
+    // Where the allocation named in LiveConfig::bar_tracking happens, and the
+    // reason it is once a beat rather than once a frame.
+    bar_.update(now_sec);
+}
+
 void LiveTracker::seedTempo(double bpm, double spread_octaves) {
     filter_.seedTempo(bpm, spread_octaves);
+}
+
+int LiveTracker::beatsPerBar() const {
+    if (manual_beats_per_bar_ > 0) return manual_beats_per_bar_;
+    return bar_.beatsPerBar();
+}
+
+int LiveTracker::barPosition() const {
+    if (!has_beat_index_) return -1;
+    if (manual_beats_per_bar_ > 0) {
+        const long long m = manual_beats_per_bar_;
+        long long delta = (beat_index_ - manual_downbeat_index_) % m;
+        if (delta < 0) delta += m;
+        return static_cast<int>(delta);
+    }
+    return bar_.positionOf(beat_index_);
+}
+
+bool LiveTracker::meterConfident() const {
+    // A typed meter is not evidence and has no margin to clear. It is also not
+    // in doubt: the user is the authority on how they are counting.
+    if (manual_beats_per_bar_ > 0) return true;
+    return bar_.confident();
+}
+
+void LiveTracker::setMeter(int beats_per_bar, int position_of_next_beat) {
+    if (beats_per_bar <= 0) {
+        manual_beats_per_bar_ = 0;
+        manual_downbeat_index_ = 0;
+        return;
+    }
+    manual_beats_per_bar_ = beats_per_bar;
+
+    // "The next beat handed out is at this position." The next beat's index is
+    // one past the last one, or the first index when none has been handed out
+    // yet, and the bar line is that many positions before it.
+    const long long next = has_beat_index_ ? beat_index_ + 1 : 0;
+    long long offset = position_of_next_beat % beats_per_bar;
+    if (offset < 0) offset += beats_per_bar;
+    manual_downbeat_index_ = next - offset;
 }
 
 double LiveTracker::withUserOctave(double bpm) const {
@@ -522,6 +599,24 @@ void LiveTracker::reset() {
     // activation history is audio, and this is what was concluded from it.
     activation_tempo_.reset();
     sync_.reset();
+    // The scored window and the bar it decided are conclusions about audio, so
+    // they go with it. The beat numbering restarts with them, which is why the
+    // user's meter is stored as an offset from a *named* beat and re-anchored
+    // here rather than kept as a raw index into a numbering that no longer
+    // exists.
+    bar_.reset();
+    const int manual_meter = manual_beats_per_bar_;
+    const int manual_position = manual_meter > 0 ? barPosition() : 0;
+    beat_index_ = 0;
+    has_beat_index_ = false;
+    manual_beats_per_bar_ = 0;
+    manual_downbeat_index_ = 0;
+    if (manual_meter > 0) {
+        // A reset forgets audio, not the user: the meter survives, and the
+        // beat about to be handed out continues the count from where the last
+        // one left it rather than restarting the bar.
+        setMeter(manual_meter, manual_position >= 0 ? (manual_position + 1) % manual_meter : 0);
+    }
     acquired_ = false;
     // octave_offset_ is deliberately not cleared, by the same rule as the pin
     // above: a reset forgets audio, not the user. It is also the safer way
