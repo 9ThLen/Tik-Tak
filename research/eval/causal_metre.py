@@ -209,10 +209,23 @@ def summarise(records: list[dict]) -> dict:
                 if corpus == "all" or r["corpus"] == corpus]
         scored = [r for r in rows if r["true_metre"] in METRES]
         restricted = [r for r in scored if r["tracked_at_level"]]
+        # The baseline the registered conditions did not name, and should have.
+        # A resolver carrying a metre prior can score well on a corpus that is
+        # almost all one metre without deciding anything, so the question "is
+        # this better than a constant" has to be asked out loud. Reported for
+        # the restricted set, which is what C1-C3 are judged on.
+        counts: dict[int, int] = {}
+        for r in restricted:
+            counts[r["true_metre"]] = counts.get(r["true_metre"], 0) + 1
+        majority = max(counts, key=lambda m: counts[m]) if counts else 0
         block: dict = {
             "records": len(rows),
             "scored": len(scored),
             "tracked_at_level": len(restricted),
+            "majority_metre": majority,
+            "always_majority_accuracy": (counts[majority] / len(restricted)
+                                         if restricted else None),
+            "true_metre_counts": {str(k): v for k, v in sorted(counts.items())},
         }
         for arm in ARMS:
             def accuracy(subset: list[dict]) -> dict:
@@ -226,7 +239,11 @@ def summarise(records: list[dict]) -> dict:
                         "ci": [low, high]}
 
             answering = [r for r in restricted if r[arm]["final_metre"] > 0]
+            # Accuracy where the majority prior cannot help. A corpus that is
+            # almost all one metre cannot discriminate a decoder anywhere else.
+            off_majority = [r for r in restricted if r["true_metre"] != majority]
             block[arm] = {
+                "accuracy_off_majority": accuracy(off_majority),
                 # M1, the registered answer and its unrestricted twin.
                 "m1_restricted": accuracy(restricted),
                 "m1_all": accuracy(scored),
