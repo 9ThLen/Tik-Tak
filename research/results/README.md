@@ -953,3 +953,89 @@ The bar mechanism ships, off, tested, and costing nothing. What is now known:
   claim about metre needs a corpus with metre in it;
 - the click gate remains untested here, because the harness plays no click, so
   every figure above is an upper bound for a shell with audible output.
+
+## The octave button: measured, not approved, and the range guard is why
+
+`octave_press_rwc.json`, from `eval.octave_press_experiment`, answering
+`eval/PREREGISTERED_octave_press.md`. RWC, all 328 recordings, all five
+collections, `beatnet_model_1`, commit `4e7902d`, clean tree, no failures,
+`NOTICE_SEC = 2.0`, `MAX_PRESSES = 3`, every arm sampled at 50 Hz. **Harmonix was
+not opened**: §7 makes transfer conditional on RWC, and RWC did not pass.
+
+| arm | usable | correct share | mean F | presses | refused |
+|---|---:|---:|---:|---:|---:|
+| baseline | 0.2073 | 0.5623 | 0.6015 | 0 | 0 |
+| `press` | 0.2287 | 0.5749 | 0.5402 | 341 | 467 |
+| `press_random` | 0.2195 | 0.5328 | 0.5566 | 451 | 357 |
+| `press_delayed` | 0.2195 | 0.5860 | 0.5552 | 315 | 487 |
+
+### Every primary fails
+
+| | measured | required | Holm p |
+|---|---:|---:|---:|
+| **A1** press vs baseline, usable | **+2.1** pts, CI [+0.3, +4.3] | +5.0 | 0.122 |
+| **A2** press vs random, usable | **+0.9** pts, CI [+0.0, +2.1] | +4.0 | 0.211 |
+| **A3** press vs baseline, share | **+0.013**, CI [−0.017, +0.042] | +0.05 | 0.401 |
+
+**A2 is the one that matters and it is at zero.** Its lower bound is +0.0000.
+The registered reason for that arm was that `setOctaveOffset` re-seeds the cloud
+and moves the anchor, so any such disturbance perturbs a stuck tracker, and
+without a same-times random-direction control the result cannot separate the
+judgement from the kick. Measured, the judgement is worth under a point over the
+kick.
+
+**Cost gate C1 fails outright.** Mean F falls 0.0615, against a bound of 0.010.
+And it falls in *every* press arm — 0.5566 random, 0.5552 delayed — so pressing
+damages beat tracking whatever direction it is in.
+
+**C4 passes, and is the reason to trust the rest.** Of 19 recordings the
+baseline never had at the wrong level, the listener fired on **zero**. The
+arming condition does what §3 says.
+
+### The binding constraint is the BPM range, not the listener
+
+**467 of 808 attempted presses were refused — 57.8%.** By direction: **342 of
+them were ×2 and 125 were ÷2.** The filter's range is 40..220 BPM, so ×2 is
+unavailable above 110, and a tracker sitting on the eighths of a 120 BPM song is
+at 240 and out of reach.
+
+§11 named this in advance: a refusal rate "over 40% of attempted presses" means
+"the range guard, not the listener, is the binding constraint. That would not
+sink the idea but would redirect the work to the BPM range, which is a different
+experiment with different costs." That is where this lands.
+
+It also distorts the control. The arms are matched on press *times*, not on
+presses that landed, so `press_random` got 451 accepted presses to `press`'s 341
+— a random direction is refused less often, because ÷2 is usually available and
+×2 usually is not. A2's margin is measured between arms that pressed a different
+number of times, and that is a weakness of the registered design rather than of
+the result.
+
+### Predictions
+
+- **P1** wanted over 60% of improving recordings to need one press. 145 of 328
+  never pressed; of those that did, 85 pressed once, 38 twice and **60 hit the
+  cap of three**. A listener spending its whole budget on a fifth of the corpus
+  is not the "one press and it holds" picture the mechanism was built for.
+- **P2** predicted refusals would be asymmetric and predominantly ×2. **342
+  against 125.** Correct.
+- **P3** predicted `press_random` would land *below* baseline rather than level
+  with it, because a wrong press is held. Correct share 0.5328 against 0.5623.
+  Correct — and it confirms the hold in `602f9ad` works as designed.
+- **P5** predicted the realised gain would be under +5.6 points. It is +2.1.
+  Correct.
+
+### Verdict
+
+**Adoption not approved.** Three primaries missed, one cost gate failed. The
+mechanism stays in the core, off nobody's path, because a person is entitled to
+overrule a tracker whether or not it helps on average — but the +21.0 point
+ceiling on RWC-Pop is **not** reachable by a button as specified, and must not be
+quoted as though it were.
+
+What this redirects to, and what it does not license: the 40..220 BPM range is
+now the measured constraint, and widening it is a config change that moves the
+tempo prior and the resample clamp under every published number here. That is
+its own pre-registration with its own cost gates, and nothing above says it would
+work — only that the present result cannot be read as a verdict on the button
+until the button is allowed to press.
