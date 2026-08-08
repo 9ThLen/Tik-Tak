@@ -1039,3 +1039,99 @@ tempo prior and the resample clamp under every published number here. That is
 its own pre-registration with its own cost gates, and nothing above says it would
 work — only that the present result cannot be read as a verdict on the button
 until the button is allowed to press.
+
+## The octave button again, with the range moving: better everywhere, still not approved
+
+`octave_press_rwc_shifted.json`, answering the re-run registered in
+`eval/PREREGISTERED_octave_press.md` on 2026-08-08. Same 328 RWC recordings,
+same gates, same `NOTICE_SEC = 2.0` and `MAX_PRESSES = 3`, 50 Hz. Code at
+`9babda2`; the tree reads dirty only because the void run below had left its
+output file behind. **Harmonix still not opened.**
+
+`77e7bae` stops the configured 40..220 BPM range outranking a press: the range
+and the prior centre move by the user's octave, shifted rather than widened so
+that no width anywhere changes.
+
+| arm | usable | correct share | mean F | accepted | refused |
+|---|---:|---:|---:|---:|---:|
+| baseline | 0.2073 | 0.5624 | 0.6015 | 0 | 0 |
+| `press` | 0.2409 | 0.6166 | 0.5717 | 469 | 0 |
+| `press_random` | 0.2287 | 0.5082 | 0.5325 | 444 | 25 |
+| `press_delayed` | 0.2165 | 0.6085 | 0.5696 | 464 | 2 |
+
+### The gates
+
+| | first run | now | required | verdict |
+|---|---:|---:|---:|---|
+| **A1** press vs baseline, usable | +2.1 | **+3.35** CI [+1.5, +5.5] | +5.0 | fails |
+| **A2** press vs random, usable | +0.9 | **+1.22** CI [+0.00, +2.74] | +4.0 | fails |
+| **A3** press vs baseline, share | +0.013 | **+0.054** CI [+0.024, +0.085] | +0.05 | **passes** |
+| **C1** mean F | −0.0615 | **−0.0298** | ≤0.010 | fails |
+| **C4** presses on clean recordings | 0 | **0** | 0 | passes |
+
+Holm over the registered family: A1 0.000, A3 0.0016, A2 0.129.
+
+**The change did exactly what it was supposed to.** Refusals went from 57.8% to
+**0.0%** — 469 attempts, none refused, P9 confirmed outright. The accepted-press
+gap between `press` and `press_random` fell to 5.3%, under the 10% bar, so A2 is
+no longer confounded by the arms doing different amounts of work. And the damage
+per press dropped: mean F fell 0.0298 where it fell 0.0615 before, on *more*
+accepted presses — because a press now lands where the cloud can live instead of
+being scaled into a clamp.
+
+**A2 is still the finding, and it is still at zero.** Its lower bound is exactly
++0.0000. With the guard gone, matched press counts and a control that can now do
+real damage, pressing in the *right* direction is worth **1.2 points of usable
+recordings** over pressing in a random one.
+
+But read A2 beside A3, because they disagree in a way that means something.
+On time at the correct level the direction matters enormously — `press` 0.6166
+against `press_random` 0.5082, over ten points — while on the pass/fail verdict
+it is worth one. The octave is one clause of four in `usable`, and fixing it
+leaves precision, recall and acquisition where they were. That is the same thing
+the ceiling measurement said: solving the octave perfectly still leaves half the
+corpus failing on the beat grid.
+
+`press_delayed` is 2.4 points below `press` (p = 0.009), so acting early is
+worth something real — which is the one place the listener's timing showed up.
+
+### Predictions
+
+P9 confirmed (0.0% refusals). P10 confirmed — `press_random` got *worse*, 0.5082
+against the first run's 0.5328, because it can now reach octaves it used to be
+refused. P11 confirmed — C1 fails again, as named in advance. **P1 is decisively
+wrong**: 124 of 328 recordings hit the three-press cap, against 60 before. Freed
+from the guard, the listener thrashes.
+
+### Verdict
+
+**Adoption not approved.** A1 and A2 fail, C1 fails. A3 passing is the first
+primary this line has ever met, and it is not enough on its own.
+
+The honest summary of two runs: the range guard was a real constraint and
+removing it bought about a point and a half of usable recordings and five points
+of correct-level time — but the button was never going to reach the +21.0
+ceiling, because that ceiling is an oracle applied to whole recordings and a
+person acts at a moment, three times at most, and only on the one clause of four
+that the octave touches.
+
+### Two process failures, both recorded
+
+**The first re-run was void, and not for the reason the precondition was written
+to catch.** `tools/eval/build` is a separate CMake tree, so building
+`tiktak_core_tests` in `core/build` left `dump_analysis.exe` 1 h 39 min older
+than the change under test. That run measured the old mechanism. It was caught
+by the registered baseline precondition — written for a different purpose
+entirely — and without it the old mechanism's numbers would have been published
+as the new one's.
+
+**One recording will not reproduce, and it is not this change.** `RWC_P065`'s
+baseline differs between the first press run and every measurement since:
+F 0.6266 there against 0.6462 in the void run, 0.6462 in this one, and 369 beats
+in seven isolated reruns. Two runs on the old binary and one on the new agree
+exactly; the first run is the outlier, and it predates `77e7bae`, so the change
+cannot be its cause. The precondition therefore fails against a reference value
+that has never reproduced, while its purpose — detect a leak from `77e7bae` — is
+met. The mechanism of the original discrepancy is **unknown**, its effect on the
+first run's published figures is one recording of 328 with the verdict unchanged
+and mean F moved by 0.00006, and it stays on the record unexplained.
