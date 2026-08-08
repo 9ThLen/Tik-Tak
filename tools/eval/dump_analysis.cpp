@@ -357,6 +357,12 @@ int main(int argc, char** argv) {
     bool live_margin_abstain = false;
     double live_freeze_timeout = 0.0;
 
+    // The whitening exponent, reachable so a room recording can be measured
+    // with and without it. 0 divides every band by peak^0, which is the same
+    // arithmetic with whitening off, so one knob covers both arms. Negative
+    // means "not given" and cannot be typed — the parser refuses it.
+    double odf_whitening_strength = -1.0;
+
     struct Threshold {
         const char* flag;
         double* target;
@@ -385,6 +391,7 @@ int main(int argc, char** argv) {
         {"--live-anchor-window", &live_anchor_window},
         {"--live-anchor-min-window", &live_anchor_min_window},
         {"--live-freeze-timeout", &live_freeze_timeout},
+        {"--odf-whitening-strength", &odf_whitening_strength},
     };
 
     for (int i = 1; i < argc; ++i) {
@@ -569,6 +576,10 @@ int main(int argc, char** argv) {
                      kCalibrationSize, calibration_given);
         return 2;
     }
+    if (odf_whitening_strength > 1.0) {
+        std::fprintf(stderr, "--odf-whitening-strength must be in [0, 1]\n");
+        return 2;
+    }
 
     if (positional.empty() || positional.size() > 2) {
         std::fprintf(stderr,
@@ -591,6 +602,8 @@ int main(int argc, char** argv) {
                      "  --live-model <file>\n"
                      "                     the core computes the activation itself; repeat\n"
                      "                     the flag to average several checkpoints\n"
+                     "  --odf-whitening-strength <0..1>\n"
+                     "                     override adaptive whitening for this run\n"
                      "  calibration: --salience-min-range <v> "
                      "--salience-min-phase-margin <v> "
                      "--salience-min-meter-margin <v>\n"
@@ -654,6 +667,9 @@ int main(int argc, char** argv) {
     // function from the one the app would compute — the tool would be
     // measuring a configuration that never ships.
     config.odf.melMaxHz = std::min(16000.0, rate * 0.5);
+    if (odf_whitening_strength >= 0.0) {
+        config.odf.whiteningStrength = odf_whitening_strength;
+    }
     config.find_downbeats = true;
     config.bpm_hint = bpm_hint;
     if (tempo_prior_centre > 0.0) config.tempo.prior_centre_bpm = tempo_prior_centre;
