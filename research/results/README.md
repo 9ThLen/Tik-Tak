@@ -1469,6 +1469,61 @@ measurement.
 The artifact records `clean: false`: the script under test was untracked when it
 ran, which is the change itself, and the commit that follows it is that script.
 
+### 6. The room, measured — and a simulation that still fails, differently
+
+A second session recorded a swept sine, sixty seconds of silence and two of the
+same tracks, with nothing moved between them. Registered in
+`PREREGISTERED_room_simulation.md` before the simulation was built.
+
+**The chain is not linear time-invariant.** Three identical sweeps 13 s apart,
+at levels within 0.6 dB, give responses correlating 0.90 to 0.96. Three
+alternative explanations were tested and refuted:
+
+| explanation | test | result |
+|---|---|---|
+| noise in the tail | correlate over growing windows | already 0.944 at 20 ms, 8 dB below peak; flat thereafter |
+| sub-sample misalignment | align to 0.02 of a sample | adds at most 0.012 |
+| no signal in the varying bands | measurement SNR per band | 104 dB at 30–60 Hz |
+
+**The variation is all in the bottom two octaves** — 14.2 dB of spread at
+30–60 Hz, 9.8 dB at 60–125 Hz, against ≤2 dB above 125 Hz and ≤0.2 dB above
+2 kHz. The top of the chain is highly repeatable; whatever the phone does below
+125 Hz, it does differently each time.
+
+**Two measurements settle an older question on their own.** RT60 is 0.33–0.37 s,
+*shorter* than the 0.4 and 0.8 the invented room used, and the captures' SNR is
+17 dB where it used 10. **The invented room was harsher than the real one on
+both knobs and cost 0.036 where the real one costs 0.390.** The tail was never
+too short and the noise was never too quiet — the character of the response was
+wrong, not its size.
+
+**The measured simulation fails its registered acceptance:**
+
+| track | clean | real room | simulated | |
+|---|---:|---:|---:|---|
+| `0116_goodies` | 0.976 | 0.938 | **0.809** | error −0.129, tolerance ±0.05 |
+| `0707_halfwaygone` | 0.951 | 0.204–0.340 (void) | **0.581** | outside the interval |
+
+Criterion 1 (level) fails. Criterion 2 (ordering) **passes** — and that is new,
+because the invented room damaged everything equally.
+
+The failure has one shape: **the simulation damages uniformly where the room
+does not.** Real drops are 0.038 and ≈0.68; simulated drops are 0.167 and 0.37.
+It over-damages the track that survives by four times and under-damages the one
+that collapses by half. A convolution applies one filter to all material, so it
+must damage all material similarly — and the room's defining property, the one
+nothing has yet predicted, is that it destroys some recordings and leaves others
+alone.
+
+**Not approved for augmentation.** The fallback is real captures.
+
+One caveat on the registered bar, which is worth stating because it is not a
+reason to move it. "Reproduce the room" is the right criterion for a simulator
+used to *predict* a rate. For a simulator used to *augment training* the
+criterion is different — training does not need the exact room, it needs a
+distribution containing it — and that criterion is end-to-end: train with it,
+evaluate on real captures. That test is not this one and was not run.
+
 ### What these three change together
 
 The oracle budget said the decoder costs 0.7 to 2.0 points on full-length songs

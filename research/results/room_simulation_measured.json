@@ -1,0 +1,37 @@
+{
+  "commit": "f0840bb58292938bd294c8e7fd5a5e0837ea1fe5",
+  "clean": false,
+  "snr_db": 17.0,
+  "ir": "D:\\Programs\\D\\Tik-tak\\music\\room-ir\\measured\\ir.wav",
+  "noise": "D:\\Programs\\D\\Tik-tak\\music\\room-ir\\measured\\noise.wav",
+  "level_ok": false,
+  "ordering_ok": true,
+  "approved_for_augmentation": false,
+  "records": [
+    {
+      "name": "0116_goodies",
+      "simulated_f": 0.8091954022988507,
+      "simulated_usable": false,
+      "simulated_r70": 0.8301886792452831,
+      "simulated_p70": 0.7892376681614349,
+      "real_f": 0.9384965831435078,
+      "clean_f": 0.9764150943396226,
+      "kind": "scored",
+      "error": -0.12930118084465714,
+      "level_ok": false
+    },
+    {
+      "name": "0707_halfwaygone",
+      "simulated_f": 0.5813586097946288,
+      "simulated_usable": false,
+      "simulated_r70": 0.48677248677248675,
+      "simulated_p70": 0.7215686274509804,
+      "interval": [
+        0.20394736842105263,
+        0.34009360374414976
+      ],
+      "kind": "void_interval",
+      "not_refuted": false
+    }
+  ]
+}
