@@ -31,71 +31,63 @@ the 2,760 annotated recordings here as evaluation ground, leaving Harmonix,
 RWC and SMC. That is a cost of the ensemble, not merely of testing it, and it is
 the strongest argument for recording new material.
 
-## A second documented negative: sparse peaks empty the gaps by losing the beats
+## WITHDRAWN: the sparse peak result of 2026-08-09
 
-`peak_front_end.json`, from `eval.peak_front_end`, answering
-`eval/PEAK_FRONT_END_PLAN.md`. Same five matched clean/room pairs. The peak map
-runs over the network's own input — 136 log-filterbank bands and their positive
-rise, dumped through `--dump-features` — with a trailing window, a per-band
-refractory cap, and no normalisation anywhere.
+`peak_front_end.json` was published here with a verdict and is **withdrawn**.
+The numbers are not reproduced in this section on purpose: they should not be
+quotable while the run that produced them is invalid. They remain in commit
+`3b2fb9c` for anyone reconstructing the history.
 
-Parameters were chosen leave-one-track-out: each recording's number comes from
-a sweep fitted on the other four.
+Five defects, four of them blocking, none of which the run could have detected
+about itself:
 
-**Conditions 1 and 2 pass. Condition 3 fails, and by a wide margin.**
+1. **The merge rules did not keep the channels apart.** `sum` added the raw
+   filterbank and difference before picking, which is the "272 as one frequency
+   axis" mistake the dump format was shaped to prevent — in the one place it
+   was not enforced. `union` credited filterbank peaks with heights read from
+   the difference channel, and the refractory cap was spent per channel before
+   the merge rather than once after it. This moves the headline numbers and the
+   whole `weighted` family.
+2. **The chance baseline was not the one it claimed to reuse.**
+   `activation_recall.py` randomises the *reference* times and matches them
+   against the arm's real candidates, which makes the baseline depend on how
+   that arm's candidates are distributed. This run randomised the *candidates*
+   instead, so every arm received an identical number, and the sentence "below
+   its own shuffled baseline" was not established by it.
+3. **The pairing was not paired everywhere.** On `0116_goodies` the clean
+   condition scored 213 beats and the room condition 217, because the two files
+   differ slightly in length and the scorable set is clipped to each. A
+   difference of ratios taken across two different beat sets is not a paired
+   degradation, and that fold's number also entered the selection for the other
+   four.
+4. **The provenance hashed the wrong things.** The tool binary, the `.ttfd`
+   dumps and the alignment offsets were not recorded, and the dump step skips
+   any file already present — so a warm cache yields `tree_clean: true` for a
+   run whose inputs were never checked and whose `--binary` was never invoked.
+5. **The top-N candidate set ignored the warm-up.** Candidates were taken over
+   the whole signal while the beats and the chance times were confined to the
+   scorable span, so a strong peak in the first five seconds could consume part
+   of the budget and match nothing. Arm-versus-arm survives this; anything
+   compared against chance does not.
 
-| held out | peaks | dense | peaks top-N | dense top-N | chance |
-|---|---:|---:|---:|---:|---:|
-| `0116_goodies` | 0.0833 | 0.1443 | **0.138** | 0.184 | **0.207** |
-| `0132_iceicebaby` | 0.0833 | 0.0624 | 0.382 | 0.611 | 0.304 |
-| `0466_onthedarkside` | 0.0333 | 0.0928 | 0.476 | 0.527 | 0.343 |
-| `0707_halfwaygone` | **0.0000** | 0.1408 | 0.356 | 0.429 | 0.238 |
-| `0837_nottonight` | **0.0000** | 0.0834 | 0.282 | 0.559 | 0.174 |
-| **mean** | **0.0400** | 0.1047 | **0.327** | **0.462** | |
+Two smaller ones are recorded with them: the artifact stored
+`novelty_frames: 10` beside `readout: novelty25`, and the tie-break resolved
+only contiguous plateaus, so two equal maxima separated by a dip inside one
+window could both fire.
 
-The first two columns are the Shazam intuition working: the space between beats
-really does stay relatively emptier under a peak map, on four recordings of
-five, at less than two thirds of the control's degradation. The last three are
-the reason that is not a result. **The peak signal is worse than the plain
-per-frame mean it replaced at finding beats on every recording**, and on
-`0116_goodies` it is below its own shuffled baseline — worse than guessing.
+**On what was preregistered and what was not.** The plan's third success
+condition was ambiguous between a per-track and a mean reading, and the strict
+per-track reading was adopted *after* a smoke run had shown the two can
+disagree. That was recorded at the time and it was the conservative choice, but
+it is a disambiguation made with numbers in view and it should not be described
+as preregistered.
 
-A representation that empties the gaps by discarding the beats is not progress,
-and the second metric is the only reason that is visible. The plan required it
-for exactly this case.
-
-### The null holds under all three collapse rules
-
-Selecting and judging each family on its own, which the registered null
-demands:
-
-| family | improved | degradation | top-N vs dense 0.462 | passes |
-|---|---:|---:|---:|---|
-| `count` | 1/5 | 0.1260 | 0.431 | no — fails 1 and 2 as well |
-| `weighted` | 5/5 | 0.0601 | 0.388 | no |
-| `novelty` | 4/5 | 0.0400 | 0.327 | no |
-
-Every family is below the control on top-N, and every family has a recording
-below its own chance baseline. `symmetric` — the arm that may read the future
-and cannot pass whatever it scores — is no better: 0.0483.
-
-### A defect in the measurement, recorded rather than left to be rediscovered
-
-**Two folds reached exactly 0.0000 degradation, and it means the opposite of
-what it looks like.** On `0707_halfwaygone` the selected signal reads peak
-3.000 and floor 1.000 in the clean room and peak 3.000 and floor 1.000 in the
-live one — identical, because `count` and `novelty` are small integers and the
-median of a small integer lands on the same value in both conditions. The
-floor-to-peak ratio cannot resolve a difference there, and the selection
-objective walks straight into that: the cheapest way to score zero degradation
-is to be too coarse to measure.
-
-`weighted` is continuous and does not have this defect, which is why the
-negative does not rest on it — that family fails on top-N alone.
-
-Any successor needs a primary metric that a quantised signal cannot game, and a
-selection objective that is not the primary metric read alone. Both are for a
-new registration; this one is closed as written.
+The direction is not refuted by any of this. It is unmeasured. A successor
+needs the defects above fixed, a primary metric that a quantised signal cannot
+game — two folds reached exactly zero degradation because small-integer medians
+land identically in both rooms — and a selection objective that is not the
+primary metric read alone. That is a new registration, not a re-run of this
+one.
 
 ## A documented negative: adaptive whitening in the room
 
