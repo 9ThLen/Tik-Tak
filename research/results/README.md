@@ -44,8 +44,8 @@ differences. Channels merge only after picking, spend one refractory budget,
 and resolve all equal maxima by earliest frame then lowest band. Parameters are
 selected leave-one-track-out.
 
-**Conditions 1 and 2 pass. Condition 3 fails under both its strict and mean
-readings.**
+**Under the registered ratio calculation, conditions 1 and 2 formally pass.
+Condition 3 fails under both its strict and mean readings.**
 
 | held out | peaks degradation | dense degradation | peaks top-N | dense top-N | peaks chance |
 |---|---:|---:|---:|---:|---:|
@@ -56,11 +56,16 @@ readings.**
 | `0837_nottonight` | **-0.0143** | 0.0834 | 0.315 | 0.563 | 0.169 |
 | **mean** | **0.0071** | 0.1040 | **0.344** | 0.468 | |
 
-Sparse peaks preserve the gaps dramatically better: four tracks improve, and
-mean degradation is under seven percent of the dense control. But the selected
-peak signal has worse beat top-N than dense on every track, and
-`0116_goodies` is below its own signal-specific shuffled baseline. Emptying the
-gaps by removing evidence of the beats is still not progress.
+Conditions 1 and 2 pass only under the registered ratio calculation; that pass
+must not be cited as evidence that the peak signal is robust. The median
+on-beat novelty falls in the room on all five tracks (`4 -> 3`, `6 -> 4`,
+`5 -> 3`, `5 -> 4`, `7 -> 5`). Three folds show negative degradation only
+because their already-quantised floor falls faster than the peak. Consequently,
+the mean `0.0071` is a readout artifact, not an estimate of near-perfect room
+robustness, and is not a quotable result. The selected peak signal also has
+worse beat top-N than dense on every track, and `0116_goodies` is below its own
+signal-specific shuffled baseline. Emptying the gaps by removing evidence of
+the beats is still not progress.
 
 ### The null holds under all three collapse families
 
