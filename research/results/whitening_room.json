@@ -1,0 +1,445 @@
+{
+  "provenance": {
+    "utc": "2026-08-08T23:59:16Z",
+    "commit": "3dba708e9da18d798d05e1dfd57a23113297c804",
+    "tree_clean": true,
+    "python": "3.11.15",
+    "platform": "Windows",
+    "binary": {
+      "name": "dump_analysis.exe",
+      "bytes": 914432,
+      "sha256": "47a170e71ea5b68572b140b15e00dbb238b42e46c58d6ed4802199979baea0df"
+    },
+    "clean_0116_goodies": {
+      "name": "0116_goodies.wav",
+      "bytes": 5742216,
+      "sha256": "8a1288c7c464c55f5e0e190975600c8a12a462c96f8106a160c4b3702ebc7339"
+    },
+    "room_0116_goodies": {
+      "name": "0116_goodies.wav",
+      "bytes": 12716866,
+      "sha256": "ebea463a46c4d2a25be75570adab64cb19c1d902ae245f197d9f0ffc0246c7a9"
+    },
+    "beats_0116_goodies": {
+      "name": "0116_goodies.beats",
+      "bytes": 6171,
+      "sha256": "41748c0244eb2782ac839204d2b6463377560fa2a127621a69bf57f83006829a"
+    },
+    "clean_0132_iceicebaby": {
+      "name": "0132_iceicebaby.wav",
+      "bytes": 6777596,
+      "sha256": "f744fef0e45f8ce655d641010006eca9818bf9709ff25856dbabaabb0448ba79"
+    },
+    "room_0132_iceicebaby": {
+      "name": "0132_iceicebaby.wav",
+      "bytes": 14989168,
+      "sha256": "2c89945705434221aa03e2839e877c21774c54c339986e872f9ce818f6d8fa47"
+    },
+    "beats_0132_iceicebaby": {
+      "name": "0132_iceicebaby.beats",
+      "bytes": 4715,
+      "sha256": "960775a77905a78b096fab3edbe3d4ebd6d15ad7217e35d27e8cee351465bddc"
+    },
+    "clean_0466_onthedarkside": {
+      "name": "0466_onthedarkside.wav",
+      "bytes": 7211144,
+      "sha256": "7431105a3562397f8b8be7868d053792df22567eb877b0a1b7ccc2031543ec79"
+    },
+    "room_0466_onthedarkside": {
+      "name": "0466_onthedarkside.wav",
+      "bytes": 15854384,
+      "sha256": "1f7378047f2269d0335d2d20b41e10c2fa694ebfbbf8ab44cb56516213d3e0ce"
+    },
+    "beats_0466_onthedarkside": {
+      "name": "0466_onthedarkside.beats",
+      "bytes": 7113,
+      "sha256": "02c86be946291eb057f28f7a7832e33f51450fb92aacc0b5dfcd603b8e926280"
+    },
+    "clean_0707_halfwaygone": {
+      "name": "0707_halfwaygone.wav",
+      "bytes": 8533614,
+      "sha256": "6dae7edb44dc2f262267ede2a3b5c2be6f7bcfa7d4246d18d9edda974005baf7"
+    },
+    "room_0707_halfwaygone": {
+      "name": "0707_halfwaygone.wav",
+      "bytes": 18832308,
+      "sha256": "067c314e44f453cdb9709a0c45a7c3a9cb9aa1d492c9cc55b970544e1e2eaa7f"
+    },
+    "beats_0707_halfwaygone": {
+      "name": "0707_halfwaygone.beats",
+      "bytes": 6449,
+      "sha256": "76dc037f2b14467007646ea3ef6d39716a8cffad4d3b41eece52967e7b13c53b"
+    },
+    "clean_0837_nottonight": {
+      "name": "0837_nottonight.wav",
+      "bytes": 6824872,
+      "sha256": "bcfc72addcbc3306b8ff452be6c7b8a7d6f8887c54c35a235fdd8098358f3d1a"
+    },
+    "room_0837_nottonight": {
+      "name": "0837_nottonight.wav",
+      "bytes": 15268330,
+      "sha256": "1dec9a5f8b5f92bb788141a3687d5a149e717f9a6b3b7d56580630d7c60d9024"
+    },
+    "beats_0837_nottonight": {
+      "name": "0837_nottonight.beats",
+      "bytes": 3578,
+      "sha256": "562cd5f8af23772d29c4de8a6d49f2f69b6e034eb6f2493127526e0376c40c3a"
+    },
+    "tracks": [
+      "0116_goodies",
+      "0132_iceicebaby",
+      "0466_onthedarkside",
+      "0707_halfwaygone",
+      "0837_nottonight"
+    ],
+    "window_sec": 0.07,
+    "warmup_sec": 5.0
+  },
+  "arms": {
+    "off": 0.0,
+    "shipped": 0.5,
+    "full": 1.0
+  },
+  "records": [
+    {
+      "track": "0116_goodies",
+      "condition": "clean",
+      "arm": "off",
+      "strength": 0.0,
+      "peak": 0.3278,
+      "floor": 0.079329075,
+      "ratio": 0.24200449969493595,
+      "beats": 213
+    },
+    {
+      "track": "0116_goodies",
+      "condition": "clean",
+      "arm": "shipped",
+      "strength": 0.5,
+      "peak": 0.200185,
+      "floor": 0.0498248,
+      "ratio": 0.24889377325973475,
+      "beats": 213
+    },
+    {
+      "track": "0116_goodies",
+      "condition": "clean",
+      "arm": "full",
+      "strength": 1.0,
+      "peak": 0.0680568,
+      "floor": 0.017466324999999998,
+      "ratio": 0.2566433479093933,
+      "beats": 213
+    },
+    {
+      "track": "0116_goodies",
+      "condition": "room",
+      "arm": "off",
+      "strength": 0.0,
+      "peak": 0.10376,
+      "floor": 0.048109025,
+      "ratio": 0.46365675597532763,
+      "beats": 217
+    },
+    {
+      "track": "0116_goodies",
+      "condition": "room",
+      "arm": "shipped",
+      "strength": 0.5,
+      "peak": 0.0723773,
+      "floor": 0.03442125,
+      "ratio": 0.4755807414755731,
+      "beats": 217
+    },
+    {
+      "track": "0116_goodies",
+      "condition": "room",
+      "arm": "full",
+      "strength": 1.0,
+      "peak": 0.0486827,
+      "floor": 0.02301985,
+      "ratio": 0.47285483344185925,
+      "beats": 217
+    },
+    {
+      "track": "0132_iceicebaby",
+      "condition": "clean",
+      "arm": "off",
+      "strength": 0.0,
+      "peak": 0.831169,
+      "floor": 0.113551,
+      "ratio": 0.13661601912487112,
+      "beats": 280
+    },
+    {
+      "track": "0132_iceicebaby",
+      "condition": "clean",
+      "arm": "shipped",
+      "strength": 0.5,
+      "peak": 0.5433675,
+      "floor": 0.0715812,
+      "ratio": 0.131736255848942,
+      "beats": 280
+    },
+    {
+      "track": "0132_iceicebaby",
+      "condition": "clean",
+      "arm": "full",
+      "strength": 1.0,
+      "peak": 0.2032445,
+      "floor": 0.0231015,
+      "ratio": 0.11366359237273334,
+      "beats": 280
+    },
+    {
+      "track": "0132_iceicebaby",
+      "condition": "room",
+      "arm": "off",
+      "strength": 0.0,
+      "peak": 0.197797,
+      "floor": 0.0510119,
+      "ratio": 0.2579002714904675,
+      "beats": 280
+    },
+    {
+      "track": "0132_iceicebaby",
+      "condition": "room",
+      "arm": "shipped",
+      "strength": 0.5,
+      "peak": 0.139808,
+      "floor": 0.0390381,
+      "ratio": 0.2792265106431678,
+      "beats": 280
+    },
+    {
+      "track": "0132_iceicebaby",
+      "condition": "room",
+      "arm": "full",
+      "strength": 1.0,
+      "peak": 0.08630355,
+      "floor": 0.0295381,
+      "ratio": 0.34225822692114055,
+      "beats": 280
+    },
+    {
+      "track": "0466_onthedarkside",
+      "condition": "clean",
+      "arm": "off",
+      "strength": 0.0,
+      "peak": 0.298772,
+      "floor": 0.0738262,
+      "ratio": 0.24709879105137028,
+      "beats": 431
+    },
+    {
+      "track": "0466_onthedarkside",
+      "condition": "clean",
+      "arm": "shipped",
+      "strength": 0.5,
+      "peak": 0.21351,
+      "floor": 0.055204550000000005,
+      "ratio": 0.25855721043510843,
+      "beats": 431
+    },
+    {
+      "track": "0466_onthedarkside",
+      "condition": "clean",
+      "arm": "full",
+      "strength": 1.0,
+      "peak": 0.0964274,
+      "floor": 0.0251946,
+      "ratio": 0.2612805074076456,
+      "beats": 431
+    },
+    {
+      "track": "0466_onthedarkside",
+      "condition": "room",
+      "arm": "off",
+      "strength": 0.0,
+      "peak": 0.108086,
+      "floor": 0.0450329,
+      "ratio": 0.4166395277834317,
+      "beats": 431
+    },
+    {
+      "track": "0466_onthedarkside",
+      "condition": "room",
+      "arm": "shipped",
+      "strength": 0.5,
+      "peak": 0.0828557,
+      "floor": 0.0366207,
+      "ratio": 0.4419816620944606,
+      "beats": 431
+    },
+    {
+      "track": "0466_onthedarkside",
+      "condition": "room",
+      "arm": "full",
+      "strength": 1.0,
+      "peak": 0.059876,
+      "floor": 0.029343025000000002,
+      "ratio": 0.4900632139755495,
+      "beats": 431
+    },
+    {
+      "track": "0707_halfwaygone",
+      "condition": "clean",
+      "arm": "off",
+      "strength": 0.0,
+      "peak": 0.3654665,
+      "floor": 0.0908284,
+      "ratio": 0.24852729319923986,
+      "beats": 382
+    },
+    {
+      "track": "0707_halfwaygone",
+      "condition": "clean",
+      "arm": "shipped",
+      "strength": 0.5,
+      "peak": 0.24866100000000002,
+      "floor": 0.0657389,
+      "ratio": 0.2643715741511536,
+      "beats": 382
+    },
+    {
+      "track": "0707_halfwaygone",
+      "condition": "clean",
+      "arm": "full",
+      "strength": 1.0,
+      "peak": 0.1143965,
+      "floor": 0.0311544,
+      "ratio": 0.2723370033174092,
+      "beats": 382
+    },
+    {
+      "track": "0707_halfwaygone",
+      "condition": "room",
+      "arm": "off",
+      "strength": 0.0,
+      "peak": 0.0959729,
+      "floor": 0.0371711,
+      "ratio": 0.38730829223666263,
+      "beats": 382
+    },
+    {
+      "track": "0707_halfwaygone",
+      "condition": "room",
+      "arm": "shipped",
+      "strength": 0.5,
+      "peak": 0.079969,
+      "floor": 0.0340399,
+      "ratio": 0.42566369468168913,
+      "beats": 382
+    },
+    {
+      "track": "0707_halfwaygone",
+      "condition": "room",
+      "arm": "full",
+      "strength": 1.0,
+      "peak": 0.06931195,
+      "floor": 0.0324295,
+      "ratio": 0.4678774727878815,
+      "beats": 382
+    },
+    {
+      "track": "0837_nottonight",
+      "condition": "clean",
+      "arm": "off",
+      "strength": 0.0,
+      "peak": 0.907823,
+      "floor": 0.0624974,
+      "ratio": 0.06884315554904424,
+      "beats": 213
+    },
+    {
+      "track": "0837_nottonight",
+      "condition": "clean",
+      "arm": "shipped",
+      "strength": 0.5,
+      "peak": 0.559702,
+      "floor": 0.0388135,
+      "ratio": 0.06934672379230376,
+      "beats": 213
+    },
+    {
+      "track": "0837_nottonight",
+      "condition": "clean",
+      "arm": "full",
+      "strength": 1.0,
+      "peak": 0.213871,
+      "floor": 0.013165199999999998,
+      "ratio": 0.06155673279687287,
+      "beats": 213
+    },
+    {
+      "track": "0837_nottonight",
+      "condition": "room",
+      "arm": "off",
+      "strength": 0.0,
+      "peak": 0.205976,
+      "floor": 0.036464575,
+      "ratio": 0.17703312521847206,
+      "beats": 213
+    },
+    {
+      "track": "0837_nottonight",
+      "condition": "room",
+      "arm": "shipped",
+      "strength": 0.5,
+      "peak": 0.146785,
+      "floor": 0.0280311,
+      "ratio": 0.1909670606669619,
+      "beats": 213
+    },
+    {
+      "track": "0837_nottonight",
+      "condition": "room",
+      "arm": "full",
+      "strength": 1.0,
+      "peak": 0.0991458,
+      "floor": 0.022187525,
+      "ratio": 0.22378683716304673,
+      "beats": 213
+    }
+  ],
+  "summary": {
+    "clean/off": {
+      "peak": 0.5462061,
+      "floor": 0.084006415,
+      "ratio": 0.18861795172389226
+    },
+    "clean/shipped": {
+      "peak": 0.35308510000000004,
+      "floor": 0.056232590000000006,
+      "ratio": 0.19458110749744853
+    },
+    "clean/full": {
+      "peak": 0.13919924,
+      "floor": 0.022016405,
+      "ratio": 0.19309623676081086
+    },
+    "room/off": {
+      "peak": 0.14231838,
+      "floor": 0.043557900000000004,
+      "ratio": 0.3405075945408723
+    },
+    "room/shipped": {
+      "peak": 0.10435900000000001,
+      "floor": 0.03443021,
+      "ratio": 0.3626839339123705
+    },
+    "room/full": {
+      "peak": 0.072664,
+      "floor": 0.027303600000000004,
+      "ratio": 0.3993681168578955
+    }
+  },
+  "verdict": {
+    "result": "negative",
+    "off_beats_shipped_tracks": 5,
+    "full_worse_than_shipped_tracks": 4,
+    "peak_loss_off_to_full": 0.4894264535613741,
+    "floor_loss_off_to_full": 0.3731653729863009,
+    "statement": "Adaptive whitening does not preserve inter-beat gaps in the room captures; disabling it produces the lowest room ratio on all five tracks."
+  }
+}
