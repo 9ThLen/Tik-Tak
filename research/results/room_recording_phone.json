@@ -78,6 +78,7 @@
         "captured_sec": 132.46689583333333
       },
       "aligned_audio": "D:\\Programs\\D\\Tik-tak\\music\\room-aligned\\0116_goodies.wav",
+      "aligned_audio_sha256": "ebea463a46c4d2a25be75570adab64cb19c1d902ae245f197d9f0ffc0246c7a9",
       "room": {
         "usable": true,
         "reasons": [],
@@ -129,6 +130,7 @@
         "captured_sec": 165.149375
       },
       "aligned_audio": "D:\\Programs\\D\\Tik-tak\\music\\room-aligned\\0466_onthedarkside.wav",
+      "aligned_audio_sha256": "1f7378047f2269d0335d2d20b41e10c2fa694ebfbbf8ab44cb56516213d3e0ce",
       "room": {
         "usable": false,
         "reasons": [
@@ -186,6 +188,7 @@
         "captured_sec": 196.16941666666668
       },
       "aligned_audio": "D:\\Programs\\D\\Tik-tak\\music\\room-aligned\\0707_halfwaygone.wav",
+      "aligned_audio_sha256": "067c314e44f453cdb9709a0c45a7c3a9cb9aa1d492c9cc55b970544e1e2eaa7f",
       "room": {
         "usable": false,
         "reasons": [
@@ -240,6 +243,7 @@
         "captured_sec": 159.04464583333333
       },
       "aligned_audio": "D:\\Programs\\D\\Tik-tak\\music\\room-aligned\\0837_nottonight.wav",
+      "aligned_audio_sha256": "1dec9a5f8b5f92bb788141a3687d5a149e717f9a6b3b7d56580630d7c60d9024",
       "room": {
         "usable": false,
         "reasons": [
@@ -378,6 +382,7 @@
         "captured_sec": 156.13670833333333
       },
       "aligned_audio": "D:\\Programs\\D\\Tik-tak\\music\\room-aligned\\0132_iceicebaby.wav",
+      "aligned_audio_sha256": "2c89945705434221aa03e2839e877c21774c54c339986e872f9ce818f6d8fa47",
       "room": {
         "usable": false,
         "reasons": [

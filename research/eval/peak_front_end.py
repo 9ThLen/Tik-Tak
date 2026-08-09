@@ -23,25 +23,26 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
-import hashlib
 import itertools
 import json
 import pathlib
 import subprocess
 import sys
+import tempfile
 
 import numpy as np
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from eval.activation_recall import matched  # noqa: E402
+from eval.activation_recall import matched, top_n_times_and_chance  # noqa: E402
 from eval.features import read as read_features  # noqa: E402
 from eval.peaks import (PeakParams, collapse, dense_signals,  # noqa: E402
                         peak_map)
-from eval.provenance import provenance  # noqa: E402
+from eval.provenance import digest, provenance  # noqa: E402
 from eval.whitening_room import WARMUP_SEC, contrast  # noqa: E402
 
 REPOSITORY = pathlib.Path(__file__).resolve().parents[2]
+ALIGNMENT_ARTIFACT = REPOSITORY / "research/results/room_recording_phone.json"
 
 TRACKS = ("0116_goodies", "0132_iceicebaby", "0466_onthedarkside",
           "0707_halfwaygone", "0837_nottonight")
@@ -70,16 +71,72 @@ def audio_path(root: pathlib.Path, track: str, condition: str) -> pathlib.Path:
     return root / "music/room-aligned" / f"{track}.wav"
 
 
-def ensure_features(binary: pathlib.Path, audio: pathlib.Path,
-                    out: pathlib.Path) -> None:
-    if out.is_file():
-        return
+def write_features(binary: pathlib.Path, audio: pathlib.Path,
+                   out: pathlib.Path) -> None:
+    """Regenerate a dump so its producer is the binary recorded by this run."""
     out.parent.mkdir(parents=True, exist_ok=True)
-    done = subprocess.run([str(binary), str(audio), "--dump-features", str(out)],
-                          capture_output=True, text=True, encoding="utf-8",
-                          errors="replace")
-    if done.returncode != 0:
-        raise RuntimeError(f"dump_analysis failed on {audio}: {done.stderr.strip()}")
+    with tempfile.NamedTemporaryFile(
+            prefix=f".{out.name}.", suffix=".tmp", dir=out.parent,
+            delete=False) as staging:
+        staged = pathlib.Path(staging.name)
+    try:
+        done = subprocess.run(
+            [str(binary), str(audio), "--dump-features", str(staged)],
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace")
+        if done.returncode != 0:
+            raise RuntimeError(
+                f"dump_analysis failed on {audio}: {done.stderr.strip()}")
+        try:
+            read_features(staged)
+        except (OSError, ValueError) as error:
+            raise RuntimeError(
+                f"dump_analysis produced an invalid feature file for {audio}: "
+                f"{error}") from error
+        staged.replace(out)
+    finally:
+        staged.unlink(missing_ok=True)
+
+
+def alignment_offsets(
+        path: pathlib.Path,
+        room_inputs: dict[str, pathlib.Path]) -> dict[str, dict[str, float | str]]:
+    """The measured offsets already applied to ``music/room-aligned``."""
+    payload = json.loads(path.read_text("utf-8"))
+    by_track = {row["name"]: row for row in payload.get("records", [])
+                if row.get("aligned_audio")}
+    missing = [track for track in TRACKS if track not in by_track]
+    if missing:
+        raise ValueError(f"alignment artifact lacks: {', '.join(missing)}")
+    result: dict[str, dict[str, float | str]] = {}
+    for track in TRACKS:
+        actual = room_inputs[track].resolve()
+        expected_sha256 = by_track[track].get("aligned_audio_sha256")
+        actual_digest = digest(actual)
+        if not expected_sha256:
+            raise ValueError(f"alignment artifact lacks a digest for {track}")
+        if actual_digest is None:
+            raise ValueError(f"cannot hash aligned room input {actual}")
+        if actual_digest["sha256"] != expected_sha256:
+            raise ValueError(
+                f"aligned room input for {track} does not match the artifact")
+        result[track] = {
+            "offset_sec": float(by_track[track]["alignment"]["offset_sec"]),
+            "skip_sec": float(by_track[track]["alignment"].get("skip_sec", 0.0)),
+            "aligned_audio": str(actual),
+            "aligned_audio_sha256": actual_digest["sha256"],
+        }
+    return result
+
+
+def shared_reference(raw_beats: np.ndarray,
+                     recordings: list) -> tuple[np.ndarray, float, float]:
+    """Use one scorable beat population for every condition in a pair."""
+    start = max(WARMUP_SEC,
+                *(float(recording.times[0]) for recording in recordings))
+    end = min(float(recording.times[-1]) for recording in recordings)
+    shared = raw_beats[(raw_beats >= start) & (raw_beats <= end)]
+    return shared, start, end
 
 
 def signal_maxima(values: np.ndarray) -> np.ndarray:
@@ -117,24 +174,22 @@ def top_n(values: np.ndarray, times: np.ndarray, beats: np.ndarray,
     if len(candidates) == 0:
         return {"top_n": 0.0, "top_n_chance": 0.0, "candidates_per_sec": 0.0}
 
-    heights = values[candidates]
-    # A stable sort so ties in an integer-valued signal — which `count`
-    # produces by the thousand — resolve by time and not by sort internals.
-    order = np.argsort(-heights, kind="stable")[: len(beats)]
-    chosen = np.sort(times[candidates[order]])
-
-    digest = hashlib.sha256(track.encode("utf-8")).digest()
-    rng = np.random.default_rng(int.from_bytes(digest[:8], "little"))
-    chance = np.sort(rng.uniform(beats[0], beats[-1], len(beats)))
+    chosen, chance_reference = top_n_times_and_chance(
+        beats, times[candidates], values[candidates], track)
 
     span = float(times[-1] - times[0])
     return {"top_n": matched(beats, chosen) / len(beats),
-            "top_n_chance": matched(beats, chance) / len(beats),
+            "top_n_chance": matched(chance_reference, chosen) / len(beats),
             "candidates_per_sec": len(candidates) / span if span > 0 else 0.0}
 
 
 def score(values: np.ndarray, times: np.ndarray, beats: np.ndarray,
-          track: str) -> dict:
+          track: str, interval: dict | None = None) -> dict:
+    if interval is not None:
+        inside = ((times >= interval["start_sec"])
+                  & (times <= interval["end_sec"]))
+        values = values[inside]
+        times = times[inside]
     stats = contrast(values, times, beats)
     if not stats:
         return {}
@@ -162,7 +217,8 @@ def readouts(mask, heights, params: PeakParams) -> dict[str, np.ndarray]:
     return out
 
 
-def run(features: dict, beats: dict, arm: str) -> dict:
+def run(features: dict, beats: dict, arm: str,
+        scoring_intervals: dict) -> dict:
     """Every (parameters, readout) point, scored on every recording."""
     table: dict = {}
     for params in grid(causal=(arm == "causal")):
@@ -172,7 +228,8 @@ def run(features: dict, beats: dict, arm: str) -> dict:
                 mask, heights = peak_map(data.filterbank, data.difference,
                                          params)
                 for rule, values in readouts(mask, heights, params).items():
-                    stats = score(values, data.times, beats[track], track)
+                    stats = score(values, data.times, beats[track], track,
+                                  scoring_intervals[track])
                     if not stats:
                         raise RuntimeError(
                             f"unscorable: {track} {condition} {params.label()} {rule}")
@@ -183,6 +240,18 @@ def run(features: dict, beats: dict, arm: str) -> dict:
 def degradation(table: dict, key, track: str) -> float:
     return (table[(*key, track, "room")]["ratio"]
             - table[(*key, track, "clean")]["ratio"])
+
+
+def selection_record(label: str, rule: str) -> dict:
+    """Serialize both the exact sweep key and effective readout parameters."""
+    selected = next(p for p in grid("_f0_" in label) if p.label() == label)
+    if rule.startswith("novelty"):
+        selected = dataclasses.replace(
+            selected, novelty_frames=int(rule.removeprefix("novelty")))
+    return {
+        "selection_key": {"parameters": label, "readout": rule},
+        "parameters": selected.as_dict() | {"readout": rule},
+    }
 
 
 def main() -> int:
@@ -196,7 +265,10 @@ def main() -> int:
     args = parser.parse_args()
 
     root = args.data_root.resolve()
-    sources: dict[str, pathlib.Path] = {}
+    sources: dict[str, pathlib.Path] = {
+        "binary": args.binary.resolve(),
+        "room_alignment_artifact": ALIGNMENT_ARTIFACT,
+    }
     for track in TRACKS:
         sources[f"beats_{track}"] = (
             root / "annotations/harmonix/annotations/beats" / f"{track}.beats")
@@ -206,22 +278,51 @@ def main() -> int:
     if missing:
         raise FileNotFoundError("missing inputs:\n" + "\n".join(missing))
 
-    run_provenance = provenance(
-        REPOSITORY, sources, tracks=list(TRACKS), warmup_sec=WARMUP_SEC,
+    room_inputs = {track: sources[f"room_{track}"] for track in TRACKS}
+    alignment = alignment_offsets(ALIGNMENT_ARTIFACT, room_inputs)
+    provenance_extra = dict(
+        tracks=list(TRACKS), warmup_sec=WARMUP_SEC,
         band_radii=list(BAND_RADII), past_frames=list(PAST_FRAMES),
         refractory=list(REFRACTORY), merges=list(MERGES),
-        novelty_horizons=list(NOVELTY_HORIZONS))
-    if run_provenance["tree_clean"] is not True and not args.allow_dirty:
+        novelty_horizons=list(NOVELTY_HORIZONS),
+        room_alignment=alignment)
+    preflight_provenance = provenance(
+        REPOSITORY, sources, **provenance_extra)
+    if (preflight_provenance["tree_clean"] is not True
+            and not args.allow_dirty):
         raise RuntimeError(
             "refusing a provisional run: git tree is not provably clean")
 
-    features, beats = {}, {}
+    features, raw_beats = {}, {}
+    feature_sources: dict[str, pathlib.Path] = {}
     for track in TRACKS:
-        beats[track] = np.loadtxt(sources[f"beats_{track}"], usecols=0, ndmin=1)
+        raw_beats[track] = np.loadtxt(
+            sources[f"beats_{track}"], usecols=0, ndmin=1)
         for condition in CONDITIONS:
             path = feature_path(args.features_dir, track, condition)
-            ensure_features(args.binary, sources[f"{condition}_{track}"], path)
+            write_features(args.binary, sources[f"{condition}_{track}"], path)
             features[(track, condition)] = read_features(path)
+            feature_sources[f"features_{condition}_{track}"] = path
+
+    # Paired degradation must use the same annotated events in both conditions.
+    # Independent truncation gave 0116_goodies 213 clean beats and 217 room
+    # beats, so that subtraction was not paired.
+    beats, scoring_intervals = {}, {}
+    for track in TRACKS:
+        shared, start, end = shared_reference(
+            raw_beats[track], [features[(track, c)] for c in CONDITIONS])
+        if len(shared) < 8:
+            raise RuntimeError(f"unscorable common interval: {track}")
+        beats[track] = shared
+        scoring_intervals[track] = {
+            "start_sec": start, "end_sec": end, "beats": int(len(shared))}
+
+    run_provenance = provenance(
+        REPOSITORY, sources | feature_sources, **provenance_extra,
+        scoring_intervals=scoring_intervals)
+    if run_provenance["tree_clean"] is not True and not args.allow_dirty:
+        raise RuntimeError(
+            "feature generation dirtied the tree; refusing a provisional run")
 
     # The control, which does not depend on any sweep parameter.
     dense: dict = {}
@@ -230,7 +331,8 @@ def main() -> int:
             data = features[(track, condition)]
             for name, values in dense_signals(data.filterbank,
                                               data.difference).items():
-                stats = score(values, data.times, beats[track], track)
+                stats = score(values, data.times, beats[track], track,
+                              scoring_intervals[track])
                 if not stats:
                     raise RuntimeError(f"unscorable dense: {track} {condition}")
                 dense[(name, track, condition)] = stats
@@ -240,7 +342,8 @@ def main() -> int:
                 - dense[("dense_difference", track, "clean")]["ratio"])
         for track in TRACKS}
 
-    arms = {arm: run(features, beats, arm) for arm in ("causal", "symmetric")}
+    arms = {arm: run(features, beats, arm, scoring_intervals)
+            for arm in ("causal", "symmetric")}
 
     def loto(table: dict, keys: list) -> list[dict]:
         rows = []
@@ -252,8 +355,7 @@ def main() -> int:
             rows.append({
                 "held_out": held_out,
                 "selected_on": others,
-                "parameters": next(p.as_dict() for p in grid("_f0_" in label)
-                                   if p.label() == label) | {"readout": rule},
+                **selection_record(label, rule),
                 "peaks": {"clean": table[(label, rule, held_out, "clean")],
                           "room": table[(label, rule, held_out, "room")],
                           "degradation": degradation(table, best, held_out)},
@@ -339,7 +441,7 @@ def main() -> int:
     verdict = {arm: judge(arm, rows) for arm, rows in folds.items()}
 
     def flatten(table: dict) -> list[dict]:
-        return [{"parameters": label, "readout": rule, "track": track,
+        return [{**selection_record(label, rule), "track": track,
                  "condition": condition, **stats}
                 for (label, rule, track, condition), stats in sorted(table.items())]
 

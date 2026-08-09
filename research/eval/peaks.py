@@ -102,11 +102,11 @@ def local_maxima(values: np.ndarray, band_radius: int, past_frames: int,
                  future_frames: int) -> np.ndarray:
     """Cells that are the maximum of their window, one per plateau.
 
-    A contiguous run of equal values is one plateau and yields one peak: the
-    cell must be strictly greater than its immediate predecessor along each
-    axis, which is "earliest frame, then lowest band" written so it vectorises.
-    Without it a flat ridge across three bands counts three times and the
-    density rules are measuring the ridge rather than the music.
+    Equal maxima anywhere in the local neighbourhood resolve
+    lexicographically: earliest frame, then lowest band. Looking only at the
+    immediately preceding cells is insufficient when equal maxima have a dip
+    between them. The tie-break reads only earlier frames, so a causal window
+    remains causal.
     """
     if values.size == 0:
         return np.zeros(values.shape, dtype=bool)
@@ -115,11 +115,21 @@ def local_maxima(values: np.ndarray, band_radius: int, past_frames: int,
                                   band_radius)
     peak &= values > 0.0
 
-    earlier = np.ones_like(peak)
-    earlier[1:] = values[1:] > values[:-1]
-    lower = np.ones_like(peak)
-    lower[:, 1:] = values[:, 1:] > values[:, :-1]
-    return peak & earlier & lower
+    tied_earlier = np.zeros_like(peak)
+    if past_frames > 0:
+        # Shift by one so this window ends at t - 1, then span the remaining
+        # past frames and the full local band neighbourhood.
+        shifted = np.full(values.shape, -np.inf,
+                          dtype=np.result_type(values.dtype, np.float64))
+        shifted[1:] = values[:-1]
+        earlier_max = windowed_max(shifted, past_frames - 1, 0, band_radius)
+        tied_earlier = values == earlier_max
+
+    tied_lower = np.zeros_like(peak)
+    for offset in range(1, band_radius + 1):
+        tied_lower[:, offset:] |= values[:, offset:] == values[:, :-offset]
+
+    return peak & ~tied_earlier & ~tied_lower
 
 
 def apply_refractory(mask: np.ndarray, refractory_frames: int) -> np.ndarray:
@@ -149,18 +159,29 @@ def peak_map(filterbank: np.ndarray, difference: np.ndarray,
     if params.merge not in MERGE_RULES:
         raise ValueError(f"unknown merge rule {params.merge!r}")
 
-    def picked(values: np.ndarray) -> np.ndarray:
-        return apply_refractory(
-            local_maxima(values, params.band_radius, params.past_frames,
-                         params.future_frames),
-            params.refractory_frames)
+    def candidates(values: np.ndarray) -> np.ndarray:
+        return local_maxima(values, params.band_radius, params.past_frames,
+                            params.future_frames)
+
+    difference_peaks = candidates(difference)
+    filterbank_peaks = candidates(filterbank)
+    difference_heights = np.where(difference_peaks, difference, 0.0)
+    filterbank_heights = np.where(filterbank_peaks, filterbank, 0.0)
 
     if params.merge == "difference":
-        return picked(difference), difference
-    if params.merge == "union":
-        return picked(difference) | picked(filterbank), difference
-    combined = difference + filterbank
-    return picked(combined), combined
+        merged = difference_peaks
+        heights = difference_heights
+    elif params.merge == "union":
+        merged = difference_peaks | filterbank_peaks
+        heights = np.maximum(difference_heights, filterbank_heights)
+    else:
+        merged = difference_peaks | filterbank_peaks
+        heights = difference_heights + filterbank_heights
+
+    # Spend the density budget once, after the channels become one map. If it
+    # were spent separately, alternating channel events in one band could each
+    # pass their own refractory gate.
+    return apply_refractory(merged, params.refractory_frames), heights
 
 
 def collapse(mask: np.ndarray, heights: np.ndarray, rule: str,

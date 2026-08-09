@@ -78,6 +78,20 @@ def test_a_plateau_yields_one_peak():
     assert mask[2, 1]             # earliest frame, then lowest band
 
 
+def test_separated_equal_maxima_use_the_full_neighbourhood_for_ties():
+    values = np.zeros((5, 5))
+    values[1, 3] = 2.0
+    values[3, 1] = 2.0
+    mask = local_maxima(values, band_radius=2, past_frames=3, future_frames=0)
+    assert np.argwhere(mask).tolist() == [[1, 3]]
+
+    same_frame = np.zeros((1, 5))
+    same_frame[0, 0] = same_frame[0, 2] = 2.0
+    mask = local_maxima(same_frame, band_radius=2, past_frames=0,
+                        future_frames=0)
+    assert np.argwhere(mask).tolist() == [[0, 0]]
+
+
 def test_zero_and_negative_never_peak():
     values = np.zeros((10, 4))
     assert local_maxima(values, 1, 3, 0).sum() == 0
@@ -150,6 +164,42 @@ def test_the_map_is_deterministic():
     second = peak_map(filterbank, difference, params)
     assert np.array_equal(first[0], second[0])
     assert np.array_equal(first[1], second[1])
+
+
+def test_sum_picks_each_channel_before_merging():
+    """A raw channel sum can invent a peak that neither channel contains."""
+    filterbank = np.array([[10.0], [0.0], [6.0]])
+    difference = np.array([[0.0], [10.0], [6.0]])
+    params = PeakParams(band_radius=0, past_frames=2, future_frames=0,
+                        refractory_frames=0, merge="sum")
+
+    mask, heights = peak_map(filterbank, difference, params)
+
+    assert np.flatnonzero(mask[:, 0]).tolist() == [0, 1]
+    assert heights[:, 0].tolist() == [10.0, 10.0, 0.0]
+
+
+def test_union_uses_filterbank_height_for_a_filterbank_only_peak():
+    filterbank = np.array([[0.0], [7.0]])
+    difference = np.zeros_like(filterbank)
+    params = PeakParams(band_radius=0, past_frames=1, future_frames=0,
+                        refractory_frames=0, merge="union")
+
+    mask, heights = peak_map(filterbank, difference, params)
+
+    assert mask[1, 0]
+    assert collapse(mask, heights, "weighted", params).tolist() == [0.0, 7.0]
+
+
+def test_refractory_is_applied_once_after_channels_are_merged():
+    filterbank = np.array([[4.0], [0.0], [4.0], [0.0]])
+    difference = np.array([[0.0], [4.0], [0.0], [4.0]])
+    params = PeakParams(band_radius=0, past_frames=1, future_frames=0,
+                        refractory_frames=1, merge="union")
+
+    mask, _ = peak_map(filterbank, difference, params)
+
+    assert np.flatnonzero(mask[:, 0]).tolist() == [0, 2]
 
 
 def test_dense_control_is_not_a_constant():

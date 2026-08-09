@@ -107,6 +107,38 @@ def matched(reference: np.ndarray, candidates: np.ndarray) -> int:
     return hits
 
 
+def top_n_times_and_chance(reference: np.ndarray,
+                           candidate_times: np.ndarray,
+                           candidate_heights: np.ndarray,
+                           name: str) -> tuple[np.ndarray, np.ndarray]:
+    """Select the strongest N candidates and their chance reference.
+
+    ``reference`` supplies N and the span for the null. Candidate ties resolve
+    by time, so integer-valued readouts remain deterministic. Both experiments
+    that quote top-N use this helper; otherwise one can accidentally randomise
+    candidates while the other randomises references and call them the same
+    baseline.
+    """
+    reference = np.asarray(reference, dtype=np.float64)
+    candidate_times = np.asarray(candidate_times, dtype=np.float64)
+    candidate_heights = np.asarray(candidate_heights, dtype=np.float64)
+    if len(reference) == 0:
+        raise ValueError("top-N needs at least one reference beat")
+    if len(candidate_times) != len(candidate_heights):
+        raise ValueError("candidate times and heights have different lengths")
+
+    # Height descending, then time ascending. Naming the secondary key makes
+    # tie handling independent of the caller's ordering.
+    order = np.lexsort((candidate_times, -candidate_heights))[:len(reference)]
+    top_times = np.sort(candidate_times[order])
+
+    digest = hashlib.sha256(name.encode("utf-8")).digest()
+    rng = np.random.default_rng(int.from_bytes(digest[:8], "little"))
+    chance_reference = np.sort(
+        rng.uniform(reference[0], reference[-1], len(reference)))
+    return top_times, chance_reference
+
+
 def one(item: dict) -> dict | None:
     done = subprocess.run(
         [str(DEFAULT_BINARY), str(item["audio"]), "--live",
@@ -146,12 +178,8 @@ def one(item: dict) -> dict | None:
     # for no reason but the interpreter's startup. A baseline that moves when
     # nothing moved is worse than no baseline, because the drift is invisible
     # and looks like signal.
-    digest = hashlib.sha256(item["name"].encode("utf-8")).digest()
-    rng = np.random.default_rng(int.from_bytes(digest[:8], "little"))
-    chance_times = np.sort(rng.uniform(reference[0], reference[-1], len(reference)))
-
-    strongest = peaks[np.argsort(peak_heights)[::-1][: len(reference)]]
-    top_times = np.sort(times[strongest])
+    top_times, chance_times = top_n_times_and_chance(
+        reference, peak_times, peak_heights, item["name"])
 
     tracked = np.asarray(raw.get("beats", []), dtype=np.float64)
     tracked = tracked[tracked >= 5.0]
