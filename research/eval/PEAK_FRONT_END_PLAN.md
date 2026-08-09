@@ -50,7 +50,10 @@ while every room number so far came through `dump_analysis`'s decoder. Decoding
 the captures a second way would put the experiment on a different signal from
 the results it is being compared against.
 
-New flag `--dump-features <path>`, under `TIKTAK_HAVE_ML`:
+New flag `--dump-features <path>`. No build guard is needed: `src/ml/beatnet.cpp`
+is compiled into `tiktak_core`, not into the optional `tiktak_ml`, and
+`core/CMakeLists.txt` notes the asymmetry itself. An earlier draft of this plan
+said otherwise and was wrong.
 
 - construct `ml::BeatNetFeatures(rate)`;
 - feed the same odd-sized `kBlock` chunks everything else uses, so framing

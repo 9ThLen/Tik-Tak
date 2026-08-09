@@ -52,6 +52,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cstdint>
 #include <iterator>
 #include <string>
 #include <deque>
@@ -156,6 +157,80 @@ bool readSalience(const char* path, std::vector<double>& out,
     return true;
 }
 
+// The network's own input, frame by frame, as a binary file.
+//
+// Written here rather than in tools/parity/dump_beatnet.cpp, which already
+// dumps the same vector, for one reason: that tool reads raw f32, and every
+// room number this dump will be compared against came through the decoder in
+// *this* tool. Decoding the captures a second way would put the experiment on
+// a different signal from the results it is measured against.
+//
+// Binary and not CSV because 272 values at 50 frames a second is about 7 MB a
+// track as float32 and roughly five times that as text, and nothing reads it
+// by eye.
+//
+// The header is self-describing on purpose. The two halves are **two channels,
+// not one frequency axis** — `filterbank` is log10(1 + magnitude) over 136
+// log-spaced bands, `difference` is its positive frame-to-frame rise — and a
+// reader that treated the 272 as contiguous frequencies would find peaks that
+// straddle the seam and mean nothing. The counts are written separately so
+// that mistake is impossible rather than merely discouraged.
+bool writeFeatures(const char* path, const std::vector<float>& samples,
+                   double rate, std::string& error) {
+    using Features = tiktak::ml::BeatNetFeatures;
+    Features features(rate);
+
+    std::vector<double> times;
+    std::vector<float> rows;
+    // The same odd-sized blocks the analysers are fed, so framing invariance is
+    // exercised by the dump rather than assumed by it.
+    constexpr std::size_t kBlock = 4099;
+    for (std::size_t pos = 0; pos < samples.size(); pos += kBlock) {
+        const std::size_t take = std::min(kBlock, samples.size() - pos);
+        features.process(samples.data() + pos, take,
+                         [&](const float* row, std::size_t count, double time_sec) {
+                             times.push_back(time_sec);
+                             rows.insert(rows.end(), row, row + count);
+                         });
+    }
+    if (times.empty()) {
+        error = "no frames produced";
+        return false;
+    }
+
+    std::FILE* file = std::fopen(path, "wb");
+    if (!file) {
+        error = "cannot open feature file for writing";
+        return false;
+    }
+
+    const std::uint32_t header[] = {
+        0x44465454u,                                   // "TTFD", little-endian
+        1u,                                            // version
+        0x01020304u,                                   // byte order check
+        static_cast<std::uint32_t>(sizeof(float)),     // value size
+        static_cast<std::uint32_t>(times.size()),      // frames
+        static_cast<std::uint32_t>(Features::kFilters),          // filterbank
+        static_cast<std::uint32_t>(Features::kFeatures -
+                                   Features::kFilters),          // difference
+    };
+    const double scalars[] = {Features::kFrameRate, rate};
+
+    bool ok = std::fwrite(header, sizeof(std::uint32_t),
+                          std::size(header), file) == std::size(header);
+    ok = ok && std::fwrite(scalars, sizeof(double), std::size(scalars), file) ==
+                   std::size(scalars);
+    // Times and values in separate blocks rather than interleaved: a reader
+    // wanting only the timeline should not have to stride over 272 floats.
+    ok = ok && std::fwrite(times.data(), sizeof(double), times.size(), file) ==
+                   times.size();
+    ok = ok && std::fwrite(rows.data(), sizeof(float), rows.size(), file) ==
+                   rows.size();
+    ok = std::fclose(file) == 0 && ok;
+    if (!ok) error = "short write to feature file";
+    return ok;
+}
+
 // JSON has no way to say "not a number", and a reader that meets NaN either
 // throws or silently invents null. Analysis of silence legitimately produces
 // none of these values, so they are reported as 0 with the empty beat list
@@ -219,6 +294,7 @@ bool nonnegativeFinite(const char* text, double& value) {
 int main(int argc, char** argv) {
     std::vector<std::string> positional;
     std::string salience_path;
+    std::string features_path;
     // A beat grid supplied from outside, so that a bad grid and a bad scorer
     // can be told apart. The bar-line stage takes the beats as given, and when
     // the tracker is an octave out every bar line is wrong for a reason that
@@ -401,6 +477,14 @@ int main(int argc, char** argv) {
                 return 2;
             }
             salience_path = argv[++i];
+            continue;
+        }
+        if (std::strcmp(argv[i], "--dump-features") == 0) {
+            if (i + 1 >= argc) {
+                std::fprintf(stderr, "--dump-features needs a file\n");
+                return 2;
+            }
+            features_path = argv[++i];
             continue;
         }
         if (std::strcmp(argv[i], "--dump-odf") == 0) {
@@ -660,6 +744,17 @@ int main(int argc, char** argv) {
     // runner-up tempos are reachable. Growing the product API to expose either
     // would be paying for a research need in a header that ships; the parity
     // tools set this precedent already.
+    // Before the analysis and not instead of it: the JSON on stdout is what
+    // every existing caller reads, and a flag that silently replaced it would
+    // make one invocation mean two different things.
+    if (!features_path.empty()) {
+        std::string error;
+        if (!writeFeatures(features_path.c_str(), samples, rate, error)) {
+            std::fprintf(stderr, "--dump-features: %s\n", error.c_str());
+            return 1;
+        }
+    }
+
     tiktak::analysis::OfflineConfig config;
     config.odf.sampleRate = rate;
     // The same clamp tt_odf_config_defaults applies. Without it a file below
