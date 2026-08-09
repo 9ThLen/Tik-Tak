@@ -31,6 +31,73 @@ the 2,760 annotated recordings here as evaluation ground, leaving Harmonix,
 RWC and SMC. That is a cost of the ensemble, not merely of testing it, and it is
 the strongest argument for recording new material.
 
+## The causal teacher gate: half the advantage survives, and it does not reach the product yet
+
+`causal_teacher_gtzan.json`, answering `eval/PREREGISTERED_causal_teacher.md`.
+Forty GTZAN clips on a fixed stride, 297 prefix passes each, no failures, clean
+tree at `c77294f`. Every arm — BeatNet included, via `--dump-activation` and
+replay — enters the same `LiveTracker` through `--live-activation`, so nothing
+here is a difference of delivery.
+
+| arm | mean F | usable | share of the advantage |
+|---|---:|---:|---:|
+| `beatnet` | 0.7112 | 0.525 | 0.000 |
+| `at_most_0.1s` | 0.7841 | **0.525** | **0.533** |
+| `at_most_0.2s` | 0.8095 | 0.600 | 0.718 |
+| `at_most_0.3s` | 0.7949 | 0.600 | 0.611 |
+| `at_most_0.5s` | 0.8060 | 0.600 | 0.693 |
+| `offline` | 0.8481 | 0.725 | 1.000 |
+
+**The registered condition is met.** At the tightest bound, 53.3% of the
+teacher's advantage survives, against a registered bar of 50%. The advantage
+itself measures +0.1369, which reproduces the +0.138 obtained independently by
+`beat_this_front_end` — a consistency check across two scripts and two runs.
+
+So most of Beat This!'s edge is the model rather than the lookahead, and a
+causal student has something real to be aimed at. That was the last open gate
+before training.
+
+### The pass is narrower than the headline
+
+`usable` does not move at the tightest bound: 0.525 for BeatNet and **0.525**
+for `at_most_0.1s`, on the same forty clips. F rises by 0.073 and the product
+verdict does not change at all. Usability only appears at `at_most_0.2s` and
+even then reaches 0.600 against the unbounded 0.725.
+
+The live metronome's own lookahead is 50 ms before buffer and round trip, so
+`at_most_0.2s` is not obviously affordable. What the gate licenses is training;
+it does not promise that matching a bounded teacher would be felt by a user.
+
+Why the F gain does not convert is visible in what still fails:
+
+| arm | failing | `too_few_beats` | `wrong_beats` | `wrong_octave` |
+|---|---:|---:|---:|---:|
+| `beatnet` | 19/40 | 1.00 | 0.95 | 0.53 |
+| `at_most_0.1s` | 19/40 | 0.89 | 0.79 | 0.37 |
+| `offline` | 11/40 | 0.91 | 0.73 | 0.45 |
+
+Precision and recall both improve — p70 0.732 → 0.822, r70 0.706 → 0.769 — and
+the same nineteen clips still fail, because they were failing by margins wider
+than the gain. This is the same shape the Harmonix oracle showed from the other
+end: a better observation moves the beat metrics first and leaves the level.
+
+### What must not be read from this
+
+**The curve is not monotone and n is 40.** `at_most_0.2s` scores above
+`at_most_0.3s`, and `at_most_0.5s` sits below `at_most_0.2s`. At this sample
+size the ordering between the three loosest arms is noise; only the gap between
+the tightest arm and the ends is large enough to read.
+
+**The level is not quotable.** `beat_this.onnx` is `final0`, trained on sixteen
+sets including GTZAN, and GTZAN is BeatNet `model_1`'s held-out fold — the
+comparison is maximally unfavourable to BeatNet in both directions at once. The
+shape survives that because it is a comparison within one model; the height does
+not.
+
+**This is an upper bound on the architecture question.** It measures what a
+non-causal model *retains* under a causal constraint, not what a causal one
+would achieve.
+
 ## Agility: the sign flip is real, the knob is not a lever, and no-anchor was misread
 
 `agility_sweep_rwc.json`, answering `eval/PREREGISTERED_agility.md`. All 328 RWC

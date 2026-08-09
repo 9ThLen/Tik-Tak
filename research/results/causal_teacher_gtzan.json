@@ -1,0 +1,2327 @@
+{
+  "commit": "c77294f6de94c7964bee388903010934e08753a1",
+  "clean": true,
+  "registered_in": "research/eval/PREREGISTERED_causal_teacher.md",
+  "step_sec": 0.1,
+  "lookaheads": [
+    0.0,
+    0.1,
+    0.2,
+    0.4
+  ],
+  "sample_hz": 50.0,
+  "clips_requested": 40,
+  "clips": [
+    "blues.00000",
+    "blues.00025",
+    "blues.00050",
+    "blues.00075",
+    "classical.00000",
+    "classical.00025",
+    "classical.00050",
+    "classical.00075",
+    "country.00000",
+    "country.00025",
+    "country.00050",
+    "country.00075",
+    "disco.00000",
+    "disco.00025",
+    "disco.00050",
+    "disco.00075",
+    "hiphop.00000",
+    "hiphop.00025",
+    "hiphop.00050",
+    "hiphop.00075",
+    "jazz.00000",
+    "jazz.00025",
+    "jazz.00050",
+    "jazz.00075",
+    "metal.00000",
+    "metal.00025",
+    "metal.00050",
+    "metal.00075",
+    "pop.00000",
+    "pop.00025",
+    "pop.00050",
+    "pop.00075",
+    "reggae.00000",
+    "reggae.00025",
+    "reggae.00050",
+    "reggae.00075",
+    "rock.00000",
+    "rock.00025",
+    "rock.00050",
+    "rock.00075"
+  ],
+  "failures": [],
+  "verdict": {
+    "tightest_arm": "at_most_0.1s",
+    "advantage_offline_over_beatnet": 0.1368677095076669,
+    "survival_share": 0.5326856173691524,
+    "outcome": "passed",
+    "at_least_half_survives": true
+  },
+  "summary": {
+    "n": 40,
+    "mean_f": {
+      "beatnet": 0.7111839763320071,
+      "at_most_0.1s": 0.7840914366690005,
+      "at_most_0.2s": 0.8094535613767994,
+      "at_most_0.3s": 0.7948701645396868,
+      "at_most_0.5s": 0.8059856372877456,
+      "offline": 0.848051685839674
+    },
+    "usable_rate": {
+      "beatnet": 0.525,
+      "at_most_0.1s": 0.525,
+      "at_most_0.2s": 0.6,
+      "at_most_0.3s": 0.6,
+      "at_most_0.5s": 0.6,
+      "offline": 0.725
+    },
+    "advantage_offline_over_beatnet": 0.1368677095076669,
+    "survival_share": {
+      "beatnet": 0.0,
+      "at_most_0.1s": 0.5326856173691524,
+      "at_most_0.2s": 0.7179895491659957,
+      "at_most_0.3s": 0.6114385088251357,
+      "at_most_0.5s": 0.6926517678768344,
+      "offline": 1.0
+    }
+  },
+  "records": [
+    {
+      "name": "blues.00000",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 0.9811320754716981,
+        "p70": 0.9811320754716981,
+        "r70": 0.9811320754716981,
+        "usable": true,
+        "reasons": []
+      },
+      "offline": {
+        "f_measure": 0.9811320754716981,
+        "p70": 0.9811320754716981,
+        "r70": 0.9811320754716981,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.9811320754716981,
+        "p70": 0.9811320754716981,
+        "r70": 0.9811320754716981,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.9811320754716981,
+        "p70": 0.9811320754716981,
+        "r70": 0.9811320754716981,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.9811320754716981,
+        "p70": 0.9811320754716981,
+        "r70": 0.9811320754716981,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.9811320754716981,
+        "p70": 0.9811320754716981,
+        "r70": 0.9811320754716981,
+        "usable": true,
+        "reasons": []
+      }
+    },
+    {
+      "name": "blues.00025",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 0.3652173913043478,
+        "p70": 0.28,
+        "r70": 0.525,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "offline": {
+        "f_measure": 0.4878048780487805,
+        "p70": 0.47619047619047616,
+        "r70": 0.5,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.35294117647058826,
+        "p70": 0.3333333333333333,
+        "r70": 0.375,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.40963855421686746,
+        "p70": 0.3953488372093023,
+        "r70": 0.425,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.3544303797468355,
+        "p70": 0.358974358974359,
+        "r70": 0.35,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.39506172839506176,
+        "p70": 0.3902439024390244,
+        "r70": 0.4,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      }
+    },
+    {
+      "name": "blues.00050",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 0.9380530973451328,
+        "p70": 0.9464285714285714,
+        "r70": 0.9298245614035088,
+        "usable": true,
+        "reasons": []
+      },
+      "offline": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.9824561403508771,
+        "p70": 0.9824561403508771,
+        "r70": 0.9824561403508771,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.9824561403508771,
+        "p70": 0.9824561403508771,
+        "r70": 0.9824561403508771,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      }
+    },
+    {
+      "name": "blues.00075",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 0.8865979381443299,
+        "p70": 0.8958333333333334,
+        "r70": 0.8775510204081632,
+        "usable": true,
+        "reasons": []
+      },
+      "offline": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.8367346938775511,
+        "p70": 0.8367346938775511,
+        "r70": 0.8367346938775511,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.9183673469387755,
+        "p70": 0.9183673469387755,
+        "r70": 0.9183673469387755,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.8979591836734694,
+        "p70": 0.8979591836734694,
+        "r70": 0.8979591836734694,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.9183673469387755,
+        "p70": 0.9183673469387755,
+        "r70": 0.9183673469387755,
+        "usable": true,
+        "reasons": []
+      }
+    },
+    {
+      "name": "classical.00000",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 0.7272727272727273,
+        "p70": 0.7368421052631579,
+        "r70": 0.717948717948718,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "offline": {
+        "f_measure": 0.6923076923076923,
+        "p70": 0.6923076923076923,
+        "r70": 0.6923076923076923,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.7435897435897437,
+        "p70": 0.7435897435897436,
+        "r70": 0.7435897435897436,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.7012987012987013,
+        "p70": 0.7105263157894737,
+        "r70": 0.6923076923076923,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.4358974358974359,
+        "p70": 0.4358974358974359,
+        "r70": 0.4358974358974359,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.4358974358974359,
+        "p70": 0.4358974358974359,
+        "r70": 0.4358974358974359,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      }
+    },
+    {
+      "name": "classical.00025",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 0.6226415094339622,
+        "p70": 0.6470588235294118,
+        "r70": 0.6,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "offline": {
+        "f_measure": 0.39669421487603307,
+        "p70": 0.36363636363636365,
+        "r70": 0.43636363636363634,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.6548672566371682,
+        "p70": 0.6379310344827587,
+        "r70": 0.6727272727272727,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.5714285714285714,
+        "p70": 0.5614035087719298,
+        "r70": 0.5818181818181818,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.5882352941176472,
+        "p70": 0.546875,
+        "r70": 0.6363636363636364,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.5964912280701754,
+        "p70": 0.576271186440678,
+        "r70": 0.6181818181818182,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      }
+    },
+    {
+      "name": "classical.00050",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 0.0,
+        "p70": 0.0,
+        "r70": 0.0,
+        "usable": false,
+        "reasons": [
+          "slow_acquisition",
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "offline": {
+        "f_measure": 0.3255813953488372,
+        "p70": 0.4117647058823529,
+        "r70": 0.2692307692307692,
+        "usable": false,
+        "reasons": [
+          "slow_acquisition",
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.13793103448275862,
+        "p70": 0.6666666666666666,
+        "r70": 0.07692307692307693,
+        "usable": false,
+        "reasons": [
+          "slow_acquisition",
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.0,
+        "p70": 0.0,
+        "r70": 0.0,
+        "usable": false,
+        "reasons": [
+          "never_acquired",
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.0,
+        "p70": 0.0,
+        "r70": 0.0,
+        "usable": false,
+        "reasons": [
+          "slow_acquisition",
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.0,
+        "p70": 0.0,
+        "r70": 0.0,
+        "usable": false,
+        "reasons": [
+          "slow_acquisition",
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      }
+    },
+    {
+      "name": "classical.00075",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 0.08333333333333334,
+        "p70": 0.11538461538461539,
+        "r70": 0.06521739130434782,
+        "usable": false,
+        "reasons": [
+          "slow_acquisition",
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "offline": {
+        "f_measure": 0.10344827586206896,
+        "p70": 0.25,
+        "r70": 0.06521739130434782,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.16666666666666669,
+        "p70": 0.23076923076923078,
+        "r70": 0.13043478260869565,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.26865671641791045,
+        "p70": 0.42857142857142855,
+        "r70": 0.1956521739130435,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.1764705882352941,
+        "p70": 0.2727272727272727,
+        "r70": 0.13043478260869565,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.10909090909090909,
+        "p70": 0.3333333333333333,
+        "r70": 0.06521739130434782,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      }
+    },
+    {
+      "name": "country.00000",
+      "corpus": "gtzan",
+      "duration": 30.081632653061224,
+      "beatnet": {
+        "f_measure": 0.303030303030303,
+        "p70": 0.3333333333333333,
+        "r70": 0.2777777777777778,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "offline": {
+        "f_measure": 0.9577464788732395,
+        "p70": 0.9714285714285714,
+        "r70": 0.9444444444444444,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.8533333333333333,
+        "p70": 0.8205128205128205,
+        "r70": 0.8888888888888888,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.8888888888888888,
+        "p70": 0.8888888888888888,
+        "r70": 0.8888888888888888,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.9166666666666666,
+        "p70": 0.9166666666666666,
+        "r70": 0.9166666666666666,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.9577464788732395,
+        "p70": 0.9714285714285714,
+        "r70": 0.9444444444444444,
+        "usable": true,
+        "reasons": []
+      }
+    },
+    {
+      "name": "country.00025",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 0.6129032258064516,
+        "p70": 0.59375,
+        "r70": 0.6333333333333333,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "offline": {
+        "f_measure": 0.9666666666666667,
+        "p70": 0.9666666666666667,
+        "r70": 0.9666666666666667,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.8253968253968254,
+        "p70": 0.7878787878787878,
+        "r70": 0.8666666666666667,
+        "usable": false,
+        "reasons": [
+          "wrong_beats"
+        ]
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.761904761904762,
+        "p70": 0.7272727272727273,
+        "r70": 0.8,
+        "usable": false,
+        "reasons": [
+          "wrong_beats"
+        ]
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.8666666666666667,
+        "p70": 0.8666666666666667,
+        "r70": 0.8666666666666667,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.7741935483870969,
+        "p70": 0.75,
+        "r70": 0.8,
+        "usable": false,
+        "reasons": [
+          "wrong_beats"
+        ]
+      }
+    },
+    {
+      "name": "country.00050",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "offline": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.98,
+        "p70": 0.98,
+        "r70": 0.98,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.2s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      }
+    },
+    {
+      "name": "country.00075",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 0.8780487804878048,
+        "p70": 0.8571428571428571,
+        "r70": 0.9,
+        "usable": true,
+        "reasons": []
+      },
+      "offline": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.8607594936708861,
+        "p70": 0.8717948717948718,
+        "r70": 0.85,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.2s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      }
+    },
+    {
+      "name": "disco.00000",
+      "corpus": "gtzan",
+      "duration": 30.12154195011338,
+      "beatnet": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "offline": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 298,
+      "at_most_0.1s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.2s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      }
+    },
+    {
+      "name": "disco.00025",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "offline": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.2s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      }
+    },
+    {
+      "name": "disco.00050",
+      "corpus": "gtzan",
+      "duration": 30.00018140589569,
+      "beatnet": {
+        "f_measure": 0.945054945054945,
+        "p70": 0.9347826086956522,
+        "r70": 0.9555555555555556,
+        "usable": true,
+        "reasons": []
+      },
+      "offline": {
+        "f_measure": 0.989010989010989,
+        "p70": 0.9782608695652174,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.891304347826087,
+        "p70": 0.8723404255319149,
+        "r70": 0.9111111111111111,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.945054945054945,
+        "p70": 0.9347826086956522,
+        "r70": 0.9555555555555556,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.967032967032967,
+        "p70": 0.9565217391304348,
+        "r70": 0.9777777777777777,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.989010989010989,
+        "p70": 0.9782608695652174,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      }
+    },
+    {
+      "name": "disco.00075",
+      "corpus": "gtzan",
+      "duration": 30.00018140589569,
+      "beatnet": {
+        "f_measure": 0.9909909909909909,
+        "p70": 1.0,
+        "r70": 0.9821428571428571,
+        "usable": true,
+        "reasons": []
+      },
+      "offline": {
+        "f_measure": 0.8571428571428571,
+        "p70": 0.8571428571428571,
+        "r70": 0.8571428571428571,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.9009009009009009,
+        "p70": 0.9090909090909091,
+        "r70": 0.8928571428571429,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.972972972972973,
+        "p70": 0.9818181818181818,
+        "r70": 0.9642857142857143,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.9821428571428571,
+        "p70": 0.9821428571428571,
+        "r70": 0.9821428571428571,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.9549549549549549,
+        "p70": 0.9636363636363636,
+        "r70": 0.9464285714285714,
+        "usable": true,
+        "reasons": []
+      }
+    },
+    {
+      "name": "hiphop.00000",
+      "corpus": "gtzan",
+      "duration": 30.00018140589569,
+      "beatnet": {
+        "f_measure": 0.4137931034482759,
+        "p70": 0.4864864864864865,
+        "r70": 0.36,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "offline": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.98,
+        "p70": 0.98,
+        "r70": 0.98,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.2s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.96,
+        "p70": 0.96,
+        "r70": 0.96,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.96,
+        "p70": 0.96,
+        "r70": 0.96,
+        "usable": true,
+        "reasons": []
+      }
+    },
+    {
+      "name": "hiphop.00025",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 0.8636363636363636,
+        "p70": 0.8636363636363636,
+        "r70": 0.8636363636363636,
+        "usable": true,
+        "reasons": []
+      },
+      "offline": {
+        "f_measure": 0.9545454545454546,
+        "p70": 0.9545454545454546,
+        "r70": 0.9545454545454546,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.6292134831460675,
+        "p70": 0.6222222222222222,
+        "r70": 0.6363636363636364,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.5617977528089888,
+        "p70": 0.5555555555555556,
+        "r70": 0.5681818181818182,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.7272727272727273,
+        "p70": 0.7272727272727273,
+        "r70": 0.7272727272727273,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.7640449438202247,
+        "p70": 0.7555555555555555,
+        "r70": 0.7727272727272727,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      }
+    },
+    {
+      "name": "hiphop.00050",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 0.951219512195122,
+        "p70": 0.975,
+        "r70": 0.9285714285714286,
+        "usable": true,
+        "reasons": []
+      },
+      "offline": {
+        "f_measure": 0.951219512195122,
+        "p70": 0.975,
+        "r70": 0.9285714285714286,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.8915662650602411,
+        "p70": 0.9024390243902439,
+        "r70": 0.8809523809523809,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.9397590361445782,
+        "p70": 0.9512195121951219,
+        "r70": 0.9285714285714286,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.963855421686747,
+        "p70": 0.975609756097561,
+        "r70": 0.9523809523809523,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.9397590361445782,
+        "p70": 0.9512195121951219,
+        "r70": 0.9285714285714286,
+        "usable": true,
+        "reasons": []
+      }
+    },
+    {
+      "name": "hiphop.00075",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "offline": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.7012987012987013,
+        "p70": 0.6923076923076923,
+        "r70": 0.7105263157894737,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.8974358974358975,
+        "p70": 0.875,
+        "r70": 0.9210526315789473,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.9736842105263158,
+        "p70": 0.9736842105263158,
+        "r70": 0.9736842105263158,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.7407407407407408,
+        "p70": 0.6976744186046512,
+        "r70": 0.7894736842105263,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      }
+    },
+    {
+      "name": "jazz.00000",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 0.18556701030927836,
+        "p70": 0.20454545454545456,
+        "r70": 0.16981132075471697,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "offline": {
+        "f_measure": 0.3333333333333333,
+        "p70": 0.29850746268656714,
+        "r70": 0.37735849056603776,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.32608695652173914,
+        "p70": 0.38461538461538464,
+        "r70": 0.2830188679245283,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.3738317757009346,
+        "p70": 0.37037037037037035,
+        "r70": 0.37735849056603776,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.4565217391304348,
+        "p70": 0.5384615384615384,
+        "r70": 0.39622641509433965,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.49572649572649563,
+        "p70": 0.453125,
+        "r70": 0.5471698113207547,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      }
+    },
+    {
+      "name": "jazz.00025",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 0.6344827586206897,
+        "p70": 0.7666666666666667,
+        "r70": 0.5411764705882353,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "offline": {
+        "f_measure": 0.9182389937106918,
+        "p70": 0.9864864864864865,
+        "r70": 0.8588235294117647,
+        "usable": false,
+        "reasons": [
+          "wrong_octave"
+        ]
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.89171974522293,
+        "p70": 0.9722222222222222,
+        "r70": 0.8235294117647058,
+        "usable": false,
+        "reasons": [
+          "wrong_octave"
+        ]
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.8758169934640523,
+        "p70": 0.9852941176470589,
+        "r70": 0.788235294117647,
+        "usable": false,
+        "reasons": [
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.7894736842105264,
+        "p70": 0.8955223880597015,
+        "r70": 0.7058823529411765,
+        "usable": false,
+        "reasons": [
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.9182389937106918,
+        "p70": 0.9864864864864865,
+        "r70": 0.8588235294117647,
+        "usable": false,
+        "reasons": [
+          "wrong_octave"
+        ]
+      }
+    },
+    {
+      "name": "jazz.00050",
+      "corpus": "gtzan",
+      "duration": 30.351020408163265,
+      "beatnet": {
+        "f_measure": 0.8636363636363636,
+        "p70": 0.8636363636363636,
+        "r70": 0.8636363636363636,
+        "usable": true,
+        "reasons": []
+      },
+      "offline": {
+        "f_measure": 0.9242424242424242,
+        "p70": 0.9242424242424242,
+        "r70": 0.9242424242424242,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 300,
+      "at_most_0.1s": {
+        "f_measure": 0.9160305343511451,
+        "p70": 0.9230769230769231,
+        "r70": 0.9090909090909091,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.8787878787878788,
+        "p70": 0.8787878787878788,
+        "r70": 0.8787878787878788,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.8549618320610687,
+        "p70": 0.8615384615384616,
+        "r70": 0.8484848484848485,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.8120300751879699,
+        "p70": 0.8059701492537313,
+        "r70": 0.8181818181818182,
+        "usable": true,
+        "reasons": []
+      }
+    },
+    {
+      "name": "jazz.00075",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 0.4153846153846154,
+        "p70": 0.627906976744186,
+        "r70": 0.3103448275862069,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "offline": {
+        "f_measure": 0.4580152671755725,
+        "p70": 0.6818181818181818,
+        "r70": 0.3448275862068966,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.5538461538461538,
+        "p70": 0.8372093023255814,
+        "r70": 0.41379310344827586,
+        "usable": false,
+        "reasons": [
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.6187050359712231,
+        "p70": 0.8269230769230769,
+        "r70": 0.4942528735632184,
+        "usable": false,
+        "reasons": [
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.5343511450381679,
+        "p70": 0.7954545454545454,
+        "r70": 0.40229885057471265,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.5362318840579711,
+        "p70": 0.7254901960784313,
+        "r70": 0.42528735632183906,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      }
+    },
+    {
+      "name": "metal.00000",
+      "corpus": "gtzan",
+      "duration": 30.00018140589569,
+      "beatnet": {
+        "f_measure": 0.717948717948718,
+        "p70": 0.717948717948718,
+        "r70": 0.717948717948718,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "offline": {
+        "f_measure": 0.9113924050632911,
+        "p70": 0.9,
+        "r70": 0.9230769230769231,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.7012987012987013,
+        "p70": 0.7105263157894737,
+        "r70": 0.6923076923076923,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.8974358974358975,
+        "p70": 0.8974358974358975,
+        "r70": 0.8974358974358975,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.7692307692307693,
+        "p70": 0.7692307692307693,
+        "r70": 0.7692307692307693,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.9230769230769231,
+        "p70": 0.9230769230769231,
+        "r70": 0.9230769230769231,
+        "usable": true,
+        "reasons": []
+      }
+    },
+    {
+      "name": "metal.00025",
+      "corpus": "gtzan",
+      "duration": 30.00018140589569,
+      "beatnet": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "offline": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.9824561403508771,
+        "p70": 1.0,
+        "r70": 0.9655172413793104,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.2s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      }
+    },
+    {
+      "name": "metal.00050",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 0.35460992907801414,
+        "p70": 0.5319148936170213,
+        "r70": 0.26595744680851063,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "offline": {
+        "f_measure": 0.5945945945945945,
+        "p70": 0.8148148148148148,
+        "r70": 0.46808510638297873,
+        "usable": false,
+        "reasons": [
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.5695364238410595,
+        "p70": 0.7543859649122807,
+        "r70": 0.4574468085106383,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.4999999999999999,
+        "p70": 0.6551724137931034,
+        "r70": 0.40425531914893614,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.5034013605442177,
+        "p70": 0.6981132075471698,
+        "r70": 0.39361702127659576,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.49673202614379086,
+        "p70": 0.6440677966101694,
+        "r70": 0.40425531914893614,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      }
+    },
+    {
+      "name": "metal.00075",
+      "corpus": "gtzan",
+      "duration": 30.00018140589569,
+      "beatnet": {
+        "f_measure": 0.9574468085106385,
+        "p70": 0.9574468085106383,
+        "r70": 0.9574468085106383,
+        "usable": true,
+        "reasons": []
+      },
+      "offline": {
+        "f_measure": 0.9894736842105264,
+        "p70": 0.9791666666666666,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.2s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      }
+    },
+    {
+      "name": "pop.00000",
+      "corpus": "gtzan",
+      "duration": 30.00018140589569,
+      "beatnet": {
+        "f_measure": 0.4666666666666667,
+        "p70": 0.4375,
+        "r70": 0.5,
+        "usable": false,
+        "reasons": [
+          "slow_acquisition",
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "offline": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.6909090909090909,
+        "p70": 0.7037037037037037,
+        "r70": 0.6785714285714286,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.7547169811320756,
+        "p70": 0.8,
+        "r70": 0.7142857142857143,
+        "usable": false,
+        "reasons": [
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.8620689655172413,
+        "p70": 0.8333333333333334,
+        "r70": 0.8928571428571429,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.7719298245614034,
+        "p70": 0.7586206896551724,
+        "r70": 0.7857142857142857,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      }
+    },
+    {
+      "name": "pop.00025",
+      "corpus": "gtzan",
+      "duration": 30.00018140589569,
+      "beatnet": {
+        "f_measure": 0.9523809523809523,
+        "p70": 0.967741935483871,
+        "r70": 0.9375,
+        "usable": true,
+        "reasons": []
+      },
+      "offline": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.78125,
+        "p70": 0.78125,
+        "r70": 0.78125,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.2s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.9538461538461539,
+        "p70": 0.9393939393939394,
+        "r70": 0.96875,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.9841269841269841,
+        "p70": 1.0,
+        "r70": 0.96875,
+        "usable": true,
+        "reasons": []
+      }
+    },
+    {
+      "name": "pop.00050",
+      "corpus": "gtzan",
+      "duration": 30.00018140589569,
+      "beatnet": {
+        "f_measure": 0.48717948717948717,
+        "p70": 0.3877551020408163,
+        "r70": 0.6551724137931034,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "offline": {
+        "f_measure": 0.9473684210526316,
+        "p70": 0.9642857142857143,
+        "r70": 0.9310344827586207,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.8620689655172413,
+        "p70": 0.8620689655172413,
+        "r70": 0.8620689655172413,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.7586206896551724,
+        "p70": 0.7586206896551724,
+        "r70": 0.7586206896551724,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.6382978723404256,
+        "p70": 0.8333333333333334,
+        "r70": 0.5172413793103449,
+        "usable": false,
+        "reasons": [
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.896551724137931,
+        "p70": 0.896551724137931,
+        "r70": 0.896551724137931,
+        "usable": true,
+        "reasons": []
+      }
+    },
+    {
+      "name": "pop.00075",
+      "corpus": "gtzan",
+      "duration": 30.00018140589569,
+      "beatnet": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "offline": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.2s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.8974358974358975,
+        "p70": 0.8974358974358975,
+        "r70": 0.8974358974358975,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      }
+    },
+    {
+      "name": "reggae.00000",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 0.8932038834951457,
+        "p70": 0.8846153846153846,
+        "r70": 0.9019607843137255,
+        "usable": true,
+        "reasons": []
+      },
+      "offline": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.2s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      }
+    },
+    {
+      "name": "reggae.00025",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 0.6415094339622641,
+        "p70": 0.5964912280701754,
+        "r70": 0.6938775510204082,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "offline": {
+        "f_measure": 0.98989898989899,
+        "p70": 0.98,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.9292929292929293,
+        "p70": 0.92,
+        "r70": 0.9387755102040817,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.9696969696969697,
+        "p70": 0.96,
+        "r70": 0.9795918367346939,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.98989898989899,
+        "p70": 0.98,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.98989898989899,
+        "p70": 0.98,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      }
+    },
+    {
+      "name": "reggae.00050",
+      "corpus": "gtzan",
+      "duration": 30.00018140589569,
+      "beatnet": {
+        "f_measure": 0.6666666666666666,
+        "p70": 1.0,
+        "r70": 0.5,
+        "usable": false,
+        "reasons": [
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "offline": {
+        "f_measure": 0.6379310344827586,
+        "p70": 0.9736842105263158,
+        "r70": 0.47435897435897434,
+        "usable": false,
+        "reasons": [
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.6495726495726496,
+        "p70": 0.9743589743589743,
+        "r70": 0.48717948717948717,
+        "usable": false,
+        "reasons": [
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.6324786324786326,
+        "p70": 0.9487179487179487,
+        "r70": 0.47435897435897434,
+        "usable": false,
+        "reasons": [
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.6666666666666666,
+        "p70": 1.0,
+        "r70": 0.5,
+        "usable": false,
+        "reasons": [
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.6153846153846155,
+        "p70": 0.9230769230769231,
+        "r70": 0.46153846153846156,
+        "usable": false,
+        "reasons": [
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      }
+    },
+    {
+      "name": "reggae.00075",
+      "corpus": "gtzan",
+      "duration": 30.00018140589569,
+      "beatnet": {
+        "f_measure": 0.9256198347107439,
+        "p70": 0.9180327868852459,
+        "r70": 0.9333333333333333,
+        "usable": true,
+        "reasons": []
+      },
+      "offline": {
+        "f_measure": 0.9917355371900827,
+        "p70": 0.9836065573770492,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.7102803738317757,
+        "p70": 0.8085106382978723,
+        "r70": 0.6333333333333333,
+        "usable": false,
+        "reasons": [
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.7547169811320754,
+        "p70": 0.8695652173913043,
+        "r70": 0.6666666666666666,
+        "usable": false,
+        "reasons": [
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.6538461538461539,
+        "p70": 0.7727272727272727,
+        "r70": 0.5666666666666667,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.7339449541284403,
+        "p70": 0.8163265306122449,
+        "r70": 0.6666666666666666,
+        "usable": false,
+        "reasons": [
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      }
+    },
+    {
+      "name": "rock.00000",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 0.5052631578947367,
+        "p70": 0.5454545454545454,
+        "r70": 0.47058823529411764,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "offline": {
+        "f_measure": 0.8039215686274509,
+        "p70": 0.803921568627451,
+        "r70": 0.803921568627451,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.6990291262135924,
+        "p70": 0.6923076923076923,
+        "r70": 0.7058823529411765,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.8039215686274509,
+        "p70": 0.803921568627451,
+        "r70": 0.803921568627451,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.792079207920792,
+        "p70": 0.8,
+        "r70": 0.7843137254901961,
+        "usable": false,
+        "reasons": [
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.8235294117647058,
+        "p70": 0.8235294117647058,
+        "r70": 0.8235294117647058,
+        "usable": true,
+        "reasons": []
+      }
+    },
+    {
+      "name": "rock.00025",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 0.21686746987951808,
+        "p70": 0.225,
+        "r70": 0.20930232558139536,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "offline": {
+        "f_measure": 0.7586206896551724,
+        "p70": 0.75,
+        "r70": 0.7674418604651163,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 0.7126436781609196,
+        "p70": 0.7045454545454546,
+        "r70": 0.7209302325581395,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.2s": {
+        "f_measure": 0.7586206896551724,
+        "p70": 0.75,
+        "r70": 0.7674418604651163,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.3s": {
+        "f_measure": 0.6588235294117646,
+        "p70": 0.6666666666666666,
+        "r70": 0.6511627906976745,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.735632183908046,
+        "p70": 0.7272727272727273,
+        "r70": 0.7441860465116279,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats"
+        ]
+      }
+    },
+    {
+      "name": "rock.00050",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "offline": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.2s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      }
+    },
+    {
+      "name": "rock.00075",
+      "corpus": "gtzan",
+      "duration": 30.013333333333332,
+      "beatnet": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "offline": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "passes": 297,
+      "at_most_0.1s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.2s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.3s": {
+        "f_measure": 1.0,
+        "p70": 1.0,
+        "r70": 1.0,
+        "usable": true,
+        "reasons": []
+      },
+      "at_most_0.5s": {
+        "f_measure": 0.98989898989899,
+        "p70": 1.0,
+        "r70": 0.98,
+        "usable": true,
+        "reasons": []
+      }
+    }
+  ]
+}
