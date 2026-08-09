@@ -31,6 +31,73 @@ the 2,760 annotated recordings here as evaluation ground, leaving Harmonix,
 RWC and SMC. That is a cost of the ensemble, not merely of testing it, and it is
 the strongest argument for recording new material.
 
+## On full-length pop the front end is nearly the whole problem
+
+`oracle_usable_harmonix.json`, the other half of the table `oracle_usable_rwc.json`
+started. All 581 aligned Harmonix recordings, no failures, clean tree at
+`9b20dd5`. The script is byte-identical to the one that produced the RWC run —
+`git diff 82705c6 9b20dd5` over `oracle_usable.py`, `oracle_activation.py` and
+`live_corpus_benchmark.py` is empty — so the two are directly comparable.
+
+| corpus | n | real | oracle | oracle, level forgiven |
+|---|---:|---:|---:|---:|
+| **Harmonix** | 581 | 0.365 | **0.952** | 0.988 |
+| RWC-Pop | 100 | 0.440 | 0.810 | 0.970 |
+| RWC royalty-free | 15 | 0.333 | 0.867 | 0.933 |
+| RWC-Genre | 102 | 0.137 | 0.569 | 0.735 |
+| RWC-Jazz | 50 | 0.100 | 0.520 | 0.700 |
+| RWC-Classical | 61 | 0.000 | 0.033 | 0.164 |
+| RWC, all | 328 | 0.207 | 0.549 | 0.704 |
+
+**A perfect observation takes Harmonix from 36.5% usable to 95.2%.** That is the
+largest figure anywhere in this repository, and it is on the corpus that looks
+most like the product's likely material: full-length popular music rather than
+thirty-second excerpts.
+
+### What the observation fixes, and what it does not
+
+| | real | oracle |
+|---|---:|---:|
+| p70 | 0.798 | 0.973 |
+| r70 | 0.807 | 0.993 |
+| recordings failing | 369 | **28** |
+| of those, `wrong_beats` | 52.6% | **absent** |
+| of those, `too_few_beats` | 55.8% | 17.9% |
+| of those, `wrong_octave` | 85.6% | 96.4% |
+
+Precision failures do not merely shrink, they **disappear**: not one recording
+fails on `wrong_beats` under the oracle. Recall failures fall from 55.8% of
+failures to 17.9%. What is left is the metrical level, and almost nothing else:
+
+    21  wrong_octave alone
+     5  too_few_beats + wrong_octave
+     1  slow_acquisition + wrong_octave
+     1  slow_acquisition
+
+**21 of 581 recordings — 3.6% — fail on the level and on nothing else.**
+
+### This does not contradict "recall is the dominant survivor"
+
+The octave-ceiling section found `too_few_beats` in 84.8% of Harmonix's
+surviving failures and concluded recall was the binding constraint. Both hold,
+because they answer different questions. Forgiving the *level* while keeping the
+*real* observation leaves recall broken. Fixing the *observation* fixes recall
+and leaves the level. The lever is the front end; the residue is the octave.
+
+### Two things a reader must carry with these numbers
+
+**They are sampled at 50 Hz.** `oracle_usable.py` passes `--live-sample-hz 50`,
+so the real arm reads 0.365 — which is the 36.49% the acquisition section
+measured at 50 Hz, not the 30.98% the 1 Hz baselines report. The octave-ceiling
+table above (31.0% → 51.3%) is a 1 Hz table and must not be differenced against
+this one.
+
+**The oracle bump is equal-height pulses on every beat**, so it removes the
+amplitude difference that tells a level from its double. Some of that 3.6%
+residual is the instrument rather than the tracker, exactly as the RWC section
+records. The accented-oracle control it asked for is now worth more, not less:
+it is the only way to learn whether the last 3.6% is real.
+
 ## A second documented negative: repaired sparse peak front end
 
 `peak_front_end.json`, produced by `eval.peak_front_end` at clean commit
