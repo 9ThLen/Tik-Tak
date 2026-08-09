@@ -31,6 +31,72 @@ the 2,760 annotated recordings here as evaluation ground, leaving Harmonix,
 RWC and SMC. That is a cost of the ensemble, not merely of testing it, and it is
 the strongest argument for recording new material.
 
+## A second documented negative: sparse peaks empty the gaps by losing the beats
+
+`peak_front_end.json`, from `eval.peak_front_end`, answering
+`eval/PEAK_FRONT_END_PLAN.md`. Same five matched clean/room pairs. The peak map
+runs over the network's own input — 136 log-filterbank bands and their positive
+rise, dumped through `--dump-features` — with a trailing window, a per-band
+refractory cap, and no normalisation anywhere.
+
+Parameters were chosen leave-one-track-out: each recording's number comes from
+a sweep fitted on the other four.
+
+**Conditions 1 and 2 pass. Condition 3 fails, and by a wide margin.**
+
+| held out | peaks | dense | peaks top-N | dense top-N | chance |
+|---|---:|---:|---:|---:|---:|
+| `0116_goodies` | 0.0833 | 0.1443 | **0.138** | 0.184 | **0.207** |
+| `0132_iceicebaby` | 0.0833 | 0.0624 | 0.382 | 0.611 | 0.304 |
+| `0466_onthedarkside` | 0.0333 | 0.0928 | 0.476 | 0.527 | 0.343 |
+| `0707_halfwaygone` | **0.0000** | 0.1408 | 0.356 | 0.429 | 0.238 |
+| `0837_nottonight` | **0.0000** | 0.0834 | 0.282 | 0.559 | 0.174 |
+| **mean** | **0.0400** | 0.1047 | **0.327** | **0.462** | |
+
+The first two columns are the Shazam intuition working: the space between beats
+really does stay relatively emptier under a peak map, on four recordings of
+five, at less than two thirds of the control's degradation. The last three are
+the reason that is not a result. **The peak signal is worse than the plain
+per-frame mean it replaced at finding beats on every recording**, and on
+`0116_goodies` it is below its own shuffled baseline — worse than guessing.
+
+A representation that empties the gaps by discarding the beats is not progress,
+and the second metric is the only reason that is visible. The plan required it
+for exactly this case.
+
+### The null holds under all three collapse rules
+
+Selecting and judging each family on its own, which the registered null
+demands:
+
+| family | improved | degradation | top-N vs dense 0.462 | passes |
+|---|---:|---:|---:|---|
+| `count` | 1/5 | 0.1260 | 0.431 | no — fails 1 and 2 as well |
+| `weighted` | 5/5 | 0.0601 | 0.388 | no |
+| `novelty` | 4/5 | 0.0400 | 0.327 | no |
+
+Every family is below the control on top-N, and every family has a recording
+below its own chance baseline. `symmetric` — the arm that may read the future
+and cannot pass whatever it scores — is no better: 0.0483.
+
+### A defect in the measurement, recorded rather than left to be rediscovered
+
+**Two folds reached exactly 0.0000 degradation, and it means the opposite of
+what it looks like.** On `0707_halfwaygone` the selected signal reads peak
+3.000 and floor 1.000 in the clean room and peak 3.000 and floor 1.000 in the
+live one — identical, because `count` and `novelty` are small integers and the
+median of a small integer lands on the same value in both conditions. The
+floor-to-peak ratio cannot resolve a difference there, and the selection
+objective walks straight into that: the cheapest way to score zero degradation
+is to be too coarse to measure.
+
+`weighted` is continuous and does not have this defect, which is why the
+negative does not rest on it — that family fails on top-N alone.
+
+Any successor needs a primary metric that a quantised signal cannot game, and a
+selection objective that is not the primary metric read alone. Both are for a
+new registration; this one is closed as written.
+
 ## A documented negative: adaptive whitening in the room
 
 `whitening_room.json`, produced by `eval/whitening_room.py`. Five matched
