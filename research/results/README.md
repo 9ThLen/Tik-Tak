@@ -31,63 +31,59 @@ the 2,760 annotated recordings here as evaluation ground, leaving Harmonix,
 RWC and SMC. That is a cost of the ensemble, not merely of testing it, and it is
 the strongest argument for recording new material.
 
-## WITHDRAWN: the sparse peak result of 2026-08-09
+## A second documented negative: repaired sparse peak front end
 
-`peak_front_end.json` was published here with a verdict and is **withdrawn**.
-The numbers are not reproduced in this section on purpose: they should not be
-quotable while the run that produced them is invalid. They remain in commit
-`3b2fb9c` for anyone reconstructing the history.
+`peak_front_end.json`, produced by `eval.peak_front_end` at clean commit
+`c67466d`, supersedes the withdrawn run in `3b2fb9c`. The repaired run regenerates
+all ten feature dumps, hashes the binary, audio, annotations, dumps and alignment
+artifact, and scores each clean/room pair on one shared time interval and one
+shared set of reference beats.
 
-Five defects, four of them blocking, none of which the run could have detected
-about itself:
+The peak map is built separately on the 136 filterbank bands and 136 positive
+differences. Channels merge only after picking, spend one refractory budget,
+and resolve all equal maxima by earliest frame then lowest band. Parameters are
+selected leave-one-track-out.
 
-1. **The merge rules did not keep the channels apart.** `sum` added the raw
-   filterbank and difference before picking, which is the "272 as one frequency
-   axis" mistake the dump format was shaped to prevent — in the one place it
-   was not enforced. `union` credited filterbank peaks with heights read from
-   the difference channel, and the refractory cap was spent per channel before
-   the merge rather than once after it. This moves the headline numbers and the
-   whole `weighted` family.
-2. **The chance baseline was not the one it claimed to reuse.**
-   `activation_recall.py` randomises the *reference* times and matches them
-   against the arm's real candidates, which makes the baseline depend on how
-   that arm's candidates are distributed. This run randomised the *candidates*
-   instead, so every arm received an identical number, and the sentence "below
-   its own shuffled baseline" was not established by it.
-3. **The pairing was not paired everywhere.** On `0116_goodies` the clean
-   condition scored 213 beats and the room condition 217, because the two files
-   differ slightly in length and the scorable set is clipped to each. A
-   difference of ratios taken across two different beat sets is not a paired
-   degradation, and that fold's number also entered the selection for the other
-   four.
-4. **The provenance hashed the wrong things.** The tool binary, the `.ttfd`
-   dumps and the alignment offsets were not recorded, and the dump step skips
-   any file already present — so a warm cache yields `tree_clean: true` for a
-   run whose inputs were never checked and whose `--binary` was never invoked.
-5. **The top-N candidate set ignored the warm-up.** Candidates were taken over
-   the whole signal while the beats and the chance times were confined to the
-   scorable span, so a strong peak in the first five seconds could consume part
-   of the budget and match nothing. Arm-versus-arm survives this; anything
-   compared against chance does not.
+**Conditions 1 and 2 pass. Condition 3 fails under both its strict and mean
+readings.**
 
-Two smaller ones are recorded with them: the artifact stored
-`novelty_frames: 10` beside `readout: novelty25`, and the tie-break resolved
-only contiguous plateaus, so two equal maxima separated by a dip inside one
-window could both fire.
+| held out | peaks degradation | dense degradation | peaks top-N | dense top-N | peaks chance |
+|---|---:|---:|---:|---:|---:|
+| `0116_goodies` | **-0.0417** | 0.1409 | 0.178 | 0.188 | **0.277** |
+| `0132_iceicebaby` | 0.0833 | **0.0624** | 0.386 | 0.614 | 0.221 |
+| `0466_onthedarkside` | **0.0333** | 0.0928 | 0.492 | 0.531 | 0.302 |
+| `0707_halfwaygone` | **-0.0250** | 0.1408 | 0.348 | 0.442 | 0.191 |
+| `0837_nottonight` | **-0.0143** | 0.0834 | 0.315 | 0.563 | 0.169 |
+| **mean** | **0.0071** | 0.1040 | **0.344** | 0.468 | |
 
-**On what was preregistered and what was not.** The plan's third success
-condition was ambiguous between a per-track and a mean reading, and the strict
-per-track reading was adopted *after* a smoke run had shown the two can
-disagree. That was recorded at the time and it was the conservative choice, but
-it is a disambiguation made with numbers in view and it should not be described
-as preregistered.
+Sparse peaks preserve the gaps dramatically better: four tracks improve, and
+mean degradation is under seven percent of the dense control. But the selected
+peak signal has worse beat top-N than dense on every track, and
+`0116_goodies` is below its own signal-specific shuffled baseline. Emptying the
+gaps by removing evidence of the beats is still not progress.
 
-The direction is not refuted by any of this. It is unmeasured. A successor
-needs the defects above fixed, a primary metric that a quantised signal cannot
-game — two folds reached exactly zero degradation because small-integer medians
-land identically in both rooms — and a selection objective that is not the
-primary metric read alone. That is a new registration, not a re-run of this
-one.
+### The null holds under all three collapse families
+
+Each family was selected and judged independently, as the registered null
+requires:
+
+| family | tracks improved | degradation | top-N vs dense 0.468 | result |
+|---|---:|---:|---:|---|
+| `count` | 2/5 | 0.1038 | 0.475 | fails conditions 1, 2 and strict top-N |
+| `weighted` | 5/5 | 0.0404 | 0.369 | fails top-N |
+| `novelty` | 4/5 | 0.0071 | 0.344 | fails top-N |
+
+The count mean is slightly above dense, but condition 3 binds per track and it
+also fails its own chance gate on at least one track. The symmetric upper bound
+also fails: it improves only three tracks and scores top-N 0.412 against 0.468.
+No causal pooled or family fold now has an identical clean/room ratio, so the
+negative no longer rests on the quantised-median defect seen in the withdrawn
+run.
+
+The historical caveat remains: the strict reading of condition 3 was adopted
+after a smoke run exposed an ambiguity in the wording, so it is not itself
+preregistered. That ambiguity does not decide this result because the mean
+reading fails too.
 
 ## A documented negative: adaptive whitening in the room
 
