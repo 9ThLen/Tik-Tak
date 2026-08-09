@@ -306,16 +306,20 @@ def main() -> int:
             "top_n_not_worse_and_above_chance": strict and above_chance,
             "parameters_selected_without_the_scored_track": True,
         }
+        peaks_top = float(np.mean([r["peaks"]["room"]["top_n"] for r in rows]))
+        dense_top = float(np.mean([r["dense"]["room"]["top_n"] for r in rows]))
         return {
             "tracks_improved": improved,
             "peaks_mean_degradation": peaks_mean,
             "dense_mean_degradation": dense_mean,
+            # Both readings of condition 3. The strict per-track one binds; the
+            # mean is reported beside it and never substituted for it, which is
+            # the whole point of writing the disambiguation down.
             "top_n": {
-                "peaks_mean": float(np.mean([r["peaks"]["room"]["top_n"]
-                                             for r in rows])),
-                "dense_mean": float(np.mean([r["dense"]["room"]["top_n"]
-                                             for r in rows])),
+                "peaks_mean": peaks_top,
+                "dense_mean": dense_top,
                 "strict_per_track_not_worse": strict,
+                "mean_not_worse": peaks_top >= dense_top,
                 "every_track_above_chance": above_chance,
                 "binding_reading": "strict_per_track"},
             "folds_where_the_ratio_did_not_move": sum(
@@ -328,47 +332,11 @@ def main() -> int:
                        for family, rows in per_family.items()}
                  for arm, per_family in families.items()}
 
-    verdict = {}
-    for arm, rows in folds.items():
-        improved = sum(1 for r in rows
-                       if r["peaks"]["degradation"] < r["dense"]["degradation"])
-        peaks_mean = float(np.mean([r["peaks"]["degradation"] for r in rows]))
-        dense_mean = float(np.mean([r["dense"]["degradation"] for r in rows]))
-        # The plan spelled out conditions 1 and 2 as per-track and mean
-        # respectively, and left condition 3 as "top-N is not worse than
-        # `dense`" with no qualifier. The strict per-track reading is the
-        # binding one, because an ambiguous criterion should be the
-        # conservative one; the mean reading is reported beside it rather than
-        # substituted for it.
-        #
-        # Recorded plainly because of when it was noticed: a one-point smoke
-        # run had already shown the two readings can disagree. Choosing between
-        # them silently after that would be choosing a verdict.
-        above_chance = all(r["peaks"]["room"]["top_n"]
-                           > r["peaks"]["room"]["top_n_chance"] for r in rows)
-        strict = all(r["peaks"]["room"]["top_n"] >= r["dense"]["room"]["top_n"]
-                     for r in rows)
-        peaks_top = float(np.mean([r["peaks"]["room"]["top_n"] for r in rows]))
-        dense_top = float(np.mean([r["dense"]["room"]["top_n"] for r in rows]))
-        conditions = {
-            "improved_on_at_least_four": improved >= MIN_TRACKS_IMPROVED,
-            "degradation_at_most_two_thirds": peaks_mean <= MAX_DEGRADATION_FRACTION * dense_mean,
-            "top_n_not_worse_and_above_chance": strict and above_chance,
-            "parameters_selected_without_the_scored_track": True,
-        }
-        verdict[arm] = {
-            "tracks_improved": improved,
-            "peaks_mean_degradation": peaks_mean,
-            "dense_mean_degradation": dense_mean,
-            "top_n": {"peaks_mean": peaks_top, "dense_mean": dense_top,
-                      "strict_per_track_not_worse": strict,
-                      "mean_not_worse": peaks_top >= dense_top,
-                      "every_track_above_chance": above_chance,
-                      "binding_reading": "strict_per_track"},
-            "conditions": conditions,
-            # Only the causal arm may pass, however large the symmetric one is.
-            "passes": arm == "causal" and all(conditions.values()),
-        }
+    # One judge for both, so the pooled verdict and the per-family ones
+    # cannot drift apart. They did on the first pass: loto() was shared and
+    # the scoring was not, so the pooled verdict silently lacked a field the
+    # families carried.
+    verdict = {arm: judge(arm, rows) for arm, rows in folds.items()}
 
     def flatten(table: dict) -> list[dict]:
         return [{"parameters": label, "readout": rule, "track": track,
