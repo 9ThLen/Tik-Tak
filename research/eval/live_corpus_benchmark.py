@@ -183,12 +183,26 @@ def load_reference_downbeats(path: pathlib.Path) -> np.ndarray:
     """
     with path.open(encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
-        if reader.fieldnames and "is_downbeat" in reader.fieldnames:
+        fields = reader.fieldnames or []
+        if "is_downbeat" in fields:
             return np.asarray(
                 [float(row["time_seconds"]) for row in reader
                  if row["is_downbeat"].strip() not in {"", "0"}],
                 dtype=np.float64,
             )
+        # RWC 2.0 states the bar line as a position within it rather than as a
+        # flag: `time_seconds,beat_position`, where 1 is the downbeat. Without
+        # this branch the function fell through to `load_annotation`, which
+        # rejects the header and raises -- so the docstring above claimed RWC
+        # and the reader could not read it. A caller was not misled quietly,
+        # but it could not run at all.
+        if "beat_position" in fields and "time_seconds" in fields:
+            out = []
+            for row in reader:
+                position = (row.get("beat_position") or "").strip()
+                if position and float(position) == 1.0:
+                    out.append(float(row["time_seconds"]))
+            return np.asarray(out, dtype=np.float64)
     return load_annotation(path).downbeats
 
 
