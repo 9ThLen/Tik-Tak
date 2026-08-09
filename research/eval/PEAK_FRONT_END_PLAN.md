@@ -213,6 +213,14 @@ is the single most likely way this experiment produces a false positive.
    recordings;
 2. mean degradation of `peaks` is at most two thirds of `dense`'s;
 3. top-N is not worse than `dense`, and clears its own chance baseline;
+   **disambiguated during implementation**: conditions 1 and 2 above say
+   per-track and mean explicitly and this one said neither, so the binding
+   reading is the strict per-track one — `peaks` at least `dense` on every
+   recording — because an ambiguous criterion should be the conservative one.
+   The mean reading is computed and reported beside it, never substituted for
+   it. Recorded here because of when it was noticed: a one-point smoke run had
+   already shown the two readings can disagree, and choosing between them
+   afterwards without saying so would have been choosing a verdict;
 4. the parameters producing 1–3 were selected without the track they are
    scored on.
 

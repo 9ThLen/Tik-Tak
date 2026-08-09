@@ -35,6 +35,7 @@ from eval.analysis import Estimate  # noqa: E402
 from eval.live_corpus_benchmark import _score_one, load_corpus  # noqa: E402
 from eval.octave_veto_experiment import write_activation_cache  # noqa: E402
 from eval.octave_veto_replay import run_activation  # noqa: E402
+from eval.provenance import experiment_provenance as provenance  # noqa: E402
 
 SAMPLE_HZ = 50.0
 ACTIVATION_HZ = 50.0
@@ -308,11 +309,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", type=pathlib.Path, required=True)
     args = parser.parse_args(argv)
 
-    commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
-                            text=True, cwd=repository).stdout.strip()
-    clean_tree = not subprocess.run(["git", "status", "--porcelain"],
-                                    capture_output=True, text=True,
-                                    cwd=repository).stdout.strip()
+    run_provenance = provenance(
+        repository,
+        {"manifest": args.manifest, "binary": args.binary,
+         "model": args.model, "scores": args.scores},
+    )
 
     items = {i["name"]: i for i in
              load_corpus(args.manifest, args.music, False, frozenset(args.corpora))}
@@ -338,7 +339,7 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as error:  # noqa: BLE001
             failures.append({"name": path.stem, "error": str(error)[:300]})
 
-    payload = {"commit": commit, "clean": clean_tree, "failures": failures,
+    payload = {"provenance": run_provenance, "failures": failures,
                "parity_ok": all(r["parity"]["ok"] for r in records) if records else False,
                "summary": summarise(records, ceiling) if records else {},
                "records": records}

@@ -23,11 +23,9 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import csv
-import hashlib
 import json
 import math
 import pathlib
-import platform
 import re
 import subprocess
 import sys
@@ -44,6 +42,7 @@ from eval.annotations import load_annotation
 from eval.harness import evaluate
 from eval.live_level import (OCTAVE_TOLERANCE, local_reference_bpm,
                              tempo_state)
+from eval.provenance import digest, experiment_provenance as provenance
 
 LOCK_CONFIDENCE = 0.25
 RELEASE_CONFIDENCE = 0.02
@@ -624,47 +623,25 @@ def _without_local_paths(text: str) -> str:
 # quoted without the commit, the weights and the corpus it was measured on is
 # not reproducible and not falsifiable either: any later disagreement is
 # unresolvable, because nobody can tell whether the code moved or the corpus did.
-def _digest(path: pathlib.Path) -> dict | None:
-    try:
-        data = path.read_bytes()
-    except OSError:
-        return None
-    return {"name": path.name, "bytes": len(data),
-            "sha256": hashlib.sha256(data).hexdigest()}
-
-
 def _provenance(binary: pathlib.Path, model: pathlib.Path | None,
                 items: list[dict[str, Any]], repository: pathlib.Path,
                 also_models: "tuple[pathlib.Path, ...]" = ()) -> dict:
-    def git(*command: str) -> str | None:
-        try:
-            done = subprocess.run(("git", "-C", str(repository)) + command,
-                                  capture_output=True, text=True, timeout=30)
-        except (OSError, subprocess.SubprocessError):
-            return None
-        return done.stdout.strip() if done.returncode == 0 else None
-
     corpora: Counter[str] = Counter(item["corpus"] for item in items)
     annotated: Counter[str] = Counter(
         item["corpus"] for item in items if item["annotated"])
-    return {
-        "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "commit": git("rev-parse", "HEAD"),
-        "tree_clean": git("status", "--porcelain") == "",
-        "binary": _digest(binary),
-        "model": _digest(model) if model else None,
+    return provenance(
+        repository,
+        {"binary": binary, "model": model},
         # Every checkpoint the core averaged, in the order it was given them.
         # A run that averaged three models and recorded one is a run nobody can
         # reproduce, and the difference between one and three is the whole
         # result — so this is present and empty rather than absent, so that its
         # absence in an older artifact is legible as "this predates ensembles"
         # rather than as "this used one model".
-        "also_models": [_digest(path) for path in also_models],
-        "python": platform.python_version(),
-        "platform": platform.system(),
-        "corpora": {name: {"files": corpora[name], "annotated": annotated[name]}
-                    for name in sorted(corpora)},
-    }
+        also_models=[digest(path) for path in also_models],
+        corpora={name: {"files": corpora[name], "annotated": annotated[name]}
+                 for name in sorted(corpora)},
+    )
 
 
 def _finite_stat(values: list[float], function: Any) -> float | None:

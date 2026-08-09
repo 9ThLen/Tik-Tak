@@ -337,6 +337,20 @@ def test_the_real_manifest_records_reproducible_provenance():
             assert entry["pinned"]["provenance"]["source"]
 
 
+def test_beat_this_runtime_names_and_matches_its_source_checkpoint():
+    artifacts = fetch.load(fetch.MANIFEST)["artifacts"]
+    source = artifacts["beat_this_final0"]
+    runtime = artifacts["beat_this_cpp_onnx"]
+    conversion = runtime["conversion"]
+
+    assert conversion["source_checkpoint_artifact"] == "beat_this_final0"
+    assert conversion["model_variant"] == "final0"
+    assert conversion["source_weights_sha256"] == source["pinned"]["sha256"]
+    assert conversion["exporter"]["revision"]
+    assert conversion["exporter"]["version"] == "onnx/convert_to_onnx.py"
+    assert runtime["pinned"]["provenance"]["conversion"] == conversion
+
+
 # ----------------------------------------------------------- attribution ----
 #
 # Using these models is conditional on crediting their authors, and the way

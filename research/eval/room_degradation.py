@@ -47,6 +47,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from eval.analysis import Estimate  # noqa: E402
 from eval.live_corpus_benchmark import _score_one, load_corpus  # noqa: E402
+from eval.provenance import experiment_provenance as provenance  # noqa: E402
 
 SAMPLE_HZ = 50.0
 
@@ -204,11 +205,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.limit and len(items) > args.limit:
         items = items[:: -(-len(items) // args.limit)]
 
-    commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
-                            text=True, cwd=repository).stdout.strip()
-    clean = not subprocess.run(["git", "status", "--porcelain"],
-                               capture_output=True, text=True,
-                               cwd=repository).stdout.strip()
+    run_provenance = provenance(
+        repository,
+        {"manifest": args.manifest, "binary": args.binary,
+         "model": args.model},
+    )
 
     records: list[dict] = []
     failures: list[dict] = []
@@ -226,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
             if done % 20 == 0 or done == len(items):
                 print(f"{done}/{len(items)}", file=sys.stderr, flush=True)
 
-    payload = {"commit": commit, "clean": clean, "corpora": args.corpora,
+    payload = {"provenance": run_provenance, "corpora": args.corpora,
                "conditions": [label(a, b) for a, b in CONDITIONS],
                "requested": len(items), "failures": failures,
                "summary": summarise(records) if records else {},

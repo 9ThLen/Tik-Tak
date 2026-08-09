@@ -181,10 +181,9 @@ def sample_at_beats(activation: np.ndarray, frame_times: np.ndarray,
 
 # The exported graph, not the checkpoint: see _load_beat_this for why this route
 # and not torch. This is the `final0` variant — which matters when reading any
-# number it produces, because Beat This!'s `final*` checkpoints are trained on
-# the full corpus, and that corpus includes Ballroom and GTZAN. Scoring either
-# with this is measuring recall of the training set as much as accuracy. The
-# fold checkpoints exist for the clean comparison; annotations/ballroom already
+# number it produces. Official `final*` checkpoints exclude GTZAN, so GTZAN is
+# held out; Ballroom and RWC are in their training data. The fold checkpoints
+# exist for cross-validated corpus comparisons; annotations/ballroom already
 # carries the matching 8-folds.split.
 BEAT_THIS_CHECKPOINT = (
     pathlib.Path(__file__).resolve().parents[2] / "models" / "beat_this.onnx"

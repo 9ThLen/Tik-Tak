@@ -53,7 +53,7 @@ sys.path.insert(0, str(RESEARCH))
 from eval.analysis import DEFAULT_BINARY  # noqa: E402
 from eval.live_corpus_benchmark import _score_one  # noqa: E402
 from eval.live_corpus_benchmark import load_corpus  # noqa: E402
-from eval.provenance import provenance  # noqa: E402
+from eval.provenance import experiment_provenance as provenance  # noqa: E402
 
 FPS = 50.0
 MACRO_MIN = 30

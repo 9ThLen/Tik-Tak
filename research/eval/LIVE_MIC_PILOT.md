@@ -20,15 +20,16 @@ costs 0.036 of mean F; the real captures cost 0.390. A factor of ten, and it
 does not identify which recordings are damaged either. Augmentation designed
 against the simulation is designed against the wrong distribution.
 
-**No existing corpus can settle the teacher question.** BeatNet `model_1` is
-trained on Ballroom, Beatles, Carnatic, GTZAN and Rock Corpus. Beat This!
-`final0` is trained on sixteen sets including ASAP, Ballroom, Beatles,
-Candombe, Filosax, Groove MIDI, GTZAN, GuitarSet, Hainsworth, Harmonix, HJDB,
-JAAH, RWC, SIMAC and SMC. Every corpus in this repository — GTZAN, Ballroom,
-SMC, RWC, Harmonix — is inside Beat This!'s training set. The measured +0.138
-(GTZAN, matched decoder) and +0.212 (room, five tracks) are therefore upper
-bounds carrying a train-on-test advantage at full strength, and no further run
-on existing audio can remove it.
+**No existing corpus settles the product-domain teacher question.** BeatNet
+`model_1` withholds GTZAN and is trained on Ballroom, Beatles, Carnatic and Rock
+Corpus. Beat This! `final0` also withholds GTZAN, while its training data include
+ASAP, Ballroom, Beatles, Candombe, Filosax, Groove MIDI, GuitarSet, Hainsworth,
+Harmonix, HJDB, JAAH, RWC, SIMAC and SMC. The matched `+0.138` on GTZAN is thus
+held-out for both models, not a train-on-test upper bound; it is still a
+short-excerpt, clean-domain system gap rather than an estimate of adaptation.
+The `+0.212` room result uses Harmonix, which is in Beat This!'s training data,
+and remains a directional upper bound. Existing corpora therefore cannot close
+the product-domain room question.
 
 Other routes exist in principle — an external corpus outside both training
 sets, a leave-one-corpus-out Beat This! checkpoint, independent performances of

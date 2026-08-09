@@ -48,7 +48,7 @@ sys.path.insert(0, str(RESEARCH))
 
 from eval.live_corpus_benchmark import load_corpus  # noqa: E402
 from eval.live_corpus_benchmark import load_reference_beats  # noqa: E402
-from eval.provenance import provenance  # noqa: E402
+from eval.provenance import experiment_provenance as provenance  # noqa: E402
 from eval.statistics import spearman  # noqa: E402
 
 WINDOW_SEC = 0.070

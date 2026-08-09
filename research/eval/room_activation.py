@@ -38,6 +38,7 @@ import numpy as np
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from eval.live_corpus_benchmark import load_corpus, load_reference_beats  # noqa: E402
+from eval.provenance import experiment_provenance as provenance  # noqa: E402
 
 # The window `sample_at_beats` means by "the activation at a beat", and the
 # tolerance the scorer uses. One constant, because a diagnosis that measured
@@ -327,11 +328,11 @@ def main(argv: list[str] | None = None) -> int:
                              "statistics against the F actually lost")
     args = parser.parse_args(argv)
 
-    commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
-                            text=True, cwd=repository).stdout.strip()
-    clean_tree = not subprocess.run(["git", "status", "--porcelain"],
-                                    capture_output=True, text=True,
-                                    cwd=repository).stdout.strip()
+    run_provenance = provenance(
+        repository,
+        {"manifest": args.manifest, "binary": args.binary,
+         "model": args.model, "scores": args.scores},
+    )
 
     items = {i["name"]: i for i in
              load_corpus(args.manifest, args.music, False, frozenset(args.corpora))}
@@ -353,7 +354,7 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as error:  # noqa: BLE001
             failures.append({"name": path.stem, "error": str(error)[:300]})
 
-    payload = {"commit": commit, "clean": clean_tree, "failures": failures,
+    payload = {"provenance": run_provenance, "failures": failures,
                "survivor": args.survivor,
                "verdicts": verdicts(records, args.survivor) if records else {},
                "records": records}

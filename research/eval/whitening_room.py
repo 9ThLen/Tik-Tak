@@ -28,7 +28,7 @@ import numpy as np
 REPOSITORY = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPOSITORY / "research"))
 
-from eval.provenance import provenance  # noqa: E402
+from eval.provenance import experiment_provenance as provenance  # noqa: E402
 
 TRACKS = (
     "0116_goodies",

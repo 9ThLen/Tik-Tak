@@ -40,6 +40,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from eval.analysis import Estimate  # noqa: E402
 from eval.live_corpus_benchmark import (_score_one, load_corpus,  # noqa: E402
                                         load_reference_beats)
+from eval.provenance import experiment_provenance as provenance  # noqa: E402
 
 ARMS = ("baseline", "press", "press_random", "press_delayed")
 
@@ -296,11 +297,11 @@ def main(argv: list[str] | None = None) -> int:
               file=sys.stderr)
         return 1
 
-    commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
-                            text=True, cwd=repository).stdout.strip()
-    clean = not subprocess.run(["git", "status", "--porcelain"],
-                               capture_output=True, text=True,
-                               cwd=repository).stdout.strip()
+    run_provenance = provenance(
+        repository,
+        {"manifest": args.manifest, "binary": args.binary,
+         "model": args.model},
+    )
 
     records: list[dict] = []
     failures: list[dict] = []
@@ -322,8 +323,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{done_count}/{len(items)}", file=sys.stderr, flush=True)
 
     payload = {
-        "commit": commit,
-        "clean": clean,
+        "provenance": run_provenance,
         "corpora": args.corpora,
         "notice_sec": args.notice_sec,
         "max_presses": args.max_presses,

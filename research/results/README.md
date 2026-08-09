@@ -31,6 +31,65 @@ the 2,760 annotated recordings here as evaluation ground, leaving Harmonix,
 RWC and SMC. That is a cost of the ensemble, not merely of testing it, and it is
 the strongest argument for recording new material.
 
+## A second documented negative: repaired sparse peak front end
+
+`peak_front_end.json`, produced by `eval.peak_front_end` at clean commit
+`c67466d`, supersedes the withdrawn run in `3b2fb9c`. The repaired run regenerates
+all ten feature dumps, hashes the binary, audio, annotations, dumps and alignment
+artifact, and scores each clean/room pair on one shared time interval and one
+shared set of reference beats.
+
+The peak map is built separately on the 136 filterbank bands and 136 positive
+differences. Channels merge only after picking, spend one refractory budget,
+and resolve all equal maxima by earliest frame then lowest band. Parameters are
+selected leave-one-track-out.
+
+**Under the registered ratio calculation, conditions 1 and 2 formally pass.
+Condition 3 fails under both its strict and mean readings.**
+
+| held out | peaks degradation | dense degradation | peaks top-N | dense top-N | peaks chance |
+|---|---:|---:|---:|---:|---:|
+| `0116_goodies` | **-0.0417** | 0.1409 | 0.178 | 0.188 | **0.277** |
+| `0132_iceicebaby` | 0.0833 | **0.0624** | 0.386 | 0.614 | 0.221 |
+| `0466_onthedarkside` | **0.0333** | 0.0928 | 0.492 | 0.531 | 0.302 |
+| `0707_halfwaygone` | **-0.0250** | 0.1408 | 0.348 | 0.442 | 0.191 |
+| `0837_nottonight` | **-0.0143** | 0.0834 | 0.315 | 0.563 | 0.169 |
+| **mean** | **0.0071** | 0.1040 | **0.344** | 0.468 | |
+
+Conditions 1 and 2 pass only under the registered ratio calculation; that pass
+must not be cited as evidence that the peak signal is robust. The median
+on-beat novelty falls in the room on all five tracks (`4 -> 3`, `6 -> 4`,
+`5 -> 3`, `5 -> 4`, `7 -> 5`). Three folds show negative degradation only
+because their already-quantised floor falls faster than the peak. Consequently,
+the mean `0.0071` is a readout artifact, not an estimate of near-perfect room
+robustness, and is not a quotable result. The selected peak signal also has
+worse beat top-N than dense on every track, and `0116_goodies` is below its own
+signal-specific shuffled baseline. Emptying the gaps by removing evidence of
+the beats is still not progress.
+
+### The null holds under all three collapse families
+
+Each family was selected and judged independently, as the registered null
+requires:
+
+| family | tracks improved | degradation | top-N vs dense 0.468 | result |
+|---|---:|---:|---:|---|
+| `count` | 2/5 | 0.1038 | 0.475 | fails conditions 1, 2 and strict top-N |
+| `weighted` | 5/5 | 0.0404 | 0.369 | fails top-N |
+| `novelty` | 4/5 | 0.0071 | 0.344 | fails top-N |
+
+The count mean is slightly above dense, but condition 3 binds per track and it
+also fails its own chance gate on at least one track. The symmetric upper bound
+also fails: it improves only three tracks and scores top-N 0.412 against 0.468.
+No causal pooled or family fold now has an identical clean/room ratio, so the
+negative no longer rests on the quantised-median defect seen in the withdrawn
+run.
+
+The historical caveat remains: the strict reading of condition 3 was adopted
+after a smoke run exposed an ambiguity in the wording, so it is not itself
+preregistered. That ambiguity does not decide this result because the mean
+reading fails too.
+
 ## A documented negative: adaptive whitening in the room
 
 `whitening_room.json`, produced by `eval/whitening_room.py`. Five matched
@@ -1592,10 +1651,14 @@ less.
 | BeatNet | 0.6813 | 0.48 |
 | Beat This! | **0.8196** | **0.68** |
 
-**+0.138 of F and +20 points of usable.** Registered threshold was 0.03, so
-question 2 comes back "not settled rather than closed": GTZAN is in `final0`'s
-training set, so this is an upper bound and no available corpus is certainly
-outside it. What it does establish is that the +0.102 struck from
+**+0.138 of F and +20 points of usable.** Registered threshold was 0.03. The
+registration's contamination premise was later corrected: official `final*`
+checkpoints exclude GTZAN, and BeatNet `model_1` also withholds it. This is
+therefore a held-out, matched-decoder system gap, not a train-on-test upper
+bound. It still differs in training corpora, recipe and capacity, was produced
+from a dirty tree, and used 100 recordings selected by stride, so P0 requires a
+clean full-split repeat before quoting it as the benchmark level. What it does
+already establish is that the +0.102 struck from
 [section 2](#2-what-a-perfect-front-end-would-buy-what-causality-costs-and-what-a-room-does)
 was not inflated by the decoder swap — held constant, the gap is larger, not
 smaller.
