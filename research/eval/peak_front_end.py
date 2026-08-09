@@ -242,32 +242,91 @@ def main() -> int:
 
     arms = {arm: run(features, beats, arm) for arm in ("causal", "symmetric")}
 
-    folds = {}
-    for arm, table in arms.items():
-        keys = sorted({(label, rule) for label, rule, _, _ in table})
-        fold_rows = []
+    def loto(table: dict, keys: list) -> list[dict]:
+        rows = []
         for held_out in TRACKS:
             others = [t for t in TRACKS if t != held_out]
             best = min(keys, key=lambda k: (
                 float(np.mean([degradation(table, k, t) for t in others])), k))
             label, rule = best
-            fold_rows.append({
+            rows.append({
                 "held_out": held_out,
                 "selected_on": others,
-                "parameters": next(p.as_dict() for p in grid(arm == "causal")
+                "parameters": next(p.as_dict() for p in grid("_f0_" in label)
                                    if p.label() == label) | {"readout": rule},
-                "peaks": {
-                    "clean": table[(label, rule, held_out, "clean")],
-                    "room": table[(label, rule, held_out, "room")],
-                    "degradation": degradation(table, best, held_out)},
-                "dense": {
-                    "clean": dense[("dense_difference", held_out, "clean")],
-                    "room": dense[("dense_difference", held_out, "room")],
-                    "degradation": dense_degradation[held_out]},
+                "peaks": {"clean": table[(label, rule, held_out, "clean")],
+                          "room": table[(label, rule, held_out, "room")],
+                          "degradation": degradation(table, best, held_out)},
+                "dense": {"clean": dense[("dense_difference", held_out, "clean")],
+                          "room": dense[("dense_difference", held_out, "room")],
+                          "degradation": dense_degradation[held_out]},
                 "selection_objective_on_others": float(np.mean(
                     [degradation(table, best, t) for t in others])),
+                # A ratio that did not move at all between conditions is worth
+                # flagging rather than celebrating: `count` and `novelty` are
+                # small integers, and a median of small integers can land on the
+                # same value in a clean room and a live one. Zero degradation
+                # then means the metric could not resolve the difference, not
+                # that the signal survived it.
+                "ratio_identical_across_conditions": bool(
+                    table[(label, rule, held_out, "room")]["ratio"]
+                    == table[(label, rule, held_out, "clean")]["ratio"]),
             })
-        folds[arm] = fold_rows
+        return rows
+
+    folds = {}
+    for arm, table in arms.items():
+        folds[arm] = loto(table, sorted({(label, rule)
+                                         for label, rule, _, _ in table}))
+
+    # The registered null holds only "under every one of the three collapse
+    # rules", so each family is selected and judged on its own. Not a retry:
+    # the condition demands it, and a family passing in isolation would break
+    # the null.
+    families = {}
+    for arm, table in arms.items():
+        keys = sorted({(label, rule) for label, rule, _, _ in table})
+        families[arm] = {
+            family: loto(table, [k for k in keys if k[1].startswith(family)])
+            for family in ("count", "weighted", "novelty")}
+
+    def judge(arm: str, rows: list[dict]) -> dict:
+        improved = sum(1 for r in rows
+                       if r["peaks"]["degradation"] < r["dense"]["degradation"])
+        peaks_mean = float(np.mean([r["peaks"]["degradation"] for r in rows]))
+        dense_mean = float(np.mean([r["dense"]["degradation"] for r in rows]))
+        strict = all(r["peaks"]["room"]["top_n"] >= r["dense"]["room"]["top_n"]
+                     for r in rows)
+        above_chance = all(r["peaks"]["room"]["top_n"]
+                           > r["peaks"]["room"]["top_n_chance"] for r in rows)
+        conditions = {
+            "improved_on_at_least_four": improved >= MIN_TRACKS_IMPROVED,
+            "degradation_at_most_two_thirds":
+                peaks_mean <= MAX_DEGRADATION_FRACTION * dense_mean,
+            "top_n_not_worse_and_above_chance": strict and above_chance,
+            "parameters_selected_without_the_scored_track": True,
+        }
+        return {
+            "tracks_improved": improved,
+            "peaks_mean_degradation": peaks_mean,
+            "dense_mean_degradation": dense_mean,
+            "top_n": {
+                "peaks_mean": float(np.mean([r["peaks"]["room"]["top_n"]
+                                             for r in rows])),
+                "dense_mean": float(np.mean([r["dense"]["room"]["top_n"]
+                                             for r in rows])),
+                "strict_per_track_not_worse": strict,
+                "every_track_above_chance": above_chance,
+                "binding_reading": "strict_per_track"},
+            "folds_where_the_ratio_did_not_move": sum(
+                1 for r in rows if r["ratio_identical_across_conditions"]),
+            "conditions": conditions,
+            "passes": arm == "causal" and all(conditions.values()),
+        }
+
+    by_family = {arm: {family: judge(arm, rows)
+                       for family, rows in per_family.items()}
+                 for arm, per_family in families.items()}
 
     verdict = {}
     for arm, rows in folds.items():
@@ -322,6 +381,10 @@ def main() -> int:
         "registered_in": "research/eval/PEAK_FRONT_END_PLAN.md",
         "folds": folds,
         "verdict": verdict,
+        # The null the plan registered holds only if every collapse family
+        # fails on its own, so each is selected and judged separately here.
+        "by_collapse_family": by_family,
+        "folds_by_collapse_family": families,
         "dense": [{"signal": name, "track": track, "condition": condition, **stats}
                   for (name, track, condition), stats in sorted(dense.items())],
         "sweep": {arm: flatten(table) for arm, table in arms.items()},
@@ -331,6 +394,12 @@ def main() -> int:
         print(f"{arm:10s} improved {result['tracks_improved']}/5  "
               f"peaks {result['peaks_mean_degradation']:.4f}  "
               f"dense {result['dense_mean_degradation']:.4f}  "
+              f"passes {result['passes']}")
+    for family, result in by_family["causal"].items():
+        print(f"  causal/{family:9s} improved {result['tracks_improved']}/5  "
+              f"peaks {result['peaks_mean_degradation']:.4f}  "
+              f"topN {result['top_n']['peaks_mean']:.3f} vs "
+              f"{result['top_n']['dense_mean']:.3f}  "
               f"passes {result['passes']}")
     return 0
 
