@@ -31,6 +31,88 @@ the 2,760 annotated recordings here as evaluation ground, leaving Harmonix,
 RWC and SMC. That is a cost of the ensemble, not merely of testing it, and it is
 the strongest argument for recording new material.
 
+## Agility: the sign flip is real, the knob is not a lever, and no-anchor was misread
+
+`agility_sweep_rwc.json`, answering `eval/PREREGISTERED_agility.md`. All 328 RWC
+recordings, both arms, five settings, one scorer, no failures, clean tree at
+`2c790e0`. The oracle bump is written once per recording and reused across every
+setting, so only the filter differs.
+
+### The registered prediction holds
+
+| arm | shipped | r0.02 | r0.04 | r0.08 | no_anchor |
+|---|---:|---:|---:|---:|---:|
+| `real` | 0.207 | −0.009 | −0.012 | −0.012 | −0.061 |
+| `oracle` | 0.549 | +0.000 | +0.012 | **+0.027** | −0.113 |
+
+The real arm never rises above its own baseline and the oracle arm rises twice,
+**on the same corpora**. The sign flip was not an artefact of comparing ballroom
+and gtzan against RWC: raising agility helps when the observation is perfect and
+does not when it is real.
+
+### And the third registered outcome fired
+
+| corpus | n | real, best raised | oracle, best raised |
+|---|---:|---:|---:|
+| RWC-Classical | 61 | +0.000 | +0.033 |
+| **RWC-Genre** | 102 | **+0.020** | +0.020 |
+| RWC-Jazz | 50 | +0.000 | +0.020 |
+| RWC-Pop | 100 | **−0.040** | +0.050 |
+| RWC royalty-free | 15 | +0.000 | +0.000 |
+
+**On RWC-Genre the real arm rises too**, which the pooled row cannot show. So
+agility is not simply unavailable on a noisy observation — it is available on
+some material and not on others, and pop is where it is most clearly not. The
+pooled statement and the sub-corpus statement are both true and they are not in
+conflict.
+
+### The mechanism: agility buys beats and spends the metrical level
+
+| arm | setting | usable | F | coverage | worst wrong octave |
+|---|---|---:|---:|---:|---:|
+| `real` | shipped | 0.207 | 0.601 | 1.005 | 19.5 s |
+| `real` | r0.08 | **0.195** | **0.614** | 1.048 | **20.6 s** |
+| `oracle` | shipped | 0.549 | 0.846 | 0.955 | 6.1 s |
+| `oracle` | r0.08 | **0.576** | **0.882** | 0.995 | **5.5 s** |
+
+On the real observation a more agile filter measurably **improves the beat
+metrics** — F rises 0.601 to 0.614 — and still loses `usable`, because it also
+spends a second longer at the wrong level. On a perfect observation both move
+the right way at once. That is the trade, and it explains the flip without
+appealing to instability in general.
+
+### `bump_no_anchor` was a recall result and it does not survive the verdict
+
+`oracle_activation.json` reported that switching the anchor off *raised* recall
+under a perfect observation — 0.560 to 0.648 on classical, 0.838 to 0.879 on
+genre — and that reading is what put `no_anchor` in this grid. Through the full
+four-condition verdict it is the worst setting tested, on every corpus, and by a
+wide margin on jazz (**−0.260**).
+
+The reason is visible in the same row. Oracle arm, shipped → no_anchor:
+
+* recall **rises**, 0.837 → 0.868;
+* coverage overshoots to **1.117** — 12% more beats emitted than exist;
+* worst wrong-octave time nearly **triples**, 6.1 s → 17.1 s;
+* `wrong_octave` climbs from 89.9% to 97.3% of failure reasons.
+
+Removing the anchor buys beats by giving up the level. This is the same lesson
+the oracle-recall table needed and did not have, now demonstrated on a knob
+rather than argued: **recall is one of four conditions, and a change that
+improves it can make the product worse.**
+
+### The answer to the question the sweep was added for
+
+`oracle_activation.py` states it plainly: *"if a knob we already have recovers
+the loss, no new decoder is needed, and if it does not, the limit is
+structural"*.
+
+It does not recover the loss. The best any raised setting does on the real
+observation is **+0.020 on RWC-Genre**, two recordings in 102, and it costs
+0.040 to 0.060 on pop. Nothing here is worth adopting and nothing here removes
+part of the task. The limit is structural, which is the alternative that
+sentence named.
+
 ## On full-length pop the front end is nearly the whole problem
 
 `oracle_usable_harmonix.json`, the other half of the table `oracle_usable_rwc.json`
