@@ -31,6 +31,30 @@ the 2,760 annotated recordings here as evaluation ground, leaving Harmonix,
 RWC and SMC. That is a cost of the ensemble, not merely of testing it, and it is
 the strongest argument for recording new material.
 
+## A documented negative: adaptive whitening in the room
+
+`whitening_room.json`, produced by `eval/whitening_room.py`. Five matched
+Harmonix clean/room pairs, 30 runs in total, commit `3dba708`, clean tree. The
+artifact carries SHA-256 for the binary, ten audio files and five annotation
+files.
+
+The endpoint is the ratio between the median ODF floor in the middle third of
+inter-beat gaps and the median peak within 70 ms of an annotated beat. Lower is
+better.
+
+| condition | whitening off | shipped 0.5 | full 1.0 |
+|---|---:|---:|---:|
+| clean | 0.1886 | 0.1946 | 0.1931 |
+| room | **0.3405** | 0.3627 | 0.3994 |
+
+Disabling whitening beats the shipped exponent on all five room captures;
+full whitening is worse than shipped on four of five. From off to full, the
+room peak loses 48.9% while the floor loses only 37.3%. The running per-band
+denominator follows the reverberant tail and compresses the next beat more than
+the smear it was meant to remove. This retires adaptive whitening as the fix
+for room gap-filling; it does not test sparse time-frequency peaks, which use
+no level-following denominator.
+
 ## The baseline every later arm is measured against
 
 `live_baseline_gtzan_family.json`, `live_baseline_rwc.json`,

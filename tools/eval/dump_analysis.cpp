@@ -52,6 +52,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cstdint>
 #include <iterator>
 #include <string>
 #include <deque>
@@ -443,6 +444,80 @@ bool readVetoSchedule(const char* path, AnchorVetoSchedule& schedule,
     return true;
 }
 
+// The network's own input, frame by frame, as a binary file.
+//
+// Written here rather than in tools/parity/dump_beatnet.cpp, which already
+// dumps the same vector, for one reason: that tool reads raw f32, and every
+// room number this dump will be compared against came through the decoder in
+// *this* tool. Decoding the captures a second way would put the experiment on
+// a different signal from the results it is measured against.
+//
+// Binary and not CSV because 272 values at 50 frames a second is about 7 MB a
+// track as float32 and roughly five times that as text, and nothing reads it
+// by eye.
+//
+// The header is self-describing on purpose. The two halves are **two channels,
+// not one frequency axis** — `filterbank` is log10(1 + magnitude) over 136
+// log-spaced bands, `difference` is its positive frame-to-frame rise — and a
+// reader that treated the 272 as contiguous frequencies would find peaks that
+// straddle the seam and mean nothing. The counts are written separately so
+// that mistake is impossible rather than merely discouraged.
+bool writeFeatures(const char* path, const std::vector<float>& samples,
+                   double rate, std::string& error) {
+    using Features = tiktak::ml::BeatNetFeatures;
+    Features features(rate);
+
+    std::vector<double> times;
+    std::vector<float> rows;
+    // The same odd-sized blocks the analysers are fed, so framing invariance is
+    // exercised by the dump rather than assumed by it.
+    constexpr std::size_t kBlock = 4099;
+    for (std::size_t pos = 0; pos < samples.size(); pos += kBlock) {
+        const std::size_t take = std::min(kBlock, samples.size() - pos);
+        features.process(samples.data() + pos, take,
+                         [&](const float* row, std::size_t count, double time_sec) {
+                             times.push_back(time_sec);
+                             rows.insert(rows.end(), row, row + count);
+                         });
+    }
+    if (times.empty()) {
+        error = "no frames produced";
+        return false;
+    }
+
+    std::FILE* file = std::fopen(path, "wb");
+    if (!file) {
+        error = "cannot open feature file for writing";
+        return false;
+    }
+
+    const std::uint32_t header[] = {
+        0x44465454u,                                   // "TTFD", little-endian
+        1u,                                            // version
+        0x01020304u,                                   // byte order check
+        static_cast<std::uint32_t>(sizeof(float)),     // value size
+        static_cast<std::uint32_t>(times.size()),      // frames
+        static_cast<std::uint32_t>(Features::kFilters),          // filterbank
+        static_cast<std::uint32_t>(Features::kFeatures -
+                                   Features::kFilters),          // difference
+    };
+    const double scalars[] = {Features::kFrameRate, rate};
+
+    bool ok = std::fwrite(header, sizeof(std::uint32_t),
+                          std::size(header), file) == std::size(header);
+    ok = ok && std::fwrite(scalars, sizeof(double), std::size(scalars), file) ==
+                   std::size(scalars);
+    // Times and values in separate blocks rather than interleaved: a reader
+    // wanting only the timeline should not have to stride over 272 floats.
+    ok = ok && std::fwrite(times.data(), sizeof(double), times.size(), file) ==
+                   times.size();
+    ok = ok && std::fwrite(rows.data(), sizeof(float), rows.size(), file) ==
+                   rows.size();
+    ok = std::fclose(file) == 0 && ok;
+    if (!ok) error = "short write to feature file";
+    return ok;
+}
+
 // JSON has no way to say "not a number", and a reader that meets NaN either
 // throws or silently invents null. Analysis of silence legitimately produces
 // none of these values, so they are reported as 0 with the empty beat list
@@ -512,6 +587,7 @@ constexpr std::size_t kLiveBlock = 512;
 int main(int argc, char** argv) {
     std::vector<std::string> positional;
     std::string salience_path;
+    std::string features_path;
     // A beat grid supplied from outside, so that a bad grid and a bad scorer
     // can be told apart. The bar-line stage takes the beats as given, and when
     // the tracker is an octave out every bar line is wrong for a reason that
@@ -695,6 +771,12 @@ int main(int argc, char** argv) {
     bool live_margin_abstain = false;
     double live_freeze_timeout = 0.0;
 
+    // The whitening exponent, reachable so a room recording can be measured
+    // with and without it. 0 divides every band by peak^0, which is the same
+    // arithmetic with whitening off, so one knob covers both arms. Negative
+    // means "not given" and cannot be typed — the parser refuses it.
+    double odf_whitening_strength = -1.0;
+
     struct Threshold {
         const char* flag;
         double* target;
@@ -724,6 +806,7 @@ int main(int argc, char** argv) {
         {"--live-anchor-min-window", &live_anchor_min_window},
         {"--live-freeze-timeout", &live_freeze_timeout},
         {"--live-sample-hz", &live_sample_hz},
+        {"--odf-whitening-strength", &odf_whitening_strength},
     };
 
     for (int i = 1; i < argc; ++i) {
@@ -733,6 +816,14 @@ int main(int argc, char** argv) {
                 return 2;
             }
             salience_path = argv[++i];
+            continue;
+        }
+        if (std::strcmp(argv[i], "--dump-features") == 0) {
+            if (i + 1 >= argc) {
+                std::fprintf(stderr, "--dump-features needs a file\n");
+                return 2;
+            }
+            features_path = argv[++i];
             continue;
         }
         if (std::strcmp(argv[i], "--dump-odf") == 0) {
@@ -976,6 +1067,10 @@ int main(int argc, char** argv) {
                      kCalibrationSize, calibration_given);
         return 2;
     }
+    if (odf_whitening_strength > 1.0) {
+        std::fprintf(stderr, "--odf-whitening-strength must be in [0, 1]\n");
+        return 2;
+    }
 
     if (positional.empty() || positional.size() > 2) {
         std::fprintf(stderr,
@@ -1003,6 +1098,8 @@ int main(int argc, char** argv) {
                      "  --live-model <file>\n"
                      "                     the core computes the activation itself; repeat\n"
                      "                     the flag to average several checkpoints\n"
+                     "  --odf-whitening-strength <0..1>\n"
+                     "                     override adaptive whitening for this run\n"
                      "  calibration: --salience-min-range <v> "
                      "--salience-min-phase-margin <v> "
                      "--salience-min-meter-margin <v>\n"
@@ -1059,6 +1156,17 @@ int main(int argc, char** argv) {
     // runner-up tempos are reachable. Growing the product API to expose either
     // would be paying for a research need in a header that ships; the parity
     // tools set this precedent already.
+    // Before the analysis and not instead of it: the JSON on stdout is what
+    // every existing caller reads, and a flag that silently replaced it would
+    // make one invocation mean two different things.
+    if (!features_path.empty()) {
+        std::string error;
+        if (!writeFeatures(features_path.c_str(), samples, rate, error)) {
+            std::fprintf(stderr, "--dump-features: %s\n", error.c_str());
+            return 1;
+        }
+    }
+
     tiktak::analysis::OfflineConfig config;
     config.odf.sampleRate = rate;
     // The same clamp tt_odf_config_defaults applies. Without it a file below
@@ -1066,6 +1174,9 @@ int main(int argc, char** argv) {
     // function from the one the app would compute — the tool would be
     // measuring a configuration that never ships.
     config.odf.melMaxHz = std::min(16000.0, rate * 0.5);
+    if (odf_whitening_strength >= 0.0) {
+        config.odf.whiteningStrength = odf_whitening_strength;
+    }
     config.find_downbeats = true;
     config.bpm_hint = bpm_hint;
     if (tempo_prior_centre > 0.0) config.tempo.prior_centre_bpm = tempo_prior_centre;
