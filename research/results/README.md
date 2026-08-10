@@ -31,6 +31,87 @@ the 2,760 annotated recordings here as evaluation ground, leaving Harmonix,
 RWC and SMC. That is a cost of the ensemble, not merely of testing it, and it is
 the strongest argument for recording new material.
 
+## The octave residue is real: accenting a perfect observation does not fix it
+
+`accented_oracle_rwc.json`, answering `eval/PREREGISTERED_accented_oracle.md`.
+All 328 RWC recordings, four arms on the same synthesised activation, no
+failures, clean tree at `785b95b`.
+
+Both oracle runs ended with `wrong_octave` as almost the only surviving failure,
+and both recorded the reason that might prove nothing: the bump is the same
+height on every beat, so it removes the amplitude difference that tells a level
+from its double. This tested that excuse.
+
+| corpus | n | `flat` | `accent_0.5` | `accent_0.25` | `accent_0.5_shuffled` |
+|---|---:|---:|---:|---:|---:|
+| RWC-Classical | 61 | 0.033 | 0.033 | **0.000** | 0.016 |
+| RWC-Genre | 102 | 0.569 | 0.559 | 0.549 | 0.578 |
+| RWC-Jazz | 50 | 0.520 | 0.480 | **0.380** | 0.500 |
+| RWC-Pop | 100 | 0.810 | 0.830 | 0.800 | **0.840** |
+| RWC royalty-free | 15 | 0.867 | 0.867 | 0.867 | 0.867 |
+| **all** | 328 | **0.549** | **0.546** | **0.512** | **0.555** |
+
+`flat` reproduces 0.549 exactly, which is the validity check the registration
+demanded before any other column could be read.
+
+**The registered condition fails on both halves.** The better true accent gains
+**−0.003** against a bar of +0.05, and the deeper accent loses 0.037. Accenting
+a perfect observation does not help; it hurts, and more accent hurts more.
+
+### The control is the finding
+
+`accent_0.5_shuffled` — the same amplitude pattern applied to the **wrong**
+beats, bar phase rotated by an offset from the recording's own name — scores
+**+0.006**, above the correctly aligned accent's −0.003.
+
+The tracker does not use where the accents are. Misaligned accents do
+marginally better than aligned ones, so what little moves is amplitude variation
+and not metre. This is the outcome the registration named in advance as the one
+the control existed to catch, and it is the second time in this repository that
+an octave arm has come in behind its own shuffled control.
+
+### Why the octave share falls while the result gets worse
+
+| arm | usable | failures | `wrong_octave` share | absolute octave failures | mean F |
+|---|---:|---:|---:|---:|---:|
+| `flat` | 0.549 | 148 | 0.899 | ~133 | 0.846 |
+| `accent_0.5` | 0.546 | 149 | 0.832 | ~124 | 0.808 |
+| `accent_0.25` | 0.512 | **160** | 0.744 | ~119 | **0.786** |
+
+The share of failures blamed on the level falls, and reading that alone would
+suggest accents help. They do not: total failures rise from 148 to 160 and mean
+F falls by 0.060. Accenting buys about fourteen fewer octave failures and pays
+about twenty-six more of everything else, because lowering three beats in four
+takes signal out of the beat channel. A share is a ratio, and this one improved
+by growing its denominator.
+
+### What this settles, and what it costs
+
+**The residue is not an instrument artefact.** A perfect observation — even one
+carrying clean bar-level accents — leaves the metrical level unresolved. The
+caveat both oracle sections carried is now discharged: their octave residues
+stand.
+
+That makes five independent negatives on the octave: the anchor-margin gate, the
+freeze and abstain policies, the downbeat head, the octave button, and now the
+accented oracle. Nothing tried on either the observation side or the decoder
+side has moved it.
+
+**So a front end must not be expected to fix the level by producing better
+beats.** Train it for what the oracle says is there — Harmonix `usable` 0.365 to
+0.952, precision failures gone entirely — and treat the octave as a separate
+unsolved problem, which the ×2/÷2 control already addresses from the user's
+side.
+
+### The limit of this test, named rather than left implicit
+
+The accent measured is **bar-level**: downbeats at full height, every other beat
+scaled. That is the accent the annotations support and the one registered. A
+**beat-level** strong-weak alternation — the cue that would speak directly to P
+against 2P rather than to the bar — was not tested and is not answered here.
+It would need its own registration, and after five negatives it needs a reason
+to expect a different answer before it earns one.
+
 ## The causal teacher gate: half the advantage survives, and it does not reach the product yet
 
 `causal_teacher_gtzan.json`, answering `eval/PREREGISTERED_causal_teacher.md`.
