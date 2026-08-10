@@ -238,8 +238,16 @@ def main(argv: list[str] | None = None) -> int:
     # The same control `make_sweep` applies before writing anything: if the
     # marker does not deconvolve to a spike, nothing downstream can align to it
     # and a file would only invite a session that cannot be used.
-    check = find_slate(take, rate=RATE)
-    if not check["accepted"]:
+    #
+    # Through `align_by_slate`, not a bare `find_slate`, because a take holds
+    # *two* identical slates. Searching the whole file finds the head and then
+    # measures it against the tail, which is exactly as tall: peak equals
+    # sidelobe, 0.0 dB, and the check fails on a take that is perfectly good.
+    # The head is looked for near the start and the tail near the end for that
+    # reason, and only a bounded search can tell them apart.
+    checked = align_by_slate(take, layout, rate=RATE)
+    check = checked.get("head", {})
+    if not checked.get("accepted"):
         print(f"slate does not resolve on the take itself: "
               f"{check.get('peak_to_sidelobe_db', float('nan')):.1f} dB",
               file=sys.stderr)

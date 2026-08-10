@@ -205,3 +205,22 @@ def test_the_offset_survives_the_room_that_was_actually_measured():
     got = align_by_slate(capture, layout)
     assert got["accepted"], got
     assert got["head"]["offset_sec"] == pytest.approx(truth, abs=0.01)
+
+
+def test_two_identical_slates_need_a_bounded_search():
+    """A take holds two of the same marker, so an unbounded search is 0 dB.
+
+    `find_slate` over a whole take finds the head and then measures it against
+    the tail, which is exactly as tall. The margin is not small, it is zero, and
+    a self-test that used it would reject a take that is perfectly good.
+    `align_by_slate` bounds each search, which is the whole reason it does.
+    """
+    take, layout = build_take(click_track(6.0))
+
+    unbounded = find_slate(take)
+    assert unbounded["peak_to_sidelobe_db"] == pytest.approx(0.0, abs=1e-9)
+    assert not unbounded["accepted"]
+
+    bounded = align_by_slate(take, layout)
+    assert bounded["accepted"]
+    assert bounded["head"]["offset_sec"] == pytest.approx(0.0, abs=1e-3)
