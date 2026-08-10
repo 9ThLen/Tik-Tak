@@ -40,6 +40,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from eval.analysis import Estimate  # noqa: E402
 from eval.live_corpus_benchmark import _score_one, load_corpus  # noqa: E402
+from eval.provenance import experiment_provenance as provenance  # noqa: E402
 
 SAMPLE_HZ = 50.0
 # Within this of the real capture and the simulation passes on level.
@@ -118,11 +119,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", type=pathlib.Path, required=True)
     args = parser.parse_args(argv)
 
-    commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
-                            text=True, cwd=repository).stdout.strip()
-    clean_tree = not subprocess.run(["git", "status", "--porcelain"],
-                                    capture_output=True, text=True,
-                                    cwd=repository).stdout.strip()
+    run_provenance = provenance(
+        repository,
+        {"manifest": args.manifest, "binary": args.binary,
+         "model": args.model, "ir": args.ir, "noise": args.noise,
+         "validate_against": args.validate_against},
+    )
 
     items = {i["name"]: i for i in
              load_corpus(args.manifest, args.music, False, frozenset(args.corpora))}
@@ -201,7 +203,7 @@ def main(argv: list[str] | None = None) -> int:
 
     level_ok = all(r.get("level_ok", True) for r in records)
     payload = {
-        "commit": commit, "clean": clean_tree, "snr_db": args.snr_db,
+        "provenance": run_provenance, "snr_db": args.snr_db,
         "ir": str(args.ir), "noise": str(args.noise),
         "level_ok": bool(level_ok), "ordering_ok": ordering_ok,
         "approved_for_augmentation": bool(level_ok and ordering_ok),

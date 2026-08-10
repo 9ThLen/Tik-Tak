@@ -1948,10 +1948,14 @@ less.
 | BeatNet | 0.6813 | 0.48 |
 | Beat This! | **0.8196** | **0.68** |
 
-**+0.138 of F and +20 points of usable.** Registered threshold was 0.03, so
-question 2 comes back "not settled rather than closed": GTZAN is in `final0`'s
-training set, so this is an upper bound and no available corpus is certainly
-outside it. What it does establish is that the +0.102 struck from
+**+0.138 of F and +20 points of usable.** Registered threshold was 0.03. The
+registration's contamination premise was later corrected: official `final*`
+checkpoints exclude GTZAN, and BeatNet `model_1` also withholds it. This is
+therefore a held-out, matched-decoder system gap, not a train-on-test upper
+bound. It still differs in training corpora, recipe and capacity, was produced
+from a dirty tree, and used 100 recordings selected by stride, so P0 requires a
+clean full-split repeat before quoting it as the benchmark level. What it does
+already establish is that the +0.102 struck from
 [section 2](#2-what-a-perfect-front-end-would-buy-what-causality-costs-and-what-a-room-does)
 was not inflated by the decoder swap — held constant, the gap is larger, not
 smaller.

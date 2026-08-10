@@ -31,9 +31,12 @@ import numpy as np
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
+REPOSITORY = pathlib.Path(__file__).resolve().parents[2]
+
 from eval.beat_this_front_end import (SAMPLE_HZ, score,  # noqa: E402
                                       through_tracker)
 from eval.beat_this_onnx import FPS, BeatThisOnnx  # noqa: E402
+from eval.provenance import experiment_provenance as provenance  # noqa: E402
 from eval.live_corpus_benchmark import load_corpus  # noqa: E402
 
 # One pass per this many seconds of audio, shared by every lookahead. The
@@ -210,13 +213,17 @@ def main() -> int:
             "at_least_half_survives": bool(share is not None and share >= 0.50),
         }
 
-    commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
-                            text=True).stdout.strip()
-    clean = not subprocess.run(["git", "status", "--porcelain"],
-                               capture_output=True, text=True).stdout.strip()
+    # The shared wrapper rather than an inline `git status`: it raises on a
+    # dirty or unreadable tree instead of recording a flag beside numbers that
+    # are already written. An artifact that says `clean: false` is one a reader
+    # has to notice; one that was never produced cannot be misread.
+    sources = {"binary": args.binary, "model": args.model,
+               "teacher": args.teacher, "manifest": args.manifest}
+    run_provenance = provenance(REPOSITORY, sources)
+    commit = run_provenance["commit"]
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps({
-        "commit": commit, "clean": clean,
+        "provenance": run_provenance,
         "registered_in": "research/eval/PREREGISTERED_causal_teacher.md",
         "step_sec": STEP_SEC, "lookaheads": list(LOOKAHEADS),
         "sample_hz": SAMPLE_HZ, "clips_requested": len(items),

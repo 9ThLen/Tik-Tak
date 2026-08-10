@@ -29,7 +29,6 @@ import hashlib
 import json
 import math
 import pathlib
-import platform
 import subprocess
 import sys
 import tempfile
@@ -52,6 +51,7 @@ from eval.live_corpus_benchmark import (  # noqa: E402
     MIN_RECALL,
     octave_statistics,
 )
+from eval.provenance import experiment_provenance as provenance  # noqa: E402
 
 FPS = 50.0
 WARMUP_SEC = 5.0
@@ -308,26 +308,8 @@ def _run(binary: pathlib.Path, activation_path: pathlib.Path,
     return json.loads(done.stdout)
 
 
-def _digest(path: pathlib.Path) -> dict[str, Any]:
-    data = path.read_bytes()
-    return {"name": path.name, "bytes": len(data),
-            "sha256": hashlib.sha256(data).hexdigest()}
-
-
 def _provenance(binary: pathlib.Path) -> dict[str, Any]:
-    def git(*arguments: str) -> str | None:
-        done = subprocess.run(["git", "-C", str(REPOSITORY), *arguments],
-                              capture_output=True, text=True, timeout=30)
-        return done.stdout.strip() if done.returncode == 0 else None
-
-    return {
-        "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "commit": git("rev-parse", "HEAD"),
-        "tree_clean": git("status", "--porcelain") == "",
-        "binary": _digest(binary),
-        "python": platform.python_version(),
-        "platform": platform.system(),
-    }
+    return provenance(REPOSITORY, {"binary": binary})
 
 
 def summarize(rows: list[dict[str, Any]], group_by: str) -> dict[str, Any]:

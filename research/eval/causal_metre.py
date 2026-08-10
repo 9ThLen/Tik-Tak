@@ -37,7 +37,6 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
-import subprocess
 import sys
 import tempfile
 
@@ -47,6 +46,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from eval.octave_veto_experiment import write_activation_cache  # noqa: E402
 from eval.octave_veto_replay import run, run_activation  # noqa: E402
+from eval.provenance import experiment_provenance as provenance  # noqa: E402
 
 ARMS = ("beat_sync", "shuffled", "beat_as_downbeat")
 
@@ -457,14 +457,13 @@ def main(argv: list[str] | None = None) -> int:
               file=sys.stderr)
         return 1
 
-    # Before the run, not after: this run's own output file lands in the tree,
-    # so a `clean` read at the end reports dirty for a reason that says nothing
-    # about the code that produced the numbers.
-    commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
-                            text=True, cwd=repository).stdout.strip()
-    clean = not subprocess.run(["git", "status", "--porcelain"],
-                               capture_output=True, text=True,
-                               cwd=repository).stdout.strip()
+    # Capture before the run: an output inside the tree would otherwise make
+    # the run report itself as dirty.
+    run_provenance = provenance(
+        repository,
+        {"manifest": args.manifest, "binary": args.binary,
+         "model": args.model},
+    )
 
     records: list[dict] = []
     failures: list[dict] = []
@@ -485,8 +484,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{done_count}/{len(items)}", file=sys.stderr, flush=True)
 
     payload = {
-        "commit": commit,
-        "clean": clean,
+        "provenance": run_provenance,
         "model": str(args.model),
         "corpora": args.corpora,
         "requested": len(items),

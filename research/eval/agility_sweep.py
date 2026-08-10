@@ -38,7 +38,10 @@ import numpy as np
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
+REPOSITORY = pathlib.Path(__file__).resolve().parents[2]
+
 from eval.analysis import Estimate  # noqa: E402
+from eval.provenance import experiment_provenance as provenance  # noqa: E402
 from eval.live_corpus_benchmark import (_score_one, load_corpus,  # noqa: E402
                                         load_reference_beats)
 from eval.oracle_activation import FPS, synthesise  # noqa: E402
@@ -218,13 +221,17 @@ def main() -> int:
                   file=sys.stderr)
     print(file=sys.stderr)
 
-    commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
-                            text=True).stdout.strip()
-    clean = not subprocess.run(["git", "status", "--porcelain"],
-                               capture_output=True, text=True).stdout.strip()
+    # The shared wrapper rather than an inline `git status`: it raises on a
+    # dirty or unreadable tree instead of recording a flag beside numbers that
+    # are already written. An artifact that says `clean: false` is one a reader
+    # has to notice; one that was never produced cannot be misread.
+    sources = {"binary": args.binary, "model": args.model,
+               "manifest": args.manifest}
+    run_provenance = provenance(REPOSITORY, sources)
+    commit = run_provenance["commit"]
     summary = summarise(records) if records else {}
     payload = {
-        "commit": commit, "clean": clean,
+        "provenance": run_provenance,
         "registered_in": "research/eval/PREREGISTERED_agility.md",
         "corpora": args.corpora, "requested": len(items),
         "sample_hz": SAMPLE_HZ, "settings": SETTINGS,

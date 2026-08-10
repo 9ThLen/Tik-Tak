@@ -29,11 +29,36 @@ from __future__ import annotations
 import hashlib
 import pathlib
 import platform
+import re
 import subprocess
 import time
 from typing import Any, Mapping
 
-__all__ = ["digest", "provenance"]
+__all__ = [
+    "PROVENANCE_SCHEMA", "digest", "experiment_provenance", "provenance",
+]
+
+
+PROVENANCE_SCHEMA = "tiktak.provenance/v1"
+
+# Captured on Windows when Git can traverse the repository but cannot read the
+# user's global excludes file. This warning does not make `git status` partial.
+# Keep this list deliberately narrow: an unknown warning is evidence we do not
+# understand, so provenance must fail closed rather than guess that it is safe.
+_BENIGN_GIT_STDERR = (
+    re.compile(
+        r"^warning: unable to access '.*[\\/]\.config[\\/]git[\\/]ignore': "
+        r"Permission denied$"
+    ),
+)
+
+
+def _unexpected_git_stderr(stderr: str) -> list[str]:
+    lines = [line.strip() for line in stderr.splitlines() if line.strip()]
+    return [
+        line for line in lines
+        if not any(pattern.fullmatch(line) for pattern in _BENIGN_GIT_STDERR)
+    ]
 
 
 def digest(path: pathlib.Path | None) -> dict | None:
@@ -69,18 +94,27 @@ def provenance(repository: pathlib.Path,
                 f"git {' '.join(command)}: exit {done.returncode} "
                 f"{done.stderr.strip()[:200]}")
             return None
+        unexpected = _unexpected_git_stderr(done.stderr)
+        if unexpected:
+            failures.append(
+                f"git {' '.join(command)}: unexpected stderr "
+                f"{' | '.join(unexpected)[:200]}")
+            return None
         return done.stdout.strip()
 
     commit = git("rev-parse", "HEAD")
     status = git("status", "--porcelain")
 
     record = {
+        "schema": PROVENANCE_SCHEMA,
         "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "commit": commit,
         # True and False are answers. None means git could not be consulted, so
         # nothing is known — which is worse than a dirty tree, not better, and
         # must not be spelled the same way.
-        "tree_clean": None if status is None else status == "",
+        "tree_clean": (
+            None if commit is None or status is None else status == ""
+        ),
         "python": platform.python_version(),
         "platform": platform.system(),
         **{name: digest(path) for name, path in (files or {}).items()},
@@ -88,4 +122,31 @@ def provenance(repository: pathlib.Path,
     }
     if failures:
         record["provenance_error"] = failures
+    return record
+
+
+def experiment_provenance(
+        repository: pathlib.Path,
+        files: Mapping[str, pathlib.Path | None] | None = None,
+        **extra: Any) -> dict:
+    """Return provenance only when the checked-out commit describes the run.
+
+    Experimental artifacts are evidence, not diagnostics. A dirty tree and an
+    unknown tree are therefore both hard failures. Call ``provenance`` directly
+    only for an explicitly labelled diagnostic whose schema prevents it from
+    being accepted as an experiment result.
+    """
+    record = provenance(repository, files, **extra)
+    unreadable = [name for name, path in (files or {}).items()
+                  if path is not None and record.get(name) is None]
+    if unreadable:
+        raise RuntimeError(
+            "experimental run has unreadable provenance inputs: "
+            + ", ".join(sorted(unreadable)))
+    if record["tree_clean"] is not True:
+        detail = record.get("provenance_error", [])
+        suffix = f": {'; '.join(detail)}" if detail else ""
+        raise RuntimeError(
+            f"experimental run requires tree_clean is True; got "
+            f"{record['tree_clean']!r}{suffix}")
     return record

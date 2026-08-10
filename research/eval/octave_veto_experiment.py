@@ -34,6 +34,7 @@ from eval.octave_veto import (Decision, Proposal, WindowTrack, committed_grid,
                               extract_proposals, judge)
 from eval.octave_veto_replay import (Replay, from_payload, run, run_activation,
                                      same_live_series)
+from eval.provenance import experiment_provenance as provenance
 
 TAU_CANDIDATES = tuple(float(x) for x in np.arange(0.0, 5.0 + 0.25, 0.25))
 DEBOUNCE_CANDIDATES = (0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0)
@@ -1206,9 +1207,16 @@ def _load_items(manifest: pathlib.Path, music: pathlib.Path, corpus: str):
 
 def run_rwc(args) -> dict[str, Any]:
     repository = pathlib.Path(__file__).resolve().parents[2]
-    if _git(repository, "status", "--porcelain"):
-        raise RuntimeError("RWC selection requires a clean implementation commit")
-    source_commit = _git(repository, "rev-parse", "HEAD")
+    run_provenance = provenance(
+        repository,
+        {"manifest": args.manifest, "binary": args.binary,
+         "model": args.model},
+    )
+    if run_provenance["tree_clean"] is not True:
+        raise RuntimeError(
+            "RWC selection requires verified clean provenance: "
+            + repr(run_provenance.get("provenance_error", [])))
+    source_commit = str(run_provenance["commit"])
     items = _load_items(args.manifest, args.music, "rwc")
     # Only the decoder needs the iterated schedule seam. Every comparison
     # policy is a live-core flag and decides online, which is both what it
@@ -1260,7 +1268,7 @@ def run_rwc(args) -> dict[str, Any]:
     }
     payload = {
         "stage": "rwc-development",
-        "tree_clean_before_output": True,
+        "provenance": run_provenance,
         "code_commit_before_selection_commit": source_commit,
         "corpus": {"name": "rwc", "tracks": len(items)},
         "selection": {
@@ -1295,8 +1303,10 @@ def run_rwc(args) -> dict[str, Any]:
 def _require_frozen_selection(repository: pathlib.Path,
                               selection_path: pathlib.Path,
                               source_commit: str) -> str:
-    if _git(repository, "status", "--porcelain"):
-        raise RuntimeError("Harmonix requires a clean worktree")
+    # The artifact-producing entry point has already obtained fail-closed
+    # experiment provenance. This helper verifies the distinct two-commit
+    # freeze contract and must not run a second, potentially divergent status
+    # implementation.
     try:
         relative = selection_path.resolve().relative_to(repository.resolve())
     except ValueError as error:
@@ -1338,6 +1348,11 @@ def _selected_schedule_policy(selection: dict[str, Any], family: str,
 
 def run_harmonix(args) -> dict[str, Any]:
     repository = pathlib.Path(__file__).resolve().parents[2]
+    run_provenance = provenance(
+        repository,
+        {"manifest": args.manifest, "binary": args.binary,
+         "model": args.model, "selection": args.selection},
+    )
     development = json.loads(args.selection.read_text(encoding="utf-8"))
     source_commit = development.get("code_commit_before_selection_commit")
     if not isinstance(source_commit, str) or not source_commit:
@@ -1397,6 +1412,7 @@ def run_harmonix(args) -> dict[str, Any]:
 
     payload = {
         "stage": "harmonix-transfer",
+        "provenance": run_provenance,
         "frozen_commit": frozen_commit,
         "corpus": {"name": "harmonix", "tracks": len(items)},
         "selection": selection,

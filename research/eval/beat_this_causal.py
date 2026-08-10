@@ -33,10 +33,12 @@ offline number, and the top of the curve by construction.
 
 ## Two things this cannot say
 
-**The absolute level.** `models/beat_this.onnx` is the `final0` checkpoint,
-trained on the full corpus, and that corpus includes GTZAN, Ballroom and RWC.
-Every absolute figure here is recall of training material. The *shape* of the
-degradation is the result; the height of the curve is not quotable.
+**The absolute level is held-out but not product-matched.**
+`models/beat_this.onnx` is the `final0` checkpoint, and the official `final*`
+checkpoints exclude GTZAN. The GTZAN height is therefore quotable once the run
+has clean provenance, but it remains a short-excerpt benchmark and does not
+estimate live-room performance. The *shape* of degradation is still the main
+causality result.
 
 **How a model trained to be causal would behave.** Depriving a bidirectional
 model of its right-hand context measures what that context was worth to *it*.
@@ -50,7 +52,6 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
-import subprocess
 import sys
 
 import numpy as np
@@ -60,6 +61,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from eval.beat_this_onnx import BeatThisOnnx, beats_and_downbeats  # noqa: E402
 from eval.live_corpus_benchmark import (load_corpus,  # noqa: E402
                                         load_reference_beats)
+from eval.provenance import experiment_provenance as provenance  # noqa: E402
 
 # inf is the whole file. 0 is the tightest arm reachable at this step size, and
 # it is *not* strictly causal — see _key: a beat may still be read from a prefix
@@ -210,11 +212,10 @@ def main(argv: list[str] | None = None) -> int:
         # N recordings are the first N genres.
         items = items[:: -(-len(items) // args.limit)]
 
-    commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
-                            text=True, cwd=repository).stdout.strip()
-    clean = not subprocess.run(["git", "status", "--porcelain"],
-                               capture_output=True, text=True,
-                               cwd=repository).stdout.strip()
+    run_provenance = provenance(
+        repository,
+        {"manifest": args.manifest, "model": args.model},
+    )
 
     records: list[dict] = []
     failures: list[dict] = []
@@ -232,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
             if done % 10 == 0 or done == len(items):
                 print(f"{done}/{len(items)}", file=sys.stderr, flush=True)
 
-    payload = {"commit": commit, "clean": clean, "model": str(args.model),
+    payload = {"provenance": run_provenance, "model": str(args.model),
                "corpora": args.corpora, "requested": len(items),
                "step_sec": STEP_SEC, "warmup_sec": WARMUP_SEC,
                "failures": failures,

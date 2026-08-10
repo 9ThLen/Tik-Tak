@@ -1,5 +1,11 @@
 # Is the room a property of the room or of BeatNet? — registered 2026-08-08
 
+> **Provenance correction, 2026-08-09 (after registration):** official Beat
+> This! `final*` checkpoints exclude GTZAN. The registered contamination claim
+> below is therefore wrong for GTZAN, although it remains true for the Harmonix
+> room pairs. This correction does not retroactively change the registered
+> decision rule; it changes how the resulting GTZAN level may be interpreted.
+
 Two questions, one run, because they share every mechanism.
 
 ## Question 1 — does a stronger front end survive a room?
@@ -41,9 +47,10 @@ only the observation differs.
 **Everything here is an upper bound, twice over, and the number is reportable
 only as one.**
 
-* No corpus available is certainly outside `final0`'s training. GTZAN, Ballroom
-  and RWC are in it — including `rwc-royalty-free`, which is part of RWC — and
-  whether Harmonix is has not been established. Contamination favours Beat This!
+* As registered, this premise was wrong for GTZAN: official `final*` checkpoints
+  exclude GTZAN. Ballroom, RWC and Harmonix are in the training collection.
+  GTZAN is a held-out clean benchmark; the Harmonix room arm is contaminated in
+  Beat This!'s favour.
 * Beat This! is a transformer over the whole file, and fed through
   `--live-activation` without a recorded release schedule it is observed on an
   analytic availability delay. So this also bounds what a causal version could

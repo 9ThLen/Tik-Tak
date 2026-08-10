@@ -1,5 +1,7 @@
 """The eval stand reports the causal tracker's tempo, not the offline tempo."""
 
+import subprocess
+
 import numpy as np
 import pytest
 
@@ -259,6 +261,23 @@ def test_provenance_names_every_checkpoint_the_core_averaged(tmp_path):
     first, second = tmp_path / "a.ttw", tmp_path / "b.ttw"
     first.write_bytes(b"aaa")
     second.write_bytes(b"bbbb")
+
+    # `_provenance` now goes through the fail-closed wrapper, which refuses a
+    # tree it cannot describe -- and a bare tmp_path is not a repository at all,
+    # so the call raises before it can answer the question this test asks. The
+    # subject here is the ensemble *schema*, not git, so the fixture is made
+    # into the clean repository the wrapper is entitled to expect. Committing
+    # the two files matters: untracked ones would leave it dirty, which the
+    # wrapper refuses for the same reason.
+    def git(*command: str) -> None:
+        subprocess.run(("git", "-C", str(tmp_path)) + command, check=True,
+                       capture_output=True)
+
+    git("init", "-q")
+    git("config", "user.email", "test@example.invalid")
+    git("config", "user.name", "test")
+    git("add", "-A")
+    git("commit", "-q", "-m", "fixture")
 
     alone = _provenance(first, first, [], tmp_path)
     assert alone["also_models"] == []

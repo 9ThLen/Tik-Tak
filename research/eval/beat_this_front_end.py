@@ -16,17 +16,17 @@ changed the model and the decoder at once. Here the activation goes through
 `--live-activation` into the same `LiveTracker`, and the only thing that differs
 from the shipped path is the observation.
 
-## Both numbers are bounded above, and differently
+## The two numbers have different limitations
 
 The room question is **immune** to `final0` having trained on this material: it
 compares one model with itself on clean and room versions of one recording, and
 memorising the clean file would enlarge the drop rather than hide it.
 
-The decoder-matched question is not. No corpus here is certainly outside
-`final0`'s training, and a bidirectional model fed through the replay seam
-without a recorded release schedule is observed on an analytic availability
-delay. Both push the same way, so what comes out is an upper bound on what a
-causal Beat This! through this decoder could give.
+The matched GTZAN question is held-out for both `final0` and BeatNet `model_1`.
+It is nevertheless a system comparison rather than an architectural one, and a
+bidirectional model fed through the replay seam without a recorded release
+schedule is observed on an analytic availability delay. Its result is a clean,
+short-excerpt bound on what causal replay could give, not a room-domain estimate.
 """
 
 from __future__ import annotations
@@ -46,10 +46,13 @@ from eval.analysis import Estimate  # noqa: E402
 from eval.beat_this_onnx import FPS, BeatThisOnnx  # noqa: E402
 from eval.live_corpus_benchmark import (_score_one, load_corpus,  # noqa: E402
                                         load_reference_beats)
+from eval.provenance import experiment_provenance as provenance  # noqa: E402
 from eval.room_activation import (auc, between_beat_ratio,  # noqa: E402
                                   half_height_width, salience_and_floor)
 
 SAMPLE_HZ = 50.0
+BOOTSTRAP_RESAMPLES = 10_000
+BOOTSTRAP_SEED = 20260809
 
 
 def activation_of(session: BeatThisOnnx, audio: pathlib.Path
@@ -153,11 +156,58 @@ def corpus_pass(session: BeatThisOnnx, items: list[dict], binary: pathlib.Path,
                                    binary, model),
             }
         except Exception as error:  # noqa: BLE001
-            records.append({"name": item["name"], "error": str(error)[:200]})
+            records.append({"name": item["name"], "corpus": item["corpus"],
+                            "error": str(error)[:200]})
             continue
         row["delta_f"] = row["beat_this"]["f_measure"] - row["beatnet"]["f_measure"]
         records.append(row)
     return records
+
+
+def paired_bootstrap(records: list[dict], resamples: int = BOOTSTRAP_RESAMPLES,
+                     seed: int = BOOTSTRAP_SEED) -> dict:
+    """Paired percentile CI, resampling recordings/compositions as clusters."""
+    values = np.asarray([row["delta_f"] for row in records
+                         if "delta_f" in row], dtype=np.float64)
+    if not len(values):
+        raise ValueError("paired bootstrap requires at least one scored recording")
+    rng = np.random.default_rng(seed)
+    means = np.empty(resamples, dtype=np.float64)
+    # Batch the index matrix so a full 999-track run stays comfortably small.
+    batch = 256
+    for start in range(0, resamples, batch):
+        count = min(batch, resamples - start)
+        indices = rng.integers(0, len(values), size=(count, len(values)))
+        means[start:start + count] = values[indices].mean(axis=1)
+    low, high = np.quantile(means, [0.025, 0.975])
+    return {
+        "unit": "recording/composition",
+        "method": "paired percentile bootstrap",
+        "resamples": resamples,
+        "seed": seed,
+        "mean_delta_f": float(values.mean()),
+        "ci95": [float(low), float(high)],
+    }
+
+
+def corpus_summary(rows: list[dict]) -> dict:
+    good = [row for row in rows if "delta_f" in row]
+    if not good:
+        raise ValueError("corpus pass produced no scored recordings")
+    return {
+        "n": len(good),
+        "failures": [row for row in rows if "delta_f" not in row],
+        "beatnet_mean_f": float(np.mean(
+            [row["beatnet"]["f_measure"] for row in good])),
+        "beat_this_mean_f": float(np.mean(
+            [row["beat_this"]["f_measure"] for row in good])),
+        "mean_delta_f": float(np.mean([row["delta_f"] for row in good])),
+        "beatnet_usable": float(np.mean(
+            [row["beatnet"]["usable"] for row in good])),
+        "beat_this_usable": float(np.mean(
+            [row["beat_this"]["usable"] for row in good])),
+        "paired_bootstrap": paired_bootstrap(good),
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -172,15 +222,28 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--aligned", type=pathlib.Path,
                         help="room captures; omit to run the corpus pass only")
     parser.add_argument("--corpus-limit", type=int, default=0,
-                        help="0 runs no corpus pass")
+                        help="diagnostic stride limit; 0 runs no corpus pass")
+    parser.add_argument("--full-corpus", action="store_true",
+                        help="run every available recording (P0 acceptance path)")
     parser.add_argument("--output", type=pathlib.Path, required=True)
     args = parser.parse_args(argv)
 
-    commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
-                            text=True, cwd=repository).stdout.strip()
-    clean_tree = not subprocess.run(["git", "status", "--porcelain"],
-                                    capture_output=True, text=True,
-                                    cwd=repository).stdout.strip()
+    if args.full_corpus and args.corpus_limit:
+        parser.error("--full-corpus and --corpus-limit are mutually exclusive")
+    if args.corpus_limit < 0:
+        parser.error("--corpus-limit cannot be negative")
+    try:
+        args.output.resolve().relative_to(repository.resolve())
+    except ValueError:
+        pass
+    else:
+        parser.error("--output must be outside the evaluation worktree")
+
+    run_provenance = provenance(
+        repository,
+        {"manifest": args.manifest, "binary": args.binary,
+         "model": args.model, "beat_this": args.beat_this},
+    )
 
     loaded = load_corpus(args.manifest, args.music, False, frozenset(args.corpora))
     seen = sorted({i["corpus"] for i in loaded})
@@ -192,29 +255,47 @@ def main(argv: list[str] | None = None) -> int:
 
     session = BeatThisOnnx(args.beat_this)
 
-    payload: dict = {"commit": commit, "clean": clean_tree,
+    payload: dict = {"provenance": run_provenance,
                      "corpora": args.corpora}
     if args.aligned:
         payload["room"] = room_pass(session, items, args.aligned, args.binary,
                                     args.model)
-    if args.corpus_limit:
+    if args.full_corpus or args.corpus_limit:
         chosen = loaded
-        if len(chosen) > args.corpus_limit:
-            chosen = chosen[:: -(-len(chosen) // args.corpus_limit)]
-        rows = corpus_pass(session, chosen, args.binary, args.model)
-        good = [r for r in rows if "delta_f" in r]
-        payload["corpus"] = {
-            "n": len(good), "failures": [r for r in rows if "delta_f" not in r],
-            "beatnet_mean_f": float(np.mean([r["beatnet"]["f_measure"] for r in good])),
-            "beat_this_mean_f": float(np.mean([r["beat_this"]["f_measure"] for r in good])),
-            "mean_delta_f": float(np.mean([r["delta_f"] for r in good])),
-            "beatnet_usable": float(np.mean([r["beatnet"]["usable"] for r in good])),
-            "beat_this_usable": float(np.mean([r["beat_this"]["usable"] for r in good])),
-            "records": rows,
+        selection = {
+            "available": len(loaded),
+            "mode": "full" if args.full_corpus else "diagnostic_stride",
+            "requested_limit": None if args.full_corpus else args.corpus_limit,
+            "stride": 1,
+            "excluded": [],
         }
+        if args.corpus_limit and len(chosen) > args.corpus_limit:
+            stride = -(-len(chosen) // args.corpus_limit)
+            chosen = chosen[::stride]
+            kept = {(item["corpus"], item["name"]) for item in chosen}
+            selection["stride"] = stride
+            selection["excluded"] = [
+                {"corpus": item["corpus"], "name": item["name"]}
+                for item in loaded
+                if (item["corpus"], item["name"]) not in kept
+            ]
+        selection["selected"] = len(chosen)
+        rows = corpus_pass(session, chosen, args.binary, args.model)
+        summary = corpus_summary(rows)
+        summary["selection"] = selection
+        summary["by_corpus"] = {
+            corpus: corpus_summary([row for row in rows
+                                    if row.get("corpus") == corpus])
+            for corpus in sorted({row.get("corpus") for row in rows
+                                  if row.get("corpus")})
+        }
+        summary["records"] = rows
+        payload["corpus"] = summary
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    staged = args.output.with_name(f".{args.output.name}.tmp")
+    staged.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    staged.replace(args.output)
 
     for row in payload.get("room", []):
         print(f"\n{row['name']}")

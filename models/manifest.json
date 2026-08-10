@@ -60,7 +60,7 @@
         "note": "converted locally from the pinned beatnet_model_1 checkpoint"
       },
       "conversion": {
-        "model_variant": "model_1 (GTZAN)",
+        "model_variant": "model_1 (held out: GTZAN)",
         "source_weights_sha256": "619091bc317ca3e83b45591d46f6de3d5a41588bcb39fe9fe7be30cffa6aca84",
         "exporter": {
           "repo": "this repository",
@@ -113,7 +113,7 @@
             "note": "converted locally from the pinned beatnet_model_1 checkpoint"
           },
           "conversion": {
-            "model_variant": "model_1 (GTZAN)",
+            "model_variant": "model_1 (held out: GTZAN)",
             "source_weights_sha256": "619091bc317ca3e83b45591d46f6de3d5a41588bcb39fe9fe7be30cffa6aca84",
             "exporter": {
               "repo": "this repository",
@@ -215,9 +215,405 @@
         "modifications": null
       }
     },
+    "beat_this_final0": {
+      "purpose": "official full Beat This! source checkpoint for GTZAN-held-out evaluation and source-to-ONNX parity",
+      "license": "MIT, code and published weights (verified: repository README)",
+      "source": {
+        "repo": "https://github.com/CPJKU/beat_this",
+        "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+        "tag": "v1.1.0",
+        "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/final0.ckpt",
+        "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+        "path": "final0.ckpt"
+      },
+      "file": "beat_this_final0.ckpt",
+      "expected_mb": 78.0,
+      "pinned": {
+        "sha256": "8c328b45f59d8dd3dff219253ff6a8d6482be57d0133a29140e2febbf8eb8331",
+        "bytes": 81058141,
+        "provenance": {
+          "source": {
+            "repo": "https://github.com/CPJKU/beat_this",
+            "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+            "tag": "v1.1.0",
+            "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/final0.ckpt",
+            "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+            "path": "final0.ckpt"
+          }
+        },
+        "date": "2026-08-09"
+      },
+      "attribution": {
+        "work": "Beat This!",
+        "creators": [
+          "Francesco Foscarin",
+          "Jan Schlüter",
+          "Gerhard Widmer"
+        ],
+        "copyright": "Copyright (c) 2024 Institute of Computational Perception, JKU Linz, Austria",
+        "license_id": "MIT",
+        "license_uri": "https://github.com/CPJKU/beat_this/blob/main/LICENSE",
+        "license_text": "licenses/MIT-beat_this.txt",
+        "source_uri": "https://github.com/CPJKU/beat_this",
+        "citation": "Francesco Foscarin, Jan Schlüter and Gerhard Widmer. \"Beat this! Accurate beat tracking without DBN postprocessing.\" Proceedings of the 25th International Society for Music Information Retrieval Conference (ISMIR), San Francisco, CA, November 2024.",
+        "modifications": null
+      }
+    },
+    "beat_this_fold0": {
+      "purpose": "official Beat This! 8-fold cross-validation source checkpoint, fold 0",
+      "license": "MIT, code and published weights (verified: repository README)",
+      "source": {
+        "repo": "https://github.com/CPJKU/beat_this",
+        "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+        "tag": "v1.1.0",
+        "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/fold0.ckpt",
+        "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+        "path": "fold0.ckpt"
+      },
+      "file": "beat_this_fold0.ckpt",
+      "expected_mb": 78.0,
+      "pinned": {
+        "sha256": "f5c6b6726179e20710e4be6a0fba4018f6cbc89f32f9c0dfd15072cb047578ad",
+        "bytes": 81054590,
+        "provenance": {
+          "source": {
+            "repo": "https://github.com/CPJKU/beat_this",
+            "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+            "tag": "v1.1.0",
+            "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/fold0.ckpt",
+            "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+            "path": "fold0.ckpt"
+          }
+        },
+        "date": "2026-08-09"
+      },
+      "attribution": {
+        "work": "Beat This!",
+        "creators": [
+          "Francesco Foscarin",
+          "Jan Schlüter",
+          "Gerhard Widmer"
+        ],
+        "copyright": "Copyright (c) 2024 Institute of Computational Perception, JKU Linz, Austria",
+        "license_id": "MIT",
+        "license_uri": "https://github.com/CPJKU/beat_this/blob/main/LICENSE",
+        "license_text": "licenses/MIT-beat_this.txt",
+        "source_uri": "https://github.com/CPJKU/beat_this",
+        "citation": "Francesco Foscarin, Jan SchlÃ¼ter and Gerhard Widmer. \"Beat this! Accurate beat tracking without DBN postprocessing.\" Proceedings of the 25th International Society for Music Information Retrieval Conference (ISMIR), San Francisco, CA, November 2024.",
+        "modifications": null
+      }
+    },
+    "beat_this_fold1": {
+      "purpose": "official Beat This! 8-fold cross-validation source checkpoint, fold 1",
+      "license": "MIT, code and published weights (verified: repository README)",
+      "source": {
+        "repo": "https://github.com/CPJKU/beat_this",
+        "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+        "tag": "v1.1.0",
+        "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/fold1.ckpt",
+        "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+        "path": "fold1.ckpt"
+      },
+      "file": "beat_this_fold1.ckpt",
+      "expected_mb": 78.0,
+      "pinned": {
+        "sha256": "617b5b9641cefa585c975c97ac4e7fb9c00165ec9827303e8a88fdbd5ff3b71f",
+        "bytes": 81054590,
+        "provenance": {
+          "source": {
+            "repo": "https://github.com/CPJKU/beat_this",
+            "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+            "tag": "v1.1.0",
+            "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/fold1.ckpt",
+            "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+            "path": "fold1.ckpt"
+          }
+        },
+        "date": "2026-08-09"
+      },
+      "attribution": {
+        "work": "Beat This!",
+        "creators": [
+          "Francesco Foscarin",
+          "Jan Schlüter",
+          "Gerhard Widmer"
+        ],
+        "copyright": "Copyright (c) 2024 Institute of Computational Perception, JKU Linz, Austria",
+        "license_id": "MIT",
+        "license_uri": "https://github.com/CPJKU/beat_this/blob/main/LICENSE",
+        "license_text": "licenses/MIT-beat_this.txt",
+        "source_uri": "https://github.com/CPJKU/beat_this",
+        "citation": "Francesco Foscarin, Jan SchlÃ¼ter and Gerhard Widmer. \"Beat this! Accurate beat tracking without DBN postprocessing.\" Proceedings of the 25th International Society for Music Information Retrieval Conference (ISMIR), San Francisco, CA, November 2024.",
+        "modifications": null
+      }
+    },
+    "beat_this_fold2": {
+      "purpose": "official Beat This! 8-fold cross-validation source checkpoint, fold 2",
+      "license": "MIT, code and published weights (verified: repository README)",
+      "source": {
+        "repo": "https://github.com/CPJKU/beat_this",
+        "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+        "tag": "v1.1.0",
+        "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/fold2.ckpt",
+        "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+        "path": "fold2.ckpt"
+      },
+      "file": "beat_this_fold2.ckpt",
+      "expected_mb": 78.0,
+      "pinned": {
+        "sha256": "cece4323bccc50738e415c91c204c93ca7021e42ab3a24da6a84dccaa7cc0d4c",
+        "bytes": 81054590,
+        "provenance": {
+          "source": {
+            "repo": "https://github.com/CPJKU/beat_this",
+            "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+            "tag": "v1.1.0",
+            "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/fold2.ckpt",
+            "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+            "path": "fold2.ckpt"
+          }
+        },
+        "date": "2026-08-09"
+      },
+      "attribution": {
+        "work": "Beat This!",
+        "creators": [
+          "Francesco Foscarin",
+          "Jan Schlüter",
+          "Gerhard Widmer"
+        ],
+        "copyright": "Copyright (c) 2024 Institute of Computational Perception, JKU Linz, Austria",
+        "license_id": "MIT",
+        "license_uri": "https://github.com/CPJKU/beat_this/blob/main/LICENSE",
+        "license_text": "licenses/MIT-beat_this.txt",
+        "source_uri": "https://github.com/CPJKU/beat_this",
+        "citation": "Francesco Foscarin, Jan SchlÃ¼ter and Gerhard Widmer. \"Beat this! Accurate beat tracking without DBN postprocessing.\" Proceedings of the 25th International Society for Music Information Retrieval Conference (ISMIR), San Francisco, CA, November 2024.",
+        "modifications": null
+      }
+    },
+    "beat_this_fold3": {
+      "purpose": "official Beat This! 8-fold cross-validation source checkpoint, fold 3",
+      "license": "MIT, code and published weights (verified: repository README)",
+      "source": {
+        "repo": "https://github.com/CPJKU/beat_this",
+        "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+        "tag": "v1.1.0",
+        "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/fold3.ckpt",
+        "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+        "path": "fold3.ckpt"
+      },
+      "file": "beat_this_fold3.ckpt",
+      "expected_mb": 78.0,
+      "pinned": {
+        "sha256": "849de186a21ed1cd41d0ac78dc412c61f5283dcafffa9dd32f390674c50792cf",
+        "bytes": 81054590,
+        "provenance": {
+          "source": {
+            "repo": "https://github.com/CPJKU/beat_this",
+            "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+            "tag": "v1.1.0",
+            "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/fold3.ckpt",
+            "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+            "path": "fold3.ckpt"
+          }
+        },
+        "date": "2026-08-09"
+      },
+      "attribution": {
+        "work": "Beat This!",
+        "creators": [
+          "Francesco Foscarin",
+          "Jan Schlüter",
+          "Gerhard Widmer"
+        ],
+        "copyright": "Copyright (c) 2024 Institute of Computational Perception, JKU Linz, Austria",
+        "license_id": "MIT",
+        "license_uri": "https://github.com/CPJKU/beat_this/blob/main/LICENSE",
+        "license_text": "licenses/MIT-beat_this.txt",
+        "source_uri": "https://github.com/CPJKU/beat_this",
+        "citation": "Francesco Foscarin, Jan SchlÃ¼ter and Gerhard Widmer. \"Beat this! Accurate beat tracking without DBN postprocessing.\" Proceedings of the 25th International Society for Music Information Retrieval Conference (ISMIR), San Francisco, CA, November 2024.",
+        "modifications": null
+      }
+    },
+    "beat_this_fold4": {
+      "purpose": "official Beat This! 8-fold cross-validation source checkpoint, fold 4",
+      "license": "MIT, code and published weights (verified: repository README)",
+      "source": {
+        "repo": "https://github.com/CPJKU/beat_this",
+        "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+        "tag": "v1.1.0",
+        "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/fold4.ckpt",
+        "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+        "path": "fold4.ckpt"
+      },
+      "file": "beat_this_fold4.ckpt",
+      "expected_mb": 78.0,
+      "pinned": {
+        "sha256": "0a17b1691edbae73a7fac35f6d26d5f8f9aa483b0e3aff5d891c74140f836c52",
+        "bytes": 81054590,
+        "provenance": {
+          "source": {
+            "repo": "https://github.com/CPJKU/beat_this",
+            "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+            "tag": "v1.1.0",
+            "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/fold4.ckpt",
+            "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+            "path": "fold4.ckpt"
+          }
+        },
+        "date": "2026-08-09"
+      },
+      "attribution": {
+        "work": "Beat This!",
+        "creators": [
+          "Francesco Foscarin",
+          "Jan Schlüter",
+          "Gerhard Widmer"
+        ],
+        "copyright": "Copyright (c) 2024 Institute of Computational Perception, JKU Linz, Austria",
+        "license_id": "MIT",
+        "license_uri": "https://github.com/CPJKU/beat_this/blob/main/LICENSE",
+        "license_text": "licenses/MIT-beat_this.txt",
+        "source_uri": "https://github.com/CPJKU/beat_this",
+        "citation": "Francesco Foscarin, Jan SchlÃ¼ter and Gerhard Widmer. \"Beat this! Accurate beat tracking without DBN postprocessing.\" Proceedings of the 25th International Society for Music Information Retrieval Conference (ISMIR), San Francisco, CA, November 2024.",
+        "modifications": null
+      }
+    },
+    "beat_this_fold5": {
+      "purpose": "official Beat This! 8-fold cross-validation source checkpoint, fold 5",
+      "license": "MIT, code and published weights (verified: repository README)",
+      "source": {
+        "repo": "https://github.com/CPJKU/beat_this",
+        "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+        "tag": "v1.1.0",
+        "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/fold5.ckpt",
+        "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+        "path": "fold5.ckpt"
+      },
+      "file": "beat_this_fold5.ckpt",
+      "expected_mb": 78.0,
+      "pinned": {
+        "sha256": "ea651e7a0d1a1b243ad3ff268969c8c3d4b7e6d06b1bfb451b020d40526275c2",
+        "bytes": 81054590,
+        "provenance": {
+          "source": {
+            "repo": "https://github.com/CPJKU/beat_this",
+            "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+            "tag": "v1.1.0",
+            "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/fold5.ckpt",
+            "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+            "path": "fold5.ckpt"
+          }
+        },
+        "date": "2026-08-09"
+      },
+      "attribution": {
+        "work": "Beat This!",
+        "creators": [
+          "Francesco Foscarin",
+          "Jan Schlüter",
+          "Gerhard Widmer"
+        ],
+        "copyright": "Copyright (c) 2024 Institute of Computational Perception, JKU Linz, Austria",
+        "license_id": "MIT",
+        "license_uri": "https://github.com/CPJKU/beat_this/blob/main/LICENSE",
+        "license_text": "licenses/MIT-beat_this.txt",
+        "source_uri": "https://github.com/CPJKU/beat_this",
+        "citation": "Francesco Foscarin, Jan SchlÃ¼ter and Gerhard Widmer. \"Beat this! Accurate beat tracking without DBN postprocessing.\" Proceedings of the 25th International Society for Music Information Retrieval Conference (ISMIR), San Francisco, CA, November 2024.",
+        "modifications": null
+      }
+    },
+    "beat_this_fold6": {
+      "purpose": "official Beat This! 8-fold cross-validation source checkpoint, fold 6",
+      "license": "MIT, code and published weights (verified: repository README)",
+      "source": {
+        "repo": "https://github.com/CPJKU/beat_this",
+        "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+        "tag": "v1.1.0",
+        "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/fold6.ckpt",
+        "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+        "path": "fold6.ckpt"
+      },
+      "file": "beat_this_fold6.ckpt",
+      "expected_mb": 78.0,
+      "pinned": {
+        "sha256": "07b32a484f2c99b676e7061650ea2cd2f9f889d87ea6c712782c5855742070b1",
+        "bytes": 81054590,
+        "provenance": {
+          "source": {
+            "repo": "https://github.com/CPJKU/beat_this",
+            "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+            "tag": "v1.1.0",
+            "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/fold6.ckpt",
+            "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+            "path": "fold6.ckpt"
+          }
+        },
+        "date": "2026-08-09"
+      },
+      "attribution": {
+        "work": "Beat This!",
+        "creators": [
+          "Francesco Foscarin",
+          "Jan Schlüter",
+          "Gerhard Widmer"
+        ],
+        "copyright": "Copyright (c) 2024 Institute of Computational Perception, JKU Linz, Austria",
+        "license_id": "MIT",
+        "license_uri": "https://github.com/CPJKU/beat_this/blob/main/LICENSE",
+        "license_text": "licenses/MIT-beat_this.txt",
+        "source_uri": "https://github.com/CPJKU/beat_this",
+        "citation": "Francesco Foscarin, Jan SchlÃ¼ter and Gerhard Widmer. \"Beat this! Accurate beat tracking without DBN postprocessing.\" Proceedings of the 25th International Society for Music Information Retrieval Conference (ISMIR), San Francisco, CA, November 2024.",
+        "modifications": null
+      }
+    },
+    "beat_this_fold7": {
+      "purpose": "official Beat This! 8-fold cross-validation source checkpoint, fold 7",
+      "license": "MIT, code and published weights (verified: repository README)",
+      "source": {
+        "repo": "https://github.com/CPJKU/beat_this",
+        "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+        "tag": "v1.1.0",
+        "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/fold7.ckpt",
+        "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+        "path": "fold7.ckpt"
+      },
+      "file": "beat_this_fold7.ckpt",
+      "expected_mb": 78.0,
+      "pinned": {
+        "sha256": "f26bed3c18c8f338a39b5a9524ffea7dce654e847ccf3d006e147fa7bf71d43f",
+        "bytes": 81054590,
+        "provenance": {
+          "source": {
+            "repo": "https://github.com/CPJKU/beat_this",
+            "revision": "ad7974846029835307ba19a3d5cefbf40b243041",
+            "tag": "v1.1.0",
+            "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/fold7.ckpt",
+            "share": "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp",
+            "path": "fold7.ckpt"
+          }
+        },
+        "date": "2026-08-09"
+      },
+      "attribution": {
+        "work": "Beat This!",
+        "creators": [
+          "Francesco Foscarin",
+          "Jan Schlüter",
+          "Gerhard Widmer"
+        ],
+        "copyright": "Copyright (c) 2024 Institute of Computational Perception, JKU Linz, Austria",
+        "license_id": "MIT",
+        "license_uri": "https://github.com/CPJKU/beat_this/blob/main/LICENSE",
+        "license_text": "licenses/MIT-beat_this.txt",
+        "source_uri": "https://github.com/CPJKU/beat_this",
+        "citation": "Francesco Foscarin, Jan SchlÃ¼ter and Gerhard Widmer. \"Beat this! Accurate beat tracking without DBN postprocessing.\" Proceedings of the 25th International Society for Music Information Retrieval Conference (ISMIR), San Francisco, CA, November 2024.",
+        "modifications": null
+      }
+    },
     "beat_this_cpp_onnx": {
       "purpose": "third-party pre-converted ONNX — desktop evaluation only; reproduce the export before release",
-      "license": "MIT repository; source-weight and conversion provenance still required before distribution",
+      "license": "MIT repository and upstream weights; clean source-to-runtime parity is required before distribution",
       "source": {
         "repo": "https://github.com/mosynthkey/beat_this_cpp",
         "revision": "07ab790a9ec2eda8093d52d249e3ec4f0510ee72",
@@ -226,11 +622,12 @@
       },
       "conversion": {
         "model_variant": "final0",
-        "source_weights_sha256": null,
+      "source_checkpoint_artifact": "beat_this_final0",
+      "source_weights_sha256": "8c328b45f59d8dd3dff219253ff6a8d6482be57d0133a29140e2febbf8eb8331",
         "exporter": {
           "repo": "https://github.com/mosynthkey/beat_this_cpp",
           "revision": "07ab790a9ec2eda8093d52d249e3ec4f0510ee72",
-          "version": null
+        "version": "onnx/convert_to_onnx.py"
         },
         "onnx_opset": 14,
         "preprocessing": {
@@ -262,7 +659,7 @@
             "downbeat"
           ]
         },
-        "note": "Populate source_weights_sha256 and exporter version before treating this ONNX as release-ready."
+      "note": "The third-party repository documents this graph as an opset-14 export of the official Beat This! final0 checkpoint. Frame-level parity still gates release use."
       },
       "file": "beat_this.onnx",
       "expected_mb": 79.2,
@@ -278,11 +675,12 @@
           },
           "conversion": {
             "model_variant": "final0",
-            "source_weights_sha256": null,
+          "source_checkpoint_artifact": "beat_this_final0",
+          "source_weights_sha256": "8c328b45f59d8dd3dff219253ff6a8d6482be57d0133a29140e2febbf8eb8331",
             "exporter": {
               "repo": "https://github.com/mosynthkey/beat_this_cpp",
               "revision": "07ab790a9ec2eda8093d52d249e3ec4f0510ee72",
-              "version": null
+            "version": "onnx/convert_to_onnx.py"
             },
             "onnx_opset": 14,
             "preprocessing": {
@@ -314,7 +712,7 @@
                 "downbeat"
               ]
             },
-            "note": "Populate source_weights_sha256 and exporter version before treating this ONNX as release-ready."
+          "note": "The third-party repository documents this graph as an opset-14 export of the official Beat This! final0 checkpoint. Frame-level parity still gates release use."
           }
         },
         "date": "2026-07-26"
@@ -555,7 +953,7 @@
         "note": "converted locally from the pinned beatnet_model_2 checkpoint"
       },
       "conversion": {
-        "model_variant": "model_2 (Ballroom)",
+        "model_variant": "model_2 (held out: Ballroom)",
         "source_weights_sha256": "5878a18c079fa0b0139879b14ed2b5b7595faef8c3d16210aed141fd00fa2d58",
         "exporter": {
           "repo": "this repository",
@@ -608,7 +1006,7 @@
             "note": "converted locally from the pinned beatnet_model_2 checkpoint"
           },
           "conversion": {
-            "model_variant": "model_2 (Ballroom)",
+            "model_variant": "model_2 (held out: Ballroom)",
             "source_weights_sha256": "5878a18c079fa0b0139879b14ed2b5b7595faef8c3d16210aed141fd00fa2d58",
             "exporter": {
               "repo": "this repository",
@@ -717,7 +1115,7 @@
         "note": "converted locally from the pinned beatnet_model_3 checkpoint"
       },
       "conversion": {
-        "model_variant": "model_3 (Rock Corpus)",
+        "model_variant": "model_3 (held out: Rock Corpus)",
         "source_weights_sha256": "0c52a074ea38e8cb4a760ecfa3747c9cf91a1e3cd19f238eed80b0de763989ca",
         "exporter": {
           "repo": "this repository",
@@ -770,7 +1168,7 @@
             "note": "converted locally from the pinned beatnet_model_3 checkpoint"
           },
           "conversion": {
-            "model_variant": "model_3 (Rock Corpus)",
+            "model_variant": "model_3 (held out: Rock Corpus)",
             "source_weights_sha256": "0c52a074ea38e8cb4a760ecfa3747c9cf91a1e3cd19f238eed80b0de763989ca",
             "exporter": {
               "repo": "this repository",

@@ -39,6 +39,25 @@ python models/fetch.py pin beat_this_small https://cloud.cp.jku.at/public.php/da
 python models/fetch.py verify                              # тримає за хеш
 ```
 
+Для P0 також закріплено офіційний повний checkpoint `final0` і всі вісім
+cross-validation checkpoint-ів `fold0..fold7`. `final0` та runtime ONNX
+пов'язані не назвою файла, а полями `source_checkpoint_artifact` і
+`source_weights_sha256` у `manifest.json`; exporter зафіксований як
+`mosynthkey/beat_this_cpp@07ab790.../onnx/convert_to_onnx.py`, opset 14.
+
+Runtime-граф додатково перевіряється frame-by-frame проти офіційного checkpoint
+за заздалегідь зареєстрованим порогом `max_abs_diff <= 1e-4`:
+
+```text
+python models/export_beat_this.py models/beat_this_final0.ckpt \
+  models/beat_this.onnx --verify-only --report <outside-repository>/parity.json
+```
+
+Перевірка відмовляється створювати прийнятний результат із dirty/unknown
+worktree, звіряє обидва SHA-256 з manifest і вимагає писати JSON поза
+репозиторієм. `--allow-dirty-diagnostic` існує лише для налагодження: такий звіт
+завжди має `accepted: false`. Протокол: `research/eval/PREREGISTERED_beat_this_runtime_parity.md`.
+
 Тільки stdlib — скрипт запускається на будь-якій машині з мережею без
 установлення чогось.
 

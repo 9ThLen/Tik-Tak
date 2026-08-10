@@ -38,7 +38,8 @@ from eval.activation_recall import matched, top_n_times_and_chance  # noqa: E402
 from eval.features import read as read_features  # noqa: E402
 from eval.peaks import (PeakParams, collapse, dense_signals,  # noqa: E402
                         peak_map)
-from eval.provenance import digest, provenance  # noqa: E402
+from eval.provenance import (digest,  # noqa: E402
+                             experiment_provenance as provenance)
 from eval.whitening_room import WARMUP_SEC, contrast  # noqa: E402
 
 REPOSITORY = pathlib.Path(__file__).resolve().parents[2]
@@ -260,9 +261,16 @@ def main() -> int:
     parser.add_argument("--data-root", type=pathlib.Path, required=True)
     parser.add_argument("--features-dir", type=pathlib.Path, required=True)
     parser.add_argument("--output", type=pathlib.Path, required=True)
-    parser.add_argument("--allow-dirty", action="store_true",
-                        help="for development only; the artifact records it")
     args = parser.parse_args()
+
+    for label, path in (("--features-dir", args.features_dir),
+                        ("--output", args.output)):
+        try:
+            path.resolve().relative_to(REPOSITORY.resolve())
+        except ValueError:
+            pass
+        else:
+            parser.error(f"{label} must be outside the evaluation worktree")
 
     root = args.data_root.resolve()
     sources: dict[str, pathlib.Path] = {
@@ -286,12 +294,7 @@ def main() -> int:
         refractory=list(REFRACTORY), merges=list(MERGES),
         novelty_horizons=list(NOVELTY_HORIZONS),
         room_alignment=alignment)
-    preflight_provenance = provenance(
-        REPOSITORY, sources, **provenance_extra)
-    if (preflight_provenance["tree_clean"] is not True
-            and not args.allow_dirty):
-        raise RuntimeError(
-            "refusing a provisional run: git tree is not provably clean")
+    provenance(REPOSITORY, sources, **provenance_extra)
 
     features, raw_beats = {}, {}
     feature_sources: dict[str, pathlib.Path] = {}
@@ -320,9 +323,6 @@ def main() -> int:
     run_provenance = provenance(
         REPOSITORY, sources | feature_sources, **provenance_extra,
         scoring_intervals=scoring_intervals)
-    if run_provenance["tree_clean"] is not True and not args.allow_dirty:
-        raise RuntimeError(
-            "feature generation dirtied the tree; refusing a provisional run")
 
     # The control, which does not depend on any sweep parameter.
     dense: dict = {}
@@ -446,7 +446,7 @@ def main() -> int:
                 for (label, rule, track, condition), stats in sorted(table.items())]
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps({
+    payload = {
         "provenance": run_provenance,
         "registered_in": "research/eval/PEAK_FRONT_END_PLAN.md",
         "folds": folds,
@@ -458,7 +458,10 @@ def main() -> int:
         "dense": [{"signal": name, "track": track, "condition": condition, **stats}
                   for (name, track, condition), stats in sorted(dense.items())],
         "sweep": {arm: flatten(table) for arm, table in arms.items()},
-    }, indent=2), "utf-8")
+    }
+    staged = args.output.with_name(f".{args.output.name}.tmp")
+    staged.write_text(json.dumps(payload, indent=2) + "\n", "utf-8")
+    staged.replace(args.output)
 
     for arm, result in verdict.items():
         print(f"{arm:10s} improved {result['tracks_improved']}/5  "
