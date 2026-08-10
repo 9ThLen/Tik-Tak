@@ -48,16 +48,19 @@ Two limits travel with them and must not be dropped:
 
 ## Rights
 
-`bpsd` (Beethoven Piano Sonata Dataset v2) and `kraisler` (KRAISLER) are cleared
-for use by permission obtained 2026-08-10.
-
-**`rubato` is in the plan but its permission was not stated in that grant.** It
-is used here on the same footing pending confirmation, and any release bundle
-must resolve it first. Recorded rather than assumed, because the difference
-between `research_only` and commercial-safe decides whether trained weights can
-ship at all.
+`bpsd` (Beethoven Piano Sonata Dataset v2), `kraisler` (KRAISLER) and `rubato`
+are all cleared for use by permission obtained 2026-08-10. `rubato` was not
+named in the first statement of that grant and was recorded here as pending; it
+was confirmed the same day, and the gap is left visible rather than edited away
+so the provenance of the clearance stays readable.
 
 `beat-this-annotations` is MIT and is annotations only.
+
+What this does **not** settle is whether the clearance is `research_only` or
+commercial-safe. That distinction decides whether weights trained on this
+material can reach a release bundle at all, it is not answered by permission to
+use the data for research, and it has to be resolved before anything is
+exported rather than after.
 
 ## Deleted, and why
 
