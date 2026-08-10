@@ -212,30 +212,67 @@ def main() -> int:
               file=sys.stderr)
         return 1
 
-    records, failures = [], []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futures = {pool.submit(measure_one, item, args.binary, args.model): item
-                   for item in items}
-        for done in concurrent.futures.as_completed(futures):
-            item = futures[done]
-            try:
-                records.append(done.result())
-            except Exception as error:  # noqa: BLE001 - recorded, not raised
-                failures.append({"name": item["name"], "error": str(error)[:300]})
-            print(f"{len(records) + len(failures)}/{len(items)}", end="\r",
-                  file=sys.stderr)
-    print(file=sys.stderr)
-
     commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
                             text=True).stdout.strip()
     clean = not subprocess.run(["git", "status", "--porcelain"],
                                capture_output=True, text=True).stdout.strip()
+
+    # A checkpoint, because the first attempt at this run was interrupted at
+    # forty-five minutes and left nothing: the artifact is written once, at the
+    # end. Each finished recording is appended here instead, and a rerun skips
+    # what is already done.
+    #
+    # The commit is written into the sidecar and a mismatch refuses to resume
+    # rather than resuming quietly. Half a result measured at one commit and
+    # half at another is not a result, and it would carry a single `commit`
+    # field in the artifact that named only one of them.
+    partial_path = args.output.with_suffix(".partial.jsonl")
+    records, failures, resumed = [], [], 0
+    if partial_path.is_file():
+        for line in partial_path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if row.get("commit") != commit:
+                print(f"refusing to resume: {partial_path.name} was written at "
+                      f"{row.get('commit', '?')[:8]}, this is {commit[:8]}",
+                      file=sys.stderr)
+                return 1
+            records.append(row["record"])
+        resumed = len(records)
+        if resumed:
+            print(f"resuming: {resumed} recordings already done",
+                  file=sys.stderr)
+    done_names = {r["name"] for r in records}
+    todo = [item for item in items if item["name"] not in done_names]
+
+    partial_path.parent.mkdir(parents=True, exist_ok=True)
+    with partial_path.open("a", encoding="utf-8") as sidecar:
+        with concurrent.futures.ThreadPoolExecutor(
+                max_workers=args.workers) as pool:
+            futures = {pool.submit(measure_one, item, args.binary,
+                                   args.model): item for item in todo}
+            for done in concurrent.futures.as_completed(futures):
+                item = futures[done]
+                try:
+                    record = done.result()
+                    records.append(record)
+                    sidecar.write(json.dumps({"commit": commit,
+                                              "record": record}) + "\n")
+                    sidecar.flush()
+                except Exception as error:  # noqa: BLE001 - recorded, not raised
+                    failures.append({"name": item["name"],
+                                     "error": str(error)[:300]})
+                print(f"{len(records) + len(failures)}/{len(items)}", end="\r",
+                      file=sys.stderr)
+    print(file=sys.stderr)
     summary = summarise(records) if records else {}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps({
         "commit": commit, "clean": clean,
         "registered_in": "research/eval/PREREGISTERED_accented_oracle.md",
         "corpora": args.corpora, "requested": len(items),
+        "resumed_from_checkpoint": resumed,
         "sample_hz": SAMPLE_HZ,
         "arms": {k: {"weak_beat_height": v[0], "shuffled": v[1]}
                  for k, v in ARMS.items()},
@@ -244,6 +281,11 @@ def main() -> int:
         "summary": summary,
         "records": sorted(records, key=lambda r: (r["corpus"], r["name"])),
     }, indent=2), encoding="utf-8")
+
+    # Only once the artifact is safely on disk. A checkpoint removed any earlier
+    # would reopen the window it exists to close.
+    if summary and not failures:
+        partial_path.unlink(missing_ok=True)
 
     if summary:
         for arm in ARMS:
