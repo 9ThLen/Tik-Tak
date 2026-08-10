@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import pathlib
 import sys
 
@@ -42,6 +43,7 @@ import numpy as np
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from eval.make_sweep import deconvolve, sweep  # noqa: E402
+from eval.provenance import digest, experiment_provenance  # noqa: E402
 
 RATE = 48000
 
@@ -112,6 +114,25 @@ def build_take(music: np.ndarray, rate: int = RATE,
         layout["tail_slate_start_sec"] = (
             len(marker) + len(gap) + len(music) + len(gap)) / rate
     return np.concatenate(parts), layout
+
+
+def prepare_music(music: np.ndarray, source_rate: int, *,
+                  target_rate: int = RATE,
+                  peak: float | None = None) -> np.ndarray:
+    """Resample and optionally peak-normalise one mono source deterministically."""
+    out = np.asarray(music, dtype=np.float64)
+    if source_rate != target_rate:
+        from scipy.signal import resample_poly
+
+        factor = math.gcd(int(source_rate), int(target_rate))
+        out = resample_poly(out, target_rate // factor, source_rate // factor)
+    if peak is not None:
+        if not (0.0 < peak <= 1.0):
+            raise ValueError("music peak must be in (0, 1]")
+        measured = float(np.max(np.abs(out))) if len(out) else 0.0
+        if measured > 0.0:
+            out = out * (peak / measured)
+    return out
 
 
 def find_slate(capture: np.ndarray, rate: int = RATE,
@@ -222,18 +243,34 @@ def main(argv: list[str] | None = None) -> int:
                         help="the track to wrap in slates")
     parser.add_argument("--output", type=pathlib.Path, required=True)
     parser.add_argument("--no-tail-slate", action="store_true")
+    parser.add_argument("--resample", action="store_true",
+                        help=f"resample non-{RATE} Hz input to {RATE} Hz")
+    parser.add_argument("--music-peak", type=float,
+                        help="normalise the music channel to this peak (0, 1]")
     args = parser.parse_args(argv)
 
     audio, rate = soundfile.read(str(args.music), dtype="float64",
                                  always_2d=True)
     mono = audio.mean(axis=1)
-    if int(rate) != RATE:
+    source_rate = int(rate)
+    if source_rate != RATE and not args.resample:
         print(f"expected {RATE} Hz, got {rate}; resample first",
               file=sys.stderr)
         return 1
+    try:
+        mono = prepare_music(mono, source_rate, peak=args.music_peak)
+    except ValueError as error:
+        print(str(error), file=sys.stderr)
+        return 2
 
     take, layout = build_take(mono, rate=RATE,
                               tail_slate=not args.no_tail_slate)
+    layout.update({
+        "source_rate": source_rate,
+        "music_peak": (float(np.max(np.abs(mono))) if len(mono) else 0.0),
+        "resampler": ("scipy.signal.resample_poly"
+                      if source_rate != RATE else "none"),
+    })
 
     # The same control `make_sweep` applies before writing anything: if the
     # marker does not deconvolve to a spike, nothing downstream can align to it
@@ -255,7 +292,23 @@ def main(argv: list[str] | None = None) -> int:
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     soundfile.write(str(args.output), take, RATE)
-    layout["self_test"] = check
+    repository = pathlib.Path(__file__).resolve().parents[2]
+    layout["self_test"] = checked
+    layout["provenance"] = experiment_provenance(
+        repository,
+        {"source_audio": args.music},
+        generator="research/eval/slate.py",
+        output_audio=digest(args.output),
+        parameters={
+            "rate": RATE,
+            "slate_seconds": SLATE_SECONDS,
+            "slate_amplitude": SLATE_AMPLITUDE,
+            "lead_seconds": LEAD_SECONDS,
+            "music_peak": args.music_peak,
+            "tail_slate": not args.no_tail_slate,
+            "resample": args.resample,
+        },
+    )
     args.output.with_suffix(".layout.json").write_text(
         json.dumps(layout, indent=2), encoding="utf-8")
     print(f"wrote {args.output} ({len(take) / RATE:.1f} s); "

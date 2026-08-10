@@ -13,7 +13,8 @@ from scipy.signal import fftconvolve
 
 from eval.room_recording import align
 from eval.slate import (LEAD_SECONDS, MIN_PEAK_TO_SIDELOBE_DB, RATE,
-                        align_by_slate, build_take, find_slate, slate)
+                        align_by_slate, build_take, find_slate, prepare_music,
+                        slate)
 
 BPM = 125.0
 BEAT_SEC = 60.0 / BPM
@@ -113,6 +114,21 @@ def test_the_slate_is_not_at_full_scale():
     # than exactly on it, which is the correct direction to be wrong in.
     assert peak == pytest.approx(0.5, abs=1e-4)
     assert peak <= 0.5
+
+
+def test_session_music_is_resampled_and_normalised_explicitly():
+    source_rate = 22050
+    source = np.sin(2 * np.pi * 440 * np.arange(source_rate) / source_rate)
+    prepared = prepare_music(source, source_rate, peak=0.7)
+
+    assert len(prepared) == pytest.approx(RATE, abs=1)
+    assert np.max(np.abs(prepared)) == pytest.approx(0.7, abs=1e-12)
+
+
+@pytest.mark.parametrize("peak", [0.0, -0.1, 1.01])
+def test_invalid_session_music_peak_is_refused(peak):
+    with pytest.raises(ValueError, match="music peak"):
+        prepare_music(np.ones(10), RATE, peak=peak)
 
 
 def test_the_take_says_where_the_music_starts():
