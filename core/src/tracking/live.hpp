@@ -26,6 +26,14 @@ namespace tiktak::tracking {
 using AnchorBpmResolver = double (*)(void* context, double time_sec,
                                      double measured_bpm);
 
+// Optional read-only audit of every beat counted by the grid, including a beat
+// that was already too late to hand to the audio device. Product configs leave
+// it null. M0a needs the complete sequence because late beats still advance bar
+// phase even though they are absent from the playable beat list.
+using BeatObserver = void (*)(void* context, double beat_sec, long long index,
+                              double now_sec, int beats_per_bar,
+                              int position, bool confident);
+
 struct LiveConfig {
     dsp::OdfConfig odf;
     ParticleFilterConfig filter;
@@ -233,6 +241,9 @@ struct LiveConfig {
     // this tracker consumes, and writes nothing back.
     bool bar_tracking = false;
     BarTracker::Config bar;
+
+    BeatObserver beat_observer = nullptr;
+    void* beat_observer_context = nullptr;
 
     bool valid() const;
 };

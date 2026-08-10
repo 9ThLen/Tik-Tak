@@ -330,15 +330,20 @@ void LiveTracker::observe(double time_sec, double activation) {
 }
 
 void LiveTracker::observe(double time_sec, double activation, double downbeat) {
-    // Read the gate before observe() consumes it, so the bar evidence is
-    // withheld on exactly the frames the beat evidence is. Not an optimisation:
-    // the accent is derived from the bar decision, so letting an accented click
-    // into this channel would let it confirm the bar line that placed it. See
-    // tracking/bar.hpp.
-    const bool gated = gatedAt(time_sec);
-    observe(time_sec, activation);
-    if (gated || !config_.bar_tracking) return;
-    bar_.observe(time_sec, std::min(1.0, std::max(0.0, downbeat)));
+    ++stats_.frames;
+
+    // Match the built-in BeatNet path exactly: gate both channels together,
+    // give BarTracker the downbeat evidence, then submit the beat evidence.
+    // Reversing those last two operations made activation replay a different
+    // causal tracker even when every value and timestamp was identical.
+    if (gatedAt(time_sec)) {
+        ++stats_.gated;
+        return;
+    }
+    if (config_.bar_tracking) {
+        bar_.observe(time_sec, std::min(1.0, std::max(0.0, downbeat)));
+    }
+    submit(time_sec, std::min(1.0, std::max(0.0, activation)));
 }
 
 bool LiveTracker::takeBeat(double now_sec, double lookahead_sec, double* beat_sec) {
@@ -450,6 +455,11 @@ void LiveTracker::noteBeat(double beat_sec, double now_sec) {
     // Where the allocation named in LiveConfig::bar_tracking happens, and the
     // reason it is once a beat rather than once a frame.
     bar_.update(now_sec);
+    if (config_.beat_observer != nullptr) {
+        config_.beat_observer(config_.beat_observer_context, beat_sec,
+                              beat_index_, now_sec, bar_.beatsPerBar(),
+                              bar_.positionOf(beat_index_), bar_.confident());
+    }
 }
 
 void LiveTracker::seedTempo(double bpm, double spread_octaves) {

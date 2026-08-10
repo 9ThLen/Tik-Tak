@@ -239,6 +239,14 @@ LiveConfig liveBarConfig() {
     return config;
 }
 
+struct ObservedBeats {
+    std::vector<double> times;
+    static void observe(void* opaque, double beat, long long, double, int,
+                        int, bool) {
+        static_cast<ObservedBeats*>(opaque)->times.push_back(beat);
+    }
+};
+
 // Alternating strong and weak beats so the tempo is unambiguous, with the
 // downbeat channel high every `m` beats.
 //
@@ -280,6 +288,34 @@ TEST(LiveBar, IsOffUnlessAskedFor) {
     positionsOf(tracker, 120.0, 4, 20.0);
     EXPECT_EQ(tracker.beatsPerBar(), 0);
     EXPECT_EQ(tracker.barPosition(), -1);
+}
+
+TEST(LiveBar, AuditObserverSeesEveryBeatCountedByTheGrid) {
+    LiveConfig config = liveBarConfig();
+    ObservedBeats observed;
+    config.beat_observer = &ObservedBeats::observe;
+    config.beat_observer_context = &observed;
+    LiveTracker tracker(config);
+
+    const double period = 0.5;
+    for (int frame = 0; frame < 1000; ++frame) {
+        const double time = static_cast<double>(frame) / kFps;
+        const double nearest = std::round(time / period);
+        const bool pulse = std::fabs(time / period - nearest) < 0.02;
+        tracker.observe(time, pulse ? 0.95 : 0.02,
+                        (pulse && static_cast<int>(nearest) % 4 == 0) ? 0.9 : 0.05);
+        // A deliberately coarse consumer cadence. Whether an event is handed
+        // out or becomes late, the equality below requires the audit to see
+        // every event that advanced bar phase.
+        if (frame % 50 == 0) {
+            double beat = 0.0;
+            while (tracker.takeBeat(time, 0.05, &beat)) {}
+        }
+    }
+
+    const auto stats = tracker.stats();
+    ASSERT_GT(observed.times.size(), 0u);
+    EXPECT_EQ(observed.times.size(), stats.beats + stats.beats_late);
 }
 
 TEST(LiveBar, DoesNotMoveASingleBeat) {

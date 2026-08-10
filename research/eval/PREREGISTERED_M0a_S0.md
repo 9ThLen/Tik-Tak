@@ -52,9 +52,10 @@ in this experiment. `dump_analysis --beats --salience` is **not** this seam: it
 calls the batch `analysis::resolveMeter` after the live run has finished, while
 the registered A4 is produced by `LiveTracker → BarTracker`. M0a therefore uses
 a causal BarTracker replay for all four arms. The replay consumes the exact
-frame timestamps, frame-release schedule and beat-publication schedule recorded
-from the live run. A4 must reproduce the ordinary live `beat_sync` arm before
-any oracle comparison is accepted.
+frame timestamps and frame-release schedule recorded from the live run. For the
+predicted grid it also consumes the recorded beat-publication schedule. A4 must
+reproduce the ordinary live `beat_sync` arm before any oracle comparison is
+accepted.
 
 | Arm | Tactus grid | Downbeat evidence | Isolates |
 |---|---|---|---|
@@ -116,7 +117,12 @@ loophole: fixed outside the registration is not registered.
   smoothing, no Gaussian. Ties between two equidistant frames resolve to the
   earlier frame.
 * The reference tactus grid is fed as the beat sequence directly; it is not
-  re-derived from an activation.
+  re-derived from an activation. Reference beats have no product publication
+  schedule to record, so their schedule is fixed here: each is published on the
+  first 512-sample device block whose ending clock puts it within the shipped
+  50 ms lookahead (`beat <= now + 0.05`). This is the earliest schedule the
+  product could publish that timestamp and is generated without consulting
+  meter or phase. A1 and A2 use the same generated block indices.
 * **A hard impulse is not what the decoder normally sees.** The earlier
   three-frame triangular sensitivity arm is withdrawn because BarTracker takes
   a maximum over ±70 ms: both constructions have the same peak of 1.0 and are
@@ -437,3 +443,25 @@ name and removes arm-dependent scoring spans.
 
 Any further change after a number exists goes below this line as a deviation,
 not into the text.
+
+## Pre-run implementation clarification, 2026-08-10
+
+No corpus artifact or binding verdict existed when the implementation exposed
+these contracts. Diagnostic smoke runs are not accepted results and are not
+written to `research/results/`.
+
+* The mandatory synthetic M0a preflight is now concrete: 32 seconds at 120 BPM,
+  a one-beat phase offset, and planted fixed meters 3, 4 and 6. Every fixture
+  must end on its planted meter and reach bar-phase F1 >= 0.90 through the same
+  causal C++ replay, or the corpus run aborts.
+* A binding M0a or S0 verdict requires scored blocks for both registered corpora;
+  `--limit`, a single-corpus diagnostic, or complete technical failure of one
+  corpus can only report `inconclusive`.
+* S0 aborts unless Rinf activation replay reproduces the ordinary live beat,
+  bar-position and meter sequences exactly, and unless every finite arm's
+  recorded reset frames equal the first model frames at or after `k * H`.
+* Fixed meter is fail-closed at the manifest boundary. A recording whose
+  manifest has no meter label is a published technical exclusion rather than a
+  meter inferred after inspecting arm output. The label itself is retained in
+  the per-record result; tactus grouping is still derived from the reference
+  beat/downbeat times and denominator remains outside the scored target.

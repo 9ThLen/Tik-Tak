@@ -307,6 +307,10 @@ BeatNetActivation::BeatNetActivation(double sampleRate,
 
 void BeatNetActivation::reset() {
     features_.reset();
+    resetModelState();
+}
+
+void BeatNetActivation::resetModelState() {
     for (BeatNetModel& model : models_) model.reset();
 }
 

@@ -391,6 +391,50 @@ std::vector<std::pair<double, double>> runActivation(BeatNetActivation& activati
 
 }  // namespace
 
+TEST(BeatNetActivation, ModelOnlyResetKeepsFeatureHistoryAndFrameClock) {
+    const auto blob = makeWeightFile();
+    BeatNetWeights weights;
+    ASSERT_TRUE(weights.load(blob.data(), blob.size()));
+    const auto audio = clickTrack(120.0, 4.0, 48000.0);
+    const std::size_t split = audio.size() / 2;
+
+    struct Frame { double time, beat, downbeat; };
+    auto collect = [&](bool reset_model) {
+        BeatNetActivation activation(48000.0, weights);
+        std::vector<Frame> out;
+        auto append = [&](double time, double beat, double downbeat) {
+            out.push_back({time, beat, downbeat});
+        };
+        activation.process(audio.data(), split, append);
+        const std::size_t boundary = out.size();
+        if (reset_model) activation.resetModelState();
+        activation.process(audio.data() + split, audio.size() - split, append);
+        return std::make_pair(out, boundary);
+    };
+
+    const auto baseline = collect(false);
+    const auto reset = collect(true);
+    ASSERT_EQ(reset.first.size(), baseline.first.size());
+    ASSERT_EQ(reset.second, baseline.second);
+    ASSERT_GT(reset.second, 10u);
+    ASSERT_LT(reset.second, reset.first.size());
+
+    bool state_changed = false;
+    for (std::size_t i = 0; i < reset.first.size(); ++i) {
+        EXPECT_DOUBLE_EQ(reset.first[i].time, baseline.first[i].time)
+            << "frame " << i << ": a model-only reset moved the feature clock";
+        if (i < reset.second) {
+            EXPECT_DOUBLE_EQ(reset.first[i].beat, baseline.first[i].beat);
+            EXPECT_DOUBLE_EQ(reset.first[i].downbeat, baseline.first[i].downbeat);
+        } else {
+            state_changed = state_changed ||
+                std::fabs(reset.first[i].beat - baseline.first[i].beat) > 1e-9 ||
+                std::fabs(reset.first[i].downbeat - baseline.first[i].downbeat) > 1e-9;
+        }
+    }
+    EXPECT_TRUE(state_changed) << "resetModelState did not change recurrent output";
+}
+
 TEST(BeatNetActivation, TheAverageIsTheMeanOfTheNetworksItAverages) {
     // Two different weight sets, run separately and together. Frame by frame,
     // the ensemble must equal the arithmetic mean of the two — in probability
