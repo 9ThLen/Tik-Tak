@@ -1,0 +1,195 @@
+{
+  "provenance": {
+    "schema": "tiktak.provenance/v1",
+    "utc": "2026-08-10T19:47:11Z",
+    "commit": "6a132790e1f8b441b08c9eac4f28735374fbe2f2",
+    "tree_clean": true,
+    "python": "3.11.15",
+    "platform": "Windows",
+    "binary": {
+      "name": "dump_analysis.exe",
+      "bytes": 966144,
+      "sha256": "886ed2c592e6bf03ef8fab90a16a3c9c345fc9baf1bfc4baaaeef1575ec2edd8"
+    },
+    "model": {
+      "name": "beatnet_model_1.ttw",
+      "bytes": 1609332,
+      "sha256": "812ed11af745885127cfb967e7db847c9bdef44b8e2c80c79cf875f790b978f1"
+    },
+    "manifest": {
+      "name": "manifest.csv",
+      "bytes": 608574,
+      "sha256": "81eceb2edcc0b9915a5bc60992cb2142ad30c88339427faaf4de38ab50e6e5cd"
+    },
+    "capture_0116_goodies": {
+      "name": "0116_goodies3.m4a",
+      "bytes": 2289977,
+      "sha256": "88eae9dfff3ec9d8c94455f561fd75ae3313cc7fb502c46ae2321d5fc19c59b1"
+    },
+    "take_0116_goodies": {
+      "name": "0116_goodies.wav",
+      "bytes": 12884012,
+      "sha256": "53d858b3b0bae2498f7189eea14b1bd8bd8ebb750799a488f1c6993ab163f601"
+    },
+    "layout_0116_goodies": {
+      "name": "0116_goodies.layout.json",
+      "bytes": 979,
+      "sha256": "bf4eba946833215dc85275f1eccb6297978e87cda465b6e41c90325e63b2cc52"
+    },
+    "capture_0707_halfwaygone": {
+      "name": "Mi\u0142a0707_halfwaygone3.m4a",
+      "bytes": 3339034,
+      "sha256": "ff2eb7315ed067895ae9832169ecca6d71706fbe3c014810560c5ba34eebfe46"
+    },
+    "take_0707_halfwaygone": {
+      "name": "0707_halfwaygone.wav",
+      "bytes": 18960524,
+      "sha256": "233080228399c4e08af71baba940eb002faf22cbf689ffada38f9e362e85eb87"
+    },
+    "layout_0707_halfwaygone": {
+      "name": "0707_halfwaygone.layout.json",
+      "bytes": 977,
+      "sha256": "1d6233a27edb44c5c9d3473e802e8bff7deda7ca7f48471569482fe76e8e21ef"
+    },
+    "capture_0837_nottonight": {
+      "name": "0837_nottonight3.m4a",
+      "bytes": 2705966,
+      "sha256": "defd046d9a409626eef9053a1b27c8ce8937e04232c97638ba931c9f0946b5ef"
+    },
+    "take_0837_nottonight": {
+      "name": "0837_nottonight.wav",
+      "bytes": 15240814,
+      "sha256": "0fcd9d774039145adb2210961d91b40af723ccb7a3b35ab03e39593d23978d5c"
+    },
+    "layout_0837_nottonight": {
+      "name": "0837_nottonight.layout.json",
+      "bytes": 1012,
+      "sha256": "785a21bda839a70a43f1b2856683ebf773184e47760b4288e1d9e47d0c1b63eb"
+    },
+    "session": 3,
+    "alignment": "slate",
+    "rate": 48000
+  },
+  "procedure": "eval/slate.py takes; offset read from the deconvolution peak; drift from the tail slate",
+  "summary": {
+    "n": 3,
+    "aligned_without_ambiguity": 3,
+    "clean_mean_f": 0.9671379619698716,
+    "room_mean_f": 0.5825033696074972,
+    "mean_delta_f": -0.3846345923623744,
+    "clean_usable_rate": 1.0,
+    "room_usable_rate": 0.3333333333333333,
+    "slate_margin_db": {
+      "min": 12.390781334108274,
+      "max": 17.590713078000324,
+      "threshold": 12.0
+    },
+    "max_abs_drift_sec": 0.002583333333348037
+  },
+  "records": [
+    {
+      "name": "0116_goodies",
+      "capture": "0116_goodies3.m4a",
+      "capture_seconds": 137.57733333333334,
+      "alignment": {
+        "music_offset_sec": 3.276604166666667,
+        "head_offset_sec": 1.2766041666666668,
+        "head_peak_to_sidelobe_db": 17.590713078000324,
+        "tail_peak_to_sidelobe_db": 12.390781334108274,
+        "drift_sec": 0.0015625000000056843,
+        "threshold_db": 12.0
+      },
+      "clean": {
+        "f_measure": 0.9764150943396226,
+        "p70": 0.9764150943396226,
+        "r70": 0.9764150943396226,
+        "usable": true,
+        "reasons": []
+      },
+      "room": {
+        "f_measure": 0.892018779342723,
+        "p70": 0.8878504672897196,
+        "r70": 0.8962264150943396,
+        "usable": true,
+        "reasons": []
+      },
+      "delta_f": -0.08439631499689959,
+      "earlier_sessions": {
+        "session1_room_f": 0.984,
+        "session2_room_f": 0.938
+      }
+    },
+    {
+      "name": "0707_halfwaygone",
+      "capture": "Mi\u0142a0707_halfwaygone3.m4a",
+      "capture_seconds": 201.15066666666667,
+      "alignment": {
+        "music_offset_sec": 2.6761875,
+        "head_offset_sec": 0.6761874999999999,
+        "head_peak_to_sidelobe_db": 17.25069460643937,
+        "tail_peak_to_sidelobe_db": 13.408339142477201,
+        "drift_sec": 0.002583333333348037,
+        "threshold_db": 12.0
+      },
+      "clean": {
+        "f_measure": 0.9505208333333334,
+        "p70": 0.9358974358974359,
+        "r70": 0.9656084656084656,
+        "usable": true,
+        "reasons": []
+      },
+      "room": {
+        "f_measure": 0.2851637764932563,
+        "p70": 0.524822695035461,
+        "r70": 0.19576719576719576,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "delta_f": -0.6653570568400771,
+      "earlier_sessions": {
+        "session1_room_f": 0.151,
+        "session2": "voided: alignment ambiguous between 0.476 s and 0.910 s"
+      }
+    },
+    {
+      "name": "0837_nottonight",
+      "capture": "0837_nottonight3.m4a",
+      "capture_seconds": 162.068,
+      "alignment": {
+        "music_offset_sec": 3.1829583333333336,
+        "head_offset_sec": 1.1829583333333333,
+        "head_peak_to_sidelobe_db": 16.06166213361286,
+        "tail_peak_to_sidelobe_db": 14.76719078600354,
+        "drift_sec": 0.001541666666639685,
+        "threshold_db": 12.0
+      },
+      "clean": {
+        "f_measure": 0.974477958236659,
+        "p70": 0.963302752293578,
+        "r70": 0.9859154929577465,
+        "usable": true,
+        "reasons": []
+      },
+      "room": {
+        "f_measure": 0.5703275529865125,
+        "p70": 0.48366013071895425,
+        "r70": 0.6948356807511737,
+        "usable": false,
+        "reasons": [
+          "wrong_beats",
+          "too_few_beats",
+          "wrong_octave"
+        ]
+      },
+      "delta_f": -0.40415040525014645,
+      "earlier_sessions": {
+        "session1_room_f": 0.555,
+        "session1_note": "aligned only with a hand-written skip_sec of 14.0 s"
+      }
+    }
+  ]
+}

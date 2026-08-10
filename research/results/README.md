@@ -31,6 +31,63 @@ the 2,760 annotated recordings here as evaluation ground, leaving Harmonix,
 RWC and SMC. That is a cost of the ensemble, not merely of testing it, and it is
 the strongest argument for recording new material.
 
+## Session 3: a slate aligns what correlation lost, and the room loss replicates
+
+`room_session3.json`. Three captures, clean tree at `6a13279`, twelve hashed
+inputs. The takes were built by `eval/slate.py` — a short Farina sweep, a gap,
+the music, a gap, the same sweep — and played once through a speaker onto a
+phone.
+
+| track | clean F | room F | Δ | head | tail | drift |
+|---|---:|---:|---:|---:|---:|---:|
+| `0116_goodies` | 0.976 | 0.892 | −0.084 | 17.6 dB | **12.4 dB** | 1.6 ms |
+| `0707_halfwaygone` | 0.951 | **0.285** | −0.665 | 17.3 dB | 13.4 dB | 2.6 ms |
+| `0837_nottonight` | 0.974 | **0.570** | −0.404 | 16.1 dB | 14.8 dB | 1.5 ms |
+| **mean** | **0.967** | **0.583** | **−0.385** | | | |
+
+### What it settles
+
+**All three aligned, with no ambiguity and no hand adjudication.** Sessions 1
+and 2 lost two of eight captures to alignment: `0837_nottonight` needed a
+hand-written `skip_sec` of 14.0 s with a paragraph explaining it, and
+`0707_halfwaygone` was voided outright — four of seven windows agreed on
+0.476 s while the coherent sum peaked at 0.910 s, 0.9 beats apart at 125 BPM,
+with nothing in the recording able to settle it. The same track, the same
+phone, read from a slate: one answer.
+
+**The room loss replicates.** −0.385 of mean F against session 1's −0.390, and
+the shape is the same: `0116_goodies` barely moves while the other two collapse,
+with `wrong_beats`, `too_few_beats` and `wrong_octave` on both.
+
+**Clock drift is real and small.** 1.5 to 2.6 ms across takes of 130 to 200 s —
+about 12 ppm between the playback clock and the phone's. Two orders below a
+beat, and now measured rather than assumed, because the tail slate measures it
+directly instead of inferring it from disagreement between thirds.
+
+### What it does not settle
+
+Three captures, one room, one phone, one session, and two of the three tracks
+are the same ones sessions 1 and 2 used. This is agreement, not independent
+confirmation, and it is a check on the *procedure* rather than a corpus.
+
+**The 12 dB threshold survived on 0.4 dB.** Six margins from three captures;
+the smallest is the tail slate on `0116_goodies` at 12.390 dB against a 12.0 bar.
+The number was chosen rather than fitted and it has now met a real phone once —
+it works, with almost no headroom. A longer or louder slate is the cheap way to
+buy some, and doing it before a collection is cheaper than discovering the bar
+was optimistic partway through one.
+
+### A mistake this artifact exists to prevent
+
+The first pass at these numbers was run from a terminal with the audio and the
+annotation paired by hand, taking `annotations/harmonix/.../*.beats` instead of
+the `normalized/harmonix/*.csv` the manifest names — the latter carry Harmonix's
+corrected offsets. `0116_goodies` scored **F 0.003 clean**, which is what
+exposed it. The other two still read 0.95 with the wrong annotation, so on two
+recordings of three the error was invisible and would have travelled.
+
+The harness takes its items from `load_corpus` and cannot make that pairing.
+
 ## The octave residue is real: accenting a perfect observation does not fix it
 
 `accented_oracle_rwc.json`, answering `eval/PREREGISTERED_accented_oracle.md`.
