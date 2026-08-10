@@ -1,3 +1,5 @@
+import pathlib
+
 import numpy as np
 
 import pytest
@@ -6,6 +8,7 @@ from eval.s0_reset import (
     InvariantError,
     arm_name,
     expected_resets,
+    measure_outcome,
     paired_bootstrap,
     require_replay_parity,
     summarise,
@@ -35,6 +38,19 @@ def test_rinf_replay_parity_is_fail_closed():
     require_replay_parity(baseline, dict(baseline), "fixture")
     with pytest.raises(InvariantError, match="beats"):
         require_replay_parity(baseline, {**baseline, "beats": [1.1]}, "fixture")
+
+
+def test_measure_outcome_keeps_technical_failures_auditable(monkeypatch):
+    def fail(*_args):
+        raise ValueError("bad annotation")
+
+    monkeypatch.setattr("eval.s0_reset.measure_one", fail)
+    kind, payload = measure_outcome(
+        {"name": "fixture", "corpus": "gtzan", "annotation": None},
+        pathlib.Path("dump_analysis"), pathlib.Path("model.ttw"))
+    assert kind == "exclusion"
+    assert payload["error_type"] == "ValueError"
+    assert payload["reason"] == "bad annotation"
 
 
 def test_summary_uses_zero_for_an_abstaining_arm():
