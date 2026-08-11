@@ -73,6 +73,26 @@ def test_dynamic_score_reports_grouping_change_acquisition():
     }
 
 
+def test_change_acquisition_requires_a_complete_bar_starting_at_position_one():
+    reference = {
+        "times": np.arange(0.0, 11.0, 1.0),
+        "positions": np.asarray([1, 2, 3, 1, 2, 3, 4, 1, 2, 3, 4]),
+        "groupings": np.asarray([3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4]),
+        "supported": np.ones(11, dtype=bool),
+        "segments": np.asarray([0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1]),
+    }
+    predicted_positions = np.asarray([
+        0, 1, 2, -1, -1, 2, 3, 0, 1, -1, -1])
+    predicted_meters = np.asarray([3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4])
+    result = score_dynamic(
+        reference["times"], predicted_positions, predicted_meters,
+        reference, 0.0)
+    assert result["changes"] == {
+        "total": 1, "acquired": 0, "within_two_bars": 0,
+        "latency_sec": [],
+    }
+
+
 def test_summarise_uses_works_not_recordings_and_requires_all_groupings():
     def record(name, work, phase, corpus="fixture"):
         metrics = {
@@ -82,14 +102,22 @@ def test_summarise_uses_works_not_recordings_and_requires_all_groupings():
             "unnecessary_unknown_share": 0.0,
             "changes": {"total": 1, "acquired": 1, "within_two_bars": 1,
                         "latency_sec": [0.0]},
+            "by_grouping": {str(grouping): {
+                "matched_tactus_phase_f1": phase}
+                for grouping in (2, 3, 4, 6)},
         }
         return {"name": name, "work_id": work, "corpus": corpus,
                 "primary_eligible": True, "groupings": [2, 3, 4, 6],
                 "arms": {arm: dict(metrics) for arm in ("A1", "A2", "A3", "A4")},
                 "A1_sensitivity": {
-                    "profiled_oracle": {"phase_f1": phase},
+                    "profiled_oracle": {
+                        "phase_f1": phase,
+                        "by_grouping": metrics["by_grouping"]},
                     "shifted_one_tactus": {
-                        "phase_f1": max(0.0, phase - 0.5)},
+                        "phase_f1": max(0.0, phase - 0.7),
+                        "by_grouping": {str(grouping): {
+                            "matched_tactus_phase_f1": max(0.0, phase - 0.7)}
+                            for grouping in (2, 3, 4, 6)}},
                 }}
 
     summary = summarise([
@@ -104,12 +132,14 @@ def test_summarise_uses_works_not_recordings_and_requires_all_groupings():
                       corpus="left" if index % 2 else "right")
                for index in range(10)]
     assert summarise(passing)["decision"]["verdict"] == "decoder_not_falsified"
+    assert set(summarise(passing)["A1_sensitivity"]["by_grouping"]) == {
+        "2", "3", "4", "6"}
 
     inert = [record(f"i{index}", f"inert-{index}", 1.0,
                     corpus="left" if index % 2 else "right")
              for index in range(10)]
     for row in inert:
-        row["A1_sensitivity"]["shifted_one_tactus"]["phase_f1"] = 1.0
+        row["A1_sensitivity"]["shifted_one_tactus"]["phase_f1"] = 0.31
     inert_summary = summarise(inert)
     assert inert_summary["A1_sensitivity"]["passed"] is False
     assert inert_summary["decision"]["verdict"] == "inconclusive"
@@ -153,7 +183,7 @@ def _checkpoint_fixture(tmp_path, count=4):
         "manifest": {"sha256": "manifest"},
     }
     identity = checkpoint_identity(
-        provenance, items, workers=1, limit=0,
+        provenance, items, limit=0,
         skip_audio_verification=False)
     return items, provenance, identity, pathlib.Path(tmp_path) / "checkpoint"
 
@@ -171,7 +201,7 @@ def test_checkpoint_pause_then_resume_skips_completed_items(tmp_path, monkeypatc
 
     monkeypatch.setattr("eval.m0b_oracle.measure_outcome", fake_measure)
     ordered, state, completed = prepare_checkpoint(
-        checkpoint, identity, provenance, items, resume=False)
+        checkpoint, identity, provenance, items, resume=False, workers=1)
     assert completed == 0
     ordered, paused = run_checkpointed(
         items, pathlib.Path("binary"), pathlib.Path("model"), workers=1,
@@ -184,7 +214,7 @@ def test_checkpoint_pause_then_resume_skips_completed_items(tmp_path, monkeypatc
 
     pause_file.unlink()
     resumed, state, completed = prepare_checkpoint(
-        checkpoint, identity, provenance, items, resume=True)
+        checkpoint, identity, provenance, items, resume=True, workers=8)
     assert completed == 1
     resumed, paused = run_checkpointed(
         items, pathlib.Path("binary"), pathlib.Path("model"), workers=1,
@@ -193,22 +223,27 @@ def test_checkpoint_pause_then_resume_skips_completed_items(tmp_path, monkeypatc
     assert paused is False
     assert calls == ["item-0", "item-1", "item-2", "item-3"]
     assert all(outcome is not None for outcome in resumed)
+    assert state["sessions"][-1]["workers"] == 8
 
 
 def test_checkpoint_resume_fails_closed_when_run_identity_changes(tmp_path):
     items, provenance, identity, checkpoint = _checkpoint_fixture(tmp_path)
-    prepare_checkpoint(checkpoint, identity, provenance, items, resume=False)
+    prepare_checkpoint(
+        checkpoint, identity, provenance, items, resume=False, workers=1)
     changed = dict(identity)
     changed["commit"] = "different"
     with pytest.raises(ValueError, match="run identity changed"):
-        prepare_checkpoint(checkpoint, changed, provenance, items, resume=True)
+        prepare_checkpoint(
+            checkpoint, changed, provenance, items, resume=True, workers=8)
 
 
 def test_checkpoint_refuses_implicit_overwrite(tmp_path):
     items, provenance, identity, checkpoint = _checkpoint_fixture(tmp_path)
-    prepare_checkpoint(checkpoint, identity, provenance, items, resume=False)
+    prepare_checkpoint(
+        checkpoint, identity, provenance, items, resume=False, workers=1)
     with pytest.raises(ValueError, match="already exists"):
-        prepare_checkpoint(checkpoint, identity, provenance, items, resume=False)
+        prepare_checkpoint(
+            checkpoint, identity, provenance, items, resume=False, workers=1)
 
 
 def test_checkpoint_and_output_must_stay_outside_repository(tmp_path):

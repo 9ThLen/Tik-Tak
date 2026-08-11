@@ -43,7 +43,8 @@ GROUPING_PASS = 0.90
 LOWER_CI_PASS = 0.85
 UPPER_CI_HARD_NEGATIVE = 0.80
 CHANGE_WITHIN_TWO_BARS_PASS = 0.80
-SENSITIVITY_MARGIN = 0.05
+SENSITIVITY_EQUIVALENCE_MARGIN = 0.05
+SHIFTED_CONTROL_MAX_PHASE_F1 = 0.30
 SENSITIVITY_CONTROLS = ("profiled_oracle", "shifted_one_tactus")
 CHECKPOINT_SCHEMA = "tiktak.m0b_checkpoint/v1"
 PAUSED_EXIT_CODE = 75
@@ -78,7 +79,7 @@ def _require_outside_repository(path: pathlib.Path, repository: pathlib.Path,
 
 
 def checkpoint_identity(provenance: dict, items: list[dict], *,
-                        workers: int, limit: int,
+                        limit: int,
                         skip_audio_verification: bool) -> dict:
     selection = [{
         "corpus": item["corpus"], "name": item["name"],
@@ -95,9 +96,9 @@ def checkpoint_identity(provenance: dict, items: list[dict], *,
         "manifest": provenance["manifest"],
         "arms": list(ARMS),
         "sensitivity_controls": list(SENSITIVITY_CONTROLS),
-        "sensitivity_margin": SENSITIVITY_MARGIN,
+        "sensitivity_equivalence_margin": SENSITIVITY_EQUIVALENCE_MARGIN,
+        "shifted_control_max_phase_f1": SHIFTED_CONTROL_MAX_PHASE_F1,
         "bootstrap_draws": 2000,
-        "workers": workers,
         "limit": limit,
         "skip_audio_verification": skip_audio_verification,
         "selected": len(items),
@@ -116,7 +117,7 @@ def _checkpoint_state(path: pathlib.Path, state: dict, *, status: str,
 
 
 def prepare_checkpoint(path: pathlib.Path, identity: dict, provenance: dict,
-                       items: list[dict], *, resume: bool
+                       items: list[dict], *, resume: bool, workers: int
                        ) -> tuple[list[object | None], dict, int]:
     expected_items = [[item["corpus"], item["name"]] for item in items]
     header_path = path / "header.json"
@@ -136,7 +137,7 @@ def prepare_checkpoint(path: pathlib.Path, identity: dict, provenance: dict,
                  if state_path.is_file() else {})
         sessions = list(state.get("sessions", []))
         sessions.append({"utc": provenance["utc"],
-                         "workers": identity["workers"], "resume": True})
+                         "workers": workers, "resume": True})
         state = {"schema": CHECKPOINT_SCHEMA, "sessions": sessions}
     else:
         if path.exists():
@@ -148,7 +149,7 @@ def prepare_checkpoint(path: pathlib.Path, identity: dict, provenance: dict,
             "provenance": provenance, "items": expected_items,
         })
         state = {"schema": CHECKPOINT_SCHEMA, "sessions": [{
-            "utc": provenance["utc"], "workers": identity["workers"],
+            "utc": provenance["utc"], "workers": workers,
             "resume": False,
         }]}
 
@@ -399,10 +400,20 @@ def score_dynamic(
     by_grouping = {}
     for grouping in sorted(set(ref_groupings[eligible])):
         mask = ref_groupings[eligible] == grouping
+        truth = ref_positions[eligible][mask] == 1
+        claimed = ((predicted_meter[eligible][mask] > 0)
+                   & (predicted_position[eligible][mask] == 1))
+        true_positive = int(np.sum(truth & claimed))
+        precision = true_positive / int(np.sum(claimed)) if np.any(claimed) else 0.0
+        recall = true_positive / int(np.sum(truth)) if np.any(truth) else 0.0
+        matched_tactus_phase_f1 = (
+            2.0 * precision * recall / (precision + recall)
+            if precision + recall > 0 else 0.0)
         by_grouping[str(int(grouping))] = {
             "events": int(np.sum(mask)),
             "grouping_accuracy": float(np.mean(meter_correct[mask])),
             "position_accuracy": float(np.mean(position_correct[mask])),
+            "matched_tactus_phase_f1": matched_tactus_phase_f1,
         }
     balanced = float(np.mean([
         block["grouping_accuracy"] for block in by_grouping.values()
@@ -426,6 +437,8 @@ def score_dynamic(
                 if change_number + 1 < len(change_indices) else len(ref_times))
         found = None
         for candidate in range(change, max(change, stop - grouping + 1)):
+            if ref_positions[candidate] != 1:
+                continue
             span = np.arange(candidate, candidate + grouping)
             if (np.all(ref_groupings[span] == grouping)
                     and np.all(predicted_meter[span] == grouping)
@@ -552,20 +565,28 @@ def measure_one(item: dict, binary: pathlib.Path, model: pathlib.Path) -> dict:
     arms = {arm: score_dynamic(*raw[arm], reference, common_start)
             for arm in ARMS}
 
-    profiled, shifted, sensitivity_profile = profiled_oracle_channels(
-        frame_times, predicted_downbeat, ref_times, reference["positions"])
-    sensitivity = {}
-    for name, channel in zip(
-            SENSITIVITY_CONTROLS, (profiled, shifted), strict=True):
-        payload = replay_bar(binary, item["audio"], beat_activation, channel,
-                             frame_emit, frame_times, ref_times, ref_emit)
-        positions = np.asarray(payload["bar_replay_positions"], dtype=np.float64)
-        meters = np.asarray(payload["bar_replay_meters"], dtype=np.float64)
-        if len(positions) != len(ref_times) or len(meters) != len(ref_times):
-            raise InvariantError(
-                f"{item['name']} {name}: incomplete sensitivity replay")
-        sensitivity[name] = score_dynamic(
-            ref_times, positions, meters, reference, common_start)
+    sensitivity = None
+    sensitivity_profile = None
+    if item["primary_eligible"]:
+        profiled, shifted, sensitivity_profile = profiled_oracle_channels(
+            frame_times, predicted_downbeat, ref_times, reference["positions"])
+        sensitivity = {}
+        for name, channel in zip(
+                SENSITIVITY_CONTROLS, (profiled, shifted), strict=True):
+            payload = replay_bar(binary, item["audio"], beat_activation, channel,
+                                 frame_emit, frame_times, ref_times, ref_emit)
+            positions = np.asarray(
+                payload["bar_replay_positions"], dtype=np.float64)
+            meters = np.asarray(payload["bar_replay_meters"], dtype=np.float64)
+            if len(positions) != len(ref_times) or len(meters) != len(ref_times):
+                raise InvariantError(
+                    f"{item['name']} {name}: incomplete sensitivity replay")
+            score = score_dynamic(
+                ref_times, positions, meters, reference, common_start)
+            score["first_decision_sec"] = (
+                float(ref_times[np.flatnonzero(meters > 0)[0]])
+                if np.any(meters > 0) else None)
+            sensitivity[name] = score
     return {
         "name": item["name"], "corpus": item["corpus"],
         "work_id": item["work_id"], "primary_eligible": item["primary_eligible"],
@@ -625,6 +646,23 @@ def _work_rows(records: list[dict]) -> list[dict]:
                 row["A1_sensitivity"][control]["phase_f1"] for row in rows]))}
             for control in SENSITIVITY_CONTROLS
         }
+        block["A1_sensitivity_by_grouping"] = {}
+        for grouping in sorted(SUPPORTED_GROUPINGS):
+            key = str(grouping)
+            sources = {"A1": [
+                row["arms"]["A1"]["by_grouping"][key][
+                    "matched_tactus_phase_f1"]
+                for row in rows if key in row["arms"]["A1"]["by_grouping"]]}
+            for control in SENSITIVITY_CONTROLS:
+                sources[control] = [
+                    row["A1_sensitivity"][control]["by_grouping"][key][
+                        "matched_tactus_phase_f1"]
+                    for row in rows
+                    if key in row["A1_sensitivity"][control]["by_grouping"]]
+            if all(values for values in sources.values()):
+                block["A1_sensitivity_by_grouping"][key] = {
+                    source: float(np.mean(values))
+                    for source, values in sources.items()}
         out.append(block)
     return out
 
@@ -656,11 +694,25 @@ def summarise(records: list[dict]) -> dict:
         work["A1_sensitivity"]["profiled_oracle"]["phase_f1"]
         - work["A1_sensitivity"]["shifted_one_tactus"]["phase_f1"]
         for work in works])
+    shifted_phase = _metric_ci([
+        work["A1_sensitivity"]["shifted_one_tactus"]["phase_f1"]
+        for work in works])
     sensitivity_passed = (
         profiled_delta["mean"] is not None
-        and abs(profiled_delta["mean"]) <= SENSITIVITY_MARGIN
-        and positive_drop["mean"] is not None
-        and positive_drop["mean"] >= SENSITIVITY_MARGIN)
+        and abs(profiled_delta["mean"]) <= SENSITIVITY_EQUIVALENCE_MARGIN
+        and shifted_phase["mean"] is not None
+        and shifted_phase["mean"] <= SHIFTED_CONTROL_MAX_PHASE_F1)
+
+    sensitivity_by_grouping = {}
+    for grouping in sorted(SUPPORTED_GROUPINGS):
+        key = str(grouping)
+        grouped_works = [work for work in works
+                         if key in work["A1_sensitivity_by_grouping"]]
+        sensitivity_by_grouping[key] = {
+            source: _metric_ci([
+                work["A1_sensitivity_by_grouping"][key][source]
+                for work in grouped_works])
+            for source in ("A1", *SENSITIVITY_CONTROLS)}
 
     enough_groups = all(count >= MIN_WORKS_PER_GROUPING
                         for count in grouping_counts.values())
@@ -713,6 +765,8 @@ def summarise(records: list[dict]) -> dict:
         "A1_sensitivity": {
             "profiled_oracle_minus_A1": profiled_delta,
             "profiled_oracle_minus_shifted_one_tactus": positive_drop,
+            "shifted_one_tactus_phase_f1": shifted_phase,
+            "by_grouping": sensitivity_by_grouping,
             "passed": sensitivity_passed,
             "limitation": (
                 "tests shape and amplitude, but not unaligned false competing "
@@ -728,7 +782,10 @@ def summarise(records: list[dict]) -> dict:
                          "lower_ci": LOWER_CI_PASS,
                          "hard_negative_upper_ci": UPPER_CI_HARD_NEGATIVE,
                          "change_within_two_bars": CHANGE_WITHIN_TWO_BARS_PASS,
-                         "sensitivity_margin": SENSITIVITY_MARGIN,
+                         "sensitivity_equivalence_margin": (
+                             SENSITIVITY_EQUIVALENCE_MARGIN),
+                         "shifted_control_max_phase_f1": (
+                             SHIFTED_CONTROL_MAX_PHASE_F1),
                          "min_works_per_grouping": MIN_WORKS_PER_GROUPING}},
     }
 
@@ -866,12 +923,13 @@ def main(argv: list[str] | None = None) -> int:
         repository, files={"binary": args.binary, "model": args.model,
                            "manifest": args.manifest}, experiment="M0b",
         arms=list(ARMS), bootstrap_draws=2000, workers=args.workers)
+    preflight = synthetic_preflight(args.binary)
     identity = checkpoint_identity(
-        provenance, items, workers=args.workers, limit=args.limit,
+        provenance, items, limit=args.limit,
         skip_audio_verification=args.skip_audio_verification)
     ordered, checkpoint_state, resumed = prepare_checkpoint(
-        checkpoint, identity, provenance, items, resume=args.resume)
-    preflight = synthetic_preflight(args.binary)
+        checkpoint, identity, provenance, items, resume=args.resume,
+        workers=args.workers)
     print(json.dumps({"event": "start", "recordings": len(items),
                       "workers": args.workers, "resumed": resumed}), flush=True)
     ordered, paused = run_checkpointed(
