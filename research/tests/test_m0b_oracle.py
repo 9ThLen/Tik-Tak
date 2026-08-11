@@ -6,8 +6,13 @@ import pytest
 
 from eval.m0b_oracle import (
     _match,
+    _require_outside_repository,
+    checkpoint_identity,
     load_manifest,
+    prepare_checkpoint,
+    profiled_oracle_channels,
     project_downbeats_to_grid,
+    run_checkpointed,
     score_dynamic,
     summarise,
 )
@@ -23,6 +28,29 @@ def test_project_downbeats_is_monotonic_unique_and_ties_go_earlier():
 def test_match_is_one_to_one():
     got = _match(np.asarray([0.0, 0.03, 1.0]), np.asarray([0.01, 1.01]))
     assert np.array_equal(got, [0, -1, 1])
+
+
+def test_profiled_oracle_copies_model_shape_and_shifts_positive_control():
+    frame_times = np.arange(0.0, 5.02, 0.02)
+    predicted = np.zeros(len(frame_times))
+    source = int(np.argmin(np.abs(frame_times - 2.0)))
+    predicted[source - 1:source + 2] = [0.25, 0.8, 0.5]
+    reference_times = np.arange(0.5, 4.51, 0.5)
+    positions = np.asarray([1, 2, 3, 4, 1, 2, 3, 4, 1])
+
+    profiled, shifted, metadata = profiled_oracle_channels(
+        frame_times, predicted, reference_times, positions)
+
+    first_downbeat = int(np.argmin(np.abs(frame_times - 0.5)))
+    first_shift = int(np.argmin(np.abs(frame_times - 1.0)))
+    assert np.allclose(profiled[first_downbeat - 1:first_downbeat + 2],
+                       [0.25, 0.8, 0.5])
+    assert np.allclose(shifted[first_shift - 1:first_shift + 2],
+                       [0.25, 0.8, 0.5])
+    assert profiled[first_shift] == 0.0
+    assert shifted[first_downbeat] == 0.0
+    assert metadata["template_half_width_sec"] >= 0.5
+    assert metadata["overlap_rule"] == "maximum"
 
 
 def test_dynamic_score_reports_grouping_change_acquisition():
@@ -57,7 +85,12 @@ def test_summarise_uses_works_not_recordings_and_requires_all_groupings():
         }
         return {"name": name, "work_id": work, "corpus": corpus,
                 "primary_eligible": True, "groupings": [2, 3, 4, 6],
-                "arms": {arm: dict(metrics) for arm in ("A1", "A2", "A3", "A4")}}
+                "arms": {arm: dict(metrics) for arm in ("A1", "A2", "A3", "A4")},
+                "A1_sensitivity": {
+                    "profiled_oracle": {"phase_f1": phase},
+                    "shifted_one_tactus": {
+                        "phase_f1": max(0.0, phase - 0.5)},
+                }}
 
     summary = summarise([
         record("performance-a", "same-work", 1.0),
@@ -71,6 +104,25 @@ def test_summarise_uses_works_not_recordings_and_requires_all_groupings():
                       corpus="left" if index % 2 else "right")
                for index in range(10)]
     assert summarise(passing)["decision"]["verdict"] == "decoder_not_falsified"
+
+    inert = [record(f"i{index}", f"inert-{index}", 1.0,
+                    corpus="left" if index % 2 else "right")
+             for index in range(10)]
+    for row in inert:
+        row["A1_sensitivity"]["shifted_one_tactus"]["phase_f1"] = 1.0
+    inert_summary = summarise(inert)
+    assert inert_summary["A1_sensitivity"]["passed"] is False
+    assert inert_summary["decision"]["verdict"] == "inconclusive"
+
+    format_biased = [record(f"f{index}", f"format-{index}", 1.0,
+                            corpus="left" if index % 2 else "right")
+                     for index in range(10)]
+    for row in format_biased:
+        row["A1_sensitivity"]["profiled_oracle"]["phase_f1"] = 0.8
+        row["A1_sensitivity"]["shifted_one_tactus"]["phase_f1"] = 0.0
+    biased_summary = summarise(format_biased)
+    assert biased_summary["A1_sensitivity"]["passed"] is False
+    assert biased_summary["decision"]["verdict"] == "inconclusive"
 
 
 def test_manifest_fails_closed_on_incomplete_hashes_and_path_escape(tmp_path):
@@ -87,3 +139,84 @@ def test_manifest_fails_closed_on_incomplete_hashes_and_path_escape(tmp_path):
         load_manifest(manifest, root, verify_audio=True)
     with pytest.raises(ValueError, match="escapes its root"):
         load_manifest(manifest, root, verify_audio=False)
+
+
+def _checkpoint_fixture(tmp_path, count=4):
+    items = [{"corpus": "fixture", "name": f"item-{index}",
+              "audio_sha256": f"audio-{index}",
+              "annotation_sha256": f"annotation-{index}"}
+             for index in range(count)]
+    provenance = {
+        "utc": "2026-08-11T00:00:00Z", "commit": "abc123",
+        "binary": {"sha256": "binary"},
+        "model": {"sha256": "model"},
+        "manifest": {"sha256": "manifest"},
+    }
+    identity = checkpoint_identity(
+        provenance, items, workers=1, limit=0,
+        skip_audio_verification=False)
+    return items, provenance, identity, pathlib.Path(tmp_path) / "checkpoint"
+
+
+def test_checkpoint_pause_then_resume_skips_completed_items(tmp_path, monkeypatch):
+    items, provenance, identity, checkpoint = _checkpoint_fixture(tmp_path)
+    pause_file = pathlib.Path(tmp_path) / "pause"
+    calls = []
+
+    def fake_measure(item, _binary, _model):
+        calls.append(item["name"])
+        if item["name"] == "item-0":
+            pause_file.write_text("pause", encoding="utf-8")
+        return "exclusion", {"name": item["name"]}
+
+    monkeypatch.setattr("eval.m0b_oracle.measure_outcome", fake_measure)
+    ordered, state, completed = prepare_checkpoint(
+        checkpoint, identity, provenance, items, resume=False)
+    assert completed == 0
+    ordered, paused = run_checkpointed(
+        items, pathlib.Path("binary"), pathlib.Path("model"), workers=1,
+        checkpoint=checkpoint, state=state, ordered=ordered,
+        pause_file=pause_file)
+    assert paused is True
+    assert calls == ["item-0"]
+    assert json.loads((checkpoint / "state.json").read_text(
+        encoding="utf-8"))["status"] == "paused"
+
+    pause_file.unlink()
+    resumed, state, completed = prepare_checkpoint(
+        checkpoint, identity, provenance, items, resume=True)
+    assert completed == 1
+    resumed, paused = run_checkpointed(
+        items, pathlib.Path("binary"), pathlib.Path("model"), workers=1,
+        checkpoint=checkpoint, state=state, ordered=resumed,
+        pause_file=pause_file)
+    assert paused is False
+    assert calls == ["item-0", "item-1", "item-2", "item-3"]
+    assert all(outcome is not None for outcome in resumed)
+
+
+def test_checkpoint_resume_fails_closed_when_run_identity_changes(tmp_path):
+    items, provenance, identity, checkpoint = _checkpoint_fixture(tmp_path)
+    prepare_checkpoint(checkpoint, identity, provenance, items, resume=False)
+    changed = dict(identity)
+    changed["commit"] = "different"
+    with pytest.raises(ValueError, match="run identity changed"):
+        prepare_checkpoint(checkpoint, changed, provenance, items, resume=True)
+
+
+def test_checkpoint_refuses_implicit_overwrite(tmp_path):
+    items, provenance, identity, checkpoint = _checkpoint_fixture(tmp_path)
+    prepare_checkpoint(checkpoint, identity, provenance, items, resume=False)
+    with pytest.raises(ValueError, match="already exists"):
+        prepare_checkpoint(checkpoint, identity, provenance, items, resume=False)
+
+
+def test_checkpoint_and_output_must_stay_outside_repository(tmp_path):
+    repository = pathlib.Path(tmp_path) / "repository"
+    repository.mkdir()
+    with pytest.raises(ValueError, match="outside the repository"):
+        _require_outside_repository(
+            repository / "results" / "checkpoint", repository, "checkpoint")
+    _require_outside_repository(
+        pathlib.Path(tmp_path) / "artifacts" / "checkpoint",
+        repository, "checkpoint")

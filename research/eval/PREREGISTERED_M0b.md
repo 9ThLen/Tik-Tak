@@ -99,6 +99,46 @@ Failure of either condition is `inconclusive`, regardless of point estimates.
 A3 projection resolves equal-distance ties to the earlier predicted beat and
 never reuses a beat. This is an oracle diagnostic, not a shippable operation.
 
+### Registered A1 format-sensitivity controls
+
+M0a's amplitude and +/-20 ms sensitivity arms were mathematically inert for
+this decoder: `BarTracker` takes the maximum downbeat evidence within +/-70 ms,
+so neither arm was capable of changing the selected evidence. M0b does not
+reinterpret or repair M0a. It adds two diagnostic replays before any successful
+M0b corpus result exists:
+
+- **Profiled oracle.** Select the highest frame in the frozen BeatNet downbeat
+  channel of that recording, resolving an exact tie to the earliest frame.
+  Copy the channel centred on that frame from one median reference-tactus
+  interval before it through one interval after it, rounding the half-width up
+  to a whole activation frame.
+  Centre the same copied profile on every reference downbeat, mapping an exact
+  nearest-frame tie to the earlier frame. Out-of-recording
+  source samples are zero-padded; overlapping copies combine by maximum, never
+  by addition. This preserves a real, recording-specific amplitude and local
+  temporal shape instead of substituting a unit impulse.
+- **Positive control: shifted one tactus.** Use the identical copied profile,
+  but centre each copy on the reference tactus immediately after its downbeat.
+  The reference grid and scoring span remain unchanged. This deliberately
+  supplies a one-position-wrong phase and must show that the sensitivity path
+  is capable of moving the result.
+
+Both controls use the A1 reference grid, reference publication clock, unchanged
+decoder, and the primary arms' common start. They are diagnostics, not fifth
+and sixth primary arms. At work level, paired phase-F1 differences are
+bootstrapped and reported, but the registered five-point rules use their means:
+
+1. if `abs(profiled oracle - A1) > 0.05`, the hard impulse has a material format
+   advantage or disadvantage and the binding verdict is withheld;
+2. if `profiled oracle - shifted one tactus < 0.05`, the positive control did
+   not move the decoder enough to make a zero sensitivity interpretable, and
+   the binding verdict is withheld.
+
+Either failure forces `inconclusive` regardless of the primary A1 thresholds.
+Passing closes only the shape-and-amplitude concern. It does **not** reproduce
+the model's unaligned false competing peaks across the whole recording; those
+remain an explicit limitation rather than being declared tested.
+
 Every arm is rescored after the latest first non-zero meter decision among the
 four arms for that recording. An arm that never answers remains in the
 intention-to-treat denominator with zero score.
@@ -171,6 +211,8 @@ Every other outcome, including an interval between the two bands, insufficient
 grouping coverage, missing corpora, diagnostic flags, or failed input
 verification.
 
+Failure of either registered A1 format-sensitivity rule is also inconclusive.
+
 The 0.80/0.90 bands deliberately leave a ten-point indifference region. They
 are fixed before model output exists; M0a's fixed-meter A1 near 0.98 is context,
 not an M0b threshold fitted from these data.
@@ -188,6 +230,86 @@ not an M0b threshold fitted from these data.
   fixes statistical overweighting but does not make the recordings unrelated.
 - A positive M0b opens S2/metrical-adapter investigation; it does not accept an
   adapter that has not yet been trained or evaluated.
+- The profiled-oracle control does not retain unaligned false competing model
+  evidence outside its copied window. It tests oracle shape and amplitude, not
+  the complete error distribution of the frozen model channel.
+
+## Sensitivity-control revision before a successful execution — 2026-08-11
+
+Independent review of the completed M0a artifact established that both of its
+registered format perturbations changed A1 by exactly zero on every scored
+recording because neither could alter the maximum selected within +/-70 ms.
+No M0b record, arm metric, aggregate, interval, or verdict has been persisted
+or inspected: the aborted execution described below predated checkpointing and
+wrote only completion counts. The profiled-oracle and shifted positive controls
+above are therefore fixed before a successful M0b result exists. This revision
+adds diagnostics and a withholding condition; it does not alter A1-A4, corpus
+selection, primary metrics, bootstrap, or the decoder thresholds.
+
+## Operational revision after the aborted first execution — 2026-08-11
+
+The first corpus execution reached 950/1005 completed futures and was then
+terminated by its orchestration shell's 7,200-second timeout. The old runner
+wrote only at the end, so it produced neither a result artifact nor a partial
+record file. No arm metric, outcome record, aggregate, confidence interval, or
+verdict from that process was persisted or inspected. Only completion counts
+and elapsed times were printed. This revision therefore changes failure
+recovery only; it does not change an arm, corpus, score, threshold, exclusion,
+bootstrap, or decision rule.
+
+Every subsequent execution uses a checkpoint directory outside the repository:
+
+- immutable `header.json` fixes the commit, binary/model/manifest digests,
+  selected-record digest, flags, worker count, primary arm list, sensitivity
+  controls and margin, and record order;
+- each completed record is written to its own temporary JSON, flushed with
+  `fsync`, and atomically renamed into `outcomes/`;
+- `state.json` is an atomic operational status file and is not a result;
+- `--resume` fails closed unless the current clean checkout and every run
+  identity field exactly match the checkpoint;
+- a fresh run refuses an existing checkpoint, and every run refuses an existing
+  final output, preventing accidental overwrite;
+- the scheduler keeps at most `--workers` futures active. When `--pause-file`
+  appears, it submits no more work, drains and checkpoints the active futures,
+  marks the checkpoint `paused`, and exits with code 75;
+- output, checkpoint, and pause paths inside the repository are rejected, so
+  operational writes cannot invalidate `tree_clean` after provenance capture;
+- after an abrupt process or host failure, resume recomputes at most the active
+  uncheckpointed futures. Already checkpointed outcomes are not rerun;
+- the final artifact is itself written atomically only after all selected
+  outcomes exist. A complete checkpoint can reconstruct it without model
+  inference if final aggregation is interrupted.
+
+Checkpoint outcomes are intermediate cache entries, not individually
+interpretable experimental results. The binding result remains the one complete
+final artifact produced from all selected records. This operational revision
+requires independent review and a new clean commit before another binding run.
+
+### Detached Windows run and pause/resume procedure
+
+The binding invocation must not inherit a short-lived shell timeout. From a
+clean eval worktree, set `PYTHONPATH=research` and launch the same command with
+PowerShell `Start-Process -WindowStyle Hidden -PassThru`, redirecting stdout and
+stderr to files outside the repository. The argument list must include:
+
+```text
+python -m eval.m0b_oracle
+  --manifest <immutable-manifest>
+  --music-root <music-root>
+  --binary <dump_analysis.exe>
+  --model <beatnet_model_1.ttw>
+  --output <m0b-final.json>
+  --checkpoint <m0b-checkpoint-directory>
+  --pause-file <m0b.pause>
+  --workers 8
+```
+
+Store the returned PID beside the redirected logs. To request a graceful pause,
+create `<m0b.pause>` and wait until `state.json` says `paused` and the process
+exits with code 75. Then remove only the pause file and launch the identical
+argument list with `--resume`. If the process is killed without a graceful
+pause, launch that same resume command after confirming no old worker remains.
+Never use `--skip-audio-verification` to recover a binding run.
 
 ## What would void the run
 

@@ -6,13 +6,16 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import csv
+import hashlib
 import json
 import math
+import os
 import pathlib
 import tempfile
 import time
 import wave
-from collections import defaultdict
+from collections import defaultdict, deque
+from datetime import datetime, timezone
 
 import numpy as np
 
@@ -40,6 +43,151 @@ GROUPING_PASS = 0.90
 LOWER_CI_PASS = 0.85
 UPPER_CI_HARD_NEGATIVE = 0.80
 CHANGE_WITHIN_TWO_BARS_PASS = 0.80
+SENSITIVITY_MARGIN = 0.05
+SENSITIVITY_CONTROLS = ("profiled_oracle", "shifted_one_tactus")
+CHECKPOINT_SCHEMA = "tiktak.m0b_checkpoint/v1"
+PAUSED_EXIT_CODE = 75
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace(
+        "+00:00", "Z")
+
+
+def _atomic_write_json(path: pathlib.Path, payload: dict) -> None:
+    """Write one durable JSON value without exposing a partial target."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    staged = path.with_name(f".{path.name}.tmp")
+    with staged.open("w", encoding="utf-8", newline="\n") as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2,
+                  allow_nan=False)
+        handle.write("\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    staged.replace(path)
+
+
+def _require_outside_repository(path: pathlib.Path, repository: pathlib.Path,
+                                label: str) -> None:
+    try:
+        path.resolve().relative_to(repository.resolve())
+    except ValueError:
+        return
+    raise ValueError(
+        f"{label} must be outside the repository to preserve tree_clean: {path}")
+
+
+def checkpoint_identity(provenance: dict, items: list[dict], *,
+                        workers: int, limit: int,
+                        skip_audio_verification: bool) -> dict:
+    selection = [{
+        "corpus": item["corpus"], "name": item["name"],
+        "audio_sha256": item.get("audio_sha256"),
+        "annotation_sha256": item.get("annotation_sha256"),
+    } for item in items]
+    selection_digest = hashlib.sha256(json.dumps(
+        selection, ensure_ascii=False, sort_keys=True,
+        separators=(",", ":")).encode("utf-8")).hexdigest()
+    return {
+        "commit": provenance["commit"],
+        "binary": provenance["binary"],
+        "model": provenance["model"],
+        "manifest": provenance["manifest"],
+        "arms": list(ARMS),
+        "sensitivity_controls": list(SENSITIVITY_CONTROLS),
+        "sensitivity_margin": SENSITIVITY_MARGIN,
+        "bootstrap_draws": 2000,
+        "workers": workers,
+        "limit": limit,
+        "skip_audio_verification": skip_audio_verification,
+        "selected": len(items),
+        "selection_sha256": selection_digest,
+    }
+
+
+def _checkpoint_state(path: pathlib.Path, state: dict, *, status: str,
+                      completed: int, total: int) -> None:
+    updated = dict(state)
+    updated.update({"status": status, "completed": completed,
+                    "total": total, "updated_utc": _utc_now()})
+    state.clear()
+    state.update(updated)
+    _atomic_write_json(path / "state.json", state)
+
+
+def prepare_checkpoint(path: pathlib.Path, identity: dict, provenance: dict,
+                       items: list[dict], *, resume: bool
+                       ) -> tuple[list[object | None], dict, int]:
+    expected_items = [[item["corpus"], item["name"]] for item in items]
+    header_path = path / "header.json"
+    outcomes_path = path / "outcomes"
+    if resume:
+        if not header_path.is_file() or not outcomes_path.is_dir():
+            raise ValueError(f"cannot resume: incomplete checkpoint {path}")
+        header = json.loads(header_path.read_text(encoding="utf-8"))
+        if header.get("schema") != CHECKPOINT_SCHEMA:
+            raise ValueError("cannot resume: checkpoint schema changed")
+        if header.get("identity") != identity:
+            raise ValueError("cannot resume: checkpoint run identity changed")
+        if header.get("items") != expected_items:
+            raise ValueError("cannot resume: checkpoint item order changed")
+        state_path = path / "state.json"
+        state = (json.loads(state_path.read_text(encoding="utf-8"))
+                 if state_path.is_file() else {})
+        sessions = list(state.get("sessions", []))
+        sessions.append({"utc": provenance["utc"],
+                         "workers": identity["workers"], "resume": True})
+        state = {"schema": CHECKPOINT_SCHEMA, "sessions": sessions}
+    else:
+        if path.exists():
+            raise ValueError(
+                f"checkpoint already exists; pass --resume or choose another: {path}")
+        outcomes_path.mkdir(parents=True)
+        _atomic_write_json(header_path, {
+            "schema": CHECKPOINT_SCHEMA, "identity": identity,
+            "provenance": provenance, "items": expected_items,
+        })
+        state = {"schema": CHECKPOINT_SCHEMA, "sessions": [{
+            "utc": provenance["utc"], "workers": identity["workers"],
+            "resume": False,
+        }]}
+
+    ordered: list[object | None] = [None] * len(items)
+    for outcome_path in sorted(outcomes_path.glob("*.json")):
+        try:
+            index = int(outcome_path.stem)
+        except ValueError as error:
+            raise ValueError(
+                f"cannot resume: invalid outcome filename {outcome_path.name}") from error
+        if not 0 <= index < len(items) or ordered[index] is not None:
+            raise ValueError(f"cannot resume: invalid outcome index {index}")
+        saved = json.loads(outcome_path.read_text(encoding="utf-8"))
+        if saved.get("schema") != CHECKPOINT_SCHEMA or saved.get("index") != index:
+            raise ValueError(f"cannot resume: invalid outcome envelope {index}")
+        if saved.get("item") != expected_items[index]:
+            raise ValueError(f"cannot resume: outcome item changed at {index}")
+        outcome = saved.get("outcome")
+        if (not isinstance(outcome, list) or len(outcome) != 2
+                or outcome[0] not in {"record", "exclusion"}
+                or not isinstance(outcome[1], dict)):
+            raise ValueError(f"cannot resume: malformed outcome {index}")
+        ordered[index] = outcome
+    completed = sum(outcome is not None for outcome in ordered)
+    _checkpoint_state(path, state, status="ready", completed=completed,
+                      total=len(items))
+    return ordered, state, completed
+
+
+def _save_checkpoint_outcome(path: pathlib.Path, index: int, item: dict,
+                             outcome: tuple[str, dict]) -> None:
+    target = path / "outcomes" / f"{index:06d}.json"
+    if target.exists():
+        raise RuntimeError(f"refusing to overwrite checkpoint outcome {index}")
+    _atomic_write_json(target, {
+        "schema": CHECKPOINT_SCHEMA, "index": index,
+        "item": [item["corpus"], item["name"]],
+        "outcome": list(outcome),
+    })
 
 
 def load_manifest(path: pathlib.Path, music_root: pathlib.Path,
@@ -127,6 +275,68 @@ def project_downbeats_to_grid(grid: np.ndarray,
         chosen.append(index)
         lower = index + 1
     return grid[np.asarray(chosen, dtype=np.int64)]
+
+
+def profiled_oracle_channels(
+    frame_times: np.ndarray,
+    predicted_channel: np.ndarray,
+    reference_times: np.ndarray,
+    reference_positions: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, dict]:
+    """Build the registered realistic oracle and its shifted positive control."""
+    if len(frame_times) != len(predicted_channel) or len(frame_times) < 2:
+        raise ValueError("profiled oracle requires matching non-trivial frames")
+    if len(reference_times) != len(reference_positions) or len(reference_times) < 2:
+        raise ValueError("profiled oracle requires matching reference tactus")
+    if (not np.all(np.isfinite(frame_times))
+            or not np.all(np.isfinite(predicted_channel))
+            or not np.all(np.isfinite(reference_times))):
+        raise ValueError("profiled oracle inputs must be finite")
+
+    frame_step = float(np.median(np.diff(frame_times)))
+    tactus_interval = float(np.median(np.diff(reference_times)))
+    if frame_step <= 0.0 or tactus_interval <= 0.0:
+        raise ValueError("profiled oracle clocks must increase")
+    half_width_frames = max(1, int(math.ceil(tactus_interval / frame_step)))
+    offsets = np.arange(-half_width_frames, half_width_frames + 1,
+                        dtype=np.int64)
+    source_center = int(np.argmax(predicted_channel))
+    source_indices = source_center + offsets
+    template = np.zeros(len(offsets), dtype=np.float64)
+    source_valid = ((source_indices >= 0)
+                    & (source_indices < len(predicted_channel)))
+    template[source_valid] = predicted_channel[source_indices[source_valid]]
+
+    def nearest_frame(time_sec: float) -> int:
+        right = int(np.searchsorted(frame_times, time_sec, side="left"))
+        candidates = [index for index in (right - 1, right)
+                      if 0 <= index < len(frame_times)]
+        return min(candidates, key=lambda index: (
+            abs(frame_times[index] - time_sec), index))
+
+    def stamp(targets: np.ndarray) -> np.ndarray:
+        channel = np.zeros(len(frame_times), dtype=np.float64)
+        for target in targets:
+            target_indices = nearest_frame(float(target)) + offsets
+            valid = ((target_indices >= 0) & (target_indices < len(channel)))
+            indices = target_indices[valid]
+            channel[indices] = np.maximum(channel[indices], template[valid])
+        return channel
+
+    downbeat_indices = np.flatnonzero(reference_positions == 1)
+    downbeats = reference_times[downbeat_indices]
+    shifted_indices = downbeat_indices[downbeat_indices + 1 < len(reference_times)] + 1
+    shifted = reference_times[shifted_indices]
+    return stamp(downbeats), stamp(shifted), {
+        "source_peak_sec": float(frame_times[source_center]),
+        "source_peak_value": float(predicted_channel[source_center]),
+        "template_half_width_frames": half_width_frames,
+        "template_half_width_sec": float(half_width_frames * frame_step),
+        "median_tactus_interval_sec": tactus_interval,
+        "profiled_targets": int(len(downbeats)),
+        "shifted_targets": int(len(shifted)),
+        "overlap_rule": "maximum",
+    }
 
 
 def _match(reference: np.ndarray, predicted: np.ndarray,
@@ -341,14 +551,36 @@ def measure_one(item: dict, binary: pathlib.Path, model: pathlib.Path) -> dict:
     common_start = float(max(first)) if first else 0.0
     arms = {arm: score_dynamic(*raw[arm], reference, common_start)
             for arm in ARMS}
+
+    profiled, shifted, sensitivity_profile = profiled_oracle_channels(
+        frame_times, predicted_downbeat, ref_times, reference["positions"])
+    sensitivity = {}
+    for name, channel in zip(
+            SENSITIVITY_CONTROLS, (profiled, shifted), strict=True):
+        payload = replay_bar(binary, item["audio"], beat_activation, channel,
+                             frame_emit, frame_times, ref_times, ref_emit)
+        positions = np.asarray(payload["bar_replay_positions"], dtype=np.float64)
+        meters = np.asarray(payload["bar_replay_meters"], dtype=np.float64)
+        if len(positions) != len(ref_times) or len(meters) != len(ref_times):
+            raise InvariantError(
+                f"{item['name']} {name}: incomplete sensitivity replay")
+        sensitivity[name] = score_dynamic(
+            ref_times, positions, meters, reference, common_start)
     return {
         "name": item["name"], "corpus": item["corpus"],
         "work_id": item["work_id"], "primary_eligible": item["primary_eligible"],
         "groupings": item["groupings"], "meter_families": item["meter_families"],
         "annotation": digest(item["annotation"]), "common_start_sec": common_start,
-        "arms": arms, "invariants": {"A4_causal_parity": True,
-                                      "A1_A2_grid_identical": True,
-                                      "A3_A4_grid_identical": True},
+        # Same naming rule as `m0a_oracle`: only `A4_causal_parity` is checked,
+        # by the raise above. `definitions` gives A1/A2 and A3/A4 the same grid
+        # objects, so their identity is a property of this function rather than
+        # a result of the run. M0b has not run yet, which is the cheapest moment
+        # for an artifact's vocabulary to stop overstating itself.
+        "arms": arms, "A1_sensitivity": sensitivity,
+        "A1_sensitivity_profile": sensitivity_profile, "invariants": {
+            "A4_causal_parity": True,
+            "A1_A2_grid_identical_by_construction": True,
+            "A3_A4_grid_identical_by_construction": True},
     }
 
 
@@ -388,6 +620,11 @@ def _work_rows(records: list[dict]) -> list[dict]:
             within = sum(row["arms"][arm]["changes"]["within_two_bars"] for row in rows)
             block["arms"][arm]["change_acquisition"] = acquired / total if total else None
             block["arms"][arm]["change_within_two_bars"] = within / total if total else None
+        block["A1_sensitivity"] = {
+            control: {"phase_f1": float(np.mean([
+                row["A1_sensitivity"][control]["phase_f1"] for row in rows]))}
+            for control in SENSITIVITY_CONTROLS
+        }
         out.append(block)
     return out
 
@@ -412,6 +649,19 @@ def summarise(records: list[dict]) -> dict:
             work["arms"]["A1"][metric] - work["arms"]["A4"][metric]
             for work in works])
 
+    profiled_delta = _metric_ci([
+        work["A1_sensitivity"]["profiled_oracle"]["phase_f1"]
+        - work["arms"]["A1"]["phase_f1"] for work in works])
+    positive_drop = _metric_ci([
+        work["A1_sensitivity"]["profiled_oracle"]["phase_f1"]
+        - work["A1_sensitivity"]["shifted_one_tactus"]["phase_f1"]
+        for work in works])
+    sensitivity_passed = (
+        profiled_delta["mean"] is not None
+        and abs(profiled_delta["mean"]) <= SENSITIVITY_MARGIN
+        and positive_drop["mean"] is not None
+        and positive_drop["mean"] >= SENSITIVITY_MARGIN)
+
     enough_groups = all(count >= MIN_WORKS_PER_GROUPING
                         for count in grouping_counts.values())
     enough_corpora = len({corpus for work in works for corpus in work["corpora"]}) >= 2
@@ -432,7 +682,8 @@ def summarise(records: list[dict]) -> dict:
               and a1_phase["ci"][1] < UPPER_CI_HARD_NEGATIVE)
              or (a1_group["ci"][1] is not None
                  and a1_group["ci"][1] < UPPER_CI_HARD_NEGATIVE)))
-    decision = ("decoder_not_falsified" if pass_result else
+    decision = ("inconclusive" if not sensitivity_passed else
+                "decoder_not_falsified" if pass_result else
                 "decoder_bottleneck" if hard_negative else "inconclusive")
     by_corpus = {}
     for corpus in sorted({record["corpus"] for record in records}):
@@ -448,23 +699,123 @@ def summarise(records: list[dict]) -> dict:
                 for metric in ("phase_f1", "grouping_balanced_accuracy",
                                "position_accuracy", "change_within_two_bars")}
                 for arm in ARMS},
+            "A1_sensitivity": {
+                control: {"phase_f1": _metric_ci([
+                    work["A1_sensitivity"][control]["phase_f1"]
+                    for work in corpus_works])}
+                for control in SENSITIVITY_CONTROLS},
         }
     return {
         "primary_records": sum(r["primary_eligible"] for r in records),
         "exploratory_records": sum(not r["primary_eligible"] for r in records),
         "independent_works": len(works), "works_by_grouping": grouping_counts,
-        "arms": arms, "A1-A4": deltas, "by_corpus": by_corpus,
+        "arms": arms, "A1-A4": deltas,
+        "A1_sensitivity": {
+            "profiled_oracle_minus_A1": profiled_delta,
+            "profiled_oracle_minus_shifted_one_tactus": positive_drop,
+            "passed": sensitivity_passed,
+            "limitation": (
+                "tests shape and amplitude, but not unaligned false competing "
+                "evidence outside the copied template")},
+        "by_corpus": by_corpus,
         "decision": {"verdict": decision,
                      "enough_grouping_coverage": enough_groups,
                      "enough_corpora": enough_corpora,
+                     "sensitivity_passed": sensitivity_passed,
                      "thresholds": {
                          "phase_point": PHASE_PASS,
                          "grouping_point": GROUPING_PASS,
                          "lower_ci": LOWER_CI_PASS,
                          "hard_negative_upper_ci": UPPER_CI_HARD_NEGATIVE,
                          "change_within_two_bars": CHANGE_WITHIN_TWO_BARS_PASS,
+                         "sensitivity_margin": SENSITIVITY_MARGIN,
                          "min_works_per_grouping": MIN_WORKS_PER_GROUPING}},
     }
+
+
+def run_checkpointed(items: list[dict], binary: pathlib.Path,
+                     model: pathlib.Path, *, workers: int,
+                     checkpoint: pathlib.Path, state: dict,
+                     ordered: list[object | None], pause_file: pathlib.Path
+                     ) -> tuple[list[object | None], bool]:
+    """Run a bounded queue, checkpointing each outcome before replacing it."""
+    pending = deque(index for index, outcome in enumerate(ordered)
+                    if outcome is None)
+    completed = len(items) - len(pending)
+    started = time.perf_counter()
+    paused = pause_file.is_file()
+
+    def save(index: int, outcome: tuple[str, dict]) -> None:
+        nonlocal completed
+        _save_checkpoint_outcome(checkpoint, index, items[index], outcome)
+        ordered[index] = list(outcome)
+        completed += 1
+        _checkpoint_state(checkpoint, state, status="running",
+                          completed=completed, total=len(items))
+        if completed % 25 == 0 or completed == len(items):
+            print(json.dumps({"event": "progress", "done": completed,
+                              "total": len(items), "elapsed_sec": round(
+                                  time.perf_counter() - started, 1)}), flush=True)
+
+    _checkpoint_state(checkpoint, state, status="running",
+                      completed=completed, total=len(items))
+    active: dict[concurrent.futures.Future, int] = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+        def notice_pause() -> None:
+            nonlocal paused
+            if pause_file.is_file() and not paused:
+                paused = True
+                _checkpoint_state(checkpoint, state,
+                                  status="pause_requested",
+                                  completed=completed, total=len(items))
+                print(json.dumps({"event": "pause_requested",
+                                  "done": completed,
+                                  "active": len(active)}), flush=True)
+
+        def fill() -> None:
+            while pending and len(active) < workers and not paused:
+                index = pending.popleft()
+                active[pool.submit(
+                    measure_outcome, items[index], binary, model)] = index
+
+        fill()
+        try:
+            while active:
+                notice_pause()
+                done, _ = concurrent.futures.wait(
+                    active, timeout=0.5,
+                    return_when=concurrent.futures.FIRST_COMPLETED)
+                for future in sorted(done, key=lambda value: active[value]):
+                    index = active.pop(future)
+                    save(index, future.result())
+                notice_pause()
+                fill()
+        except KeyboardInterrupt:
+            paused = True
+            print(json.dumps({"event": "interrupt_draining",
+                              "done": completed,
+                              "active": len(active)}), flush=True)
+            while active:
+                done, _ = concurrent.futures.wait(
+                    active, return_when=concurrent.futures.FIRST_COMPLETED)
+                for future in sorted(done, key=lambda value: active[value]):
+                    index = active.pop(future)
+                    save(index, future.result())
+        except Exception:
+            _checkpoint_state(checkpoint, state, status="failed",
+                              completed=completed, total=len(items))
+            raise
+
+    if paused and completed < len(items):
+        _checkpoint_state(checkpoint, state, status="paused",
+                          completed=completed, total=len(items))
+        print(json.dumps({"event": "paused", "done": completed,
+                          "total": len(items),
+                          "checkpoint": checkpoint.name}), flush=True)
+        return ordered, True
+    _checkpoint_state(checkpoint, state, status="complete",
+                      completed=completed, total=len(items))
+    return ordered, False
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -475,6 +826,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--binary", type=pathlib.Path, required=True)
     parser.add_argument("--model", type=pathlib.Path, required=True)
     parser.add_argument("--output", type=pathlib.Path, required=True)
+    parser.add_argument(
+        "--checkpoint", type=pathlib.Path,
+        help="checkpoint directory; defaults to <output>.checkpoint")
+    parser.add_argument(
+        "--resume", action="store_true",
+        help="resume a compatible existing checkpoint")
+    parser.add_argument(
+        "--pause-file", type=pathlib.Path,
+        help="when this file appears, drain active workers and exit 75")
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--skip-audio-verification", action="store_true",
@@ -482,6 +842,21 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.workers < 1:
         parser.error("--workers must be positive")
+    if args.output.exists():
+        parser.error(f"refusing to overwrite existing output: {args.output}")
+    checkpoint = (args.checkpoint if args.checkpoint is not None else
+                  pathlib.Path(f"{args.output}.checkpoint"))
+    pause_file = (args.pause_file if args.pause_file is not None else
+                  pathlib.Path(f"{checkpoint}.pause"))
+    for path, label in ((args.output, "output"),
+                        (checkpoint, "checkpoint"),
+                        (pause_file, "pause file")):
+        try:
+            _require_outside_repository(path, repository, label)
+        except ValueError as error:
+            parser.error(str(error))
+    if pause_file.exists():
+        parser.error(f"remove the pause file before starting: {pause_file}")
     items, source_manifest = load_manifest(
         args.manifest, args.music_root,
         verify_audio=not args.skip_audio_verification)
@@ -491,21 +866,20 @@ def main(argv: list[str] | None = None) -> int:
         repository, files={"binary": args.binary, "model": args.model,
                            "manifest": args.manifest}, experiment="M0b",
         arms=list(ARMS), bootstrap_draws=2000, workers=args.workers)
+    identity = checkpoint_identity(
+        provenance, items, workers=args.workers, limit=args.limit,
+        skip_audio_verification=args.skip_audio_verification)
+    ordered, checkpoint_state, resumed = prepare_checkpoint(
+        checkpoint, identity, provenance, items, resume=args.resume)
     preflight = synthetic_preflight(args.binary)
     print(json.dumps({"event": "start", "recordings": len(items),
-                      "workers": args.workers}), flush=True)
-    started = time.perf_counter()
-    ordered = [None] * len(items)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futures = {pool.submit(measure_outcome, item, args.binary, args.model): index
-                   for index, item in enumerate(items)}
-        for completed, future in enumerate(
-                concurrent.futures.as_completed(futures), start=1):
-            ordered[futures[future]] = future.result()
-            if completed % 25 == 0 or completed == len(futures):
-                print(json.dumps({"event": "progress", "done": completed,
-                                  "total": len(futures), "elapsed_sec": round(
-                                      time.perf_counter() - started, 1)}), flush=True)
+                      "workers": args.workers, "resumed": resumed}), flush=True)
+    ordered, paused = run_checkpointed(
+        items, args.binary, args.model, workers=args.workers,
+        checkpoint=checkpoint, state=checkpoint_state, ordered=ordered,
+        pause_file=pause_file)
+    if paused:
+        return PAUSED_EXIT_CODE
     records = [payload for kind, payload in ordered if kind == "record"]
     exclusions = [payload for kind, payload in ordered if kind == "exclusion"]
     summary = summarise(records)
@@ -519,11 +893,15 @@ def main(argv: list[str] | None = None) -> int:
             "technical_exclusions", []),
         "selected": len(items), "scored": len(records),
         "technical_exclusions": exclusions, "records": records,
+        "checkpoint": {
+            "schema": CHECKPOINT_SCHEMA, "resumed_outcomes": resumed,
+            "sessions": checkpoint_state.get("sessions", []),
+        },
         "summary": summary,
     }
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(artifact, ensure_ascii=False, indent=2,
-                                      allow_nan=False), encoding="utf-8")
+    _atomic_write_json(args.output, artifact)
+    _checkpoint_state(checkpoint, checkpoint_state, status="artifact_written",
+                      completed=len(items), total=len(items))
     return 0
 
 
