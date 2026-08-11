@@ -1733,7 +1733,9 @@ Two things the reviews carry that the verdicts do not:
   answer — whether a hard impulse at the reference frame flatters A1 — is open,
   and M0b inherits the construction.
 * **The two corpora disagree about which input is the limit.** On GTZAN the
-  predicted downbeat channel costs more than the predicted grid; on Harmonix it
-  is the other way round, and the best rotation of the predicted grid buys 0.006
-  over what `BarTracker` already chooses. On full-length material the phase
-  decision is not where the loss is.
+  downbeat-channel gap is the wider one; on Harmonix it is the grid gap, and the
+  best rotation of the predicted grid buys 0.006 over what `BarTracker` already
+  chooses. On full-length material the phase decision is not where the loss is.
+  These are diagnostic gaps and not component costs — on both corpora the two
+  single-substitution gaps sum to more than the joint one, so the decoder is not
+  apportioning damage additively and no per-component share can be read off it.
