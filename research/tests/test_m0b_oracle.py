@@ -144,6 +144,18 @@ def test_summarise_uses_works_not_recordings_and_requires_all_groupings():
     assert inert_summary["A1_sensitivity"]["passed"] is False
     assert inert_summary["decision"]["verdict"] == "inconclusive"
 
+    low_and_inert = [record(f"l{index}", f"low-{index}", 0.3,
+                            corpus="left" if index % 2 else "right")
+                     for index in range(10)]
+    for row in low_and_inert:
+        row["A1_sensitivity"]["shifted_one_tactus"]["phase_f1"] = 0.28
+    low_summary = summarise(low_and_inert)
+    assert low_summary["arms"]["A1"]["phase_f1"]["mean"] == pytest.approx(0.3)
+    assert low_summary["A1_sensitivity"][
+        "profiled_oracle_minus_shifted_one_tactus"]["mean"] == pytest.approx(0.02)
+    assert low_summary["A1_sensitivity"]["passed"] is False
+    assert low_summary["decision"]["verdict"] == "inconclusive"
+
     format_biased = [record(f"f{index}", f"format-{index}", 1.0,
                             corpus="left" if index % 2 else "right")
                      for index in range(10)]

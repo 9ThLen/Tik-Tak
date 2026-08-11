@@ -133,11 +133,11 @@ because one is an equivalence check and the other is a power check:
 
 1. if `abs(profiled oracle - A1) > 0.05`, the hard impulse has a material format
    advantage or disadvantage and the binding verdict is withheld;
-2. if the shifted-one-tactus control has mean phase F1 **above 0.30**, the
-   deliberately wrong phase did not produce a sufficiently absolute failure to
-   make a near-zero format difference interpretable, and the verdict is
-   withheld. `profiled oracle - shifted one tactus` remains reported but is not
-   the power gate.
+2. the shifted-one-tactus control must satisfy **both** power conditions: mean
+   phase F1 at or below 0.30, and a mean `profiled oracle - shifted one tactus`
+   drop of at least 0.30. The absolute ceiling proves that the deliberately
+   wrong phase failed; the relative floor proves that it actually moved this
+   recording population. Failure of either condition withholds the verdict.
 
 Either failure forces `inconclusive` regardless of the primary A1 thresholds.
 Passing closes only the shape-and-amplitude concern. It does **not** reproduce
@@ -261,9 +261,13 @@ selection, primary metrics, bootstrap, or the decoder thresholds.
 Independent review before execution then separated the controls' two unlike
 questions. The 0.05 equivalence margin remains attached only to profiled A1
 versus impulse A1. The shifted positive control instead receives the absolute
-phase-F1 ceiling 0.30. The same review required the grouping breakdown and made
-the phrase "one complete new bar" executable by requiring acquisition to start
-at reference position 1. No corpus output existed when these rules were fixed.
+phase-F1 ceiling 0.30. A final pre-run review demonstrated that this ceiling is
+insufficient when profiled A1 is itself low, so the relative drop floor 0.30 is
+required simultaneously. A catastrophic but inert pair such as profiled
+`0.30`, shifted `0.28` is therefore `inconclusive`, not `decoder_bottleneck`.
+The same review required the grouping breakdown and made the phrase "one
+complete new bar" executable by requiring acquisition to start at reference
+position 1. No corpus output existed when these rules were fixed.
 
 ## Operational revision after the aborted first execution — 2026-08-11
 

@@ -45,6 +45,7 @@ UPPER_CI_HARD_NEGATIVE = 0.80
 CHANGE_WITHIN_TWO_BARS_PASS = 0.80
 SENSITIVITY_EQUIVALENCE_MARGIN = 0.05
 SHIFTED_CONTROL_MAX_PHASE_F1 = 0.30
+POSITIVE_CONTROL_MIN_DROP = 0.30
 SENSITIVITY_CONTROLS = ("profiled_oracle", "shifted_one_tactus")
 CHECKPOINT_SCHEMA = "tiktak.m0b_checkpoint/v1"
 PAUSED_EXIT_CODE = 75
@@ -98,6 +99,7 @@ def checkpoint_identity(provenance: dict, items: list[dict], *,
         "sensitivity_controls": list(SENSITIVITY_CONTROLS),
         "sensitivity_equivalence_margin": SENSITIVITY_EQUIVALENCE_MARGIN,
         "shifted_control_max_phase_f1": SHIFTED_CONTROL_MAX_PHASE_F1,
+        "positive_control_min_drop": POSITIVE_CONTROL_MIN_DROP,
         "bootstrap_draws": 2000,
         "limit": limit,
         "skip_audio_verification": skip_audio_verification,
@@ -701,7 +703,9 @@ def summarise(records: list[dict]) -> dict:
         profiled_delta["mean"] is not None
         and abs(profiled_delta["mean"]) <= SENSITIVITY_EQUIVALENCE_MARGIN
         and shifted_phase["mean"] is not None
-        and shifted_phase["mean"] <= SHIFTED_CONTROL_MAX_PHASE_F1)
+        and shifted_phase["mean"] <= SHIFTED_CONTROL_MAX_PHASE_F1
+        and positive_drop["mean"] is not None
+        and positive_drop["mean"] >= POSITIVE_CONTROL_MIN_DROP)
 
     sensitivity_by_grouping = {}
     for grouping in sorted(SUPPORTED_GROUPINGS):
@@ -786,6 +790,8 @@ def summarise(records: list[dict]) -> dict:
                              SENSITIVITY_EQUIVALENCE_MARGIN),
                          "shifted_control_max_phase_f1": (
                              SHIFTED_CONTROL_MAX_PHASE_F1),
+                         "positive_control_min_drop": (
+                             POSITIVE_CONTROL_MIN_DROP),
                          "min_works_per_grouping": MIN_WORKS_PER_GROUPING}},
     }
 
