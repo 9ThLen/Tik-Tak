@@ -1,3 +1,4 @@
+import json
 import pathlib
 
 import numpy as np
@@ -81,3 +82,20 @@ def test_one_corpus_cannot_produce_binding_s0_verdict():
     summary = summarise([{"corpus": "gtzan", "arms": arms}])
     assert summary["decision"]["verdict"] == "inconclusive"
     assert not summary["decision"]["required_corpora_present"]
+
+
+def test_secondary_summary_ignores_unscorable_values_and_counts_support():
+    def record(downbeat_f):
+        arms = {
+            name: {"phase": {"f1": 0.5}, "beat_f": 0.75,
+                   "downbeat_f": downbeat_f, "usable_strict": True}
+            for name in ("R2", "R4", "R8", "R16", "R32", "Rinf")
+        }
+        return {"corpus": "fixture", "arms": arms}
+
+    got = summarise([record(0.25), record(float("nan"))])["fixture"]
+    assert got["secondary"]["Rinf"]["beat_f"] == 0.75
+    assert got["secondary"]["Rinf"]["beat_f_n_scored"] == 2
+    assert got["secondary"]["Rinf"]["downbeat_f"] == 0.25
+    assert got["secondary"]["Rinf"]["downbeat_f_n_scored"] == 1
+    json.dumps(got, allow_nan=False)

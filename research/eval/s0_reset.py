@@ -44,6 +44,20 @@ class InvariantError(RuntimeError):
     """A harness mismatch that voids the run instead of excluding a file."""
 
 
+def finite_or_none(value: float) -> float | None:
+    """Keep unscorable secondary metrics valid in strict JSON artifacts."""
+    numeric = float(value)
+    return numeric if np.isfinite(numeric) else None
+
+
+def finite_mean(values: list[float | None]) -> tuple[float | None, int]:
+    finite = np.asarray([
+        float(value) for value in values
+        if value is not None and np.isfinite(float(value))
+    ], dtype=np.float64)
+    return ((float(np.mean(finite)) if len(finite) else None), int(len(finite)))
+
+
 def arm_name(horizon: float | None) -> str:
     return "Rinf" if horizon is None else f"R{int(horizon)}"
 
@@ -81,8 +95,8 @@ def _score(item: dict, payload: dict, reference: np.ndarray,
     canonical = score_estimate(item, Estimate.from_json(payload), mode="S0")
     return {
         "phase": phase,
-        "beat_f": beat["f_measure"],
-        "downbeat_f": downbeat["downbeat_f_measure"],
+        "beat_f": finite_or_none(beat["f_measure"]),
+        "downbeat_f": finite_or_none(downbeat["downbeat_f_measure"]),
         "final_meter": int(payload.get("live_beats_per_bar", 0)),
         "usable_strict": bool(canonical.get("usable_strict", False)),
         "resets": [float(x) for x in payload.get("activation_model_resets", [])],
@@ -207,17 +221,20 @@ def summarise(records: list[dict]) -> dict:
             arm: float(np.mean([r["arms"][arm]["phase"]["f1"] for r in rows]))
             for arm in names
         }
-        secondary = {
-            arm: {
-                "beat_f": float(np.mean([
-                    r["arms"][arm].get("beat_f", float("nan")) for r in rows])),
-                "downbeat_f": float(np.mean([
-                    r["arms"][arm].get("downbeat_f", float("nan")) for r in rows])),
+        secondary = {}
+        for arm in names:
+            beat_f, beat_n = finite_mean([
+                r["arms"][arm].get("beat_f") for r in rows])
+            downbeat_f, downbeat_n = finite_mean([
+                r["arms"][arm].get("downbeat_f") for r in rows])
+            secondary[arm] = {
+                "beat_f": beat_f,
+                "beat_f_n_scored": beat_n,
+                "downbeat_f": downbeat_f,
+                "downbeat_f_n_scored": downbeat_n,
                 "usable_strict": float(np.mean([
                     r["arms"][arm].get("usable_strict", False) for r in rows])),
             }
-            for arm in names
-        }
         adjacent = {}
         for left, right in zip(names, names[1:]):
             delta = np.asarray([
@@ -337,7 +354,8 @@ def main(argv: list[str] | None = None) -> int:
                 "technical_exclusions": exclusions, "records": records,
                 "summary": summarise(records)}
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(artifact, indent=2), encoding="utf-8")
+    args.output.write_text(
+        json.dumps(artifact, indent=2, allow_nan=False), encoding="utf-8")
     return 0
 
 

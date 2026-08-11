@@ -31,6 +31,23 @@ the 2,760 annotated recordings here as evaluation ground, leaving Harmonix,
 RWC and SMC. That is a cost of the ensemble, not merely of testing it, and it is
 the strongest argument for recording new material.
 
+## S0: recurrent state carries bar-level evidence
+
+The preregistered reset-horizon experiment is preserved byte-for-byte as
+`s0_reset_gtzan_harmonix_20260811.raw.json`; the independent calculation and
+method review is `S0_RESET_REVIEW_20260811.md`.
+
+S0 is **positive**. R∞−R2 bar-phase F1 is `+0.158 [0.136, 0.180]` on GTZAN and
+`+0.237 [0.217, 0.258]` on Harmonix. Both lower bounds exceed the registered
+`0.05` margin, and every adjacent reset-horizon comparison passes the registered
+monotonicity rule. This promotes S1 stateful block training to an ablation over
+A2–A4; it is not itself evidence about a trained S1 model or a locked test.
+
+The review records one technical exclusion and a non-binding output defect:
+six unscorable GTZAN downbeat values made the raw secondary aggregate `NaN`.
+Neither enters the primary verdict. The raw artifact remains unchanged; future
+S0 output uses strict JSON and reports finite secondary support explicitly.
+
 ## A second documented negative: repaired sparse peak front end
 
 `peak_front_end.json`, produced by `eval.peak_front_end` at clean commit
