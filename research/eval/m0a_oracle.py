@@ -98,6 +98,16 @@ def fixed_meter_label(item: dict) -> str:
     return label
 
 
+def require_reference_within_audio(reference: np.ndarray, duration_sec: float,
+                                   name: str) -> None:
+    """Reject annotations the causal audio stream can never publish."""
+    beyond = reference[reference > duration_sec]
+    if len(beyond):
+        raise RuntimeError(
+            f"{name}: {len(beyond)} reference beat(s) extend beyond decoded "
+            f"audio duration ({float(beyond[0]):.6f}s > {duration_sec:.6f}s)")
+
+
 def _write(path: pathlib.Path, values: np.ndarray, fmt: str = "%.17g") -> None:
     np.savetxt(path, np.asarray(values, dtype=np.float64), fmt=fmt)
 
@@ -208,6 +218,8 @@ def measure_one(item: dict, binary: pathlib.Path, model: pathlib.Path) -> dict:
         raise RuntimeError(f"{item['name']}: no fixed annotated meter")
 
     initial = run(binary, item["audio"], model, extra=["--live-bars"])
+    require_reference_within_audio(
+        reference, float(initial["duration_sec"]), item["name"])
     frame_times = np.asarray(initial["activation_times"], dtype=np.float64)
     frame_emit = np.asarray(initial["activation_emit"], dtype=np.float64)
     beat_activation = np.asarray(initial["activation_beat"], dtype=np.float64)

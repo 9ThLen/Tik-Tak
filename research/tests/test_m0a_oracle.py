@@ -9,6 +9,7 @@ from eval.m0a_oracle import (
     fixed_meter_label,
     measure_outcome,
     oracle_channel,
+    require_reference_within_audio,
     reference_emit,
     summarise,
     visible_indices,
@@ -37,6 +38,13 @@ def test_fixed_meter_label_is_fail_closed():
     assert fixed_meter_label({"name": "ok", "meter": "4/4"}) == "4/4"
     with pytest.raises(RuntimeError, match="fixed meter"):
         fixed_meter_label({"name": "missing", "meter": None})
+
+
+def test_reference_tail_beyond_audio_is_a_pre_arm_technical_failure():
+    require_reference_within_audio(np.asarray([0.5, 1.0]), 1.0, "ok")
+    with pytest.raises(RuntimeError, match="1 reference beat.*30.117052s"):
+        require_reference_within_audio(
+            np.asarray([29.826803, 30.117052]), 30.013333, "reggae.00002")
 
 
 def test_best_phase_events_selects_planted_bar_line():

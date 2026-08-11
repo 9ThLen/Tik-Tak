@@ -277,6 +277,23 @@ Recorded so that being wrong is visible.
 Tuning `BarTracker`. Any claim about metre, grouping, denominator, or rooms. Any
 threshold for the model gate.
 
+## Execution deviation: annotation tail validation
+
+The first full M0a attempt at commit `531af40` aborted fail-closed after 775
+completed futures, before writing an artifact or reading a corpus verdict.
+`gtzan/reggae.00002` supplied 104 reference beats but its last annotation was at
+`30.117052 s`, after the decoded audio ended at `30.013333 s`. Its causal
+publication block therefore occurred after the stream ended, and A1 correctly
+returned only 103 bar positions. The generic length invariant stopped the run.
+
+This is now classified explicitly as the technical annotation exclusion that
+the intention-to-treat contract already permits, before any arm score is read.
+A corpus-wide preflight found exactly one such tail-invalid recording among the
+1,581 selected inputs; `jazz.00054` remains the separate unreadable-audio
+exclusion. No arm construction, scorer, threshold, complete-case rule, or
+bootstrap rule changed. The full run restarts from the beginning on the commit
+that adds this check; the aborted attempt contributes no numbers.
+
 ---
 
 # S0 — reset horizon
