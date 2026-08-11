@@ -1705,3 +1705,35 @@ from its annotations.** A tracker's own reading is an outcome, and using it as a
 covariate lets the thing being measured choose the axis it is measured on. The
 first version of this section did that and produced a monotone table in both
 arms that is not there.
+
+## M0a and S0: where the two preregistered causal results live
+
+Both runs are reviewed in their own files rather than summarised here, because
+each carries a provenance block that a summary would strip.
+
+| run | verdict | review | raw |
+|---|---|---|---|
+| S0 — reset horizon | positive | [`S0_RESET_REVIEW_20260811.md`](S0_RESET_REVIEW_20260811.md) | `s0_reset_gtzan_harmonix_20260811.raw.json` |
+| M0a — oracle ladder | `band3_decoder_not_falsified` | [`M0A_REVIEW_20260811.md`](M0A_REVIEW_20260811.md) | **outside the repository** — path and SHA-256 in the review |
+
+**M0a's raw artifact is not in the tree.** It was written to the tool's own
+output directory and nothing here pointed at it, so a reviewer working from the
+repository found the harness, the preregistration and the tests, and no numbers
+— while `PREREGISTERED_M0b.md` already cited the finding. The review file is the
+pointer: absolute path, SHA-256, run commit, and a recomputation done from the
+per-record data without reading the artifact's own summary. Any future run whose
+output lands outside `research/results/` needs the same treatment before its
+verdict is used anywhere.
+
+Two things the reviews carry that the verdicts do not:
+
+* **M0a's format-sensitivity guard is inert.** Both registered perturbations sit
+  inside the ±70 ms window `BarTracker` maximises over, and both come back at
+  exactly 0.0. The band does not depend on it, but the question it was meant to
+  answer — whether a hard impulse at the reference frame flatters A1 — is open,
+  and M0b inherits the construction.
+* **The two corpora disagree about which input is the limit.** On GTZAN the
+  predicted downbeat channel costs more than the predicted grid; on Harmonix it
+  is the other way round, and the best rotation of the predicted grid buys 0.006
+  over what `BarTracker` already chooses. On full-length material the phase
+  decision is not where the loss is.

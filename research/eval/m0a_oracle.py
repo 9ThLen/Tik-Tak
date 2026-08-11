@@ -292,9 +292,17 @@ def measure_one(item: dict, binary: pathlib.Path, model: pathlib.Path) -> dict:
         "annotation_meter_label": meter_label, "annotated_meter": meter,
         "common_start_sec": common_start, "arms": arms,
         "A1_sensitivity": sensitivity,
+        # `A4_causal_parity` is measured: the loop above raises before reaching
+        # here if the replay does not byte-reproduce the live run. The other two
+        # are not measured and are named so. `definitions` hands A1 and A2 the
+        # same `reference`/`ref_emit` objects and A3 and A4 the same
+        # `predicted_all`/`predicted_emit`, so the grids cannot differ; an
+        # equality check here would compare an array with itself. Recording that
+        # under a name a reader takes for a measurement is the failure mode --
+        # the artifact would look like it had been verified.
         "invariants": {"A4_causal_parity": True,
-                       "A1_A2_grid_identical": True,
-                       "A3_A4_grid_identical": True},
+                       "A1_A2_grid_identical_by_construction": True,
+                       "A3_A4_grid_identical_by_construction": True},
     }
 
 

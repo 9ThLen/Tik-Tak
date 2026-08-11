@@ -106,3 +106,28 @@ threshold. The exclusion therefore cannot change the S0 decision.
 3. The raw file is Python's historical JSON dialect because it contains six
    literal `NaN` secondary values. Use the raw file for provenance and per-record
    evidence; use the finite-only values above for the affected aggregate.
+4. **The committed harness no longer reproduces this artifact's `summary`.** The
+   writer correction described above is already in `s0_reset.py`, which now
+   emits `beat_f_n_scored` and `downbeat_f_n_scored` and refuses non-standard
+   JSON; the artifact has neither key and carries the `NaN`. A re-run at this
+   commit would therefore produce a different summary block from the same
+   records. The raw per-record evidence and the primary verdict are unaffected —
+   both were recomputed from `records` alone — but the artifact and the harness
+   are no longer byte-comparable, and that is a property of the file rather than
+   a defect to fix in it.
+
+## `usable_strict`, added after review
+
+The registered secondary set includes `usable_strict`, and the first pass of
+this review did not report it. It is the one arm-level number that speaks to the
+product rather than to the metric:
+
+| corpus | R2 | R∞ |
+|---|---:|---:|
+| GTZAN | 0.259 | 0.439 |
+| Harmonix | 0.138 | 0.277 |
+
+Carrying state doubles the strictly-usable rate on both corpora. This is a
+secondary endpoint and sets no threshold; it is recorded because the primary
+bar-phase F1 understates what the horizon is worth to a recording that either
+works or does not.
