@@ -7,9 +7,11 @@ The old ``--beats --salience`` batch resolver is intentionally not used.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import pathlib
 import tempfile
+import time
 import wave
 from collections import defaultdict
 
@@ -350,6 +352,21 @@ def summarise(records: list[dict]) -> dict:
     return out
 
 
+def measure_outcome(item: dict, binary: pathlib.Path,
+                    model: pathlib.Path) -> tuple[str, dict]:
+    try:
+        return "record", measure_one(item, binary, model)
+    except InvariantError:
+        raise
+    except Exception as error:
+        return "exclusion", {
+            "name": item["name"], "corpus": item["corpus"],
+            "error_type": type(error).__name__,
+            "reason": _without_local_paths(str(error)),
+            "annotation": digest(item.get("annotation")),
+        }
+
+
 def main(argv: list[str] | None = None) -> int:
     repository = pathlib.Path(__file__).resolve().parents[2]
     parser = argparse.ArgumentParser(description=__doc__)
@@ -361,7 +378,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model", type=pathlib.Path, required=True)
     parser.add_argument("--output", type=pathlib.Path, required=True)
     parser.add_argument("--limit", type=int, default=0)
+    parser.add_argument("--workers", type=int, default=1)
     args = parser.parse_args(argv)
+    if args.workers < 1:
+        parser.error("--workers must be positive")
 
     items = load_corpus(args.manifest, args.music, False,
                         frozenset(args.corpora))
@@ -372,27 +392,38 @@ def main(argv: list[str] | None = None) -> int:
     provenance = experiment_provenance(
         repository, files={"binary": args.binary, "model": args.model,
                            "manifest": args.manifest},
-        experiment="M0a", arms=list(ARMS), bootstrap_draws=2000)
+        experiment="M0a", arms=list(ARMS), bootstrap_draws=2000,
+        workers=args.workers)
     synthetic = synthetic_preflight(args.binary)
-    records = []
-    exclusions = []
-    for item in items:
-        try:
-            records.append(measure_one(item, args.binary, args.model))
-        except InvariantError:
-            raise
-        except Exception as error:
-            exclusions.append({"name": item["name"], "corpus": item["corpus"],
-                               "error_type": type(error).__name__,
-                               "reason": _without_local_paths(str(error)),
-                               "annotation": digest(item.get("annotation"))})
+    print(json.dumps({"event": "start", "recordings": len(items),
+                      "workers": args.workers}), flush=True)
+    started = time.perf_counter()
+    ordered: list[tuple[str, dict] | None] = [None] * len(items)
+    with concurrent.futures.ThreadPoolExecutor(
+            max_workers=args.workers) as pool:
+        futures = {
+            pool.submit(measure_outcome, item, args.binary, args.model): index
+            for index, item in enumerate(items)
+        }
+        for completed, future in enumerate(
+                concurrent.futures.as_completed(futures), start=1):
+            ordered[futures[future]] = future.result()
+            if completed % 25 == 0 or completed == len(futures):
+                print(json.dumps({"event": "progress", "done": completed,
+                                  "total": len(futures), "elapsed_sec": round(
+                                      time.perf_counter() - started, 1)}),
+                      flush=True)
+    outcomes = [outcome for outcome in ordered if outcome is not None]
+    records = [payload for kind, payload in outcomes if kind == "record"]
+    exclusions = [payload for kind, payload in outcomes if kind == "exclusion"]
     artifact = {"provenance": provenance,
                 "synthetic_preflight": synthetic,
                 "selected": len(items), "scored": len(records),
                 "technical_exclusions": exclusions, "records": records,
                 "summary": summarise(records)}
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(artifact, indent=2), encoding="utf-8")
+    args.output.write_text(
+        json.dumps(artifact, indent=2, allow_nan=False), encoding="utf-8")
     return 0
 
 

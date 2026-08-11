@@ -1,3 +1,5 @@
+import pathlib
+
 import numpy as np
 import pytest
 
@@ -5,6 +7,7 @@ from eval.m0a_oracle import (
     _phase_with_null,
     best_phase_events,
     fixed_meter_label,
+    measure_outcome,
     oracle_channel,
     reference_emit,
     summarise,
@@ -89,3 +92,16 @@ def test_one_corpus_cannot_produce_binding_m0a_verdict():
     }])
     assert summary["decision"]["band"] == "band2_inconclusive"
     assert not summary["decision"]["required_corpora_present"]
+
+
+def test_measure_outcome_keeps_pre_arm_exclusions_auditable(monkeypatch):
+    def fail(*_args):
+        raise RuntimeError("manifest does not identify a fixed meter")
+
+    monkeypatch.setattr("eval.m0a_oracle.measure_one", fail)
+    kind, payload = measure_outcome(
+        {"name": "fixture", "corpus": "gtzan", "annotation": None},
+        pathlib.Path("dump_analysis"), pathlib.Path("model.ttw"))
+    assert kind == "exclusion"
+    assert payload["error_type"] == "RuntimeError"
+    assert "fixed meter" in payload["reason"]
