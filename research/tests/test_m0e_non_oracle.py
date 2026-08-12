@@ -228,3 +228,43 @@ def test_registration_and_runner_thresholds_stay_synchronised():
     for text in ("+0.10", "-0.03", "+1.0 per five minutes",
                  "+0.25 per five minutes", "980", "414", "61"):
         assert text in registration
+    # The digests are bound by the registration too, and were declared in the
+    # runner without being compared to anything for one commit. Pin both
+    # directions so a hand-edited constant cannot drift from the document.
+    for digest in (m0e.SOURCE_M0B_SHA256, m0e.SOURCE_M0C_SHA256,
+                   m0e.SOURCE_M0D_SHA256, m0e.SOURCE_MANIFEST_SHA256,
+                   m0e.SOURCE_MODEL_SHA256):
+        assert digest in registration
+
+
+def test_bound_manifest_and_model_digests_are_enforced_not_declared(tmp_path):
+    """The registration calls these fixed by content; check they act like it."""
+    manifest = tmp_path / "manifest.csv"
+    model = tmp_path / "model.ttw"
+    manifest.write_bytes(b"not the canonical manifest")
+    model.write_bytes(b"not the shipped model")
+
+    with pytest.raises(ValueError, match="canonical manifest digest changed"):
+        m0e.validate_fixed_inputs(manifest, model)
+
+    # And the model is checked on its own, not only as a side effect of the
+    # manifest failing first: a wrong model previously survived until the M0b
+    # A4 parity assert, which reports parity rather than the real cause.
+    def only_model(path):
+        return (m0e.SOURCE_MANIFEST_SHA256 if path == manifest
+                else "0" * 64)
+
+    import eval.m0e_non_oracle as module
+    original = module._file_sha256
+    module._file_sha256 = only_model
+    try:
+        with pytest.raises(ValueError, match="BeatNet model digest changed"):
+            m0e.validate_fixed_inputs(manifest, model)
+    finally:
+        module._file_sha256 = original
+
+
+def test_paired_refuses_to_silently_intersect_work_sets():
+    assert m0e._paired({"a": 1.0, "b": 1.0}, {"a": 0.0, "b": 0.5})["n"] == 2
+    with pytest.raises(m0e.InvariantError, match="paired work sets differ"):
+        m0e._paired({"a": 1.0, "b": 1.0}, {"a": 0.0})

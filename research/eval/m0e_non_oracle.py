@@ -136,6 +136,28 @@ def validate_m0d_artifact(path: pathlib.Path) -> dict:
     return payload
 
 
+def validate_fixed_inputs(manifest_path: pathlib.Path,
+                          model_path: pathlib.Path) -> None:
+    """Enforce the two digests the registration binds and nothing checked.
+
+    `SOURCE_MANIFEST_SHA256` and `SOURCE_MODEL_SHA256` sat here as declarations
+    while only the three source artifacts were verified. The indirect cover was
+    real but uneven: a wrong model dies later at the M0b A4 parity assert, with
+    a message about parity rather than about the model, and a manifest that
+    agrees on identity, work and corpus profile passes `select_population`
+    outright. The registration calls both fixed by content, so they are checked
+    here, before any work, as the precondition it says they are.
+    """
+    for path, expected, label in ((manifest_path, SOURCE_MANIFEST_SHA256,
+                                   "canonical manifest"),
+                                  (model_path, SOURCE_MODEL_SHA256,
+                                   "BeatNet model")):
+        actual = _file_sha256(path)
+        if actual != expected:
+            raise ValueError(
+                f"{label} digest changed: expected {expected}, got {actual}")
+
+
 def validate_sources(m0b_path: pathlib.Path, m0c_path: pathlib.Path,
                      m0d_path: pathlib.Path) -> tuple[dict, dict, dict]:
     m0b = validate_m0b_artifact(m0b_path)
@@ -499,7 +521,13 @@ def _metric(values: list[float]) -> dict:
 
 
 def _paired(candidate: dict[str, float], baseline: dict[str, float]) -> dict:
-    works = sorted(set(candidate) & set(baseline))
+    # An intersection would silently drop a work the two arms disagree about
+    # having, and pairing is the whole design. `measure_one` already forces
+    # identical transition IDs per record, so a mismatch here is unreachable --
+    # which is the reason to say so rather than to quietly take the overlap.
+    if set(candidate) != set(baseline):
+        raise InvariantError("paired work sets differ between arms")
+    works = sorted(candidate)
     return _metric([candidate[work] - baseline[work] for work in works])
 
 
@@ -709,6 +737,7 @@ def synthetic_preflight(binary: pathlib.Path) -> dict:
             handle.setframerate(int(sample_rate))
             handle.writeframes(b"\0\0" * int(sample_rate * duration_sec))
         outputs = {}
+        meters = {}
         for arm in ARMS:
             payload = replay_bar(
                 binary, audio, beat_activation,
@@ -716,6 +745,8 @@ def synthetic_preflight(binary: pathlib.Path) -> dict:
                 frame_times, beats, beat_emit, extra=_flags(arm))
             outputs[arm] = np.asarray(
                 payload["bar_replay_positions"], dtype=np.int64)
+            meters[arm] = np.asarray(
+                payload["bar_replay_meters"], dtype=np.int64)
     expected = (np.arange(len(beats)) - (change + 2)) % 4
     window = np.arange(change + 2, min(change + 10, len(beats)))
     candidate_exact = outputs[CANDIDATE][window] == expected[window]
@@ -723,14 +754,25 @@ def synthetic_preflight(binary: pathlib.Path) -> dict:
                      if np.all(candidate_exact[index:index + 4])), None)
     differences = int(np.sum(outputs[BASELINE][window]
                              != outputs[CANDIDATE][window]))
-    if acquired is None or acquired > 8 or differences == 0:
+    # The registration asks this preflight to show three things, and the third
+    # -- that the candidate moves phase and *not* the meter candidate -- was
+    # previously reported rather than measured. The neural evidence and the beat
+    # grid are the same arrays for both replays, so their identity is a property
+    # of this function; the meter is an output of the resolver the two arms
+    # configure differently, so it is the one of the three that can actually
+    # come back unequal, and it is now compared.
+    meter_identical = bool(np.array_equal(meters[BASELINE], meters[CANDIDATE]))
+    if acquired is None or acquired > 8 or differences == 0 or not meter_identical:
         raise InvariantError(
             "M0e synthetic L2 preflight failed: "
-            f"acquired={acquired}, differences={differences}")
+            f"acquired={acquired}, differences={differences}, "
+            f"meter_identical={meter_identical}")
     return {"passed": True, "meter": 4, "phase_shift_tactus": 2,
             "candidate_acquisition_events": acquired,
             "baseline_candidate_differences": differences,
-            "neural_state_used": False}
+            "meter_candidate_identical": meter_identical,
+            "planted_meter_held": int(meters[CANDIDATE][window[-1]]),
+            "neural_evidence_identical_by_construction": True}
 
 
 def checkpoint_identity(provenance: dict, items: list[dict], *, limit: int,
@@ -812,6 +854,10 @@ def main(argv: list[str] | None = None) -> int:
     if pause_file.exists():
         parser.error(f"remove the pause file before starting: {pause_file}")
 
+    try:
+        validate_fixed_inputs(args.manifest, args.model)
+    except ValueError as error:
+        parser.error(str(error))
     m0b, m0c, m0d = validate_sources(
         args.source_m0b, args.source_m0c, args.source_m0d)
     items, manifest = load_manifest(

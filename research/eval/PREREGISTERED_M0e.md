@@ -131,7 +131,11 @@ Before any comparison is interpreted, all of the following must pass:
 5. a deterministic synthetic same-meter phase-shift preflight demonstrates
    that `L2_latest` reaches the planted latest path state within two bars,
    differs from `B64_opening` on at least one planted event, and changes no
-   neural evidence, beat grid or meter candidate.
+   neural evidence, beat grid or meter candidate. The neural evidence and beat
+   grid are the same arrays for both replays and are identical by construction;
+   the meter candidate is a resolver output the two arms configure differently,
+   so the preflight compares `bar_replay_meters` between arms and fails if they
+   differ.
 
 Failure of any item is fatal to the binding interpretation. If the synthetic
 preflight passes but the two corpus arms are identical, that is a valid
@@ -289,6 +293,10 @@ diagnostics only and force `inconclusive`. A binding run starts from
 checkpoint creation. No binding run begins until this registration,
 implementation and tests have been reviewed and committed.
 
+The canonical manifest and BeatNet model digests above are verified against the
+files actually passed on the command line, before the source artifacts are read
+and before any record is measured. They are preconditions, not annotations.
+
 Any review correction made before the first M0e corpus output must be recorded
 as a dated pre-run revision in this document and committed before execution.
 Once any candidate corpus output exists, a changed rule is a deviation rather
@@ -305,6 +313,28 @@ as M0a-M0d:
 4. create `research/results/M0E_REVIEW_<date>.md` with absolute path, hash and
    run commit;
 5. add M0e to `research/results/README.md` before using its verdict.
+
+## Pre-run review revision — 2026-08-12
+
+Independent review before any M0e corpus output found three declared guarantees
+that nothing enforced. No arm, threshold, population, metric, bootstrap or
+decision rule changes; each item turns an assertion into a check.
+
+1. `SOURCE_MANIFEST_SHA256` and `SOURCE_MODEL_SHA256` were defined in the runner
+   and never compared to anything. A wrong model would have failed later at the
+   M0b A4 parity assert, reporting parity rather than the model; a manifest
+   agreeing on identity, work and corpus profile would have passed
+   `select_population` outright. Both are now verified before any other work.
+2. The synthetic preflight tested acquisition and baseline difference but not
+   the third registered condition. It now compares `bar_replay_meters` between
+   arms and fails if the candidate moved the meter, and the by-construction part
+   of the claim is named as such instead of being reported as a measurement.
+3. The paired bootstrap took the intersection of the two arms' work sets. That
+   is unreachable given per-record transition-ID parity, and it now raises
+   rather than silently dropping a work.
+
+No M0e record, arm value, aggregate, interval or verdict existed when these were
+fixed.
 
 ## Boundaries
 
