@@ -280,56 +280,126 @@ def test_summary_recomputes_registered_work_pairing(tmp_path):
         "unnecessary_unknown_share", "wrong_episodes_per_5min",
         "resolver_state_changes_per_5min", "held_state_changes_per_5min",
         "acquisition_latency_sec")
+    work_corpora = {f"work-{index}": "rwc2" for index in range(84)}
+    baseline_path = tmp_path / "baseline.json"
+    _atomic_json(baseline_path, {
+        "schema": "tiktak.s1_evaluation/v1", "dev_works": 84,
+        "provenance": {"tree_clean": True},
+        "work_metrics": {
+            f"work-{index}": {metric: 0.5 for metric in metrics}
+            for index in range(84)
+        },
+        "work_corpora": work_corpora,
+    })
+    baseline_sha256 = file_sha256(baseline_path)
     for arm in ("A3_reset", "A3_stateful"):
         for seed in (17, 29, 43):
             root = tmp_path / f"{arm}-{seed}"
-            evaluation_path = root / "candidates" / "epoch-005" / "evaluation.json"
-            work_metrics = {}
-            for index in range(84):
-                row = {metric: 0.5 for metric in metrics}
-                if arm == "A3_stateful":
-                    row["phase_f1"] += 0.04
-                work_metrics[f"work-{index}"] = row
-            evaluation = {
-                "schema": "tiktak.s1_evaluation/v1", "arm": arm,
-                "seed": seed, "dev_works": 84, "work_metrics": work_metrics,
-                "work_corpora": {f"work-{index}": "rwc2"
-                                 for index in range(84)},
-            }
-            _atomic_json(evaluation_path, evaluation)
+            epochs = (5, 10) if arm == "A3_stateful" else (5,)
+            history = []
+            for epoch in epochs:
+                evaluation_path = (root / "candidates"
+                                   / f"epoch-{epoch:03d}" / "evaluation.json")
+                work_metrics = {}
+                for index in range(84):
+                    row = {metric: 0.5 for metric in metrics}
+                    if arm == "A3_stateful":
+                        row["phase_f1"] += -0.01 if epoch == 5 else 0.04
+                    work_metrics[f"work-{index}"] = row
+                evaluation = {
+                    "schema": "tiktak.s1_evaluation/v1", "arm": arm,
+                    "seed": seed, "dev_works": 84,
+                    "work_metrics": work_metrics,
+                    "work_corpora": work_corpora,
+                }
+                _atomic_json(evaluation_path, evaluation)
+                history.append({
+                    "epoch": epoch, "eligible": True,
+                    "evaluation_sha256": file_sha256(evaluation_path),
+                })
+            selected_epoch = epochs[-1]
             result = {
                 "schema": "tiktak.s1_training/v1", "complete": True,
                 "provenance": {"tree_clean": True}, "arm": arm, "seed": seed,
-                "identity": {"same": True, "arm": arm, "seed": seed},
-                "best": {"epoch": 5,
-                         "evaluation": "candidates/epoch-005/evaluation.json"},
-                "history": [{"epoch": 5,
-                             "evaluation_sha256": file_sha256(evaluation_path)}],
+                "identity": {"same": True, "arm": arm, "seed": seed,
+                             "baseline_sha256": baseline_sha256},
+                "best": {
+                    "epoch": selected_epoch,
+                    "evaluation": (
+                        f"candidates/epoch-{selected_epoch:03d}/evaluation.json"),
+                },
+                "history": history,
             }
             result_path = root / "result.json"
             _atomic_json(result_path, result)
             paths.append(result_path)
-    summary = summarise(paths)
+    summary = summarise(paths, baseline_path)
     assert summary["paired_effects"]["phase_f1"]["mean"] == pytest.approx(0.04)
+    assert summary["selection_diagnostics"]["A3_reset"]["17"] == {
+        "validation_points": 1, "eligible_points": 1, "selected_epoch": 5,
+    }
+    assert summary["selection_diagnostics"]["A3_stateful"]["17"] == {
+        "validation_points": 2, "eligible_points": 2, "selected_epoch": 10,
+    }
+    assert summary["common_epoch_endpoint"]["paired_effects"][
+        "phase_f1"]["mean"] == pytest.approx(-0.01)
+    assert summary["common_epoch_endpoint"]["non_gating"] is True
+    assert summary["a0_diagnostics"]["paired_effects"]["A3_reset"][
+        "phase_f1"]["mean"] == pytest.approx(0.0)
+    assert summary["a0_diagnostics"]["paired_effects"]["A3_stateful"][
+        "phase_f1"]["mean"] == pytest.approx(0.04)
     assert summary["interpretation"] == "stateful_training_positive"
 
 
 def test_summary_reports_inconclusive_when_an_arm_has_no_eligible_checkpoint(
         tmp_path):
     paths = []
+    metrics = (
+        "phase_f1", "beat_f1", "downbeat_f1", "stable_exact_position",
+        "false_switches_per_5min", "long_wrong_episodes_per_5min",
+        "beat_precision", "beat_recall", "downbeat_precision",
+        "downbeat_recall", "usable_strict", "position_accuracy",
+        "grouping_balanced_accuracy", "coverage", "false_confident_share",
+        "unnecessary_unknown_share", "wrong_episodes_per_5min",
+        "resolver_state_changes_per_5min", "held_state_changes_per_5min")
+    work_corpora = {f"work-{index}": "rwc2" for index in range(84)}
+    work_metrics = {
+        f"work-{index}": {metric: 0.5 for metric in metrics}
+        for index in range(84)
+    }
+    baseline_path = tmp_path / "baseline.json"
+    _atomic_json(baseline_path, {
+        "schema": "tiktak.s1_evaluation/v1", "dev_works": 84,
+        "provenance": {"tree_clean": True},
+        "work_metrics": work_metrics, "work_corpora": work_corpora,
+    })
+    baseline_sha256 = file_sha256(baseline_path)
     for arm in ("A3_reset", "A3_stateful"):
         for seed in (17, 29, 43):
             root = tmp_path / f"missing-{arm}-{seed}"
+            evaluation_path = (
+                root / "candidates" / "epoch-005" / "evaluation.json")
+            _atomic_json(evaluation_path, {
+                "schema": "tiktak.s1_evaluation/v1", "arm": arm,
+                "seed": seed, "dev_works": 84,
+                "work_metrics": work_metrics, "work_corpora": work_corpora,
+            })
             result = {
                 "schema": "tiktak.s1_training/v1", "complete": True,
                 "provenance": {"tree_clean": True}, "arm": arm, "seed": seed,
-                "identity": {"same": True, "arm": arm, "seed": seed},
-                "best": None, "history": [],
+                "identity": {"same": True, "arm": arm, "seed": seed,
+                             "baseline_sha256": baseline_sha256},
+                "best": None, "history": [{
+                    "epoch": 5, "eligible": False,
+                    "evaluation_sha256": file_sha256(evaluation_path),
+                }],
             }
             path = root / "result.json"
             _atomic_json(path, result)
             paths.append(path)
-    summary = summarise(paths)
+    summary = summarise(paths, baseline_path)
     assert summary["complete"] is False
     assert summary["interpretation"] == "inconclusive"
+    assert summary["reason"] == (
+        "one or more arms had no beat-noninferior checkpoint")
     assert len(summary["ineligible_runs"]) == 6

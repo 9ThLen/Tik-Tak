@@ -133,9 +133,9 @@ shared 100-frame block warm-up. Missing labels never become null examples.
 Within one seed, both arms start from byte-identical source weights and use the
 same split, recording order, block order, masks and maximum update budget.
 Checkpoint selection is lexicographic on development metrics: reject any point
-whose beat-F loss exceeds 0.01 from that seed's frozen A0; among the remainder,
-maximise bar-phase F1, then downbeat F1, then beat F1. If no point clears beat
-non-inferiority, the arm has no eligible checkpoint.
+whose beat-F loss exceeds 0.01 from the frozen, seed-independent A0; among the
+remainder, maximise bar-phase F1, then downbeat F1, then beat F1. If no point
+clears beat non-inferiority, the arm has no eligible checkpoint.
 
 ## Registered endpoints
 
@@ -166,6 +166,22 @@ unnecessary-unknown shares, acquisition latency, all wrong episodes, state
 changes, per-corpus results, seed spread, train/dev losses and throughput.
 These diagnostics cannot replace a failed primary or safety gate.
 
+For every arm/seed, also report the number of product-validation points, the
+number that passed beat non-inferiority, and the selected epoch. To expose
+unequal winner's-curse opportunities without changing checkpoint selection,
+report a non-gating secondary paired endpoint from the last validation epoch
+shared by both arms within each seed. It uses the same work pairing, seed
+averaging and 2,000 work-level bootstrap draws as the primary endpoint but does
+not enter efficacy, safety or interpretation.
+
+The frozen A0 is not an S1 arm. Nevertheless, report `A3_reset - A0` and
+`A3_stateful - A0` for phase, beat and downbeat F1 as mandatory non-gating
+diagnostics. Differences are paired by the same 84 works, averaged across the
+three seeds within work, and bootstrapped with the same 2,000 draws. Thus a
+positive S1 verdict means stateful training beat reset training; the A0
+diagnostics separately show whether either trained arm improved on the
+untrained model.
+
 ## Interpretation
 
 After source, split, parity, completeness and determinism checks pass:
@@ -178,6 +194,8 @@ After source, split, parity, completeness and determinism checks pass:
 Any missing seed/work/arm, changed split, failed source/export parity,
 non-equivalent resume, non-finite loss/gradient, technical exclusion or
 incomplete product evaluation forces `inconclusive`.
+If either arm in any seed has no beat-noninferior checkpoint, the result is
+explicitly `inconclusive`; it cannot enter one of the four comparative verdicts.
 
 ## Apparatus gates before comparative output
 
@@ -231,3 +249,13 @@ verify that digest before submitting corpus work. This does not change a model
 arm, endpoint, threshold or population; it fixes the evaluator implementation
 to the one that produced the registered M0e baseline and makes a known
 apparatus incompatibility fail before a long run.
+
+## 2026-08-12 pre-run reporting revision: selection and A0 context
+
+No real-corpus A3 checkpoint or comparative training output existed when this
+revision was fixed. The summary must expose checkpoint-selection opportunity,
+the non-gating last-common-validation endpoint, and both selected A3 arms
+against the frozen A0 as specified above. These additions reuse evaluations
+and the frozen baseline already required by S1; they require no new model or
+corpus pass. They do not change an arm, selected checkpoint, primary endpoint,
+gate, threshold, population, bootstrap unit or interpretation rule.

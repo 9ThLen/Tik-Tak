@@ -23,8 +23,9 @@ The order is fixed:
    default on the 6 GiB GTX 1660 Ti. Product evaluation is CPU work and accepts
    several `--eval-workers`.
 5. Run `python -m training.beatnet.summarise` with six repeated `--run`
-   arguments. It reloads the selected per-work records and recomputes the
-   registered work-level bootstrap; it does not trust per-run means.
+   arguments and the fixed `--baseline`. It reloads selected and last-common
+   candidate records, recomputes the registered work-level bootstrap, and
+   reports both trained arms against A0; it does not trust per-run means.
 
 The training pause file is checked at epoch boundaries. Remove it and add
 `--resume` to continue. Resume binds the clean commit, source checkpoint,
