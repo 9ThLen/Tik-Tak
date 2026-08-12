@@ -18,9 +18,13 @@ test = [
     # run, so no Python test was executing in CI at all.
     "soundfile>=0.12",
 ]
+training = [
+    "torch>=2.3",
+    "soundfile>=0.12",
+]
 
 [tool.setuptools.packages.find]
-include = ["eval", "tiktak"]
+include = ["eval", "tiktak", "training", "training.*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
