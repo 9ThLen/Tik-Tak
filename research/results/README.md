@@ -1718,8 +1718,9 @@ each carries a provenance block that a summary would strip.
 | M0b — time-varying meter oracle ladder | `inconclusive` | [`M0B_REVIEW_20260812.md`](M0B_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
 | M0c — meter-transition trace | `mixed` | [`M0C_REVIEW_20260812.md`](M0C_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
 | M0d — decoder path-state reacquisition | `phase_hysteresis_bottleneck` | [`M0D_REVIEW_20260812.md`](M0D_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
+| M0e — paired non-oracle decoder regression | `non_oracle_candidate_regression` | [`M0E_REVIEW_20260812.md`](M0E_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
 
-**The M0a, M0b, M0c and M0d raw artifacts are not in the tree.** They were written to the
+**The M0a, M0b, M0c, M0d and M0e raw artifacts are not in the tree.** They were written to the
 tool's own output directory. Each review file is the durable pointer: absolute
 path, SHA-256, run commit, and a recomputation done from per-record data without
 reading the artifact's own summary. Any future run whose output lands outside
