@@ -32,6 +32,10 @@ complete cache manifest, frozen baseline, arm, seed and full JSON config. A
 mismatch fails closed. Candidate checkpoints are exported and evaluated every
 five epochs; patience is four product-validation points.
 
+The runner sets `CUBLAS_WORKSPACE_CONFIG=:4096:8` when it is absent and rejects
+other values. Together with deterministic PyTorch algorithms, this is part of
+the CUDA resume-equivalence contract.
+
 The cache is intentionally about 14 GiB. A diagnostic cache made with
 `--limit` is marked `diagnostic_only` and the binding runner refuses it.
 Likewise, a baseline without clean provenance, exactly 84 development works,

@@ -216,3 +216,18 @@ Resume fails closed on any identity mismatch.
 Any correction before the first comparative A3 training output is a dated
 pre-run revision. After either arm emits a real-corpus trained checkpoint, a
 changed rule is a deviation and cannot silently replace this registration.
+
+## 2026-08-12 pre-run apparatus revision: product binary
+
+The frozen A0 development baseline exposed that a newer local
+`dump_analysis.exe` can provide the published bar fields while omitting the
+internal `*_all` traces required by the fixed M0e scorer. It spent the complete
+development pass before the missing field surfaced. No A3 checkpoint or
+comparative training output existed.
+
+All S1 product evaluations therefore require the exact M0e binary, SHA-256
+`49c47437423f0d79c2f30dde3bcba506f1075099b9f3a7c780efcffe2eed647d`, and
+verify that digest before submitting corpus work. This does not change a model
+arm, endpoint, threshold or population; it fixes the evaluator implementation
+to the one that produced the registered M0e baseline and makes a known
+apparatus incompatibility fail before a long run.

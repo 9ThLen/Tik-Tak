@@ -15,7 +15,7 @@ from .cache import _atomic_json, _outside_repository
 from .data import (
     file_sha256, fixed_split, load_cache_manifest, load_cached_recording,
     verify_cache_records)
-from .evaluate import evaluate_model
+from .evaluate import PRODUCT_BINARY_SHA256, evaluate_model
 from .export import export_ttbn, save_state_dict
 from .model import BeatNetTrainable, SOURCE_SHA256, configure_a3
 from .trainer import (
@@ -78,6 +78,8 @@ def run_training(*, arm: str, seed: int, config: dict,
             or baseline.get("dev_works") != 84
             or baseline.get("model", {}).get("sha256")
             != "812ed11af745885127cfb967e7db847c9bdef44b8e2c80c79cf875f790b978f1"
+            or baseline.get("binary", {}).get("sha256")
+            != PRODUCT_BINARY_SHA256
             or baseline.get("provenance", {}).get("tree_clean") is not True):
         raise ValueError("invalid frozen A0 development baseline")
     fixed = fixed_split(source_manifest, m0e)

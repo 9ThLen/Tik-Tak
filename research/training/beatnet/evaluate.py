@@ -26,6 +26,14 @@ from .data import file_sha256, fixed_split
 
 
 SCHEMA = "tiktak.s1_evaluation/v1"
+PRODUCT_BINARY_SHA256 = (
+    "49c47437423f0d79c2f30dde3bcba506f1075099b9f3a7c780efcffe2eed647d")
+
+
+def validate_product_binary(path: pathlib.Path) -> None:
+    if file_sha256(path) != PRODUCT_BINARY_SHA256:
+        raise ValueError(
+            "S1 requires the M0e product binary with full internal bar traces")
 
 
 def _finite(value) -> float | None:
@@ -144,6 +152,7 @@ def evaluate_model(*, split: dict, manifest_path: pathlib.Path,
                    workers: int) -> dict:
     if workers < 1:
         raise ValueError("evaluation workers must be positive")
+    validate_product_binary(binary)
     items, _ = load_manifest(manifest_path, music_root, verify_audio=False)
     item_map = {(row["corpus"], row["name"]): row for row in items}
     source = json.loads(m0e_path.read_text(encoding="utf-8"))

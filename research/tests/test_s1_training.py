@@ -16,6 +16,7 @@ from training.beatnet.data import (
 from training.beatnet.export import export_ttbn, save_state_dict
 from training.beatnet.model import BeatNetTrainable, configure_a3
 from training.beatnet.run import _eligible_key, _validate_config
+from training.beatnet.evaluate import validate_product_binary
 from training.beatnet.summarise import summarise
 from training.beatnet.cache import _atomic_json
 from training.beatnet.data import file_sha256
@@ -123,7 +124,11 @@ def test_scheduler_pairs_order_masks_and_never_leaks_slots():
     assert not active
 
 
-def test_checkpoint_resume_is_tensor_identical(tmp_path):
+@pytest.mark.parametrize("device_name", ["cpu", "cuda"])
+def test_checkpoint_resume_is_tensor_identical(tmp_path, device_name):
+    if device_name == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA is unavailable")
+    device = torch.device(device_name)
     config = {"test": "resume"}
     identity = checkpoint_identity(
         config, source_sha256="a", split_sha256="b", cache_sha256="c",
@@ -134,19 +139,20 @@ def test_checkpoint_resume_is_tensor_identical(tmp_path):
         set_deterministic(29)
         model = BeatNetTrainable()
         configure_a3(model)
+        model.to(device)
         optimizer = torch.optim.Adam(
             [p for p in model.parameters() if p.requires_grad], lr=5e-4)
         return model, optimizer
 
     uninterrupted, optimizer_a = build()
     train_epoch(uninterrupted, optimizer_a, recordings, arm="A3_stateful",
-                seed=29, batch_size=2, device=torch.device("cpu"))
+                seed=29, batch_size=2, device=device)
     train_epoch(uninterrupted, optimizer_a, recordings, arm="A3_stateful",
-                seed=30, batch_size=2, device=torch.device("cpu"))
+                seed=30, batch_size=2, device=device)
 
     resumed, optimizer_b = build()
     train_epoch(resumed, optimizer_b, recordings, arm="A3_stateful",
-                seed=29, batch_size=2, device=torch.device("cpu"))
+                seed=29, batch_size=2, device=device)
     checkpoint = tmp_path / "checkpoint.pt"
     save_checkpoint(checkpoint, resumed, optimizer_b, epoch=0,
                     identity=identity, metadata={"marker": 1})
@@ -155,9 +161,16 @@ def test_checkpoint_resume_is_tensor_identical(tmp_path):
         checkpoint, loaded, optimizer_c, identity=identity)
     assert payload["metadata"] == {"marker": 1}
     train_epoch(loaded, optimizer_c, recordings, arm="A3_stateful",
-                seed=30, batch_size=2, device=torch.device("cpu"))
+                seed=30, batch_size=2, device=device)
     for name, expected in uninterrupted.state_dict().items():
         assert torch.equal(expected, loaded.state_dict()[name]), name
+
+
+def test_product_binary_is_fixed_before_corpus_work(tmp_path):
+    wrong = tmp_path / "dump_analysis.exe"
+    wrong.write_bytes(b"not the registered binary")
+    with pytest.raises(ValueError, match="M0e product binary"):
+        validate_product_binary(wrong)
 
 
 def test_both_arms_overfit_tiny_set_and_state_changes_second_block():

@@ -23,6 +23,10 @@ CLASS_WEIGHTS = (50.0, 400.0, 5.0)
 
 
 def set_deterministic(seed: int) -> None:
+    workspace = os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+    if workspace not in {":4096:8", ":16:8"}:
+        raise RuntimeError(
+            "S1 requires a deterministic CUBLAS_WORKSPACE_CONFIG")
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
