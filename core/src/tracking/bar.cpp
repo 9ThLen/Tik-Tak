@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 
 namespace tiktak::tracking {
 
@@ -34,6 +35,9 @@ void BarTracker::reset() {
     held_beats_per_bar_ = 0;
     held_downbeat_index_ = 0;
     decided_ = false;
+    path_beats_per_bar_ = 0;
+    path_downbeat_index_ = 0;
+    path_decided_ = false;
     scored_ = 0;
 }
 
@@ -114,7 +118,21 @@ bool BarTracker::update(double now_sec) {
         // `phase` indexes the beat list handed in, so the bar line it names has
         // to be carried back out into the tracker's own numbering before the
         // window slides and that index means a different beat.
-        held_downbeat_index_ = beat_index_[static_cast<std::size_t>(result_.phase)];
+        std::size_t anchor = static_cast<std::size_t>(result_.phase);
+        if (!result_.downbeats.empty()) {
+            const auto found = std::find(beat_time_.rbegin(), beat_time_.rend(),
+                                         result_.downbeats.back());
+            if (found != beat_time_.rend()) {
+                const std::size_t path_anchor = beat_time_.size() - 1 -
+                    static_cast<std::size_t>(
+                        std::distance(beat_time_.rbegin(), found));
+                path_beats_per_bar_ = result_.beats_per_bar;
+                path_downbeat_index_ = beat_index_[path_anchor];
+                path_decided_ = true;
+                if (config_.use_latest_path_downbeat) anchor = path_anchor;
+            }
+        }
+        held_downbeat_index_ = beat_index_[anchor];
         decided_ = true;
     }
     // A window that decided nothing does not erase one that did. A bar or two
@@ -129,6 +147,14 @@ int BarTracker::positionOf(long long index) const {
     if (!decided_ || held_beats_per_bar_ <= 0) return -1;
     const long long m = held_beats_per_bar_;
     long long delta = (index - held_downbeat_index_) % m;
+    if (delta < 0) delta += m;
+    return static_cast<int>(delta);
+}
+
+int BarTracker::pathPositionOf(long long index) const {
+    if (!path_decided_ || path_beats_per_bar_ <= 0) return -1;
+    const long long m = path_beats_per_bar_;
+    long long delta = (index - path_downbeat_index_) % m;
     if (delta < 0) delta += m;
     return static_cast<int>(delta);
 }

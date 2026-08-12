@@ -72,6 +72,15 @@ public:
 
         analysis::DownbeatConfig resolver;
 
+        // Research counterfactual, off in every shipping configuration.  With
+        // dynamic phase switching the resolver's `phase` is the opening state
+        // of its trailing window; `downbeats` is the decoded path.  M0d compares
+        // the existing opening-state readout with anchoring to the latest state
+        // already present in that path.  This changes no evidence or resolver
+        // decision and must remain opt-in until the registered corpus test says
+        // whether it helps without destabilising steady passages.
+        bool use_latest_path_downbeat = false;
+
         bool valid() const;
     };
 
@@ -113,6 +122,10 @@ public:
     // -1 when nothing has been decided, and for an index older than the window
     // the decision was made from.
     int positionOf(long long index) const;
+
+    // Diagnostic view of the latest state in the resolver's dynamic path,
+    // independent of which state the held/product readout uses.
+    int pathPositionOf(long long index) const;
 
     // The last window's answer, whatever it was, including "nothing". This is
     // the diagnostic view: its margins are fresh, and they can say the evidence
@@ -164,6 +177,10 @@ private:
     int held_beats_per_bar_ = 0;
     long long held_downbeat_index_ = 0;
     bool decided_ = false;
+
+    int path_beats_per_bar_ = 0;
+    long long path_downbeat_index_ = 0;
+    bool path_decided_ = false;
     std::size_t scored_ = 0;
 };
 

@@ -239,6 +239,33 @@ LiveConfig liveBarConfig() {
     return config;
 }
 
+TEST(BarTracker, LatestPathReadoutFollowsAResolvedPhaseChange) {
+    auto config = barConfig();
+    config.resolver.phase_switch_cost = 0.0;
+
+    BarTracker opening(config);
+    Drive opening_at;
+    driveBarsFrom(opening, opening_at, 4, 8, 120.0, 0.9, 0.0,
+                  /*phase=*/0);
+    driveBarsFrom(opening, opening_at, 4, 2, 120.0, 0.9, 0.0,
+                  /*phase=*/2);
+
+    config.use_latest_path_downbeat = true;
+    BarTracker latest(config);
+    Drive latest_at;
+    driveBarsFrom(latest, latest_at, 4, 8, 120.0, 0.9, 0.0,
+                  /*phase=*/0);
+    driveBarsFrom(latest, latest_at, 4, 2, 120.0, 0.9, 0.0,
+                  /*phase=*/2);
+
+    const long long last = latest_at.index - 1;
+    ASSERT_EQ(opening_at.index, latest_at.index);
+    EXPECT_EQ(opening.pathPositionOf(last), 1);
+    EXPECT_EQ(latest.pathPositionOf(last), 1);
+    EXPECT_EQ(latest.positionOf(last), 1);
+    EXPECT_NE(opening.positionOf(last), latest.positionOf(last));
+}
+
 struct ObservedBeats {
     std::vector<double> times;
     static void observe(void* opaque, double beat, long long, double, int,

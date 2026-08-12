@@ -707,6 +707,8 @@ int main(int argc, char** argv) {
     // product class.
     std::string bar_replay_beats_path;
     std::string bar_replay_emit_path;
+    bool bar_latest_path_phase = false;
+    double bar_phase_switch_cost = std::numeric_limits<double>::quiet_NaN();
 
     // The matched-cost comparison policies, one at a time.
     OnlineOctavePolicy online_policy;
@@ -921,6 +923,23 @@ int main(int argc, char** argv) {
         }
         if (std::strcmp(argv[i], "--live-bars") == 0) {
             live_bars = true;
+            continue;
+        }
+        if (std::strcmp(argv[i], "--bar-latest-path-phase") == 0) {
+            bar_latest_path_phase = true;
+            continue;
+        }
+        if (std::strcmp(argv[i], "--bar-phase-switch-cost") == 0) {
+            if (i + 1 >= argc) {
+                std::fprintf(stderr, "--bar-phase-switch-cost needs a value\n");
+                return 2;
+            }
+            bar_phase_switch_cost = std::atof(argv[++i]);
+            if (!(bar_phase_switch_cost >= 0.0)) {
+                std::fprintf(stderr,
+                             "--bar-phase-switch-cost must be >= 0\n");
+                return 2;
+            }
             continue;
         }
         if (std::strcmp(argv[i], "--live-activation") == 0) {
@@ -1298,6 +1317,7 @@ int main(int argc, char** argv) {
     std::vector<double> bar_replay_beats;
     std::vector<double> bar_replay_emit;
     std::vector<double> bar_replay_positions;
+    std::vector<double> bar_replay_path_positions;
     std::vector<double> bar_replay_meters;
     std::vector<double> bar_replay_confident;
     BeatAudit beat_audit;
@@ -1516,6 +1536,10 @@ int main(int argc, char** argv) {
         }
         live_config.anchor_octave_freeze = live_octave_freeze;
         live_config.bar_tracking = live_bars;
+        live_config.bar.use_latest_path_downbeat = bar_latest_path_phase;
+        if (!std::isnan(bar_phase_switch_cost)) {
+            live_config.bar.resolver.phase_switch_cost = bar_phase_switch_cost;
+        }
         if (live_bars) {
             live_config.beat_observer = &BeatAudit::observe;
             live_config.beat_observer_context = &beat_audit;
@@ -1591,6 +1615,8 @@ int main(int argc, char** argv) {
                 replay_bar.update(now);
                 bar_replay_positions.push_back(
                     static_cast<double>(replay_bar.positionOf(index)));
+                bar_replay_path_positions.push_back(
+                    static_cast<double>(replay_bar.pathPositionOf(index)));
                 bar_replay_meters.push_back(
                     static_cast<double>(replay_bar.beatsPerBar()));
                 bar_replay_confident.push_back(
@@ -2067,6 +2093,7 @@ int main(int argc, char** argv) {
         column("live_bar_confident", live_bar_confident);
         exact_column("bar_replay_beats", bar_replay_beats);
         column("bar_replay_positions", bar_replay_positions);
+        column("bar_replay_path_positions", bar_replay_path_positions);
         column("bar_replay_meters", bar_replay_meters);
         column("bar_replay_confident", bar_replay_confident);
     }

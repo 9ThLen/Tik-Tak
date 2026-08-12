@@ -115,7 +115,7 @@ def _write(path: pathlib.Path, values: np.ndarray, fmt: str = "%.17g") -> None:
 def replay_bar(binary: pathlib.Path, audio: pathlib.Path, beat_activation: np.ndarray,
                downbeat_activation: np.ndarray, frame_emit: np.ndarray,
                frame_times: np.ndarray, beats: np.ndarray,
-               beat_emit: np.ndarray) -> dict:
+               beat_emit: np.ndarray, extra: list[str] | None = None) -> dict:
     with tempfile.TemporaryDirectory() as directory:
         root = pathlib.Path(directory)
         paths = {name: root / f"{name}.txt" for name in
@@ -127,11 +127,14 @@ def replay_bar(binary: pathlib.Path, audio: pathlib.Path, beat_activation: np.nd
         _write(paths["frame_times"], frame_times)
         _write(paths["beats"], beats)
         _write(paths["beat_emit"], beat_emit, "%.0f")
+        flags = ["--live-bars", "--live-downbeat", str(paths["downbeat"]),
+                 "--bar-replay-beats", str(paths["beats"]),
+                 "--bar-replay-emit", str(paths["beat_emit"])]
+        if extra:
+            flags += list(extra)
         return run_activation(
             binary, audio, paths["beat"],
-            extra=["--live-bars", "--live-downbeat", str(paths["downbeat"]),
-                   "--bar-replay-beats", str(paths["beats"]),
-                   "--bar-replay-emit", str(paths["beat_emit"])],
+            extra=flags,
             emit_path=paths["frame_emit"], times_path=paths["frame_times"])
 
 
