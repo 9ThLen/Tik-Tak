@@ -119,7 +119,8 @@ def _checkpoint_state(path: pathlib.Path, state: dict, *, status: str,
 
 
 def prepare_checkpoint(path: pathlib.Path, identity: dict, provenance: dict,
-                       items: list[dict], *, resume: bool, workers: int
+                       items: list[dict], *, resume: bool, workers: int,
+                       schema: str = CHECKPOINT_SCHEMA,
                        ) -> tuple[list[object | None], dict, int]:
     expected_items = [[item["corpus"], item["name"]] for item in items]
     header_path = path / "header.json"
@@ -128,7 +129,7 @@ def prepare_checkpoint(path: pathlib.Path, identity: dict, provenance: dict,
         if not header_path.is_file() or not outcomes_path.is_dir():
             raise ValueError(f"cannot resume: incomplete checkpoint {path}")
         header = json.loads(header_path.read_text(encoding="utf-8"))
-        if header.get("schema") != CHECKPOINT_SCHEMA:
+        if header.get("schema") != schema:
             raise ValueError("cannot resume: checkpoint schema changed")
         if header.get("identity") != identity:
             raise ValueError("cannot resume: checkpoint run identity changed")
@@ -140,17 +141,17 @@ def prepare_checkpoint(path: pathlib.Path, identity: dict, provenance: dict,
         sessions = list(state.get("sessions", []))
         sessions.append({"utc": provenance["utc"],
                          "workers": workers, "resume": True})
-        state = {"schema": CHECKPOINT_SCHEMA, "sessions": sessions}
+        state = {"schema": schema, "sessions": sessions}
     else:
         if path.exists():
             raise ValueError(
                 f"checkpoint already exists; pass --resume or choose another: {path}")
         outcomes_path.mkdir(parents=True)
         _atomic_write_json(header_path, {
-            "schema": CHECKPOINT_SCHEMA, "identity": identity,
+            "schema": schema, "identity": identity,
             "provenance": provenance, "items": expected_items,
         })
-        state = {"schema": CHECKPOINT_SCHEMA, "sessions": [{
+        state = {"schema": schema, "sessions": [{
             "utc": provenance["utc"], "workers": workers,
             "resume": False,
         }]}
@@ -165,7 +166,7 @@ def prepare_checkpoint(path: pathlib.Path, identity: dict, provenance: dict,
         if not 0 <= index < len(items) or ordered[index] is not None:
             raise ValueError(f"cannot resume: invalid outcome index {index}")
         saved = json.loads(outcome_path.read_text(encoding="utf-8"))
-        if saved.get("schema") != CHECKPOINT_SCHEMA or saved.get("index") != index:
+        if saved.get("schema") != schema or saved.get("index") != index:
             raise ValueError(f"cannot resume: invalid outcome envelope {index}")
         if saved.get("item") != expected_items[index]:
             raise ValueError(f"cannot resume: outcome item changed at {index}")
@@ -182,12 +183,13 @@ def prepare_checkpoint(path: pathlib.Path, identity: dict, provenance: dict,
 
 
 def _save_checkpoint_outcome(path: pathlib.Path, index: int, item: dict,
-                             outcome: tuple[str, dict]) -> None:
+                             outcome: tuple[str, dict], *,
+                             schema: str = CHECKPOINT_SCHEMA) -> None:
     target = path / "outcomes" / f"{index:06d}.json"
     if target.exists():
         raise RuntimeError(f"refusing to overwrite checkpoint outcome {index}")
     _atomic_write_json(target, {
-        "schema": CHECKPOINT_SCHEMA, "index": index,
+        "schema": schema, "index": index,
         "item": [item["corpus"], item["name"]],
         "outcome": list(outcome),
     })
@@ -799,9 +801,12 @@ def summarise(records: list[dict]) -> dict:
 def run_checkpointed(items: list[dict], binary: pathlib.Path,
                      model: pathlib.Path, *, workers: int,
                      checkpoint: pathlib.Path, state: dict,
-                     ordered: list[object | None], pause_file: pathlib.Path
+                     ordered: list[object | None], pause_file: pathlib.Path,
+                     measure=None,
+                     checkpoint_schema: str = CHECKPOINT_SCHEMA,
                      ) -> tuple[list[object | None], bool]:
     """Run a bounded queue, checkpointing each outcome before replacing it."""
+    worker = measure_outcome if measure is None else measure
     pending = deque(index for index, outcome in enumerate(ordered)
                     if outcome is None)
     completed = len(items) - len(pending)
@@ -810,7 +815,9 @@ def run_checkpointed(items: list[dict], binary: pathlib.Path,
 
     def save(index: int, outcome: tuple[str, dict]) -> None:
         nonlocal completed
-        _save_checkpoint_outcome(checkpoint, index, items[index], outcome)
+        _save_checkpoint_outcome(
+            checkpoint, index, items[index], outcome,
+            schema=checkpoint_schema)
         ordered[index] = list(outcome)
         completed += 1
         _checkpoint_state(checkpoint, state, status="running",
@@ -839,7 +846,7 @@ def run_checkpointed(items: list[dict], binary: pathlib.Path,
             while pending and len(active) < workers and not paused:
                 index = pending.popleft()
                 active[pool.submit(
-                    measure_outcome, items[index], binary, model)] = index
+                    worker, items[index], binary, model)] = index
 
         fill()
         try:

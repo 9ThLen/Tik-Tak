@@ -6,7 +6,7 @@
 
 ## 1. Рішення в одному абзаці
 
-Основний шлях цієї альтернативи — не проєктувати новий audio frontend, а адаптувати вже портовану причинну BeatNet до цільового домену Tik-tak. Незмінена архітектура BeatNet уже дає 50-fps класи `beat/downbeat/non-beat`, а локальний код перетворює їх на узгоджені `P(any beat)=P(beat)+P(downbeat)` і `P(downbeat)`, після чого наявні `LiveTracker` та `BarTracker` відновлюють tactus grid, bar onset, bar position і tactus grouping. Навчання ескалюється від калібрування й head-only до часткового та повного fine-tune; реальні paired clean↔microphone записи є головним доменним матеріалом. Новий neural head для subdivision/`meter_family` дозволяється лише після M0b, якщо BeatNet уже дає добрі tactus/downbeat, але наявний metrical decoder інформаційно недостатній. Denominator не вважається акустичним передбаченням. Нова audio-архітектура в цей план не входить.
+Основний шлях цієї альтернативи — не проєктувати новий audio frontend, а адаптувати вже портовану причинну BeatNet до цільового домену Tik-tak. Незмінена архітектура BeatNet уже дає 50-fps класи `beat/downbeat/non-beat`, а локальний код перетворює їх на узгоджені `P(any beat)=P(beat)+P(downbeat)` і `P(downbeat)`, після чого наявні `LiveTracker` та `BarTracker` відновлюють tactus grid, bar onset, bar position і tactus grouping. Навчання ескалюється від калібрування й head-only до часткового та повного fine-tune; реальні paired clean↔microphone записи є головним доменним матеріалом. Новий neural head для subdivision/`meter_family` дозволяється лише після M0c і нового позитивного метричного гейта, якщо BeatNet уже дає добрі tactus/downbeat, але наявний metrical decoder інформаційно недостатній. Denominator не вважається акустичним передбаченням. Нова audio-архітектура в цей план не входить.
 
 ## 2. Чому цей шлях справді коротший
 
@@ -236,7 +236,7 @@ PyTorch і training-only packages належать в окреме optional envi
 |---|---|---|
 | S0 | frozen BeatNet: reset LSTM-state кожні `2/4/8/16/32` с проти безперервного стану | немає; до S1 |
 | S1 | stateful contiguous blocks, TBPTT `detach`, masked warm-up | лише позитивний S0; ablation поверх A2–A4 |
-| S2 | training-only bar-position auxiliary head, вилучений перед export | лише після позитивного M0b |
+| S2 | training-only bar-position auxiliary head, вилучений перед export | лише після M0c і нового позитивного метричного гейта |
 
 S0 ізолює **лише** стан `BeatNetModel`: feature history, `LiveTracker` і `BarTracker` не скидаються; однакові reset points не підбираються за музичними межами; transient після reset звітується окремо, а основна метрика рахується також із masked warm-up. Якщо continuous state не покращує downbeat/bar phase, S1 втрачає пріоритет. Якщо S0 позитивний, S1 не переносить state між композиціями або batch slots і робить reset лише там, де його причинно робить runtime.
 
@@ -271,9 +271,9 @@ Fine-tuning BeatNet безпосередньо навчає tactus/downbeat sali
 - якщо 2 проходить, а 3 ні, вузьке місце у tactus grid;
 - якщо phase/grouping проходять, але subdivision/`meter_family` ні, поточні BeatNet outputs і decoder інформаційно недостатні для цієї задачі.
 
-`M0a` запускається одразу після provenance/parity на найметричнішому наявному матеріалі. Негатив oracle-руки 1 є твердим stop для neural escalation; позитив лише не спростовує її через домінування 4/4. `M0b` повторює драбину на meter-diverse dev і є остаточним гейтом для S2 та metrical adapter. Denominator у M0 не оцінюється, бо поточний decoder його не видає, а звук його однозначно не визначає.
+`M0a` запускається одразу після provenance/parity на найметричнішому наявному матеріалі. Негатив oracle-руки 1 є твердим stop для neural escalation; позитив лише не спростовує її через домінування 4/4. `M0b` повторює драбину на meter-diverse dev. Фактичний M0b — `inconclusive`: статичні A1 phase/grouping високі, але швидке захоплення змін провалене, а 62/123 RWC2 переходів right-censored щодо повної двотактової межі. Тому перед будь-яким S2/metrical adapter виконується A1-only `M0c` transition trace; він локалізує stale state проти phase/sequence instability, але сам не є позитивним гейтом. Denominator у M0 не оцінюється, бо поточний decoder його не видає, а звук його однозначно не визначає.
 
-Лише останній випадок після M0b відкриває маленький **metrical adapter**, не новий audio frontend:
+Лише останній випадок після M0c і нового позитивного метричного гейта відкриває маленький **metrical adapter**, не новий audio frontend:
 
 - перший baseline — deterministic subdivision evidence;
 - другий — tiny beat-synchronous classifier на accepted tactus sequence;
@@ -375,10 +375,15 @@ Fine-tuning BeatNet безпосередньо навчає tactus/downbeat sali
 
 ### F5 — metrical completion
 
-1. Виконати M0b — чотири oracle/frontend arms із §10 на meter-diverse dev.
-2. Виправляти decoder лише якщо reference evidence не проходить.
-3. Додати S2 або metrical adapter лише якщо subdivision/`meter_family` bottleneck доведений.
-4. Перевірити changes, acquisition, abstention і class balance.
+1. M0b виконано: чотири oracle/frontend arms із §10 на meter-diverse dev;
+   результат `inconclusive` через change acquisition.
+2. Виконати пререєстрований M0c на A1 transitions, окремо від right-censored,
+   і визначити домінуючий stale-state/phase/other механізм.
+3. Перевірити найменший decoder counterfactual, який випливає з M0c; не
+   переписувати M0b і не трактувати M0c як дозвіл на neural head.
+4. Додати S2 або metrical adapter лише якщо наступний позитивний метричний гейт
+   доведе subdivision/`meter_family` bottleneck.
+5. Перевірити changes, acquisition, abstention і class balance.
 
 **Exit:** bar position, grouping і `meter_family` проходять окремі gates; canonical time signature лишається вторинним виходом із `notation_basis`.
 
@@ -469,7 +474,7 @@ meter-diverse dev ────────────────────�
 10. **A1–A4 adaptation matrix** — S1 only after positive S0; stop at first full-gate pass.
 11. **Paired room A5–A7 matrix** — supervised, output consistency, teacher only as justified.
 12. **M0b metrical oracle report** — final meter-diverse decoder/downbeat/grid/full-frontend gate.
-13. **Optional S2/metrical adapter** — only after M0b evidence; `meter_family` and measured `unknown` behavior.
+13. **Optional S2/metrical adapter** — only after M0c and a new positive metrical gate; `meter_family` and measured `unknown` behavior.
 14. **Fine-tuned artifact/export** — manifest modifications, `TTBN v1` parity, C++ load.
 15. **Mobile candidate report** — decomposed latency, RAM, startup, sustained RTF, energy/thermal.
 16. **One-shot locked report** — immutable preregistration and final verdict.
