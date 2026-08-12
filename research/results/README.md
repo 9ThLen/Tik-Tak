@@ -1706,7 +1706,7 @@ covariate lets the thing being measured choose the axis it is measured on. The
 first version of this section did that and produced a monotone table in both
 arms that is not there.
 
-## M0a, M0b and S0: where the preregistered causal results live
+## M0a, M0b, M0c and S0: where the preregistered causal results live
 
 The runs are reviewed in their own files rather than summarised here, because
 each carries a provenance block that a summary would strip.
@@ -1716,8 +1716,9 @@ each carries a provenance block that a summary would strip.
 | S0 — reset horizon | positive | [`S0_RESET_REVIEW_20260811.md`](S0_RESET_REVIEW_20260811.md) | `s0_reset_gtzan_harmonix_20260811.raw.json` |
 | M0a — oracle ladder | `band3_decoder_not_falsified` | [`M0A_REVIEW_20260811.md`](M0A_REVIEW_20260811.md) | **outside the repository** — path and SHA-256 in the review |
 | M0b — time-varying meter oracle ladder | `inconclusive` | [`M0B_REVIEW_20260812.md`](M0B_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
+| M0c — meter-transition trace | `mixed` | [`M0C_REVIEW_20260812.md`](M0C_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
 
-**The M0a and M0b raw artifacts are not in the tree.** They were written to the
+**The M0a, M0b and M0c raw artifacts are not in the tree.** They were written to the
 tool's own output directory. Each review file is the durable pointer: absolute
 path, SHA-256, run commit, and a recomputation done from per-record data without
 reading the artifact's own summary. Any future run whose output lands outside
@@ -1743,3 +1744,10 @@ M0b adds a different boundary: static reference phase and grouping are strong,
 but only 0.0837 of annotated meter changes are acquired within two bars. Its
 verdict is therefore `inconclusive`, and the M0b-gated S2/metrical-adapter path
 remains closed pending a focused transition diagnostic.
+
+M0c supplies that trace but not a neural permission. Only 61/123 transitions
+fully observe the two-bar endpoint. Among 59 observable failures, 48 acquire
+late, at a median five new-meter bars. `acquired_late` was omitted from M0c's
+registered dominance gate, so the formal result is `mixed`; descriptively the
+delay class is 0.833 [0.700, 0.950] at work level. The next gate is a
+decoder-only state/phase reacquisition counterfactual, not S2.
