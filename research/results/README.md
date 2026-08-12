@@ -1706,7 +1706,7 @@ covariate lets the thing being measured choose the axis it is measured on. The
 first version of this section did that and produced a monotone table in both
 arms that is not there.
 
-## M0a, M0b, M0c and S0: where the preregistered causal results live
+## M0a, M0b, M0c, M0d and S0: where the preregistered causal results live
 
 The runs are reviewed in their own files rather than summarised here, because
 each carries a provenance block that a summary would strip.
@@ -1717,8 +1717,9 @@ each carries a provenance block that a summary would strip.
 | M0a — oracle ladder | `band3_decoder_not_falsified` | [`M0A_REVIEW_20260811.md`](M0A_REVIEW_20260811.md) | **outside the repository** — path and SHA-256 in the review |
 | M0b — time-varying meter oracle ladder | `inconclusive` | [`M0B_REVIEW_20260812.md`](M0B_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
 | M0c — meter-transition trace | `mixed` | [`M0C_REVIEW_20260812.md`](M0C_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
+| M0d — decoder path-state reacquisition | `phase_hysteresis_bottleneck` | [`M0D_REVIEW_20260812.md`](M0D_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
 
-**The M0a, M0b and M0c raw artifacts are not in the tree.** They were written to the
+**The M0a, M0b, M0c and M0d raw artifacts are not in the tree.** They were written to the
 tool's own output directory. Each review file is the durable pointer: absolute
 path, SHA-256, run commit, and a recomputation done from per-record data without
 reading the artifact's own summary. Any future run whose output lands outside
@@ -1749,5 +1750,13 @@ M0c supplies that trace but not a neural permission. Only 61/123 transitions
 fully observe the two-bar endpoint. Among 59 observable failures, 48 acquire
 late, at a median five new-meter bars. `acquired_late` was omitted from M0c's
 registered dominance gate, so the formal result is `mixed`; descriptively the
-delay class is 0.833 [0.700, 0.950] at work level. The next gate is a
-decoder-only state/phase reacquisition counterfactual, not S2.
+delay class is 0.833 [0.700, 0.950] at work level.
+
+M0d closes that next gate under fixed oracle/reference evidence. Merely reading
+the latest path at the existing switch cost has no effect, and cost 8 remains
+null. At cost 2, acquisition within two bars improves by +0.581 [0.425, 0.731]
+while stable exact-position accuracy improves by +0.020 [0.011, 0.033]. Free
+switching is unsafe: the zero-cost control causes 3,829 path/held-output changes
+and loses 0.072 [-0.133, -0.018] stable accuracy. The formal result is
+`phase_hysteresis_bottleneck`; the next gate is a paired non-oracle decoder
+regression for the frozen cost-2 candidate, not S2 or a product-default change.
