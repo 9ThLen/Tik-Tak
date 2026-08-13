@@ -76,7 +76,33 @@ MIN_PEAK_TO_SIDELOBE_DB = 12.0
 
 # How far either side of the peak is excluded when measuring what it stands
 # above. The room's response is part of the peak, not a rival to it.
-GUARD_SECONDS = 0.05
+#
+# 0.05 was a guess, and it was too narrow. Measured on session 3, five of the
+# six limiting sidelobes sat at +53 to +61 ms from their peak -- the slate's own
+# response, just outside the old window, counted as a rival to itself. Widening
+# past that ridge is worth 8 to 14 dB on those five.
+#
+# It cannot be widened freely: the ambiguity this file exists to resolve is one
+# beat, so a rival a beat away has to stay outside the guard. 0.125 is at least
+# twice the observed ridge and under half a beat even at 200 BPM, which is
+# faster than anything these takes contain. The ridge is a property of the room
+# that was measured and should be rechecked in a new one; the beat bound is not.
+GUARD_SECONDS = 0.125
+
+# How far either side of the *expected* tail position the trailing slate is
+# looked for. The head cannot be bounded this tightly -- the capture's start
+# offset is exactly what is unknown -- but once the head is found the tail's
+# position is known to within clock drift, which measured 1.5 to 2.6 ms across a
+# whole take.
+#
+# This was 2.0, and that was the real cause of session 3's narrowest margin.
+# `build_take` leaves `LEAD_SECONDS` of silence between the music and the tail
+# slate, so a 2.0 s window reaches 0.5 s back into the music, and on
+# `0116_goodies` the loudest thing in the window was the end of the song, at
+# -1999.3 ms from the peak. No guard width reaches that far; only the window
+# does. Bounded below by drift and above by `LEAD_SECONDS`, 1.0 s sits inside a
+# wide interval rather than at a fitted optimum.
+TAIL_SEARCH_HALF_WIDTH_SEC = 1.0
 
 
 def slate(rate: int = RATE, seconds: float = SLATE_SECONDS,
@@ -134,6 +160,22 @@ def find_slate(capture: np.ndarray, rate: int = RATE,
         hi = min(len(magnitude), int(round(search[1] * rate)))
         if hi <= lo:
             return {"accepted": False, "reason": "empty search window"}
+        # A window can be too small to support the measurement at all. Once the
+        # peak and its guard are removed, what is left has to be at least a
+        # slate long, or the sidelobe is estimated from less material than the
+        # signal it is compared against. Swept on the session 3 captures, a
+        # +/-0.25 s tail window returned 0.180 dB -- peak and rival were the same
+        # ridge -- which reads as a terrible capture rather than as a
+        # misconfigured search. Refusing says which one it is.
+        #
+        # Only for a bounded search: an unbounded call measures whatever buffer
+        # it was handed, and that is the caller's business.
+        minimum = seconds + 2.0 * GUARD_SECONDS
+        if (hi - lo) / rate < minimum:
+            return {"accepted": False,
+                    "reason": (f"search window {(hi - lo) / rate:.3f} s is "
+                               f"below the {minimum:.3f} s this measurement "
+                               f"needs")}
 
     window = magnitude[lo:hi]
     if not len(window) or not np.any(window > 0):
@@ -200,9 +242,10 @@ def align_by_slate(capture: np.ndarray, layout: dict,
         return out
 
     centre = head["offset_sec"] + expected_tail
+    half = TAIL_SEARCH_HALF_WIDTH_SEC
     tail = find_slate(capture, rate=rate, seconds=slate_len,
-                      search=(max(0.0, centre - 2.0),
-                              min(centre + 2.0, len(capture) / rate)))
+                      search=(max(0.0, centre - half),
+                              min(centre + half, len(capture) / rate)))
     out["tail"] = tail
     if not tail.get("accepted"):
         out["accepted"] = False
