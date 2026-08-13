@@ -102,7 +102,27 @@ GUARD_SECONDS = 0.125
 # -1999.3 ms from the peak. No guard width reaches that far; only the window
 # does. Bounded below by drift and above by `LEAD_SECONDS`, 1.0 s sits inside a
 # wide interval rather than at a fitted optimum.
-TAIL_SEARCH_HALF_WIDTH_SEC = 1.0
+#
+# It is a ceiling rather than the width, because the width is not a constant at
+# all: `lead_seconds` is written into every layout, and the bound that matters
+# is a fraction of *that*. A take built with a shorter pause -- which is exactly
+# what lengthening the tail gap for the phone's AGC would produce on the other
+# side -- would silently put a hard-coded 1.0 back inside the music, and the
+# symptom would again look like a weak slate.
+TAIL_SEARCH_MAX_HALF_WIDTH_SEC = 1.0
+TAIL_SEARCH_LEAD_FRACTION = 2.0 / 3.0
+
+# Head and tail must agree about where the take starts, after the interval
+# between them is removed. This is the check the peak-to-sidelobe margin was
+# only ever a proxy for: the margin asks whether a peak looks convincing, this
+# asks whether the two independent readings of the same take land in the same
+# place. A head slate read one beat early does not produce a slightly worse
+# margin -- it produces a drift of about half a second.
+#
+# No free parameter, and the bar does not need calibrating: measured drift is
+# 1.5 to 2.6 ms, one beat is around 480 ms, and 50 ms sits twenty times above
+# the first and ten times below the second. Nothing in between needs a decision.
+MAX_DRIFT_SEC = 0.05
 
 
 def slate(rate: int = RATE, seconds: float = SLATE_SECONDS,
@@ -212,6 +232,13 @@ def find_slate(capture: np.ndarray, rate: int = RATE,
         "peak_to_sidelobe_db": ratio_db,
         "accepted": bool(ratio_db >= MIN_PEAK_TO_SIDELOBE_DB),
         "threshold_db": MIN_PEAK_TO_SIDELOBE_DB,
+        # Reported because they decide the number above. The first session 3
+        # artifact recorded `threshold_db` -- the one of the three that turned
+        # out not to matter -- and neither of these, so reading it afterwards
+        # could not reveal which guard produced a 12.4 dB margin. A constant
+        # that is not in the artifact is no better than a variable one.
+        "guard_sec": GUARD_SECONDS,
+        "search_seconds": (hi - lo) / rate,
     }
 
 
@@ -233,8 +260,16 @@ def align_by_slate(capture: np.ndarray, layout: dict,
         return {"accepted": False, "reason": "head slate not found",
                 "head": head}
 
+    # A fraction of the take's own pause, not a constant: the window must not
+    # reach back into the music, and how far away the music is, is a property of
+    # the layout that built the take.
+    lead = float(layout.get("lead_seconds", TAIL_SEARCH_MAX_HALF_WIDTH_SEC))
+    half = min(TAIL_SEARCH_MAX_HALF_WIDTH_SEC, lead * TAIL_SEARCH_LEAD_FRACTION)
+
     out = {"head": head, "capture_seconds": len(capture) / rate,
            "music_offset_sec": head["offset_sec"] + music_start,
+           "tail_search_half_width_sec": half,
+           "max_drift_sec": MAX_DRIFT_SEC,
            "accepted": True}
 
     expected_tail = layout.get("tail_slate_start_sec")
@@ -242,7 +277,6 @@ def align_by_slate(capture: np.ndarray, layout: dict,
         return out
 
     centre = head["offset_sec"] + expected_tail
-    half = TAIL_SEARCH_HALF_WIDTH_SEC
     tail = find_slate(capture, rate=rate, seconds=slate_len,
                       search=(max(0.0, centre - half),
                               min(centre + half, len(capture) / rate)))
@@ -254,6 +288,18 @@ def align_by_slate(capture: np.ndarray, layout: dict,
 
     measured = tail["offset_sec"] - head["offset_sec"]
     out["drift_sec"] = float(measured - expected_tail)
+
+    # The primary check, and the only one here without a free parameter. Two
+    # independent readings of one take have to land in the same place; a head
+    # read a beat early shows up as half a second of "drift", not as a slightly
+    # worse margin. The margin stays as the secondary signal because it is what
+    # notices a capture degrading before it fails.
+    if abs(out["drift_sec"]) > MAX_DRIFT_SEC:
+        out["accepted"] = False
+        out["reason"] = (
+            f"head and tail disagree by {out['drift_sec'] * 1000:.1f} ms, "
+            f"above the {MAX_DRIFT_SEC * 1000:.0f} ms two-slate bar; one of "
+            f"them is not the slate it was taken for")
     return out
 
 

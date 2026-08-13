@@ -150,6 +150,19 @@ def main() -> int:
                 "tail_peak_to_sidelobe_db": found["tail"]["peak_to_sidelobe_db"],
                 "drift_sec": found["drift_sec"],
                 "threshold_db": found["head"]["threshold_db"],
+                # The first version of this block recorded the threshold and
+                # nothing else, and the threshold turned out to be the least
+                # important of the three: swept afterwards, the guard and the
+                # tail window moved the worst margin by 15 dB while the bar
+                # stayed at 12. A reader of that artifact could not have found
+                # this out from it. These are the numbers that decide the ones
+                # above, so they travel with them.
+                "guard_sec": found["head"]["guard_sec"],
+                "head_search_seconds": found["head"]["search_seconds"],
+                "tail_search_seconds": found["tail"]["search_seconds"],
+                "tail_search_half_width_sec":
+                    found["tail_search_half_width_sec"],
+                "max_drift_sec": found["max_drift_sec"],
             },
             "clean": scored["clean"], "room": scored["room"],
             "delta_f": (scored["room"]["f_measure"]
@@ -176,7 +189,16 @@ def main() -> int:
         # 12 dB was chosen with room to spare or only just.
         "slate_margin_db": {"min": float(min(margins)),
                             "max": float(max(margins)),
-                            "threshold": records[0]["alignment"]["threshold_db"]},
+                            "threshold": records[0]["alignment"]["threshold_db"],
+                            "guard_sec": records[0]["alignment"]["guard_sec"]},
+        # The primary alignment check, and the only one without a tunable in it:
+        # two independent readings of one take have to agree. A head slate taken
+        # a beat early does not read as a poor margin, it reads as half a second
+        # of drift.
+        "drift_sec": {
+            "max_abs": float(max(abs(r["alignment"]["drift_sec"])
+                                 for r in records)),
+            "bar": records[0]["alignment"]["max_drift_sec"]},
         "max_abs_drift_sec": float(max(abs(r["alignment"]["drift_sec"])
                                        for r in records)),
     }
