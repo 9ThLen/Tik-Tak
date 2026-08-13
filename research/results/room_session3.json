@@ -1,8 +1,8 @@
 {
   "provenance": {
     "schema": "tiktak.provenance/v1",
-    "utc": "2026-08-13T20:24:10Z",
-    "commit": "cad368b5ffec5f48f024e246176d4dd6016cda02",
+    "utc": "2026-08-13T20:51:14Z",
+    "commit": "3962e4ad4bd2a5674e21945f7e7253f252731909",
     "tree_clean": true,
     "python": "3.11.15",
     "platform": "Windows",
@@ -82,7 +82,12 @@
     "slate_margin_db": {
       "min": 22.796802234710754,
       "max": 27.556581416573678,
-      "threshold": 12.0
+      "threshold": 12.0,
+      "guard_sec": 0.125
+    },
+    "drift_sec": {
+      "max_abs": 0.002583333333348037,
+      "bar": 0.05
     },
     "max_abs_drift_sec": 0.002583333333348037
   },
@@ -97,7 +102,12 @@
         "head_peak_to_sidelobe_db": 27.481004678570553,
         "tail_peak_to_sidelobe_db": 22.796802234710754,
         "drift_sec": 0.0015625000000056843,
-        "threshold_db": 12.0
+        "threshold_db": 12.0,
+        "guard_sec": 0.125,
+        "head_search_seconds": 4.0,
+        "tail_search_seconds": 2.0,
+        "tail_search_half_width_sec": 1.0,
+        "max_drift_sec": 0.05
       },
       "clean": {
         "f_measure": 0.9764150943396226,
@@ -129,7 +139,12 @@
         "head_peak_to_sidelobe_db": 27.556581416573678,
         "tail_peak_to_sidelobe_db": 25.15907089082622,
         "drift_sec": 0.002583333333348037,
-        "threshold_db": 12.0
+        "threshold_db": 12.0,
+        "guard_sec": 0.125,
+        "head_search_seconds": 4.0,
+        "tail_search_seconds": 2.0,
+        "tail_search_half_width_sec": 1.0,
+        "max_drift_sec": 0.05
       },
       "clean": {
         "f_measure": 0.9505208333333334,
@@ -165,7 +180,12 @@
         "head_peak_to_sidelobe_db": 26.7636224194888,
         "tail_peak_to_sidelobe_db": 23.061181664958355,
         "drift_sec": 0.001541666666639685,
-        "threshold_db": 12.0
+        "threshold_db": 12.0,
+        "guard_sec": 0.125,
+        "head_search_seconds": 4.0,
+        "tail_search_seconds": 2.0,
+        "tail_search_half_width_sec": 1.0,
+        "max_drift_sec": 0.05
       },
       "clean": {
         "f_measure": 0.974477958236659,

@@ -64,10 +64,20 @@ phone, read from a slate: one answer.
 the shape is the same: `0116_goodies` barely moves while the other two collapse,
 with `wrong_beats`, `too_few_beats` and `wrong_octave` on both.
 
-**Clock drift is real and small.** 1.5 to 2.6 ms across takes of 130 to 200 s —
-about 12 ppm between the playback clock and the phone's. Two orders below a
-beat, and now measured rather than assumed, because the tail slate measures it
-directly instead of inferring it from disagreement between thirds.
+**Clock drift is real and small — and it is now the gate, not a footnote.**
+1.5 to 2.6 ms across takes of 130 to 200 s, about 12 ppm between the playback
+clock and the phone's. Two orders below a beat, and measured rather than
+assumed, because the tail slate measures it directly instead of inferring it
+from disagreement between thirds.
+
+Which makes it the better check. Peak-to-sidelobe asks whether a peak looks
+convincing; the two slates agreeing asks whether the *right* peak was taken,
+which is the question. A head slate read one beat early does not produce a
+slightly worse margin — it produces half a second of drift. The bar is 50 ms:
+twenty times the observed maximum, ten times below a beat, and nothing between
+those scales needs a decision, so unlike the margin it has no tunable in it. The
+margin stays as the secondary signal because it notices a capture degrading
+before it fails outright.
 
 ### What it does not settle
 
@@ -121,6 +131,23 @@ it.
 What is still room-specific: the 55 ms ridge belongs to this room and should be
 rechecked in a new one. The window argument is structural — the music is always
 `LEAD_SECONDS` away by construction, and drift is a property of the two clocks.
+
+And the general lesson, which is not about slates. The artifact recorded
+`threshold_db` and neither the guard nor the window: the one number worth
+nothing next to the two worth 15 dB. Read on its own afterwards it said
+"12.4 dB against a 12.0 bar" and gave no way to discover which guard produced
+that. **A constant that is not in the artifact is no better than a variable
+one**, so both now travel with every margin they decide — along with the search
+widths, and the drift bar beside the drift.
+
+The tail width itself stopped being a constant. `lead_seconds` is in every
+layout, so the window is a fraction of the take's own pause with a 1.0 s
+ceiling. On the shipped takes that is exactly 1.0 and nothing moved; the point
+is that lengthening the gap before the tail slate — which the AGC hypothesis
+below would have us do — can no longer silently put the window back inside the
+music. The guard stays fixed on purpose: deriving it from the capture's own
+response would let a smeared, bad capture earn a wider guard, a higher margin
+and a pass.
 
 ### A mistake this artifact exists to prevent
 
