@@ -1,8 +1,8 @@
 {
   "provenance": {
     "schema": "tiktak.provenance/v1",
-    "utc": "2026-08-10T19:47:11Z",
-    "commit": "6a132790e1f8b441b08c9eac4f28735374fbe2f2",
+    "utc": "2026-08-13T20:24:10Z",
+    "commit": "cad368b5ffec5f48f024e246176d4dd6016cda02",
     "tree_clean": true,
     "python": "3.11.15",
     "platform": "Windows",
@@ -80,8 +80,8 @@
     "clean_usable_rate": 1.0,
     "room_usable_rate": 0.3333333333333333,
     "slate_margin_db": {
-      "min": 12.390781334108274,
-      "max": 17.590713078000324,
+      "min": 22.796802234710754,
+      "max": 27.556581416573678,
       "threshold": 12.0
     },
     "max_abs_drift_sec": 0.002583333333348037
@@ -94,8 +94,8 @@
       "alignment": {
         "music_offset_sec": 3.276604166666667,
         "head_offset_sec": 1.2766041666666668,
-        "head_peak_to_sidelobe_db": 17.590713078000324,
-        "tail_peak_to_sidelobe_db": 12.390781334108274,
+        "head_peak_to_sidelobe_db": 27.481004678570553,
+        "tail_peak_to_sidelobe_db": 22.796802234710754,
         "drift_sec": 0.0015625000000056843,
         "threshold_db": 12.0
       },
@@ -126,8 +126,8 @@
       "alignment": {
         "music_offset_sec": 2.6761875,
         "head_offset_sec": 0.6761874999999999,
-        "head_peak_to_sidelobe_db": 17.25069460643937,
-        "tail_peak_to_sidelobe_db": 13.408339142477201,
+        "head_peak_to_sidelobe_db": 27.556581416573678,
+        "tail_peak_to_sidelobe_db": 25.15907089082622,
         "drift_sec": 0.002583333333348037,
         "threshold_db": 12.0
       },
@@ -162,8 +162,8 @@
       "alignment": {
         "music_offset_sec": 3.1829583333333336,
         "head_offset_sec": 1.1829583333333333,
-        "head_peak_to_sidelobe_db": 16.06166213361286,
-        "tail_peak_to_sidelobe_db": 14.76719078600354,
+        "head_peak_to_sidelobe_db": 26.7636224194888,
+        "tail_peak_to_sidelobe_db": 23.061181664958355,
         "drift_sec": 0.001541666666639685,
         "threshold_db": 12.0
       },

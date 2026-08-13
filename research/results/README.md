@@ -40,10 +40,15 @@ phone.
 
 | track | clean F | room F | Δ | head | tail | drift |
 |---|---:|---:|---:|---:|---:|---:|
-| `0116_goodies` | 0.976 | 0.892 | −0.084 | 17.6 dB | **12.4 dB** | 1.6 ms |
-| `0707_halfwaygone` | 0.951 | **0.285** | −0.665 | 17.3 dB | 13.4 dB | 2.6 ms |
-| `0837_nottonight` | 0.974 | **0.570** | −0.404 | 16.1 dB | 14.8 dB | 1.5 ms |
+| `0116_goodies` | 0.976 | 0.892 | −0.084 | 27.5 dB | **22.8 dB** | 1.6 ms |
+| `0707_halfwaygone` | 0.951 | **0.285** | −0.665 | 27.6 dB | 25.2 dB | 2.6 ms |
+| `0837_nottonight` | 0.974 | **0.570** | −0.404 | 26.8 dB | 23.1 dB | 1.5 ms |
 | **mean** | **0.967** | **0.583** | **−0.385** | | | |
+
+The margins are the second measurement of these captures, after the section
+below found that the first was reading the song as a rival to the slate. Every
+F, offset and drift is bit-identical between the two runs; only the confidence
+measure moved.
 
 ### What it settles
 
@@ -70,12 +75,52 @@ Three captures, one room, one phone, one session, and two of the three tracks
 are the same ones sessions 1 and 2 used. This is agreement, not independent
 confirmation, and it is a check on the *procedure* rather than a corpus.
 
-**The 12 dB threshold survived on 0.4 dB.** Six margins from three captures;
-the smallest is the tail slate on `0116_goodies` at 12.390 dB against a 12.0 bar.
-The number was chosen rather than fitted and it has now met a real phone once —
-it works, with almost no headroom. A longer or louder slate is the cheap way to
-buy some, and doing it before a collection is cheaper than discovering the bar
-was optimistic partway through one.
+### The 0.4 dB scare was two unswept constants, not a weak slate
+
+The first pass at these six margins cleared the 12 dB bar by 0.4 dB on the tail
+slate of `0116_goodies`, and the obvious reading — the slate is too quiet — was
+wrong. A longer or louder slate would have bought margin while leaving the
+actual cause in place.
+
+Five of the six limiting sidelobes sat at **+53 to +61 ms** from their peak: the
+slate's own room response, counted as a rival to itself because `GUARD_SECONDS`
+was guessed at 50 ms while this room measures RT60 0.33 to 0.37 s. Clearing that
+ridge is worth 8 to 14 dB on those five.
+
+The sixth — the one that set the bar — had its rival at **−1999.3 ms**, and no
+guard width reaches that far. It was the far edge of the tail search window.
+`build_take` leaves `LEAD_SECONDS` of silence between the music and the trailing
+slate, the window was ±2.0 s, so it read the end of the song as a candidate
+slate. The head window cannot be tightened, because the capture's start offset
+is exactly what is unknown; the tail's can, because once the head is found the
+tail is known to within clock drift — 1.5 to 2.6 ms.
+
+Both constants are derived from the take's geometry rather than chosen from the
+sweep, and that matters here: across the grid the worst margin moves **15 dB**
+with the signal, room and phone unchanged, so picking the best cell would have
+produced a number that could not be defended. The guard is at least twice the
+measured ridge and under half a beat at 200 BPM; the tail window is bounded
+below by drift and above by `LEAD_SECONDS`.
+
+| | worst of six |
+|---|---:|
+| guard 50 ms, tail ±2.0 s (as run) | 12.391 dB |
+| guard 125 ms, tail ±1.0 s | **22.797 dB** |
+
+Headroom 0.4 dB → 10.8 dB, with no new recording and no change to the protocol.
+The re-run above is the same harness on the same captures: every F, offset and
+drift identical, only the margins moved.
+
+A third finding from the same sweep, now fixed: at a ±0.25 s window the
+measurement returns **0.180 dB**, because once the peak and its guard are removed
+less material remains than the slate itself and the "sidelobe" is another sample
+of the same ridge. That reads as a ruined capture when it is a misconfigured
+search, so a bounded search refuses below `slate + 2·guard` instead of scoring
+it.
+
+What is still room-specific: the 55 ms ridge belongs to this room and should be
+rechecked in a new one. The window argument is structural — the music is always
+`LEAD_SECONDS` away by construction, and drift is a property of the two clocks.
 
 ### A mistake this artifact exists to prevent
 
