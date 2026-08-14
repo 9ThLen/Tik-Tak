@@ -46,6 +46,7 @@ def _valid_subset(cache, **overrides):
     payload = dict(c1.build(cache), total_frames=c1.REAL_TOTAL_FRAMES,
                    registered_corpus=True, frame_fraction_deviations={},
                    cache_sha256=c1.REGISTERED_CACHE_SHA256,
+                   preflight={"passed": True, "seeds": list(c1.PREFLIGHT_SEEDS)},
                    provenance={"tree_clean": True, "commit": "abc"})
     payload.update(overrides)
     return payload
@@ -328,3 +329,34 @@ def test_a_run_without_the_subsets_own_digest_never_starts(digest):
                          arm=c1.C1_ARM,
                          cache_sha256=c1.REGISTERED_CACHE_SHA256,
                          subset_sha256=digest)
+
+
+def test_the_preflight_covers_every_training_seed_not_only_the_first():
+    """`run.py` advances the scheduler seed as `seed + epoch`.
+
+    The seeds actually used are 17..66, 29..78 and 43..92, so checking 17, 18,
+    19 exercised the first training seed and left the other two unvisited.
+    """
+    assert set(c1.PREFLIGHT_SEEDS) >= {17, 29, 43}
+    for seed in (17, 29, 43):
+        assert seed + 1 in c1.PREFLIGHT_SEEDS
+
+
+def test_training_requires_evidence_that_the_preflight_ran():
+    """The old check sat under `if fraction == 1.00`, which stopped being
+    reachable the moment 1.00 was refused -- a guard deleted into silence.
+
+    The comparison still runs, in the generator; the training path needs the
+    artifact to carry its result rather than repeat 26,000 blocks per job.
+    """
+    from training.beatnet.run import c1_training_rows
+
+    cache = _cache()
+    rows = c1.training_rows(cache)
+    for broken in ({}, {"passed": False, "seeds": [17]},
+                   {"passed": True, "seeds": []}):
+        subset = _valid_subset(cache, preflight=broken)
+        with pytest.raises(ValueError, match="no passing schedule preflight"):
+            c1_training_rows(subset, rows, 0.25, arm=c1.C1_ARM,
+                             cache_sha256=c1.REGISTERED_CACHE_SHA256,
+                             subset_sha256=SUBSET_SHA)

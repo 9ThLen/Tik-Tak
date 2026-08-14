@@ -52,6 +52,10 @@ REGISTERED_S1_SUMMARY_SHA256 = (
     "4c7dd592ce0bce191b2c78b8a59616f6d75dfe1870056b227c2ba9a81010160f")
 REGISTERED_A0_SHA256 = (
     "4db6990164291f078a3cc22e9b31c47715759a557e28130af3396c91c84b3385")
+# Registered under "Bound sources" and enforced nowhere. The digest check
+# against the pinned S1 summary already implies it, but an implication is not an
+# assertion, and it would survive anyone relaxing that check later.
+REGISTERED_S1_COMMIT = "b12eea828f25df502a157cccc872c5e2000cc2e3"
 # Everything an S1 and a C1 run must agree on. `commit` is deliberately absent:
 # the anchor ran at b12eea82 and the new fractions run later, so requiring it
 # would refuse the reuse the design is built on. What must not differ is the
@@ -103,6 +107,10 @@ def authenticate(runs: dict, digests: dict, subset: dict,
             if digests[(fraction, seed)] not in s1_sources:
                 raise ValueError(
                     f"{where}: not one of the runs in the registered S1 summary")
+            if identity.get("commit") != REGISTERED_S1_COMMIT:
+                raise ValueError(
+                    f"{where}: anchor commit is not the registered "
+                    f"{REGISTERED_S1_COMMIT}")
         else:
             if c1 is None:
                 raise ValueError(f"{where}: a C1 fraction must record its subset")

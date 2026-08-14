@@ -229,8 +229,15 @@ def require_registered_corpus(payload: dict) -> None:
         raise ValueError("subset payload is not from the registered corpus")
 
 
-def assert_anchor_schedule(cache: dict, *, seeds: tuple[int, ...] = (17, 18, 19)
-                           ) -> dict:
+# `run.py` advances the scheduler seed per epoch as `seed + epoch`, so the seeds
+# actually used are 17..66, 29..78 and 43..92. Checking 17, 18, 19 covered the
+# first training seed and nothing else; two epochs from each of the three costs
+# the same and covers all three.
+PREFLIGHT_SEEDS = (17, 18, 29, 30, 43, 44)
+
+
+def assert_anchor_schedule(cache: dict, *,
+                           seeds: tuple[int, ...] = PREFLIGHT_SEEDS) -> dict:
     """The registered preflight: 100% must reproduce S1's schedule, not just its rows.
 
     `run.py` advances the scheduler seed per epoch (`seed + epoch`), so a single

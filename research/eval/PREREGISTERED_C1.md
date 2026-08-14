@@ -322,10 +322,15 @@ fraction including 100% — and a 100% arm that does not reproduce the S1 runs i
 not an anchor, which removes the reason C1 is six runs rather than nine.
 
 **Preflight, before any C1 training.** Order equality is necessary but not what
-matters; the emitted schedule is. For each of at least the first three epoch
-seeds, run `contiguous_batches` over the C1 100% selection and over S1's
-`train_rows`, and require the full emitted sequence of
-`(slot_id, identity, work_id, block index, reset, end)` to be identical. This
+matters; the emitted schedule is. The scheduler seed advances per epoch as
+`seed + epoch`, so the seeds actually used are `17..66`, `29..78` and `43..92`;
+the preflight runs `contiguous_batches` over the C1 100% selection and over S1's
+`train_rows` at **two epoch seeds from each of the three training seeds** and
+requires the full emitted sequence of
+`(slot_id, identity, work_id, block index, reset, end)` to be identical. It runs
+in the subset generator and its result is recorded in the subset artifact; a
+training run requires that record to be present and passing rather than
+repeating a 26,813-block comparison before every job. This
 costs seconds, needs no training, and proves exactly the property the anchor
 depends on. The 765-record identity list and its order are digested into the
 subset artifact and into checkpoint identity, together with the subset

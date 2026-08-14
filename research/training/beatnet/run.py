@@ -89,10 +89,6 @@ def c1_training_rows(subset: dict, train_rows: list[dict],
     if (len(selected) != block["records"]
             or c1_subsets.identity_digest(selected) != block["identity_sha256"]):
         raise ValueError(f"fraction {key} does not match the subset artifact")
-    if fraction == 1.00:
-        # The anchor claim in one assertion: at 100% the filter has to be the
-        # identity, or C1's reuse of the S1 runs is not reuse.
-        c1_subsets.assert_anchor_schedule({"records": train_rows})
     # The registered digest was checked only where subsets are *built*. On the
     # path where one is *trained from*, the subset and the cache were required
     # to agree with each other and with nothing else -- so another cache plus a
@@ -110,6 +106,18 @@ def c1_training_rows(subset: dict, train_rows: list[dict],
     subset_provenance = subset.get("provenance") or {}
     if subset_provenance.get("tree_clean") is not True:
         raise ValueError("C1 subset artifact has no clean provenance")
+    # This used to call `assert_anchor_schedule` under `if fraction == 1.00`,
+    # which became unreachable the moment 1.00 was refused above -- a guard that
+    # could not fire, of the same family as the others, arrived at by deletion
+    # rather than by logic. The check itself still matters and still runs, in
+    # the generator; what the training path needs is evidence that it ran, so it
+    # requires the artifact to carry a passing preflight rather than repeating
+    # a 26,000-block comparison before every job.
+    preflight = subset.get("preflight") or {}
+    if preflight.get("passed") is not True or not preflight.get("seeds"):
+        raise ValueError(
+            "C1 subset carries no passing schedule preflight; the 100% anchor "
+            "is unverified and the reuse it licenses is not established")
     if (not isinstance(subset_sha256, str) or len(subset_sha256) != 64
             or not all(c in "0123456789abcdef" for c in subset_sha256)):
         raise ValueError(

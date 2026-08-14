@@ -220,6 +220,8 @@ def test_a_missing_work_in_one_fraction_is_refused():
 
 def _run(fraction, seed, *, arm=c1s.C1_ARM, c1_block="auto", clean=True,
          commit="c1-commit"):
+    if fraction == "1.00" and commit == "c1-commit":
+        commit = c1s.REGISTERED_S1_COMMIT
     identity = {"schema": "tiktak.s1_checkpoint/v1", "source_sha256": "s",
                 "split_sha256": "p", "cache_sha256": "c",
                 "baseline_sha256": "b", "config": {"k": 1}, "commit": commit}
@@ -250,6 +252,20 @@ SUBSET_SHA = "subset-sha"
 
 def test_authentication_accepts_only_the_nine_registered_runs():
     c1s.authenticate(*_auth_inputs(), SUBSET_SHA)
+
+
+def test_the_anchor_commit_is_the_registered_one():
+    """Listed under Bound sources and enforced nowhere.
+
+    The digest check against the pinned S1 summary already implies it, but an
+    implication is not an assertion and would not survive that check being
+    relaxed.
+    """
+    runs, digests, subset, sources = _auth_inputs()
+    c1s.authenticate(runs, digests, subset, sources, SUBSET_SHA)
+    runs[("1.00", 29)] = _run("1.00", 29, commit="some-other-commit")
+    with pytest.raises(ValueError, match="anchor commit is not the registered"):
+        c1s.authenticate(runs, digests, subset, sources, SUBSET_SHA)
 
 
 def test_the_six_new_runs_must_share_one_commit():
@@ -309,13 +325,19 @@ def test_a_run_that_trained_another_subset_is_refused():
         c1s.authenticate(runs, digests, subset, sources, SUBSET_SHA)
 
 
-def test_a_differing_recipe_is_refused_but_a_differing_commit_is_not():
-    """The anchor ran at b12eea82 and the fractions run later, so requiring the
-    commit to match would refuse the reuse the whole design rests on."""
+def test_the_anchor_and_the_fractions_hold_two_different_commits():
+    """Both halves of the commit question, which pull in opposite directions.
+
+    The anchor must carry the *registered* S1 commit; the six fractions must
+    share one commit of their own, necessarily a later one. Requiring them all
+    to match would refuse the reuse the design rests on; requiring nothing would
+    accept six runs from six trees.
+    """
     runs, digests, subset, sources = _auth_inputs()
-    for seed in c1s.SEEDS:
-        runs[("1.00", seed)]["identity"]["commit"] = "b12eea82"
-    c1s.authenticate(runs, digests, subset, sources, SUBSET_SHA)
+    identity = c1s.authenticate(runs, digests, subset, sources, SUBSET_SHA)
+    anchor = {runs[("1.00", seed)]["identity"]["commit"] for seed in c1s.SEEDS}
+    assert anchor == {c1s.REGISTERED_S1_COMMIT}
+    assert identity["c1_commit"] != c1s.REGISTERED_S1_COMMIT
 
     runs[("0.50", 17)]["identity"]["cache_sha256"] = "another-cache"
     with pytest.raises(ValueError, match="identity differs"):
