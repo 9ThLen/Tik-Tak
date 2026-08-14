@@ -45,8 +45,22 @@ def plan(output_root: pathlib.Path) -> list[dict]:
     return jobs
 
 
-def job_state(root: pathlib.Path) -> str:
-    if (root / "result.json").is_file():
+def job_state(root: pathlib.Path, fraction: float, seed: int) -> str:
+    """Complete means *this* job finished, not that some result.json is there.
+
+    A directory reused from another fraction or seed would otherwise be skipped
+    as done, and the sweep would quietly train five runs instead of six.
+    """
+    result = root / "result.json"
+    if result.is_file():
+        payload = json.loads(result.read_text(encoding="utf-8"))
+        recorded = payload.get("identity", {}).get("c1", {}).get("fraction")
+        if (payload.get("arm") != ARM or int(payload.get("seed", -1)) != seed
+                or recorded is None or abs(recorded - fraction) > 1e-9):
+            raise ValueError(
+                f"{root.name}: holds another job's result "
+                f"({payload.get('arm')}, seed {payload.get('seed')}, "
+                f"fraction {recorded})")
         return "complete"
     if (root / "checkpoint.pt").is_file():
         return "interrupted"
@@ -108,7 +122,7 @@ def main(argv: list[str] | None = None) -> int:
     jobs = plan(args.output_root)
     done, paused, failed = [], None, None
     for job in jobs:
-        state = job_state(job["root"])
+        state = job_state(job["root"], job["fraction"], job["seed"])
         argv_job = command(job, args, state)
         label = {"fraction": job["fraction"], "seed": job["seed"],
                  "state": state}

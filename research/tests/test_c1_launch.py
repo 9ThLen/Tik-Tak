@@ -38,9 +38,12 @@ def test_resume_is_inferred_per_job_not_applied_to_all(tmp_path):
     (interrupted / "checkpoint.pt").write_bytes(b"x")
     pending = tmp_path / "pending"
 
-    assert launch.job_state(complete) == "complete"
-    assert launch.job_state(interrupted) == "interrupted"
-    assert launch.job_state(pending) == "pending"
+    (complete / "result.json").write_text(json.dumps({
+        "arm": launch.ARM, "seed": 17,
+        "identity": {"c1": {"fraction": 0.25}}}), encoding="utf-8")
+    assert launch.job_state(complete, 0.25, 17) == "complete"
+    assert launch.job_state(interrupted, 0.25, 29) == "interrupted"
+    assert launch.job_state(pending, 0.25, 43) == "pending"
 
     args = _args(tmp_path)
     job = {"fraction": 0.25, "seed": 17, "root": interrupted}
@@ -129,7 +132,9 @@ def test_relaunching_after_a_pause_skips_what_finished_and_resumes_one(
     """The whole point of inferring resume per job rather than per sweep."""
     out = tmp_path / "out"
     (out / "f0.25-seed-17").mkdir(parents=True)
-    (out / "f0.25-seed-17" / "result.json").write_text("{}", encoding="utf-8")
+    (out / "f0.25-seed-17" / "result.json").write_text(json.dumps({
+        "arm": launch.ARM, "seed": 17,
+        "identity": {"c1": {"fraction": 0.25}}}), encoding="utf-8")
     (out / "f0.25-seed-29").mkdir(parents=True)
     (out / "f0.25-seed-29" / "checkpoint.pt").write_bytes(b"x")
 
@@ -162,3 +167,14 @@ def test_end_to_end_dry_run_plans_six_commands(tmp_path, capsys):
     assert sum(1 for e in events if e["event"] == "start") == 6
     assert events[-1] == {"event": "done", "status": "complete",
                           "completed": 6, "of": 6}
+
+
+def test_a_directory_holding_another_jobs_result_is_not_called_complete(tmp_path):
+    """Otherwise the sweep skips it and trains five runs while reporting six."""
+    root = tmp_path / "f0.25-seed-17"
+    root.mkdir()
+    (root / "result.json").write_text(json.dumps({
+        "arm": launch.ARM, "seed": 29,
+        "identity": {"c1": {"fraction": 0.50}}}), encoding="utf-8")
+    with pytest.raises(ValueError, match="another job's result"):
+        launch.job_state(root, 0.25, 17)

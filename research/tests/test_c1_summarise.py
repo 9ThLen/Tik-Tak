@@ -20,7 +20,12 @@ def _evaluation(level, *, candombe_level=None, jitter=0.0, seed=0):
     for work, corpus in WORKS.items():
         base = candombe_level if (corpus == "candombe"
                                   and candombe_level is not None) else level
-        metrics[work] = {"phase_f1": base + rng.normal(0.0, jitter)}
+        value = base + rng.normal(0.0, jitter)
+        # Real evaluations carry the whole registered set; a fixture with only
+        # phase_f1 would have hidden that the secondary block reads the others.
+        metrics[work] = {"phase_f1": value}
+        metrics[work].update({name: value * 0.9
+                              for name in c1s.DIAGNOSTIC_METRICS})
     return {"work_metrics": metrics, "work_corpora": dict(WORKS),
             "dev_works": len(WORKS)}
 
@@ -210,4 +215,121 @@ def test_a_missing_work_in_one_fraction_is_refused():
                                if k != "rwc2::w000"}
     evaluations[("1.00", 17, "selected")] = dropped
     with pytest.raises(ValueError, match="work pairing differs"):
+        c1s.summarise(runs, evaluations)
+
+
+def _run(fraction, seed, *, arm=c1s.C1_ARM, c1_block="auto", clean=True):
+    identity = {"schema": "tiktak.s1_checkpoint/v1", "source_sha256": "s",
+                "split_sha256": "p", "cache_sha256": "c",
+                "baseline_sha256": "b", "config": {"k": 1}, "commit": "any"}
+    if c1_block == "auto":
+        c1_block = (None if fraction == "1.00" else
+                    {"fraction": float(fraction), "identity_sha256": f"id{fraction}"})
+    if c1_block is not None:
+        identity["c1"] = c1_block
+    return {"schema": "tiktak.s1_training/v1", "complete": True, "arm": arm,
+            "seed": seed, "provenance": {"tree_clean": clean},
+            "identity": identity, "history": [], "best": {"epoch": 10}}
+
+
+def _auth_inputs(**overrides):
+    runs = {(f, s): _run(f, s) for f in c1s.FRACTIONS for s in c1s.SEEDS}
+    runs.update(overrides.get("runs", {}))
+    digests = {key: f"sha-{key[0]}-{key[1]}" for key in runs}
+    subset = {"fractions": {f: {"identity_sha256": f"id{f}"}
+                            for f in c1s.FRACTIONS}}
+    anchor = {digests[("1.00", s)] for s in c1s.SEEDS}
+    return runs, digests, subset, overrides.get("s1_sources", anchor)
+
+
+def test_authentication_accepts_only_the_nine_registered_runs():
+    c1s.authenticate(*_auth_inputs())
+
+
+def test_an_arbitrary_clean_run_cannot_pose_as_the_anchor():
+    """The gap that mattered: C1 never trains 1.00, so it cannot detect a fake
+    anchor from its own outputs. Only the registered S1 summary can."""
+    runs, digests, subset, _ = _auth_inputs()
+    with pytest.raises(ValueError, match="registered S1 summary"):
+        c1s.authenticate(runs, digests, subset, {"some-other-run"})
+
+
+def test_a_reset_arm_is_refused_at_any_fraction():
+    runs, digests, subset, sources = _auth_inputs()
+    runs[("0.50", 29)] = _run("0.50", 29, arm="A3_reset")
+    with pytest.raises(ValueError, match="is not A3_stateful"):
+        c1s.authenticate(runs, digests, subset, sources)
+
+
+def test_the_anchor_must_not_carry_a_subset_and_a_fraction_must():
+    runs, digests, subset, sources = _auth_inputs()
+    runs[("1.00", 17)] = _run("1.00", 17, c1_block={"fraction": 1.0})
+    with pytest.raises(ValueError, match="anchor must be an S1 run"):
+        c1s.authenticate(runs, digests, subset, sources)
+
+    runs, digests, subset, sources = _auth_inputs()
+    runs[("0.25", 17)] = _run("0.25", 17, c1_block=None)
+    with pytest.raises(ValueError, match="must record its subset"):
+        c1s.authenticate(runs, digests, subset, sources)
+
+
+def test_a_run_that_trained_another_subset_is_refused():
+    runs, digests, subset, sources = _auth_inputs()
+    runs[("0.25", 43)] = _run("0.25", 43, c1_block={
+        "fraction": 0.25, "identity_sha256": "somethingelse"})
+    with pytest.raises(ValueError, match="subset identity does not match"):
+        c1s.authenticate(runs, digests, subset, sources)
+
+
+def test_a_differing_recipe_is_refused_but_a_differing_commit_is_not():
+    """The anchor ran at b12eea82 and the fractions run later, so requiring the
+    commit to match would refuse the reuse the whole design rests on."""
+    runs, digests, subset, sources = _auth_inputs()
+    for seed in c1s.SEEDS:
+        runs[("1.00", seed)]["identity"]["commit"] = "b12eea82"
+    c1s.authenticate(runs, digests, subset, sources)
+
+    runs[("0.50", 17)]["identity"]["cache_sha256"] = "another-cache"
+    with pytest.raises(ValueError, match="identity differs"):
+        c1s.authenticate(runs, digests, subset, sources)
+
+
+def test_an_incomplete_or_dirty_run_is_refused():
+    for field, value, message in (("complete", False, "not complete"),
+                                  ("schema", "other", "not an S1 training")):
+        runs, digests, subset, sources = _auth_inputs()
+        runs[("0.25", 17)][field] = value
+        with pytest.raises(ValueError, match=message):
+            c1s.authenticate(runs, digests, subset, sources)
+    runs, digests, subset, sources = _auth_inputs()
+    runs[("0.50", 43)] = _run("0.50", 43, clean=False)
+    with pytest.raises(ValueError, match="not clean"):
+        c1s.authenticate(runs, digests, subset, sources)
+
+
+def test_the_registered_secondary_set_is_reported_at_every_fraction():
+    runs, evaluations = _bundle({"0.25": 0.20, "0.50": 0.25, "1.00": 0.30})
+    result = c1s.summarise(runs, evaluations)
+    assert set(result["secondary"]) == set(c1s.DIAGNOSTIC_METRICS)
+    for metric, block in result["secondary"].items():
+        assert set(block["level"]) == set(c1s.FRACTIONS), metric
+        assert block["1.00-0.50"]["mean"] > 0, metric
+        assert "vs_a0" not in block
+    assert result["secondary_against_a0"] is False
+
+
+def test_the_secondary_set_reaches_a0_when_the_baseline_is_given():
+    runs, evaluations = _bundle({"0.25": 0.20, "0.50": 0.25, "1.00": 0.30})
+    baseline = _evaluation(0.10, jitter=0.0, seed=99)
+    result = c1s.summarise(runs, evaluations, baseline)
+    assert result["secondary_against_a0"] is True
+    assert result["secondary"]["beat_f1"]["vs_a0"]["1.00"] > 0
+
+
+def test_a_missing_registered_metric_is_a_failure_not_a_silent_gap():
+    runs, evaluations = _bundle({"0.25": 0.20, "0.50": 0.25, "1.00": 0.30})
+    for seed in c1s.SEEDS:
+        for values in evaluations[("1.00", seed, "selected")]["work_metrics"].values():
+            values.pop("coverage")
+    with pytest.raises(KeyError):
         c1s.summarise(runs, evaluations)
