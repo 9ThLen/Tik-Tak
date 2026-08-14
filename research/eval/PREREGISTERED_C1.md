@@ -1,6 +1,8 @@
 # C1 — first data-scaling curve for the A3 stateful recipe
 
-Status: **pre-run registration**, fixed 2026-08-14. No 25% or 50% training
+Status: **pre-run registration**, fixed 2026-08-14, revised the same day after
+independent review. **Not runnable**: the C1 runner, subset generator,
+summariser and tests do not exist yet. No 25% or 50% training
 output exists. The 100% arm is an already-observed anchor and is declared as
 such below, with everything already known about it written down before the new
 runs start.
@@ -139,17 +141,40 @@ and not recomputed.
 
 ## Endpoints
 
-All paired by development work, averaged across the three seeds within work
-before comparison, bootstrapped over works.
+**Primary:** the paired `F1_100 − F1_50` bar-phase difference, with a **two-way
+bootstrap that resamples development works and training seeds independently**,
+2,000 draws, deterministic seeds `0..1999`.
 
-**Primary:** the paired `F1_100 − F1_50` bar-phase difference over all 84 works.
+S1's scheme — average the three seeds within work, then bootstrap the 84 works —
+produces an interval *conditional on those three trained models*. It answers
+"how would this differ on other works", not "how would this differ on another
+training run", and the second is the question a curve is asked. Seeds are
+resampled as paired clusters so the fractions stay paired within a seed.
+
+**This is deliberately the weaker-powered choice, and an `inconclusive` from
+interval width is a registered, acceptable outcome rather than a failure.** A
+bootstrap over three seeds is a crude variance estimate and will widen the
+interval substantially — plausibly to the point where neither MCID bound is
+crossed. Raising the seed count would break the anchor reuse, which supplies only
+three. Recording that here is the difference between a limitation and a surprise.
+
+The work-only interval is **also reported**, unchanged from S1, so the two runs
+remain comparable; it is a secondary and does not decide anything. Per-seed
+slopes are reported individually.
 
 **Also required, reported together and none substituting for another:**
 
 - `F1_50 − F1_25`, to say whether the curve has a shape or a step;
-- the **all-except-Candombe** macro slope over the 77 remaining works — mandatory
-  because Candombe produced 72.4% of S1's pooled gain, and without it a curve
-  driven entirely by one genre saturating is indistinguishable from a curve;
+- the **all-except-Candombe** macro slope over the 77 remaining works. This is a
+  **deciding endpoint, not a diagnostic** — see the decision table. Candombe
+  produced 72.4% of S1's pooled gain, so a verdict driven by the overall slope
+  alone cannot tell a curve from one genre saturating;
+- **validation-point counts, eligible-point counts and selected epochs** per
+  fraction and seed, plus the **last-common-epoch** secondary endpoint. Equal
+  cadence does not give equal selection opportunity: patience truncates, and S1
+  itself came out at 10/10/9 against 9/10/10 from early stopping alone. A
+  fraction that plateaus sooner draws fewer maxima on the works that carry the
+  endpoint, and only the counts show it;
 - per-corpus slopes, with their interpretability fixed **now** rather than
   chosen when the numbers arrive:
 
@@ -174,16 +199,41 @@ endpoint and the same works — not a product-contract number.** `plan.md` state
 no product threshold for bar-phase F1; inventing one now, knowing F1_100 =
 0.396, would be worse than reusing one registered in ignorance of it.
 
-The three outcomes do not overlap:
+Each slope is classified by the same non-overlapping rule: **material** if its
+lower bound is at least +0.03, **saturated** if its upper bound is below +0.03,
+**inconclusive** otherwise, including any interval spanning +0.03.
 
-- **`material_growth`** — the lower bound of `F1_100 − F1_50` is at least
-  **+0.03**. The recipe is data-limited at this scale, and `P1-B1` is sized to
-  extend the curve rather than to test whether one is needed.
-- **`saturated_at_mcid`** — the upper bound is **below +0.03**. Growth, if any,
-  is smaller than the smallest difference this project has been willing to call
-  material. More data of this distribution is not the next purchase.
-- **`inconclusive`** — anything else, including an interval that spans +0.03.
-  Not a licence to pick a reading.
+Both the overall and the all-except-Candombe slope are classified, and the pair
+decides:
+
+| overall | non-Candombe | outcome |
+|---|---|---|
+| material | material | `data_limited_under_fixed_recipe` |
+| material | saturated | `candombe_localized_growth` |
+| saturated | saturated | `saturated_at_mcid` |
+| saturated | material | `growth_outside_candombe` |
+| any | inconclusive | `inconclusive` |
+| inconclusive | any | `inconclusive` |
+
+`candombe_localized_growth` is the outcome S1 makes most likely and the reason
+the second axis exists: it would mean the curve is still climbing on one genre
+the frozen model could not track at all, while the rest has stopped, and it
+would **not** justify sizing `P1-B1` to extend this distribution.
+
+**A `selection_sensitive` override.** If the selected-checkpoint endpoint and the
+last-common-epoch endpoint fall in different MCID classes, the outcome is
+`selection_sensitive/inconclusive` regardless of the table. Checkpoint choice may
+not be what decides a curve.
+
+**Why `under_fixed_recipe`.** At a fixed 50-epoch cap, 100% receives roughly four
+times the optimiser updates of 25%, so data volume and update count are
+confounded and growth cannot be attributed to data alone. The existing runner
+already records what settles it: if the smaller fractions **stopped early on
+patience** rather than reaching the cap, updates were not their binding
+constraint and the confound is largely defused. This is read from `stopped_early`
+and the learning histories, and it is committed to here rather than argued
+afterwards. If any fraction runs to the 50-epoch cap in any seed, the name keeps
+its suffix and the run does not claim `data-limited` unqualified.
 
 `inconclusive` is also forced by: a digest mismatch, a dirty tree, a missing
 seed or fraction, a technical exclusion, a subset that is not nested or not
@@ -193,6 +243,41 @@ values differ from the S1 artifact.
 **What a saturated result licenses.** Only that this recipe on this distribution
 has stopped improving. It does not choose the next intervention, and it does not
 open A4 or S2.
+
+## Implementation, and the one invariant that decides whether the anchor is real
+
+No C1 runner, subset generator, summariser or test exists yet. None of the
+numbers above may be produced until they do and have been independently
+reviewed.
+
+**The subset filter must be order-preserving, and this is not a style
+preference.** `contiguous_batches` draws
+`np.random.default_rng(seed).permutation(len(recordings))` — a permutation of
+**positional** indices — and then reads `recordings[order[cursor]]`. The batch
+schedule is therefore a pure function of the *order of the list it is handed*
+and the seed. `fixed_split` walks `manifest["records"]` in manifest order and
+appends; `run.py` derives `train_rows` by list comprehension, preserving it.
+
+So the hash ordering has exactly one job — **choosing which works are members**.
+The row list emitted afterwards must be rebuilt in manifest order. Handing the
+scheduler rows in hash order would change which recording occupies which slot at
+which step for the same seed, which would change the SGD trajectory at **every**
+fraction including 100% — and a 100% arm that does not reproduce the S1 runs is
+not an anchor, which removes the reason C1 is six runs rather than nine.
+
+**Preflight, before any C1 training.** Order equality is necessary but not what
+matters; the emitted schedule is. For each of at least the first three epoch
+seeds, run `contiguous_batches` over the C1 100% selection and over S1's
+`train_rows`, and require the full emitted sequence of
+`(slot_id, identity, work_id, block index, reset, end)` to be identical. This
+costs seconds, needs no training, and proves exactly the property the anchor
+depends on. The 765-record identity list and its order are digested into the
+subset artifact and into checkpoint identity.
+
+The frame-level fractions are **29.31% / 55.68% / 100%** against the nominal
+25/50/100 by works, because works differ in length. Both axes are frozen in the
+subset artifact before training, and any figure drawn from this curve states
+which one it uses.
 
 ## Operational contract
 
@@ -220,4 +305,10 @@ After either exists, a changed rule is a deviation.
 - reporting the macro slope without the all-except-Candombe slope;
 - reading a per-corpus interval from a corpus this document marks descriptive;
 - resampling recordings instead of works;
-- choosing the minimum worthwhile gain after seeing `F1_50`.
+- choosing the minimum worthwhile gain after seeing `F1_50`;
+- emitting training rows in any order but the manifest's, or running C1 before
+  the schedule-equivalence preflight passes;
+- deciding on the overall slope alone, without classifying the
+  all-except-Candombe slope;
+- reading `data_limited` without its `under_fixed_recipe` qualifier when any
+  fraction reached the 50-epoch cap.
