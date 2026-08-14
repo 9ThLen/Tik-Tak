@@ -1706,7 +1706,7 @@ covariate lets the thing being measured choose the axis it is measured on. The
 first version of this section did that and produced a monotone table in both
 arms that is not there.
 
-## M0a, M0b, M0c, M0d and S0: where the preregistered causal results live
+## M0a-M0e, S0 and S1: where the preregistered causal results live
 
 The runs are reviewed in their own files rather than summarised here, because
 each carries a provenance block that a summary would strip.
@@ -1719,8 +1719,32 @@ each carries a provenance block that a summary would strip.
 | M0c — meter-transition trace | `mixed` | [`M0C_REVIEW_20260812.md`](M0C_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
 | M0d — decoder path-state reacquisition | `phase_hysteresis_bottleneck` | [`M0D_REVIEW_20260812.md`](M0D_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
 | M0e — paired non-oracle decoder regression | `non_oracle_candidate_regression` | [`M0E_REVIEW_20260812.md`](M0E_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
+| S1 — stateful block-training ablation | `stateful_training_negative` | [`S1_REVIEW_20260814.md`](S1_REVIEW_20260814.md) | **outside the repository** — path and SHA-256 in the review |
 
-**The M0a, M0b, M0c, M0d and M0e raw artifacts are not in the tree.** They were written to the
+**S1's verdict name is narrower than the run.** It compared two *trained* arms
+and found no difference in bar phase: −0.0045 [−0.0194, +0.0102] against a +0.03
+gate. The registered A0 diagnostics, added on review because none of the four
+verdict names can express this, show both trained arms beating the frozen
+published model by about **+0.10 of bar-phase F1** — 0.291 → 0.40 on the same 84
+works. Training this arm works; carrying state across blocks adds nothing to it.
+
+The one effect that clears zero is operational rather than metrical: **−7.0
+[−11.2, −3.4] false switches per five minutes** for the stateful arm. Absolutely,
+the untrained model runs at 47.3, block-reset training makes it *worse* at 52.9,
+and carrying state holds it at 45.9. Carried state does not buy accuracy here —
+it prevents a churn regression that reset training introduces. The registered
+gate is a one-sided ceiling on an increase, so that finding passes the gate
+without ever entering the verdict.
+
+Three safety gates are recorded as failed and **all three intervals contain
+zero**: they fail as "not demonstrably inside the tolerance", not as "the
+candidate is worse". Those tolerances were sized for a candidate with a real
+effect whose cost needed bounding; against a null at 84 works a two-sided
+interval fails them by construction. A registration that expects a possible null
+should size the tolerance to the interval it can afford, or call a straddling
+interval inconclusive rather than failed.
+
+**The M0a-M0e and S1 raw artifacts are not in the tree.** They were written to the
 tool's own output directory. Each review file is the durable pointer: absolute
 path, SHA-256, run commit, and a recomputation done from per-record data without
 reading the artifact's own summary. Any future run whose output lands outside
