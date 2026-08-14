@@ -50,6 +50,8 @@ ANCHOR_FRACTION = "1.00"
 C1_ARM = "A3_stateful"
 REGISTERED_S1_SUMMARY_SHA256 = (
     "4c7dd592ce0bce191b2c78b8a59616f6d75dfe1870056b227c2ba9a81010160f")
+REGISTERED_A0_SHA256 = (
+    "4db6990164291f078a3cc22e9b31c47715759a557e28130af3396c91c84b3385")
 # Everything an S1 and a C1 run must agree on. `commit` is deliberately absent:
 # the anchor ran at b12eea82 and the new fractions run later, so requiring it
 # would refuse the reuse the design is built on. What must not differ is the
@@ -59,7 +61,7 @@ SHARED_IDENTITY = ("schema", "source_sha256", "split_sha256", "cache_sha256",
 
 
 def authenticate(runs: dict, digests: dict, subset: dict,
-                 s1_sources: set[str]) -> dict:
+                 s1_sources: set[str], subset_sha256: str | None = None) -> dict:
     """Refuse anything that is not the nine runs C1 registered.
 
     A first version checked `tree_clean` and the seed, which would have accepted
@@ -68,6 +70,7 @@ def authenticate(runs: dict, digests: dict, subset: dict,
     own outputs.
     """
     shared = None
+    commits: set[str | None] = set()
     for (fraction, seed), run in sorted(runs.items()):
         where = f"{fraction}/{seed}"
         if run.get("schema") != "tiktak.s1_training/v1":
@@ -86,6 +89,12 @@ def authenticate(runs: dict, digests: dict, subset: dict,
             raise ValueError(f"{where}: data or recipe identity differs")
 
         c1 = identity.get("c1")
+        if fraction != ANCHOR_FRACTION:
+            # The anchor's commit must differ -- it ran at b12eea82 and the
+            # fractions run later -- but the six new runs are one experiment and
+            # must share one. Excluding `commit` from SHARED_IDENTITY answered
+            # the first half and left the second unguarded.
+            commits.add(identity.get("commit"))
         if fraction == ANCHOR_FRACTION:
             # The anchor is an S1 run, so it must not carry a C1 subset at all,
             # and it must be one of the runs the registered S1 summary lists.
@@ -102,7 +111,12 @@ def authenticate(runs: dict, digests: dict, subset: dict,
             expected = subset["fractions"][fraction]["identity_sha256"]
             if c1.get("identity_sha256") != expected:
                 raise ValueError(f"{where}: subset identity does not match")
-    return shared or {}
+            if c1.get("subset_sha256") != subset_sha256:
+                raise ValueError(f"{where}: trained a different subset artifact")
+    if len(commits) != 1 or None in commits:
+        raise ValueError(
+            f"the six C1 runs must share one commit; got {sorted(map(str, commits))}")
+    return dict(shared or {}, c1_commit=commits.pop())
 
 
 def diagnostics(selected: dict, baseline: dict | None) -> dict:
@@ -317,6 +331,14 @@ def main(argv: list[str] | None = None) -> int:
         baseline = json.loads(args.baseline.read_text(encoding="utf-8"))
         if baseline.get("schema") != "tiktak.s1_evaluation/v1":
             raise ValueError("A0 baseline is not an S1 evaluation artifact")
+        # Shape is not identity: any S1 evaluation would have passed the schema
+        # check and silently replaced every vs_a0 diagnostic.
+        a0_digest = file_sha256(args.baseline)
+        if a0_digest != REGISTERED_A0_SHA256:
+            raise ValueError(
+                f"A0 baseline digest {a0_digest} is not the registered "
+                f"{REGISTERED_A0_SHA256}")
+        subset_sha256 = file_sha256(args.subset)
 
         roots: dict[tuple[str, int], pathlib.Path] = {}
         runs: dict[tuple[str, int], dict] = {}
@@ -334,7 +356,8 @@ def main(argv: list[str] | None = None) -> int:
             digests[key] = file_sha256(root / "result.json")
         if set(runs) != {(f, s) for f in FRACTIONS for s in SEEDS}:
             raise ValueError("C1 needs every fraction at every seed")
-        shared_identity = authenticate(runs, digests, subset, s1_sources)
+        shared_identity = authenticate(
+            runs, digests, subset, s1_sources, subset_sha256)
 
         def evaluated(key: tuple[str, int]) -> list[int]:
             return sorted(int(row["epoch"]) for row in runs[key]["history"]

@@ -24,6 +24,10 @@ from .trainer import (
 
 
 SCHEMA = "tiktak.s1_training/v1"
+# The frozen development baseline S1 selected against and C1
+# measures against. Shape is not identity.
+REGISTERED_A0_SHA256 = (
+    "4db6990164291f078a3cc22e9b31c47715759a557e28130af3396c91c84b3385")
 
 
 def _validate_config(config: dict) -> None:
@@ -50,7 +54,8 @@ def _eligible_key(evaluation: dict, baseline: dict) -> tuple | None:
 
 def c1_training_rows(subset: dict, train_rows: list[dict],
                      fraction: float | None, *, arm: str,
-                     cache_sha256: str) -> tuple[list[dict], dict]:
+                     cache_sha256: str,
+                     subset_sha256: str) -> tuple[list[dict], dict]:
     """Restrict the training rows to a registered C1 fraction.
 
     Membership comes from the subset artifact; the order comes from the cache
@@ -88,12 +93,22 @@ def c1_training_rows(subset: dict, train_rows: list[dict],
         # The anchor claim in one assertion: at 100% the filter has to be the
         # identity, or C1's reuse of the S1 runs is not reuse.
         c1_subsets.assert_anchor_schedule({"records": train_rows})
-    if subset.get("cache_sha256") not in (None, cache_sha256):
-        raise ValueError("C1 subset was built from a different cache")
+    # Fail closed, not fail open: an earlier version accepted a subset with no
+    # `cache_sha256` at all, so an artifact that never recorded which cache it
+    # was built from passed the check that exists to catch exactly that.
+    if subset.get("cache_sha256") != cache_sha256:
+        raise ValueError(
+            "C1 subset records no cache digest, or a different one")
+    subset_provenance = subset.get("provenance") or {}
+    if subset_provenance.get("tree_clean") is not True:
+        raise ValueError("C1 subset artifact has no clean provenance")
     return selected, {
         "fraction": fraction, "records": len(selected),
         "cache_sha256": cache_sha256,
-        "subset_provenance": subset.get("provenance"),
+        # The artifact that decides which works are trained belongs in identity
+        # by its own digest, not only by the fields copied out of it.
+        "subset_sha256": subset_sha256,
+        "subset_commit": subset_provenance.get("commit"),
         "works": block["works"], "frames": block["frames"],
         "identity_sha256": block["identity_sha256"],
         "salt": subset.get("salt"),
@@ -113,7 +128,8 @@ def run_training(*, arm: str, seed: int, config: dict,
                  music_root: pathlib.Path | None = None,
                  eval_workers: int = 4,
                  subset: dict | None = None,
-                 fraction: float | None = None) -> dict | None:
+                 fraction: float | None = None,
+                 subset_sha256: str | None = None) -> dict | None:
     if arm not in ARMS or seed not in config["seeds"]:
         raise ValueError("S1 arm or seed is outside the registration")
     cache = load_cache_manifest(cache_manifest_path)
@@ -132,7 +148,8 @@ def run_training(*, arm: str, seed: int, config: dict,
     if subset is not None:
         train_rows, subset_identity = c1_training_rows(
             subset, train_rows, fraction, arm=arm,
-            cache_sha256=file_sha256(cache_manifest_path))
+            cache_sha256=file_sha256(cache_manifest_path),
+            subset_sha256=subset_sha256 or "")
     product_inputs = (baseline_path, binary, source_manifest, m0e, music_root)
     if any(value is None for value in product_inputs):
         raise ValueError("binding S1 requires baseline and all product-eval inputs")
@@ -145,6 +162,9 @@ def run_training(*, arm: str, seed: int, config: dict,
             != PRODUCT_BINARY_SHA256
             or baseline.get("provenance", {}).get("tree_clean") is not True):
         raise ValueError("invalid frozen A0 development baseline")
+    if file_sha256(baseline_path) != REGISTERED_A0_SHA256:
+        raise ValueError(
+            f"A0 baseline digest is not the registered {REGISTERED_A0_SHA256}")
     fixed = fixed_split(source_manifest, m0e)
     fixed_identities = [(row["corpus"], row["name"], row["split"])
                         for row in fixed["records"]]
@@ -308,9 +328,12 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("CUDA requested but unavailable")
         subset = (None if args.subset is None else
                   json.loads(args.subset.read_text(encoding="utf-8")))
+        subset_sha256 = (None if args.subset is None
+                         else file_sha256(args.subset))
         result = run_training(
             arm=args.arm, seed=args.seed, config=config, source=args.source,
             subset=subset, fraction=args.fraction,
+            subset_sha256=subset_sha256,
             config_path=args.config,
             cache_manifest_path=args.cache, output_root=args.output_root,
             repository=repository, device=device, resume=args.resume,

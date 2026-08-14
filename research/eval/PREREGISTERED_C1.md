@@ -301,9 +301,10 @@ open A4 or S2.
 
 ## Implementation, and the one invariant that decides whether the anchor is real
 
-No C1 runner, subset generator, summariser or test exists yet. None of the
-numbers above may be produced until they do and have been independently
-reviewed.
+The subset generator, runner filter, summariser, launcher and their tests exist
+in `research/training/beatnet/c1_*.py`. None of the numbers above may be
+produced until that implementation has been independently reviewed against this
+document.
 
 **The subset filter must be order-preserving, and this is not a style
 preference.** `contiguous_batches` draws

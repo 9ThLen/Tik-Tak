@@ -218,13 +218,16 @@ def test_a_missing_work_in_one_fraction_is_refused():
         c1s.summarise(runs, evaluations)
 
 
-def _run(fraction, seed, *, arm=c1s.C1_ARM, c1_block="auto", clean=True):
+def _run(fraction, seed, *, arm=c1s.C1_ARM, c1_block="auto", clean=True,
+         commit="c1-commit"):
     identity = {"schema": "tiktak.s1_checkpoint/v1", "source_sha256": "s",
                 "split_sha256": "p", "cache_sha256": "c",
-                "baseline_sha256": "b", "config": {"k": 1}, "commit": "any"}
+                "baseline_sha256": "b", "config": {"k": 1}, "commit": commit}
     if c1_block == "auto":
         c1_block = (None if fraction == "1.00" else
-                    {"fraction": float(fraction), "identity_sha256": f"id{fraction}"})
+                    {"fraction": float(fraction),
+                     "identity_sha256": f"id{fraction}",
+                     "subset_sha256": "subset-sha"})
     if c1_block is not None:
         identity["c1"] = c1_block
     return {"schema": "tiktak.s1_training/v1", "complete": True, "arm": arm,
@@ -242,8 +245,33 @@ def _auth_inputs(**overrides):
     return runs, digests, subset, overrides.get("s1_sources", anchor)
 
 
+SUBSET_SHA = "subset-sha"
+
+
 def test_authentication_accepts_only_the_nine_registered_runs():
-    c1s.authenticate(*_auth_inputs())
+    c1s.authenticate(*_auth_inputs(), SUBSET_SHA)
+
+
+def test_the_six_new_runs_must_share_one_commit():
+    """The anchor's commit differs by design; the six are one experiment.
+
+    Excluding `commit` from the shared block answered the anchor half and left
+    this half unguarded, so six runs from six different trees would have passed.
+    """
+    runs, digests, subset, sources = _auth_inputs()
+    identity = c1s.authenticate(runs, digests, subset, sources, SUBSET_SHA)
+    assert identity["c1_commit"] == "c1-commit"
+
+    runs[("0.50", 29)] = _run("0.50", 29, commit="another-commit")
+    with pytest.raises(ValueError, match="must share one commit"):
+        c1s.authenticate(runs, digests, subset, sources, SUBSET_SHA)
+
+
+def test_a_run_trained_from_another_subset_artifact_is_refused():
+    runs, digests, subset, sources = _auth_inputs()
+    runs[("0.25", 17)]["identity"]["c1"]["subset_sha256"] = "elsewhere"
+    with pytest.raises(ValueError, match="different subset artifact"):
+        c1s.authenticate(runs, digests, subset, sources, SUBSET_SHA)
 
 
 def test_an_arbitrary_clean_run_cannot_pose_as_the_anchor():
@@ -251,26 +279,26 @@ def test_an_arbitrary_clean_run_cannot_pose_as_the_anchor():
     anchor from its own outputs. Only the registered S1 summary can."""
     runs, digests, subset, _ = _auth_inputs()
     with pytest.raises(ValueError, match="registered S1 summary"):
-        c1s.authenticate(runs, digests, subset, {"some-other-run"})
+        c1s.authenticate(runs, digests, subset, {"some-other-run"}, SUBSET_SHA)
 
 
 def test_a_reset_arm_is_refused_at_any_fraction():
     runs, digests, subset, sources = _auth_inputs()
     runs[("0.50", 29)] = _run("0.50", 29, arm="A3_reset")
     with pytest.raises(ValueError, match="is not A3_stateful"):
-        c1s.authenticate(runs, digests, subset, sources)
+        c1s.authenticate(runs, digests, subset, sources, SUBSET_SHA)
 
 
 def test_the_anchor_must_not_carry_a_subset_and_a_fraction_must():
     runs, digests, subset, sources = _auth_inputs()
     runs[("1.00", 17)] = _run("1.00", 17, c1_block={"fraction": 1.0})
     with pytest.raises(ValueError, match="anchor must be an S1 run"):
-        c1s.authenticate(runs, digests, subset, sources)
+        c1s.authenticate(runs, digests, subset, sources, SUBSET_SHA)
 
     runs, digests, subset, sources = _auth_inputs()
     runs[("0.25", 17)] = _run("0.25", 17, c1_block=None)
     with pytest.raises(ValueError, match="must record its subset"):
-        c1s.authenticate(runs, digests, subset, sources)
+        c1s.authenticate(runs, digests, subset, sources, SUBSET_SHA)
 
 
 def test_a_run_that_trained_another_subset_is_refused():
@@ -278,7 +306,7 @@ def test_a_run_that_trained_another_subset_is_refused():
     runs[("0.25", 43)] = _run("0.25", 43, c1_block={
         "fraction": 0.25, "identity_sha256": "somethingelse"})
     with pytest.raises(ValueError, match="subset identity does not match"):
-        c1s.authenticate(runs, digests, subset, sources)
+        c1s.authenticate(runs, digests, subset, sources, SUBSET_SHA)
 
 
 def test_a_differing_recipe_is_refused_but_a_differing_commit_is_not():
@@ -287,11 +315,11 @@ def test_a_differing_recipe_is_refused_but_a_differing_commit_is_not():
     runs, digests, subset, sources = _auth_inputs()
     for seed in c1s.SEEDS:
         runs[("1.00", seed)]["identity"]["commit"] = "b12eea82"
-    c1s.authenticate(runs, digests, subset, sources)
+    c1s.authenticate(runs, digests, subset, sources, SUBSET_SHA)
 
     runs[("0.50", 17)]["identity"]["cache_sha256"] = "another-cache"
     with pytest.raises(ValueError, match="identity differs"):
-        c1s.authenticate(runs, digests, subset, sources)
+        c1s.authenticate(runs, digests, subset, sources, SUBSET_SHA)
 
 
 def test_an_incomplete_or_dirty_run_is_refused():
@@ -300,11 +328,11 @@ def test_an_incomplete_or_dirty_run_is_refused():
         runs, digests, subset, sources = _auth_inputs()
         runs[("0.25", 17)][field] = value
         with pytest.raises(ValueError, match=message):
-            c1s.authenticate(runs, digests, subset, sources)
+            c1s.authenticate(runs, digests, subset, sources, SUBSET_SHA)
     runs, digests, subset, sources = _auth_inputs()
     runs[("0.50", 43)] = _run("0.50", 43, clean=False)
     with pytest.raises(ValueError, match="not clean"):
-        c1s.authenticate(runs, digests, subset, sources)
+        c1s.authenticate(runs, digests, subset, sources, SUBSET_SHA)
 
 
 def test_the_registered_secondary_set_is_reported_at_every_fraction():

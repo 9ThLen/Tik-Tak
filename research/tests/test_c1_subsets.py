@@ -38,6 +38,16 @@ def _cache(records_per_work=2):
     return {"records": records}
 
 
+def _valid_subset(cache, **overrides):
+    """What the generator produces on the registered corpus, for filter tests."""
+    payload = dict(c1.build(cache), total_frames=c1.REAL_TOTAL_FRAMES,
+                   registered_corpus=True, frame_fraction_deviations={},
+                   cache_sha256="x",
+                   provenance={"tree_clean": True, "commit": "abc"})
+    payload.update(overrides)
+    return payload
+
+
 def test_fractions_are_nested_stratified_and_close():
     cache = _cache()
     built = c1.build(cache)
@@ -198,15 +208,44 @@ def test_the_runner_filter_refuses_an_unregistered_fraction():
     from training.beatnet.run import c1_training_rows
 
     cache = _cache()
-    subset = dict(c1.build(cache), total_frames=c1.REAL_TOTAL_FRAMES,
-                  registered_corpus=True, frame_fraction_deviations={})
+    subset = _valid_subset(cache)
     rows = c1.training_rows(cache)
     for fraction in (0.75, 0.0):
         with pytest.raises((ValueError, KeyError)):
             c1_training_rows(subset, rows, fraction, arm=c1.C1_ARM,
-                             cache_sha256="x")
+                             cache_sha256="x", subset_sha256="s")
     with pytest.raises(ValueError, match="explicit --fraction"):
-        c1_training_rows(subset, rows, None, arm=c1.C1_ARM, cache_sha256="x")
+        c1_training_rows(subset, rows, None, arm=c1.C1_ARM, cache_sha256="x",
+                         subset_sha256="s")
+
+
+def test_a_subset_without_a_cache_digest_or_provenance_is_refused():
+    """`not in (None, ...)` was fail-open: a subset that never recorded which
+    cache it came from passed the check that exists to catch exactly that."""
+    from training.beatnet.run import c1_training_rows
+
+    cache = _cache()
+    rows = c1.training_rows(cache)
+    bare = dict(c1.build(cache), total_frames=c1.REAL_TOTAL_FRAMES,
+                registered_corpus=True, frame_fraction_deviations={})
+    with pytest.raises(ValueError, match="no cache digest"):
+        c1_training_rows(bare, rows, 0.25, arm=c1.C1_ARM,
+                         cache_sha256="x", subset_sha256="s")
+    unprovenanced = dict(bare, cache_sha256="x")
+    with pytest.raises(ValueError, match="no clean provenance"):
+        c1_training_rows(unprovenanced, rows, 0.25, arm=c1.C1_ARM,
+                         cache_sha256="x", subset_sha256="s")
+
+
+def test_the_subset_digest_travels_into_run_identity():
+    from training.beatnet.run import c1_training_rows
+
+    cache = _cache()
+    _, identity = c1_training_rows(
+        _valid_subset(cache), c1.training_rows(cache), 0.25,
+        arm=c1.C1_ARM, cache_sha256="x", subset_sha256="the-subset-sha")
+    assert identity["subset_sha256"] == "the-subset-sha"
+    assert identity["cache_sha256"] == "x"
 
 
 def test_the_registered_matrix_is_closed_by_the_runner():
@@ -218,25 +257,25 @@ def test_the_registered_matrix_is_closed_by_the_runner():
     from training.beatnet.run import c1_training_rows
 
     cache = _cache()
-    subset = dict(c1.build(cache), total_frames=c1.REAL_TOTAL_FRAMES,
-                  registered_corpus=True, frame_fraction_deviations={})
+    subset = _valid_subset(cache)
     rows = c1.training_rows(cache)
     with pytest.raises(ValueError, match="registers only A3_stateful"):
-        c1_training_rows(subset, rows, 0.25, arm="A3_reset", cache_sha256="x")
+        c1_training_rows(subset, rows, 0.25, arm="A3_reset", cache_sha256="x",
+                         subset_sha256="s")
     with pytest.raises(ValueError, match="is the S1 anchor and is reused"):
-        c1_training_rows(subset, rows, 1.00, arm=c1.C1_ARM, cache_sha256="x")
+        c1_training_rows(subset, rows, 1.00, arm=c1.C1_ARM, cache_sha256="x",
+                         subset_sha256="s")
 
 
 def test_a_subset_from_another_cache_is_refused():
     from training.beatnet.run import c1_training_rows
 
     cache = _cache()
-    subset = dict(c1.build(cache), total_frames=c1.REAL_TOTAL_FRAMES,
-                  registered_corpus=True, frame_fraction_deviations={},
-                  cache_sha256="a" * 64)
-    with pytest.raises(ValueError, match="different cache"):
+    subset = dict(_valid_subset(cache), cache_sha256="a" * 64)
+    with pytest.raises(ValueError, match="cache digest"):
         c1_training_rows(subset, c1.training_rows(cache), 0.25,
-                         arm=c1.C1_ARM, cache_sha256="b" * 64)
+                         arm=c1.C1_ARM, cache_sha256="b" * 64,
+                         subset_sha256="s")
 
 
 def test_the_runner_filter_catches_a_digest_that_does_not_match():
@@ -244,9 +283,8 @@ def test_the_runner_filter_catches_a_digest_that_does_not_match():
     from training.beatnet.run import c1_training_rows
 
     cache = _cache()
-    subset = dict(c1.build(cache), total_frames=c1.REAL_TOTAL_FRAMES,
-                  registered_corpus=True, frame_fraction_deviations={})
+    subset = _valid_subset(cache)
     subset["fractions"]["0.25"]["identity_sha256"] = "0" * 64
     with pytest.raises(ValueError, match="does not match the subset artifact"):
         c1_training_rows(subset, c1.training_rows(cache), 0.25,
-                         arm=c1.C1_ARM, cache_sha256="x")
+                         arm=c1.C1_ARM, cache_sha256="x", subset_sha256="s")
