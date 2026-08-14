@@ -46,7 +46,13 @@ def _valid_subset(cache, **overrides):
     payload = dict(c1.build(cache), total_frames=c1.REAL_TOTAL_FRAMES,
                    registered_corpus=True, frame_fraction_deviations={},
                    cache_sha256=c1.REGISTERED_CACHE_SHA256,
-                   preflight={"passed": True, "seeds": list(c1.PREFLIGHT_SEEDS)},
+                   preflight={
+                       "passed": True,
+                       "seeds": list(c1.PREFLIGHT_SEEDS),
+                       "blocks_compared": {
+                           str(seed): c1.PREFLIGHT_BLOCKS_PER_SEED
+                           for seed in c1.PREFLIGHT_SEEDS},
+                   },
                    provenance={"tree_clean": True, "commit": "abc"})
     payload.update(overrides)
     return payload
@@ -314,6 +320,29 @@ def test_a_cache_that_is_not_the_registered_one_is_refused_at_training_time():
                          subset_sha256=SUBSET_SHA)
 
 
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    (("schema", None, "schema"),
+     ("schema", "tiktak.c1_subsets/v0", "schema"),
+     ("salt", None, "membership salt"),
+     ("salt", "another-order", "membership salt")),
+)
+def test_subset_schema_and_membership_salt_are_identity(field, value, message):
+    from training.beatnet.run import c1_training_rows
+
+    cache = _cache()
+    subset = _valid_subset(cache)
+    if value is None:
+        subset.pop(field)
+    else:
+        subset[field] = value
+    with pytest.raises(ValueError, match=message):
+        c1_training_rows(
+            subset, c1.training_rows(cache), 0.25, arm=c1.C1_ARM,
+            cache_sha256=c1.REGISTERED_CACHE_SHA256,
+            subset_sha256=SUBSET_SHA)
+
+
 @pytest.mark.parametrize("digest", [None, "", "not-a-digest", "a" * 63])
 def test_a_run_without_the_subsets_own_digest_never_starts(digest):
     """`or ""` let it train for hours and be caught only at summary time.
@@ -353,10 +382,19 @@ def test_training_requires_evidence_that_the_preflight_ran():
 
     cache = _cache()
     rows = c1.training_rows(cache)
-    for broken in ({}, {"passed": False, "seeds": [17]},
-                   {"passed": True, "seeds": []}):
+    valid = _valid_subset(cache)["preflight"]
+    for broken in (
+            {},
+            {"passed": False, "seeds": list(c1.PREFLIGHT_SEEDS),
+             "blocks_compared": valid["blocks_compared"]},
+            {"passed": True, "seeds": [17],
+             "blocks_compared": {"17": c1.PREFLIGHT_BLOCKS_PER_SEED}},
+            {**valid, "blocks_compared": {
+                **valid["blocks_compared"], "17": 1}},
+    ):
         subset = _valid_subset(cache, preflight=broken)
-        with pytest.raises(ValueError, match="no passing schedule preflight"):
+        with pytest.raises(
+                ValueError, match="no passing registered schedule preflight"):
             c1_training_rows(subset, rows, 0.25, arm=c1.C1_ARM,
                              cache_sha256=c1.REGISTERED_CACHE_SHA256,
                              subset_sha256=SUBSET_SHA)

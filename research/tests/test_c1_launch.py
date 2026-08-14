@@ -5,6 +5,7 @@ import pathlib
 import pytest
 
 from training.beatnet import c1_launch as launch
+from training.beatnet import c1_subsets as subsets
 
 
 def _args(tmp_path, **overrides):
@@ -61,8 +62,20 @@ def test_the_command_carries_the_fraction_and_the_stateful_arm(tmp_path):
 
 
 def _inputs(tmp_path):
-    subset = {"total_frames": 10566912, "registered_corpus": True,
-              "frame_fraction_deviations": {}}
+    subset = {
+        "schema": subsets.SCHEMA,
+        "salt": subsets.SALT,
+        "total_frames": subsets.REAL_TOTAL_FRAMES,
+        "registered_corpus": True,
+        "frame_fraction_deviations": {},
+        "preflight": {
+            "passed": True,
+            "seeds": list(subsets.PREFLIGHT_SEEDS),
+            "blocks_compared": {
+                str(seed): subsets.PREFLIGHT_BLOCKS_PER_SEED
+                for seed in subsets.PREFLIGHT_SEEDS},
+        },
+    }
     for name in ("subset.json", "config.json", "cache.json", "a0.json",
                  "manifest.json", "m0e.json"):
         (tmp_path / name).write_text(json.dumps(subset), encoding="utf-8")

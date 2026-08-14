@@ -337,6 +337,9 @@ subset artifact and into checkpoint identity, together with the subset
 artifact's own digest and the registered cache digest -- both verified on the
 training path and not only where the subset is generated, since a subset and a
 cache that agree with each other prove nothing about which cache they are.
+The recorded preflight must contain exactly the six registered epoch seeds and
+26,813 compared blocks for each; a merely non-empty or differently scoped
+preflight is not equivalent evidence.
 
 **The registered fractions are the work-level 25/50/100**, and the frame-level
 fractions follow from them because works differ in length. Under the byte-exact
@@ -352,7 +355,9 @@ Outputs, checkpoints, caches and the subset artifact live outside the
 repository. The run starts from `tree_clean: true` and records code, source
 model, split, cache, subset, config and binary digests. Worker count and paths
 are operational; fractions, subsets, arm, recipe, seeds, cadence, selection rule
-and thresholds are identity, and resume fails closed on any mismatch.
+and thresholds are identity, and resume fails closed on any mismatch. The
+subset generator and all six new training runs use the same final clean commit;
+the older S1 anchor retains its registered commit.
 
 Acceptance follows M0a–M0e and S1: recompute every deciding value from `records`
 without reading `summary`, verify the anchor reproduces the S1 artifact exactly,
@@ -377,5 +382,5 @@ After either exists, a changed rule is a deviation.
   the schedule-equivalence preflight passes;
 - deciding on the overall slope alone, without classifying the
   all-except-Candombe slope;
-- reading `data_limited` without its `under_fixed_recipe` qualifier when any
-  fraction reached the 50-epoch cap.
+- reading `data_limited` without its unconditional `under_fixed_recipe`
+  qualifier.

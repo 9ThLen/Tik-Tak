@@ -116,6 +116,7 @@ def main(argv: list[str] | None = None) -> int:
         # Refuse before any GPU time rather than on the first job.
         from . import c1_subsets
         c1_subsets.require_registered_corpus(subset)
+        c1_subsets.require_registered_preflight(subset)
     except (OSError, ValueError) as error:
         parser.error(str(error))
 

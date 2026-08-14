@@ -217,6 +217,12 @@ def build(cache: dict) -> dict:
 
 def require_registered_corpus(payload: dict) -> None:
     """The binding path refuses anything but the corpus C1 registered."""
+    if payload.get("schema") != SCHEMA:
+        raise ValueError(
+            f"subset schema {payload.get('schema')!r} is not the registered "
+            f"{SCHEMA!r}")
+    if payload.get("salt") != SALT:
+        raise ValueError("subset membership salt is not the registered one")
     if payload.get("total_frames") != REAL_TOTAL_FRAMES:
         raise ValueError(
             f"training frames {payload.get('total_frames')} is not the "
@@ -234,6 +240,20 @@ def require_registered_corpus(payload: dict) -> None:
 # first training seed and nothing else; two epochs from each of the three costs
 # the same and covers all three.
 PREFLIGHT_SEEDS = (17, 18, 29, 30, 43, 44)
+PREFLIGHT_BLOCKS_PER_SEED = 26_813
+
+
+def require_registered_preflight(payload: dict) -> None:
+    """Require the exact schedule-equivalence evidence C1 registered."""
+    preflight = payload.get("preflight") or {}
+    expected_blocks = {
+        str(seed): PREFLIGHT_BLOCKS_PER_SEED for seed in PREFLIGHT_SEEDS}
+    if (preflight.get("passed") is not True
+            or preflight.get("seeds") != list(PREFLIGHT_SEEDS)
+            or preflight.get("blocks_compared") != expected_blocks):
+        raise ValueError(
+            "C1 subset carries no passing registered schedule preflight; "
+            "the 100% anchor is unverified")
 
 
 def assert_anchor_schedule(cache: dict, *,

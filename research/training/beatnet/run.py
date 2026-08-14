@@ -113,11 +113,7 @@ def c1_training_rows(subset: dict, train_rows: list[dict],
     # the generator; what the training path needs is evidence that it ran, so it
     # requires the artifact to carry a passing preflight rather than repeating
     # a 26,000-block comparison before every job.
-    preflight = subset.get("preflight") or {}
-    if preflight.get("passed") is not True or not preflight.get("seeds"):
-        raise ValueError(
-            "C1 subset carries no passing schedule preflight; the 100% anchor "
-            "is unverified and the reuse it licenses is not established")
+    c1_subsets.require_registered_preflight(subset)
     if (not isinstance(subset_sha256, str) or len(subset_sha256) != 64
             or not all(c in "0123456789abcdef" for c in subset_sha256)):
         raise ValueError(
@@ -204,6 +200,10 @@ def run_training(*, arm: str, seed: int, config: dict,
                            "baseline": baseline_path, "binary": binary,
                            "manifest": source_manifest, "m0e": m0e},
         experiment="S1", arm=arm, seed=seed)
+    if (subset_identity is not None
+            and subset_identity.get("subset_commit") != provenance["commit"]):
+        raise ValueError(
+            "C1 subset and training run must come from the same final commit")
     identity = checkpoint_identity(
         config, source_sha256=file_sha256(source),
         split_sha256=file_sha256(cache_manifest_path),

@@ -81,11 +81,15 @@ def authenticate(runs: dict, digests: dict, subset: dict,
             raise ValueError(f"{where}: not an S1 training artifact")
         if run.get("complete") is not True:
             raise ValueError(f"{where}: run is not complete")
-        if run.get("provenance", {}).get("tree_clean") is not True:
+        provenance = run.get("provenance", {})
+        if provenance.get("tree_clean") is not True:
             raise ValueError(f"{where}: run provenance is not clean")
         if run.get("arm") != C1_ARM:
             raise ValueError(f"{where}: arm {run.get('arm')!r} is not {C1_ARM}")
         identity = run.get("identity", {})
+        if identity.get("commit") != provenance.get("commit"):
+            raise ValueError(
+                f"{where}: identity and provenance commits differ")
         block = {key: identity.get(key) for key in SHARED_IDENTITY}
         if shared is None:
             shared = block
@@ -121,6 +125,9 @@ def authenticate(runs: dict, digests: dict, subset: dict,
                 raise ValueError(f"{where}: subset identity does not match")
             if c1.get("subset_sha256") != subset_sha256:
                 raise ValueError(f"{where}: trained a different subset artifact")
+            if c1.get("subset_commit") != identity.get("commit"):
+                raise ValueError(
+                    f"{where}: subset and training commits differ")
     if len(commits) != 1 or None in commits:
         raise ValueError(
             f"the six C1 runs must share one commit; got {sorted(map(str, commits))}")
@@ -338,6 +345,7 @@ def main(argv: list[str] | None = None) -> int:
         subset = json.loads(args.subset.read_text(encoding="utf-8"))
         from . import c1_subsets
         c1_subsets.require_registered_corpus(subset)
+        c1_subsets.require_registered_preflight(subset)
         if subset.get("cache_sha256") != c1_subsets.REGISTERED_CACHE_SHA256:
             raise ValueError(
                 "the subset artifact was not built from the registered cache")

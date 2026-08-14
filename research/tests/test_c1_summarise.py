@@ -229,11 +229,13 @@ def _run(fraction, seed, *, arm=c1s.C1_ARM, c1_block="auto", clean=True,
         c1_block = (None if fraction == "1.00" else
                     {"fraction": float(fraction),
                      "identity_sha256": f"id{fraction}",
-                     "subset_sha256": "subset-sha"})
+                     "subset_sha256": "subset-sha",
+                     "subset_commit": commit})
     if c1_block is not None:
         identity["c1"] = c1_block
     return {"schema": "tiktak.s1_training/v1", "complete": True, "arm": arm,
-            "seed": seed, "provenance": {"tree_clean": clean},
+            "seed": seed,
+            "provenance": {"tree_clean": clean, "commit": commit},
             "identity": identity, "history": [], "best": {"epoch": 10}}
 
 
@@ -280,6 +282,18 @@ def test_the_six_new_runs_must_share_one_commit():
 
     runs[("0.50", 29)] = _run("0.50", 29, commit="another-commit")
     with pytest.raises(ValueError, match="must share one commit"):
+        c1s.authenticate(runs, digests, subset, sources, SUBSET_SHA)
+
+
+def test_identity_provenance_and_subset_commits_must_agree():
+    runs, digests, subset, sources = _auth_inputs()
+    runs[("0.25", 17)]["provenance"]["commit"] = "another-commit"
+    with pytest.raises(ValueError, match="identity and provenance commits differ"):
+        c1s.authenticate(runs, digests, subset, sources, SUBSET_SHA)
+
+    runs, digests, subset, sources = _auth_inputs()
+    runs[("0.50", 29)]["identity"]["c1"]["subset_commit"] = "older-commit"
+    with pytest.raises(ValueError, match="subset and training commits differ"):
         c1s.authenticate(runs, digests, subset, sources, SUBSET_SHA)
 
 
