@@ -274,10 +274,14 @@ costs seconds, needs no training, and proves exactly the property the anchor
 depends on. The 765-record identity list and its order are digested into the
 subset artifact and into checkpoint identity.
 
-The frame-level fractions are **29.31% / 55.68% / 100%** against the nominal
-25/50/100 by works, because works differ in length. Both axes are frozen in the
-subset artifact before training, and any figure drawn from this curve states
-which one it uses.
+**The registered fractions are the work-level 25/50/100.** Works differ in
+length, so the frame-level fractions differ from them and are an *output* of the
+generator, computed and frozen in the subset artifact before training — not a
+constant asserted here. A pre-implementation estimate put them near 29% and 56%;
+that figure presupposes one particular reading of the ordering rule above, and a
+generator that differs in string construction or rounding will land elsewhere
+without being wrong. Whatever it produces is what gets frozen, and any figure
+drawn from this curve states which axis it uses.
 
 ## Operational contract
 
