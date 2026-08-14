@@ -31,6 +31,432 @@ the 2,760 annotated recordings here as evaluation ground, leaving Harmonix,
 RWC and SMC. That is a cost of the ensemble, not merely of testing it, and it is
 the strongest argument for recording new material.
 
+## Session 3: a slate aligns what correlation lost, and the room loss replicates
+
+`room_session3.json`. Three captures, clean tree at `6a13279`, twelve hashed
+inputs. The takes were built by `eval/slate.py` — a short Farina sweep, a gap,
+the music, a gap, the same sweep — and played once through a speaker onto a
+phone.
+
+| track | clean F | room F | Δ | head | tail | drift |
+|---|---:|---:|---:|---:|---:|---:|
+| `0116_goodies` | 0.976 | 0.892 | −0.084 | 27.5 dB | **22.8 dB** | 1.6 ms |
+| `0707_halfwaygone` | 0.951 | **0.285** | −0.665 | 27.6 dB | 25.2 dB | 2.6 ms |
+| `0837_nottonight` | 0.974 | **0.570** | −0.404 | 26.8 dB | 23.1 dB | 1.5 ms |
+| **mean** | **0.967** | **0.583** | **−0.385** | | | |
+
+The margins are the second measurement of these captures, after the section
+below found that the first was reading the song as a rival to the slate. Every
+F, offset and drift is bit-identical between the two runs; only the confidence
+measure moved.
+
+### What it settles
+
+**All three aligned, with no ambiguity and no hand adjudication.** Sessions 1
+and 2 lost two of eight captures to alignment: `0837_nottonight` needed a
+hand-written `skip_sec` of 14.0 s with a paragraph explaining it, and
+`0707_halfwaygone` was voided outright — four of seven windows agreed on
+0.476 s while the coherent sum peaked at 0.910 s, 0.9 beats apart at 125 BPM,
+with nothing in the recording able to settle it. The same track, the same
+phone, read from a slate: one answer.
+
+**The room loss replicates.** −0.385 of mean F against session 1's −0.390, and
+the shape is the same: `0116_goodies` barely moves while the other two collapse,
+with `wrong_beats`, `too_few_beats` and `wrong_octave` on both.
+
+**Clock drift is real and small — and it is now the gate, not a footnote.**
+1.5 to 2.6 ms across takes of 130 to 200 s, about 12 ppm between the playback
+clock and the phone's. Two orders below a beat, and measured rather than
+assumed, because the tail slate measures it directly instead of inferring it
+from disagreement between thirds.
+
+Which makes it the better check. Peak-to-sidelobe asks whether a peak looks
+convincing; the two slates agreeing asks whether the *right* peak was taken,
+which is the question. A head slate read one beat early does not produce a
+slightly worse margin — it produces half a second of drift. The bar is 50 ms:
+twenty times the observed maximum, ten times below a beat, and nothing between
+those scales needs a decision, so unlike the margin it has no tunable in it. The
+margin stays as the secondary signal because it notices a capture degrading
+before it fails outright.
+
+### What it does not settle
+
+Three captures, one room, one phone, one session, and two of the three tracks
+are the same ones sessions 1 and 2 used. This is agreement, not independent
+confirmation, and it is a check on the *procedure* rather than a corpus.
+
+### The 0.4 dB scare was two unswept constants, not a weak slate
+
+The first pass at these six margins cleared the 12 dB bar by 0.4 dB on the tail
+slate of `0116_goodies`, and the obvious reading — the slate is too quiet — was
+wrong. A longer or louder slate would have bought margin while leaving the
+actual cause in place.
+
+Five of the six limiting sidelobes sat at **+53 to +61 ms** from their peak: the
+slate's own room response, counted as a rival to itself because `GUARD_SECONDS`
+was guessed at 50 ms while this room measures RT60 0.33 to 0.37 s. Clearing that
+ridge is worth 8 to 14 dB on those five.
+
+The sixth — the one that set the bar — had its rival at **−1999.3 ms**, and no
+guard width reaches that far. It was the far edge of the tail search window.
+`build_take` leaves `LEAD_SECONDS` of silence between the music and the trailing
+slate, the window was ±2.0 s, so it read the end of the song as a candidate
+slate. The head window cannot be tightened, because the capture's start offset
+is exactly what is unknown; the tail's can, because once the head is found the
+tail is known to within clock drift — 1.5 to 2.6 ms.
+
+Both constants are derived from the take's geometry rather than chosen from the
+sweep, and that matters here: across the grid the worst margin moves **15 dB**
+with the signal, room and phone unchanged, so picking the best cell would have
+produced a number that could not be defended. The guard is at least twice the
+measured ridge and under half a beat at 200 BPM; the tail window is bounded
+below by drift and above by `LEAD_SECONDS`.
+
+| | worst of six |
+|---|---:|
+| guard 50 ms, tail ±2.0 s (as run) | 12.391 dB |
+| guard 125 ms, tail ±1.0 s | **22.797 dB** |
+
+Headroom 0.4 dB → 10.8 dB, with no new recording and no change to the protocol.
+The re-run above is the same harness on the same captures: every F, offset and
+drift identical, only the margins moved.
+
+A third finding from the same sweep, now fixed: at a ±0.25 s window the
+measurement returns **0.180 dB**, because once the peak and its guard are removed
+less material remains than the slate itself and the "sidelobe" is another sample
+of the same ridge. That reads as a ruined capture when it is a misconfigured
+search, so a bounded search refuses below `slate + 2·guard` instead of scoring
+it.
+
+What is still room-specific: the 55 ms ridge belongs to this room and should be
+rechecked in a new one. The window argument is structural — the music is always
+`LEAD_SECONDS` away by construction, and drift is a property of the two clocks.
+
+And the general lesson, which is not about slates. The artifact recorded
+`threshold_db` and neither the guard nor the window: the one number worth
+nothing next to the two worth 15 dB. Read on its own afterwards it said
+"12.4 dB against a 12.0 bar" and gave no way to discover which guard produced
+that. **A constant that is not in the artifact is no better than a variable
+one**, so both now travel with every margin they decide — along with the search
+widths, and the drift bar beside the drift.
+
+The tail width itself stopped being a constant. `lead_seconds` is in every
+layout, so the window is a fraction of the take's own pause with a 1.0 s
+ceiling. On the shipped takes that is exactly 1.0 and nothing moved; the point
+is that lengthening the gap before the tail slate — which the AGC hypothesis
+below would have us do — can no longer silently put the window back inside the
+music. The guard stays fixed on purpose: deriving it from the capture's own
+response would let a smeared, bad capture earn a wider guard, a higher margin
+and a pass.
+
+### A mistake this artifact exists to prevent
+
+The first pass at these numbers was run from a terminal with the audio and the
+annotation paired by hand, taking `annotations/harmonix/.../*.beats` instead of
+the `normalized/harmonix/*.csv` the manifest names — the latter carry Harmonix's
+corrected offsets. `0116_goodies` scored **F 0.003 clean**, which is what
+exposed it. The other two still read 0.95 with the wrong annotation, so on two
+recordings of three the error was invisible and would have travelled.
+
+The harness takes its items from `load_corpus` and cannot make that pairing.
+
+## The octave residue is real: accenting a perfect observation does not fix it
+
+`accented_oracle_rwc.json`, answering `eval/PREREGISTERED_accented_oracle.md`.
+All 328 RWC recordings, four arms on the same synthesised activation, no
+failures, clean tree at `785b95b`.
+
+Both oracle runs ended with `wrong_octave` as almost the only surviving failure,
+and both recorded the reason that might prove nothing: the bump is the same
+height on every beat, so it removes the amplitude difference that tells a level
+from its double. This tested that excuse.
+
+| corpus | n | `flat` | `accent_0.5` | `accent_0.25` | `accent_0.5_shuffled` |
+|---|---:|---:|---:|---:|---:|
+| RWC-Classical | 61 | 0.033 | 0.033 | **0.000** | 0.016 |
+| RWC-Genre | 102 | 0.569 | 0.559 | 0.549 | 0.578 |
+| RWC-Jazz | 50 | 0.520 | 0.480 | **0.380** | 0.500 |
+| RWC-Pop | 100 | 0.810 | 0.830 | 0.800 | **0.840** |
+| RWC royalty-free | 15 | 0.867 | 0.867 | 0.867 | 0.867 |
+| **all** | 328 | **0.549** | **0.546** | **0.512** | **0.555** |
+
+`flat` reproduces 0.549 exactly, which is the validity check the registration
+demanded before any other column could be read.
+
+**The registered condition fails on both halves.** The better true accent gains
+**−0.003** against a bar of +0.05, and the deeper accent loses 0.037. Accenting
+a perfect observation does not help; it hurts, and more accent hurts more.
+
+### The control is the finding
+
+`accent_0.5_shuffled` — the same amplitude pattern applied to the **wrong**
+beats, bar phase rotated by an offset from the recording's own name — scores
+**+0.006**, above the correctly aligned accent's −0.003.
+
+The tracker does not use where the accents are. Misaligned accents do
+marginally better than aligned ones, so what little moves is amplitude variation
+and not metre. This is the outcome the registration named in advance as the one
+the control existed to catch, and it is the second time in this repository that
+an octave arm has come in behind its own shuffled control.
+
+### Why the octave share falls while the result gets worse
+
+| arm | usable | failures | `wrong_octave` share | absolute octave failures | mean F |
+|---|---:|---:|---:|---:|---:|
+| `flat` | 0.549 | 148 | 0.899 | ~133 | 0.846 |
+| `accent_0.5` | 0.546 | 149 | 0.832 | ~124 | 0.808 |
+| `accent_0.25` | 0.512 | **160** | 0.744 | ~119 | **0.786** |
+
+The share of failures blamed on the level falls, and reading that alone would
+suggest accents help. They do not: total failures rise from 148 to 160 and mean
+F falls by 0.060. Accenting buys about fourteen fewer octave failures and pays
+about twenty-six more of everything else, because lowering three beats in four
+takes signal out of the beat channel. A share is a ratio, and this one improved
+by growing its denominator.
+
+### What this settles, and what it costs
+
+**The residue is not an instrument artefact.** A perfect observation — even one
+carrying clean bar-level accents — leaves the metrical level unresolved. The
+caveat both oracle sections carried is now discharged: their octave residues
+stand.
+
+That makes five independent negatives on the octave: the anchor-margin gate, the
+freeze and abstain policies, the downbeat head, the octave button, and now the
+accented oracle. Nothing tried on either the observation side or the decoder
+side has moved it.
+
+**So a front end must not be expected to fix the level by producing better
+beats.** Train it for what the oracle says is there — Harmonix `usable` 0.365 to
+0.952, precision failures gone entirely — and treat the octave as a separate
+unsolved problem, which the ×2/÷2 control already addresses from the user's
+side.
+
+### The limit of this test, named rather than left implicit
+
+The accent measured is **bar-level**: downbeats at full height, every other beat
+scaled. That is the accent the annotations support and the one registered. A
+**beat-level** strong-weak alternation — the cue that would speak directly to P
+against 2P rather than to the bar — was not tested and is not answered here.
+It would need its own registration, and after five negatives it needs a reason
+to expect a different answer before it earns one.
+
+## The causal teacher gate: half the advantage survives, and it does not reach the product yet
+
+`causal_teacher_gtzan.json`, answering `eval/PREREGISTERED_causal_teacher.md`.
+Forty GTZAN clips on a fixed stride, 297 prefix passes each, no failures, clean
+tree at `c77294f`. Every arm — BeatNet included, via `--dump-activation` and
+replay — enters the same `LiveTracker` through `--live-activation`, so nothing
+here is a difference of delivery.
+
+| arm | mean F | usable | share of the advantage |
+|---|---:|---:|---:|
+| `beatnet` | 0.7112 | 0.525 | 0.000 |
+| `at_most_0.1s` | 0.7841 | **0.525** | **0.533** |
+| `at_most_0.2s` | 0.8095 | 0.600 | 0.718 |
+| `at_most_0.3s` | 0.7949 | 0.600 | 0.611 |
+| `at_most_0.5s` | 0.8060 | 0.600 | 0.693 |
+| `offline` | 0.8481 | 0.725 | 1.000 |
+
+**The registered condition is met.** At the tightest bound, 53.3% of the
+teacher's advantage survives, against a registered bar of 50%. The advantage
+itself measures +0.1369, which reproduces the +0.138 obtained independently by
+`beat_this_front_end` — a consistency check across two scripts and two runs.
+
+So most of Beat This!'s edge is the model rather than the lookahead, and a
+causal student has something real to be aimed at. That was the last open gate
+before training.
+
+### The pass is narrower than the headline
+
+`usable` does not move at the tightest bound: 0.525 for BeatNet and **0.525**
+for `at_most_0.1s`, on the same forty clips. F rises by 0.073 and the product
+verdict does not change at all. Usability only appears at `at_most_0.2s` and
+even then reaches 0.600 against the unbounded 0.725.
+
+The live metronome's own lookahead is 50 ms before buffer and round trip, so
+`at_most_0.2s` is not obviously affordable. What the gate licenses is training;
+it does not promise that matching a bounded teacher would be felt by a user.
+
+Why the F gain does not convert is visible in what still fails:
+
+| arm | failing | `too_few_beats` | `wrong_beats` | `wrong_octave` |
+|---|---:|---:|---:|---:|
+| `beatnet` | 19/40 | 1.00 | 0.95 | 0.53 |
+| `at_most_0.1s` | 19/40 | 0.89 | 0.79 | 0.37 |
+| `offline` | 11/40 | 0.91 | 0.73 | 0.45 |
+
+Precision and recall both improve — p70 0.732 → 0.822, r70 0.706 → 0.769 — and
+the same nineteen clips still fail, because they were failing by margins wider
+than the gain. This is the same shape the Harmonix oracle showed from the other
+end: a better observation moves the beat metrics first and leaves the level.
+
+### What must not be read from this
+
+**The curve is not monotone and n is 40.** `at_most_0.2s` scores above
+`at_most_0.3s`, and `at_most_0.5s` sits below `at_most_0.2s`. At this sample
+size the ordering between the three loosest arms is noise; only the gap between
+the tightest arm and the ends is large enough to read.
+
+**The level is not quotable.** `beat_this.onnx` is `final0`, trained on sixteen
+sets including GTZAN, and GTZAN is BeatNet `model_1`'s held-out fold — the
+comparison is maximally unfavourable to BeatNet in both directions at once. The
+shape survives that because it is a comparison within one model; the height does
+not.
+
+**This is an upper bound on the architecture question.** It measures what a
+non-causal model *retains* under a causal constraint, not what a causal one
+would achieve.
+
+## Agility: the sign flip is real, the knob is not a lever, and no-anchor was misread
+
+`agility_sweep_rwc.json`, answering `eval/PREREGISTERED_agility.md`. All 328 RWC
+recordings, both arms, five settings, one scorer, no failures, clean tree at
+`2c790e0`. The oracle bump is written once per recording and reused across every
+setting, so only the filter differs.
+
+### The registered prediction holds
+
+| arm | shipped | r0.02 | r0.04 | r0.08 | no_anchor |
+|---|---:|---:|---:|---:|---:|
+| `real` | 0.207 | −0.009 | −0.012 | −0.012 | −0.061 |
+| `oracle` | 0.549 | +0.000 | +0.012 | **+0.027** | −0.113 |
+
+The real arm never rises above its own baseline and the oracle arm rises twice,
+**on the same corpora**. The sign flip was not an artefact of comparing ballroom
+and gtzan against RWC: raising agility helps when the observation is perfect and
+does not when it is real.
+
+### And the third registered outcome fired
+
+| corpus | n | real, best raised | oracle, best raised |
+|---|---:|---:|---:|
+| RWC-Classical | 61 | +0.000 | +0.033 |
+| **RWC-Genre** | 102 | **+0.020** | +0.020 |
+| RWC-Jazz | 50 | +0.000 | +0.020 |
+| RWC-Pop | 100 | **−0.040** | +0.050 |
+| RWC royalty-free | 15 | +0.000 | +0.000 |
+
+**On RWC-Genre the real arm rises too**, which the pooled row cannot show. So
+agility is not simply unavailable on a noisy observation — it is available on
+some material and not on others, and pop is where it is most clearly not. The
+pooled statement and the sub-corpus statement are both true and they are not in
+conflict.
+
+### The mechanism: agility buys beats and spends the metrical level
+
+| arm | setting | usable | F | coverage | worst wrong octave |
+|---|---|---:|---:|---:|---:|
+| `real` | shipped | 0.207 | 0.601 | 1.005 | 19.5 s |
+| `real` | r0.08 | **0.195** | **0.614** | 1.048 | **20.6 s** |
+| `oracle` | shipped | 0.549 | 0.846 | 0.955 | 6.1 s |
+| `oracle` | r0.08 | **0.576** | **0.882** | 0.995 | **5.5 s** |
+
+On the real observation a more agile filter measurably **improves the beat
+metrics** — F rises 0.601 to 0.614 — and still loses `usable`, because it also
+spends a second longer at the wrong level. On a perfect observation both move
+the right way at once. That is the trade, and it explains the flip without
+appealing to instability in general.
+
+### `bump_no_anchor` was a recall result and it does not survive the verdict
+
+`oracle_activation.json` reported that switching the anchor off *raised* recall
+under a perfect observation — 0.560 to 0.648 on classical, 0.838 to 0.879 on
+genre — and that reading is what put `no_anchor` in this grid. Through the full
+four-condition verdict it is the worst setting tested, on every corpus, and by a
+wide margin on jazz (**−0.260**).
+
+The reason is visible in the same row. Oracle arm, shipped → no_anchor:
+
+* recall **rises**, 0.837 → 0.868;
+* coverage overshoots to **1.117** — 12% more beats emitted than exist;
+* worst wrong-octave time nearly **triples**, 6.1 s → 17.1 s;
+* `wrong_octave` climbs from 89.9% to 97.3% of failure reasons.
+
+Removing the anchor buys beats by giving up the level. This is the same lesson
+the oracle-recall table needed and did not have, now demonstrated on a knob
+rather than argued: **recall is one of four conditions, and a change that
+improves it can make the product worse.**
+
+### The answer to the question the sweep was added for
+
+`oracle_activation.py` states it plainly: *"if a knob we already have recovers
+the loss, no new decoder is needed, and if it does not, the limit is
+structural"*.
+
+It does not recover the loss. The best any raised setting does on the real
+observation is **+0.020 on RWC-Genre**, two recordings in 102, and it costs
+0.040 to 0.060 on pop. Nothing here is worth adopting and nothing here removes
+part of the task. The limit is structural, which is the alternative that
+sentence named.
+
+## On full-length pop the front end is nearly the whole problem
+
+`oracle_usable_harmonix.json`, the other half of the table `oracle_usable_rwc.json`
+started. All 581 aligned Harmonix recordings, no failures, clean tree at
+`9b20dd5`. The script is byte-identical to the one that produced the RWC run —
+`git diff 82705c6 9b20dd5` over `oracle_usable.py`, `oracle_activation.py` and
+`live_corpus_benchmark.py` is empty — so the two are directly comparable.
+
+| corpus | n | real | oracle | oracle, level forgiven |
+|---|---:|---:|---:|---:|
+| **Harmonix** | 581 | 0.365 | **0.952** | 0.988 |
+| RWC-Pop | 100 | 0.440 | 0.810 | 0.970 |
+| RWC royalty-free | 15 | 0.333 | 0.867 | 0.933 |
+| RWC-Genre | 102 | 0.137 | 0.569 | 0.735 |
+| RWC-Jazz | 50 | 0.100 | 0.520 | 0.700 |
+| RWC-Classical | 61 | 0.000 | 0.033 | 0.164 |
+| RWC, all | 328 | 0.207 | 0.549 | 0.704 |
+
+**A perfect observation takes Harmonix from 36.5% usable to 95.2%.** That is the
+largest figure anywhere in this repository, and it is on the corpus that looks
+most like the product's likely material: full-length popular music rather than
+thirty-second excerpts.
+
+### What the observation fixes, and what it does not
+
+| | real | oracle |
+|---|---:|---:|
+| p70 | 0.798 | 0.973 |
+| r70 | 0.807 | 0.993 |
+| recordings failing | 369 | **28** |
+| of those, `wrong_beats` | 52.6% | **absent** |
+| of those, `too_few_beats` | 55.8% | 17.9% |
+| of those, `wrong_octave` | 85.6% | 96.4% |
+
+Precision failures do not merely shrink, they **disappear**: not one recording
+fails on `wrong_beats` under the oracle. Recall failures fall from 55.8% of
+failures to 17.9%. What is left is the metrical level, and almost nothing else:
+
+    21  wrong_octave alone
+     5  too_few_beats + wrong_octave
+     1  slow_acquisition + wrong_octave
+     1  slow_acquisition
+
+**21 of 581 recordings — 3.6% — fail on the level and on nothing else.**
+
+### This does not contradict "recall is the dominant survivor"
+
+The octave-ceiling section found `too_few_beats` in 84.8% of Harmonix's
+surviving failures and concluded recall was the binding constraint. Both hold,
+because they answer different questions. Forgiving the *level* while keeping the
+*real* observation leaves recall broken. Fixing the *observation* fixes recall
+and leaves the level. The lever is the front end; the residue is the octave.
+
+### Two things a reader must carry with these numbers
+
+**They are sampled at 50 Hz.** `oracle_usable.py` passes `--live-sample-hz 50`,
+so the real arm reads 0.365 — which is the 36.49% the acquisition section
+measured at 50 Hz, not the 30.98% the 1 Hz baselines report. The octave-ceiling
+table above (31.0% → 51.3%) is a 1 Hz table and must not be differenced against
+this one.
+
+**The oracle bump is equal-height pulses on every beat**, so it removes the
+amplitude difference that tells a level from its double. Some of that 3.6%
+residual is the instrument rather than the tracker, exactly as the RWC section
+records. The accented-oracle control it asked for is now worth more, not less:
+it is the only way to learn whether the last 3.6% is real.
+
 ## A second documented negative: repaired sparse peak front end
 
 `peak_front_end.json`, produced by `eval.peak_front_end` at clean commit
