@@ -1725,24 +1725,34 @@ each carries a provenance block that a summary would strip.
 and found no difference in bar phase: −0.0045 [−0.0194, +0.0102] against a +0.03
 gate. The registered A0 diagnostics, added on review because none of the four
 verdict names can express this, show both trained arms beating the frozen
-published model by about **+0.10 of bar-phase F1** — 0.291 → 0.40 on the same 84
-works. Training this arm works; carrying state across blocks adds nothing to it.
+published model by about +0.10 of bar-phase F1.
 
-The one effect that clears zero is operational rather than metrical: **−7.0
-[−11.2, −3.4] false switches per five minutes** for the stateful arm. Absolutely,
-the untrained model runs at 47.3, block-reset training makes it *worse* at 52.9,
-and carrying state holds it at 45.9. Carried state does not buy accuracy here —
-it prevents a churn regression that reset training introduces. The registered
-gate is a one-sided ceiling on an increase, so that finding passes the gate
-without ever entering the verdict.
+**That +0.10 is one genre.** 72.4% of it comes from the seven Candombe works,
+where the frozen model scores 0.023 — chance — and the trained arms reach 0.970.
+Excluding Candombe the gain is +0.033 [+0.001, +0.068]; on RWC2, 63 of the 84
+works and the material closest to the product, +0.038 [−0.001, +0.077], which
+straddles zero. A3 adapts strongly to a genre the published model could not
+track at all and moves everything else a little or not measurably. What that
+does establish is *where* the missing capacity was: the frozen convolution and
+LSTM layer 0 already carry candombe's structure, and only the readout was wrong.
+
+The one effect clearing zero is operational: **−7.0 [−11.2, −3.4] false switches
+per five minutes** for the stateful arm. The absolute levels invite a stronger
+story — 47.3 untrained, 52.9 reset, 45.9 stateful — but against A0 neither arm
+separates (+5.57 [−4.45, +14.26] and −1.43 [−13.03, +7.68]), so "reset regresses
+churn and carried state fixes it" is not established. Only "stateful churns less
+than reset" is, and because the registered condition is a one-sided ceiling on
+an increase, it passes the gate without entering the verdict. It needs its own
+preregistered confirmation rather than the authority of this run.
 
 Three safety gates are recorded as failed and **all three intervals contain
 zero**: they fail as "not demonstrably inside the tolerance", not as "the
-candidate is worse". Those tolerances were sized for a candidate with a real
-effect whose cost needed bounding; against a null at 84 works a two-sided
-interval fails them by construction. A registration that expects a possible null
-should size the tolerance to the interval it can afford, or call a straddling
-interval inconclusive rather than failed.
+candidate is worse". That is what these tolerances produced against the variance
+observed at 84 works rather than an inevitability — but they were sized for a
+candidate with a real effect whose cost needed bounding, and a registration that
+thinks a null is plausible should size the tolerance to the interval it can
+afford, or say in advance that a straddling interval is inconclusive rather than
+failed.
 
 **The M0a-M0e and S1 raw artifacts are not in the tree.** They were written to the
 tool's own output directory. Each review file is the durable pointer: absolute
