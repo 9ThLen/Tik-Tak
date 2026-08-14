@@ -38,11 +38,14 @@ def _cache(records_per_work=2):
     return {"records": records}
 
 
+SUBSET_SHA = "b" * 64
+
+
 def _valid_subset(cache, **overrides):
     """What the generator produces on the registered corpus, for filter tests."""
     payload = dict(c1.build(cache), total_frames=c1.REAL_TOTAL_FRAMES,
                    registered_corpus=True, frame_fraction_deviations={},
-                   cache_sha256="x",
+                   cache_sha256=c1.REGISTERED_CACHE_SHA256,
                    provenance={"tree_clean": True, "commit": "abc"})
     payload.update(overrides)
     return payload
@@ -213,7 +216,7 @@ def test_the_runner_filter_refuses_an_unregistered_fraction():
     for fraction in (0.75, 0.0):
         with pytest.raises((ValueError, KeyError)):
             c1_training_rows(subset, rows, fraction, arm=c1.C1_ARM,
-                             cache_sha256="x", subset_sha256="s")
+                             cache_sha256=c1.REGISTERED_CACHE_SHA256, subset_sha256=SUBSET_SHA)
     with pytest.raises(ValueError, match="explicit --fraction"):
         c1_training_rows(subset, rows, None, arm=c1.C1_ARM, cache_sha256="x",
                          subset_sha256="s")
@@ -230,11 +233,12 @@ def test_a_subset_without_a_cache_digest_or_provenance_is_refused():
                 registered_corpus=True, frame_fraction_deviations={})
     with pytest.raises(ValueError, match="no cache digest"):
         c1_training_rows(bare, rows, 0.25, arm=c1.C1_ARM,
-                         cache_sha256="x", subset_sha256="s")
-    unprovenanced = dict(bare, cache_sha256="x")
+                         cache_sha256=c1.REGISTERED_CACHE_SHA256,
+                         subset_sha256=SUBSET_SHA)
+    unprovenanced = dict(bare, cache_sha256=c1.REGISTERED_CACHE_SHA256)
     with pytest.raises(ValueError, match="no clean provenance"):
         c1_training_rows(unprovenanced, rows, 0.25, arm=c1.C1_ARM,
-                         cache_sha256="x", subset_sha256="s")
+                         cache_sha256=c1.REGISTERED_CACHE_SHA256, subset_sha256=SUBSET_SHA)
 
 
 def test_the_subset_digest_travels_into_run_identity():
@@ -243,9 +247,10 @@ def test_the_subset_digest_travels_into_run_identity():
     cache = _cache()
     _, identity = c1_training_rows(
         _valid_subset(cache), c1.training_rows(cache), 0.25,
-        arm=c1.C1_ARM, cache_sha256="x", subset_sha256="the-subset-sha")
-    assert identity["subset_sha256"] == "the-subset-sha"
-    assert identity["cache_sha256"] == "x"
+        arm=c1.C1_ARM, cache_sha256=c1.REGISTERED_CACHE_SHA256,
+        subset_sha256=SUBSET_SHA)
+    assert identity["subset_sha256"] == SUBSET_SHA
+    assert identity["cache_sha256"] == c1.REGISTERED_CACHE_SHA256
 
 
 def test_the_registered_matrix_is_closed_by_the_runner():
@@ -287,4 +292,39 @@ def test_the_runner_filter_catches_a_digest_that_does_not_match():
     subset["fractions"]["0.25"]["identity_sha256"] = "0" * 64
     with pytest.raises(ValueError, match="does not match the subset artifact"):
         c1_training_rows(subset, c1.training_rows(cache), 0.25,
-                         arm=c1.C1_ARM, cache_sha256="x", subset_sha256="s")
+                         arm=c1.C1_ARM, cache_sha256=c1.REGISTERED_CACHE_SHA256, subset_sha256=SUBSET_SHA)
+
+
+def test_a_cache_that_is_not_the_registered_one_is_refused_at_training_time():
+    """The digest was pinned where subsets are built, not where they are used.
+
+    The runner required the subset and the cache to agree with each other and
+    with nothing else, so another cache plus a subset generated from it agreed
+    and passed.
+    """
+    from training.beatnet.run import c1_training_rows
+
+    cache = _cache()
+    other = "c" * 64
+    subset = dict(_valid_subset(cache), cache_sha256=other)
+    with pytest.raises(ValueError, match="is not the registered"):
+        c1_training_rows(subset, c1.training_rows(cache), 0.25,
+                         arm=c1.C1_ARM, cache_sha256=other,
+                         subset_sha256=SUBSET_SHA)
+
+
+@pytest.mark.parametrize("digest", [None, "", "not-a-digest", "a" * 63])
+def test_a_run_without_the_subsets_own_digest_never_starts(digest):
+    """`or ""` let it train for hours and be caught only at summary time.
+
+    Worse, identity carried the empty value, so resume stayed self-consistent
+    and the run would have completed.
+    """
+    from training.beatnet.run import c1_training_rows
+
+    cache = _cache()
+    with pytest.raises(ValueError, match="subset artifact's own digest"):
+        c1_training_rows(_valid_subset(cache), c1.training_rows(cache), 0.25,
+                         arm=c1.C1_ARM,
+                         cache_sha256=c1.REGISTERED_CACHE_SHA256,
+                         subset_sha256=digest)

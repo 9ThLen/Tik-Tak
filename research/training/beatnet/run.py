@@ -93,6 +93,14 @@ def c1_training_rows(subset: dict, train_rows: list[dict],
         # The anchor claim in one assertion: at 100% the filter has to be the
         # identity, or C1's reuse of the S1 runs is not reuse.
         c1_subsets.assert_anchor_schedule({"records": train_rows})
+    # The registered digest was checked only where subsets are *built*. On the
+    # path where one is *trained from*, the subset and the cache were required
+    # to agree with each other and with nothing else -- so another cache plus a
+    # subset generated from it agreed, and passed.
+    if cache_sha256 != c1_subsets.REGISTERED_CACHE_SHA256:
+        raise ValueError(
+            f"cache digest {cache_sha256} is not the registered "
+            f"{c1_subsets.REGISTERED_CACHE_SHA256}")
     # Fail closed, not fail open: an earlier version accepted a subset with no
     # `cache_sha256` at all, so an artifact that never recorded which cache it
     # was built from passed the check that exists to catch exactly that.
@@ -102,6 +110,11 @@ def c1_training_rows(subset: dict, train_rows: list[dict],
     subset_provenance = subset.get("provenance") or {}
     if subset_provenance.get("tree_clean") is not True:
         raise ValueError("C1 subset artifact has no clean provenance")
+    if (not isinstance(subset_sha256, str) or len(subset_sha256) != 64
+            or not all(c in "0123456789abcdef" for c in subset_sha256)):
+        raise ValueError(
+            "C1 requires the subset artifact's own digest; an unrecorded one "
+            "would train for hours and only be caught at summary time")
     return selected, {
         "fraction": fraction, "records": len(selected),
         "cache_sha256": cache_sha256,
@@ -149,7 +162,7 @@ def run_training(*, arm: str, seed: int, config: dict,
         train_rows, subset_identity = c1_training_rows(
             subset, train_rows, fraction, arm=arm,
             cache_sha256=file_sha256(cache_manifest_path),
-            subset_sha256=subset_sha256 or "")
+            subset_sha256=subset_sha256)
     product_inputs = (baseline_path, binary, source_manifest, m0e, music_root)
     if any(value is None for value in product_inputs):
         raise ValueError("binding S1 requires baseline and all product-eval inputs")

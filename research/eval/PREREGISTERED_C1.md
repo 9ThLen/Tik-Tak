@@ -328,7 +328,10 @@ seeds, run `contiguous_batches` over the C1 100% selection and over S1's
 `(slot_id, identity, work_id, block index, reset, end)` to be identical. This
 costs seconds, needs no training, and proves exactly the property the anchor
 depends on. The 765-record identity list and its order are digested into the
-subset artifact and into checkpoint identity.
+subset artifact and into checkpoint identity, together with the subset
+artifact's own digest and the registered cache digest -- both verified on the
+training path and not only where the subset is generated, since a subset and a
+cache that agree with each other prove nothing about which cache they are.
 
 **The registered fractions are the work-level 25/50/100**, and the frame-level
 fractions follow from them because works differ in length. Under the byte-exact

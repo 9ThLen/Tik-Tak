@@ -61,7 +61,7 @@ SHARED_IDENTITY = ("schema", "source_sha256", "split_sha256", "cache_sha256",
 
 
 def authenticate(runs: dict, digests: dict, subset: dict,
-                 s1_sources: set[str], subset_sha256: str | None = None) -> dict:
+                 s1_sources: set[str], subset_sha256: str) -> dict:
     """Refuse anything that is not the nine runs C1 registered.
 
     A first version checked `tree_clean` and the seed, which would have accepted
@@ -328,6 +328,11 @@ def main(argv: list[str] | None = None) -> int:
         s1 = json.loads(args.s1_summary.read_text(encoding="utf-8"))
         s1_sources = {source["run"]["sha256"] for source in s1["sources"]}
         subset = json.loads(args.subset.read_text(encoding="utf-8"))
+        from . import c1_subsets
+        c1_subsets.require_registered_corpus(subset)
+        if subset.get("cache_sha256") != c1_subsets.REGISTERED_CACHE_SHA256:
+            raise ValueError(
+                "the subset artifact was not built from the registered cache")
         baseline = json.loads(args.baseline.read_text(encoding="utf-8"))
         if baseline.get("schema") != "tiktak.s1_evaluation/v1":
             raise ValueError("A0 baseline is not an S1 evaluation artifact")
