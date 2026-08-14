@@ -203,9 +203,40 @@ def test_the_runner_filter_refuses_an_unregistered_fraction():
     rows = c1.training_rows(cache)
     for fraction in (0.75, 0.0):
         with pytest.raises((ValueError, KeyError)):
-            c1_training_rows(subset, rows, fraction)
+            c1_training_rows(subset, rows, fraction, arm=c1.C1_ARM,
+                             cache_sha256="x")
     with pytest.raises(ValueError, match="explicit --fraction"):
-        c1_training_rows(subset, rows, None)
+        c1_training_rows(subset, rows, None, arm=c1.C1_ARM, cache_sha256="x")
+
+
+def test_the_registered_matrix_is_closed_by_the_runner():
+    """Six runs, one arm. Nothing stopped a subset run training the anchor.
+
+    Retraining 1.00 would quietly replace the S1 runs the six-run design exists
+    to reuse, and A3_reset is not a C1 arm at all.
+    """
+    from training.beatnet.run import c1_training_rows
+
+    cache = _cache()
+    subset = dict(c1.build(cache), total_frames=c1.REAL_TOTAL_FRAMES,
+                  registered_corpus=True, frame_fraction_deviations={})
+    rows = c1.training_rows(cache)
+    with pytest.raises(ValueError, match="registers only A3_stateful"):
+        c1_training_rows(subset, rows, 0.25, arm="A3_reset", cache_sha256="x")
+    with pytest.raises(ValueError, match="is the S1 anchor and is reused"):
+        c1_training_rows(subset, rows, 1.00, arm=c1.C1_ARM, cache_sha256="x")
+
+
+def test_a_subset_from_another_cache_is_refused():
+    from training.beatnet.run import c1_training_rows
+
+    cache = _cache()
+    subset = dict(c1.build(cache), total_frames=c1.REAL_TOTAL_FRAMES,
+                  registered_corpus=True, frame_fraction_deviations={},
+                  cache_sha256="a" * 64)
+    with pytest.raises(ValueError, match="different cache"):
+        c1_training_rows(subset, c1.training_rows(cache), 0.25,
+                         arm=c1.C1_ARM, cache_sha256="b" * 64)
 
 
 def test_the_runner_filter_catches_a_digest_that_does_not_match():
@@ -217,4 +248,5 @@ def test_the_runner_filter_catches_a_digest_that_does_not_match():
                   registered_corpus=True, frame_fraction_deviations={})
     subset["fractions"]["0.25"]["identity_sha256"] = "0" * 64
     with pytest.raises(ValueError, match="does not match the subset artifact"):
-        c1_training_rows(subset, c1.training_rows(cache), 0.25)
+        c1_training_rows(subset, c1.training_rows(cache), 0.25,
+                         arm=c1.C1_ARM, cache_sha256="x")

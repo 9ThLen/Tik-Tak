@@ -110,19 +110,15 @@ def test_candombe_can_carry_the_overall_slope_and_is_named_for_it():
     assert result["verdict"] == "candombe_localized_growth"
 
 
-def test_a_moderate_candombe_only_effect_reads_inconclusive_not_localized():
-    """The reachability boundary of the registered table, pinned deliberately.
+def test_a_moderate_candombe_only_effect_is_now_named_not_swallowed():
+    """What changing the deciding axis bought.
 
-    Seven works of eighty-four cannot move the overall slope's *lower* bound
-    past the MCID unless the step is enormous -- resampling works varies how
-    many Candombe works a draw contains, so the interval stays wide. A Candombe
-    step of 0.90 reaches `candombe_localized_growth`; 0.75 does not, and comes
-    out `inconclusive`.
-
-    That is honest but lossy: `inconclusive` does not say that one genre was
-    still climbing while the rest had stopped. The table is registered and is
-    implemented as registered; this test exists so the limitation is a recorded
-    property rather than a surprise during acceptance.
+    Under the earlier table the overall slope gated, and an effect confined to
+    seven works of eighty-four could not push its lower bound past the MCID
+    unless the step approached 0.90 -- so a moderate Candombe-only signal came
+    out `inconclusive`, which is honest but says nothing about one genre still
+    climbing while the rest has stopped. The deciding slope is now the
+    all-except-Candombe one, and the same input is named.
     """
     runs, evaluations = _bundle(
         {"0.25": 0.30, "0.50": 0.30, "1.00": 0.30},
@@ -130,9 +126,29 @@ def test_a_moderate_candombe_only_effect_reads_inconclusive_not_localized():
     result = c1s.summarise(runs, evaluations)
     assert result["axes"]["overall"]["class"] == "inconclusive"
     assert result["axes"]["non_candombe"]["class"] == "saturated"
-    assert result["verdict"] == "inconclusive"
-    # The information is not lost, only kept out of the verdict.
-    assert result["by_corpus"]["candombe"]["mean"] > 0.5
+    assert result["verdict"] == "candombe_localized_growth"
+    assert result["deciding_axis"] == "non_candombe"
+
+
+def test_candombe_labels_the_result_and_cannot_gate_it():
+    """Seven works may choose a name; they may not change a consequence.
+
+    Both saturated names carry the same action -- neither justifies sizing
+    P1-B1 to extend this distribution -- so a Candombe slope that is exploratory
+    by registration is allowed to distinguish them and nothing more.
+    """
+    flat = c1s.summarise(*_bundle(
+        {"0.25": 0.30, "0.50": 0.30, "1.00": 0.30},
+        candombe={"0.25": 0.90, "0.50": 0.95, "1.00": 0.95}, jitter=0.001))
+    assert flat["verdict"] == "saturated_at_mcid"
+    assert flat["candombe_label_only"]["gates"] is False
+
+    climbing = c1s.summarise(*_bundle(
+        {"0.25": 0.30, "0.50": 0.30, "1.00": 0.30},
+        candombe={"0.25": 0.05, "0.50": 0.20, "1.00": 0.95}, jitter=0.001))
+    assert climbing["verdict"] == "candombe_localized_growth"
+    # Candombe climbing hard cannot turn a saturated rest into growth.
+    assert climbing["axes"]["non_candombe"]["class"] == "saturated"
 
 
 def test_growth_everywhere_is_data_limited_and_keeps_its_suffix():

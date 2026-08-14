@@ -7,10 +7,13 @@ actually trained -- it answers "how would this differ on other works" when a
 curve is asked "how would this differ on another training run". The work-only
 interval is kept as an S1-comparable secondary and decides nothing.
 
-Both the overall slope and the all-except-Candombe slope are classified against
-the same MCID and the pair decides, because Candombe supplied 72.4% of S1's
-pooled gain and a verdict on the overall slope alone cannot tell a curve from
-one genre saturating.
+The deciding slope is the **all-except-Candombe** one. The overall slope is
+computed and reported and does not gate: it is the single quantity one genre can
+contaminate -- Candombe supplied 72.4% of S1's pooled gain -- and it is
+insensitive in exactly that case, because an effect confined to seven works of
+eighty-four moves the mean by 7/84 of its size while resampling works widens the
+interval around it. Candombe's own slope chooses between the two saturated names
+and gates nothing, since seven works are exploratory by registration.
 """
 
 from __future__ import annotations
@@ -139,18 +142,26 @@ def summarise(runs: dict[tuple[str, int], dict],
                            else int(runs[(f, s)]["best"]["epoch"])),
     } for s in SEEDS} for f in FRACTIONS}
 
-    common_primary, _, _ = slopes(common["1.00"], common["0.50"], None)
-    selection_sensitive = classify(common_primary) != axes["overall"]["class"]
+    # The deciding slope is the all-except-Candombe one. The overall slope is
+    # still computed and reported and no longer gates: it is the one quantity a
+    # single genre can contaminate, and it is insensitive in exactly that case,
+    # because an effect confined to seven works of eighty-four moves the mean by
+    # 7/84 of its size while resampling works widens the interval around it.
+    common_primary, _, _ = slopes(common["1.00"], common["0.50"], non_candombe)
+    deciding = axes["non_candombe"]["class"]
+    selection_sensitive = classify(common_primary) != deciding
 
-    overall, outside = axes["overall"]["class"], axes["non_candombe"]["class"]
-    if "inconclusive" in (overall, outside):
+    # Candombe's own term is a label and not a gate: its slope is over seven
+    # works, which the registration calls exploratory, so it may not turn a
+    # saturated result into a growth one. It chooses which of the two saturated
+    # names is used, and both carry the same consequence.
+    candombe_climbing = by_corpus[CANDOMBE]["mean"] >= MCID
+    if deciding == "inconclusive":
         verdict = "inconclusive"
-    elif overall == "material" and outside == "material":
+    elif deciding == "material":
         verdict = "data_limited_under_fixed_recipe"
-    elif overall == "material":
+    elif candombe_climbing:
         verdict = "candombe_localized_growth"
-    elif outside == "material":
-        verdict = "growth_outside_candombe"
     else:
         verdict = "saturated_at_mcid"
     if selection_sensitive:
@@ -170,6 +181,10 @@ def summarise(runs: dict[tuple[str, int], dict],
         "last_common_epoch": {"two_way": common_primary,
                               "class": classify(common_primary)},
         "selection_sensitive": selection_sensitive,
+        "deciding_axis": "non_candombe",
+        "candombe_label_only": {"mean": by_corpus[CANDOMBE]["mean"],
+                                "climbing": candombe_climbing,
+                                "gates": False},
         "update_confound": {"suffix": "under_fixed_recipe",
                             "unconditional": True,
                             "seeds_reaching_epoch_cap": reached_cap},
@@ -215,6 +230,20 @@ def main(argv: list[str] | None = None) -> int:
                     / "evaluation.json")
             return json.loads(path.read_text(encoding="utf-8"))
 
+        ineligible = [key for key, run in runs.items()
+                      if run.get("best") is None
+                      or run.get("eligible_checkpoint") is False]
+        if ineligible:
+            _atomic_json(args.output, {
+                "schema": SCHEMA, "research_only": True, "complete": False,
+                "verdict": "inconclusive",
+                "reason": "one or more runs had no beat-noninferior checkpoint",
+                "ineligible_runs": [{"fraction": f, "seed": s}
+                                    for f, s in sorted(ineligible)]})
+            print(json.dumps({"verdict": "inconclusive",
+                              "reason": "ineligible checkpoint"}))
+            return 0
+
         evaluations = {}
         for key, run in runs.items():
             evaluations[(*key, "selected")] = load(
@@ -223,7 +252,12 @@ def main(argv: list[str] | None = None) -> int:
             # The last epoch *every* fraction evaluated at this seed. Patience
             # truncates unequally, which is the whole reason this endpoint is
             # registered.
-            shared = min(evaluated((f, seed))[-1] for f in FRACTIONS)
+            common_epochs = set(evaluated((FRACTIONS[0], seed)))
+            for fraction in FRACTIONS[1:]:
+                common_epochs &= set(evaluated((fraction, seed)))
+            if not common_epochs:
+                raise ValueError(f"seed {seed}: no shared validation epoch")
+            shared = max(common_epochs)
             for fraction in FRACTIONS:
                 evaluations[(fraction, seed, "common")] = load(
                     (fraction, seed), shared)

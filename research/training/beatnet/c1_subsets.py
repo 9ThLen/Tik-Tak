@@ -29,6 +29,8 @@ import pathlib
 
 import numpy as np
 
+from eval.provenance import experiment_provenance
+
 from .cache import _atomic_json, _outside_repository
 from .data import (BLOCK_FRAMES, FEATURES, Recording, WARMUP_FRAMES,
                    contiguous_batches, file_sha256, load_cache_manifest)
@@ -36,6 +38,13 @@ from .data import (BLOCK_FRAMES, FEATURES, Recording, WARMUP_FRAMES,
 SCHEMA = "tiktak.c1_subsets/v1"
 SALT = "tiktak-c1-v1"
 FRACTIONS = (0.25, 0.50, 1.00)
+# C1 registers six runs. 1.00 appears in `FRACTIONS` because the subset artifact
+# describes it, and is absent here because it is the S1 anchor: reused, never
+# retrained. Nothing else may be trained under a C1 subset either.
+C1_ARM = "A3_stateful"
+C1_TRAINED_FRACTIONS = (0.25, 0.50)
+REGISTERED_CACHE_SHA256 = (
+    "ed0bb52521aea150c2b838d38ec4096c91f0c4a6b62c7e500c53b8fe4b364a00")
 TRAIN_RECORDS = 765
 TRAIN_WORKS = 330
 # Verified against the S1 cache; a different corpus mix is a different corpus.
@@ -255,10 +264,20 @@ def main(argv: list[str] | None = None) -> int:
         cache = load_cache_manifest(args.cache)
         if cache.get("diagnostic_only") or cache.get("selected") != 980:
             raise ValueError("C1 requires the complete 980-record cache")
+        digest = file_sha256(args.cache)
+        if digest != REGISTERED_CACHE_SHA256:
+            raise ValueError(
+                f"cache digest {digest} is not the registered "
+                f"{REGISTERED_CACHE_SHA256}")
         payload = build(cache)
         require_registered_corpus(payload)
         payload["preflight"] = assert_anchor_schedule(cache)
-        payload["cache_sha256"] = file_sha256(args.cache)
+        payload["cache_sha256"] = digest
+        # The artifact every C1 run binds itself to needs the same fail-closed
+        # provenance as the runs do; without it a subset built from a dirty tree
+        # could quietly define six trainings.
+        payload["provenance"] = experiment_provenance(
+            repository, files={"cache": args.cache}, experiment="C1-subsets")
         _atomic_json(args.output, payload)
     except (OSError, ValueError) as error:
         parser.error(str(error))

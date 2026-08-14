@@ -1,9 +1,10 @@
 # C1 — first data-scaling curve for the A3 stateful recipe
 
 Status: **pre-run registration**, fixed 2026-08-14, revised the same day after
-independent review. **Not runnable**: the C1 runner, subset generator,
-summariser and tests do not exist yet. No 25% or 50% training
-output exists. The 100% arm is an already-observed anchor and is declared as
+independent review. The subset generator, runner filter, summariser, launcher
+and their tests exist; **no 25% or 50% training output does**, and none may be
+produced until this document and that implementation have been reviewed
+together. The 100% arm is an already-observed anchor and is declared as
 such below, with everything already known about it written down before the new
 runs start.
 
@@ -238,27 +239,42 @@ Each slope is classified by the same non-overlapping rule: **material** if its
 lower bound is at least +0.03, **saturated** if its upper bound is below +0.03,
 **inconclusive** otherwise, including any interval spanning +0.03.
 
-Both the overall and the all-except-Candombe slope are classified, and the pair
-decides:
+**The deciding slope is the all-except-Candombe one**, over the 77 works that are
+not Candombe:
 
-| overall | non-Candombe | outcome |
+| non-Candombe | Candombe mean | outcome |
 |---|---|---|
-| material | material | `data_limited_under_fixed_recipe` |
-| material | saturated | `candombe_localized_growth` |
-| saturated | saturated | `saturated_at_mcid` |
-| saturated | material | `growth_outside_candombe` |
-| any | inconclusive | `inconclusive` |
+| material | any | `data_limited_under_fixed_recipe` |
+| saturated | ≥ +0.03 | `candombe_localized_growth` |
+| saturated | < +0.03 | `saturated_at_mcid` |
 | inconclusive | any | `inconclusive` |
 
-`candombe_localized_growth` is the outcome S1 makes most likely and the reason
-the second axis exists: it would mean the curve is still climbing on one genre
-the frozen model could not track at all, while the rest has stopped, and it
-would **not** justify sizing `P1-B1` to extend this distribution.
+**Why not the overall slope, which an earlier draft made the primary axis.** The
+question C1 exists to answer is whether more data of this distribution is worth
+collecting, and the overall slope is the one quantity a single genre can
+contaminate. It is also insensitive in exactly the case that matters: an effect
+confined to seven works of eighty-four moves the mean by `7/84` of its size, and
+resampling works varies how many Candombe works a draw contains, so the interval
+stays wide. Measured on fixtures, a Candombe step of 0.60 gives +0.050 [+0.021,
++0.086] and 0.75 gives +0.063 [+0.027, +0.107] — both `inconclusive` — and only a
+step of 0.90 or more reaches `material`. Since Candombe's whole available climb
+from the frozen model is 0.95, the outcome the second axis was added to name was
+very nearly unreachable through the axis that gated it. The overall slope is
+still computed and reported; it no longer decides.
 
-**A `selection_sensitive` override.** If the selected-checkpoint endpoint and the
-last-common-epoch endpoint fall in different MCID classes, the outcome is
-`selection_sensitive/inconclusive` regardless of the table. Checkpoint choice may
-not be what decides a curve.
+**Candombe's own term is a label, not a gate.** Its slope is over 7 works, which
+this document classifies as exploratory and not interval-bearing, so it may not
+turn a saturated result into a growth result. It selects only which of the two
+saturated names is used, and **both carry the same consequence**: neither
+justifies sizing `P1-B1` to extend this distribution. The distinction is
+diagnostic — `candombe_localized_growth` records that one genre the frozen model
+could not track at all was still climbing while everything else had stopped,
+which is worth knowing and is not worth acting on by itself.
+
+**A `selection_sensitive` override.** If the deciding slope's
+selected-checkpoint endpoint and its last-common-epoch endpoint fall in
+different MCID classes, the outcome is `selection_sensitive/inconclusive`
+regardless of the table. Checkpoint choice may not be what decides a curve.
 
 **Why `under_fixed_recipe`, and why the suffix never comes off here.** At a fixed
 50-epoch cap, 100% receives roughly four times the optimiser updates of 25%, so

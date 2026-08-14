@@ -49,7 +49,8 @@ def _eligible_key(evaluation: dict, baseline: dict) -> tuple | None:
 
 
 def c1_training_rows(subset: dict, train_rows: list[dict],
-                     fraction: float | None) -> tuple[list[dict], dict]:
+                     fraction: float | None, *, arm: str,
+                     cache_sha256: str) -> tuple[list[dict], dict]:
     """Restrict the training rows to a registered C1 fraction.
 
     Membership comes from the subset artifact; the order comes from the cache
@@ -63,6 +64,16 @@ def c1_training_rows(subset: dict, train_rows: list[dict],
     c1_subsets.require_registered_corpus(subset)
     if fraction is None:
         raise ValueError("C1 requires an explicit --fraction")
+    # C1 registers exactly six runs. Nothing here stopped a subset run from
+    # training A3_reset, or from training 1.00 -- which is not a C1 run at all
+    # but the S1 anchor, and repeating it would quietly replace the thing the
+    # six-run design depends on being reused.
+    if arm != c1_subsets.C1_ARM:
+        raise ValueError(f"C1 registers only {c1_subsets.C1_ARM}, not {arm}")
+    if fraction not in c1_subsets.C1_TRAINED_FRACTIONS:
+        raise ValueError(
+            f"C1 trains only {sorted(c1_subsets.C1_TRAINED_FRACTIONS)}; "
+            f"{fraction:.2f} is the S1 anchor and is reused, not rerun")
     key = f"{fraction:.2f}"
     block = subset.get("fractions", {}).get(key)
     if block is None:
@@ -77,8 +88,12 @@ def c1_training_rows(subset: dict, train_rows: list[dict],
         # The anchor claim in one assertion: at 100% the filter has to be the
         # identity, or C1's reuse of the S1 runs is not reuse.
         c1_subsets.assert_anchor_schedule({"records": train_rows})
+    if subset.get("cache_sha256") not in (None, cache_sha256):
+        raise ValueError("C1 subset was built from a different cache")
     return selected, {
         "fraction": fraction, "records": len(selected),
+        "cache_sha256": cache_sha256,
+        "subset_provenance": subset.get("provenance"),
         "works": block["works"], "frames": block["frames"],
         "identity_sha256": block["identity_sha256"],
         "salt": subset.get("salt"),
@@ -116,7 +131,8 @@ def run_training(*, arm: str, seed: int, config: dict,
     subset_identity = None
     if subset is not None:
         train_rows, subset_identity = c1_training_rows(
-            subset, train_rows, fraction)
+            subset, train_rows, fraction, arm=arm,
+            cache_sha256=file_sha256(cache_manifest_path))
     product_inputs = (baseline_path, binary, source_manifest, m0e, music_root)
     if any(value is None for value in product_inputs):
         raise ValueError("binding S1 requires baseline and all product-eval inputs")
