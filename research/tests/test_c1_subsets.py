@@ -173,3 +173,48 @@ def test_build_is_json_serialisable_and_carries_digests():
     digests = {block["identity_sha256"]
                for block in built["fractions"].values()}
     assert len(digests) == len(c1.FRACTIONS)
+
+
+def test_an_s1_run_identity_is_unchanged_when_no_subset_is_given():
+    """C1's anchor argument in one assertion.
+
+    The 100% arm is the S1 runs reused, not repeated, so `run_training` without
+    a subset must build exactly the identity S1 built. A field added
+    unconditionally would have made every existing S1 checkpoint unresumable and
+    quietly falsified the reuse.
+    """
+    from training.beatnet.trainer import checkpoint_identity
+
+    identity = checkpoint_identity(
+        {"a": 1}, source_sha256="s", split_sha256="p", cache_sha256="c",
+        commit="k")
+    identity["arm"] = "A3_stateful"
+    identity["seed"] = 17
+    identity["baseline_sha256"] = "b"
+    assert "c1" not in identity
+
+
+def test_the_runner_filter_refuses_an_unregistered_fraction():
+    from training.beatnet.run import c1_training_rows
+
+    cache = _cache()
+    subset = dict(c1.build(cache), total_frames=c1.REAL_TOTAL_FRAMES,
+                  registered_corpus=True, frame_fraction_deviations={})
+    rows = c1.training_rows(cache)
+    for fraction in (0.75, 0.0):
+        with pytest.raises((ValueError, KeyError)):
+            c1_training_rows(subset, rows, fraction)
+    with pytest.raises(ValueError, match="explicit --fraction"):
+        c1_training_rows(subset, rows, None)
+
+
+def test_the_runner_filter_catches_a_digest_that_does_not_match():
+    """A filter returning the right works in the wrong order would pass counts."""
+    from training.beatnet.run import c1_training_rows
+
+    cache = _cache()
+    subset = dict(c1.build(cache), total_frames=c1.REAL_TOTAL_FRAMES,
+                  registered_corpus=True, frame_fraction_deviations={})
+    subset["fractions"]["0.25"]["identity_sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="does not match the subset artifact"):
+        c1_training_rows(subset, c1.training_rows(cache), 0.25)

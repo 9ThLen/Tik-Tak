@@ -48,6 +48,43 @@ def _eligible_key(evaluation: dict, baseline: dict) -> tuple | None:
     return (means["phase_f1"], means["downbeat_f1"], means["beat_f1"])
 
 
+def c1_training_rows(subset: dict, train_rows: list[dict],
+                     fraction: float | None) -> tuple[list[dict], dict]:
+    """Restrict the training rows to a registered C1 fraction.
+
+    Membership comes from the subset artifact; the order comes from the cache
+    manifest, and the two are not the same thing -- see `c1_subsets`. The
+    identity digest is recomputed from the emitted rows rather than copied, so a
+    filter that returned the right works in the wrong order is caught here
+    instead of silently training on a different schedule.
+    """
+    from . import c1_subsets
+
+    c1_subsets.require_registered_corpus(subset)
+    if fraction is None:
+        raise ValueError("C1 requires an explicit --fraction")
+    key = f"{fraction:.2f}"
+    block = subset.get("fractions", {}).get(key)
+    if block is None:
+        raise ValueError(f"fraction {key} is not in the subset artifact")
+    order = c1_subsets.work_order(train_rows)
+    selected = c1_subsets.subset_rows(
+        train_rows, c1_subsets.members(order, fraction))
+    if (len(selected) != block["records"]
+            or c1_subsets.identity_digest(selected) != block["identity_sha256"]):
+        raise ValueError(f"fraction {key} does not match the subset artifact")
+    if fraction == 1.00:
+        # The anchor claim in one assertion: at 100% the filter has to be the
+        # identity, or C1's reuse of the S1 runs is not reuse.
+        c1_subsets.assert_anchor_schedule({"records": train_rows})
+    return selected, {
+        "fraction": fraction, "records": len(selected),
+        "works": block["works"], "frames": block["frames"],
+        "identity_sha256": block["identity_sha256"],
+        "salt": subset.get("salt"),
+    }
+
+
 def run_training(*, arm: str, seed: int, config: dict,
                  config_path: pathlib.Path,
                  source: pathlib.Path, cache_manifest_path: pathlib.Path,
@@ -59,7 +96,9 @@ def run_training(*, arm: str, seed: int, config: dict,
                  source_manifest: pathlib.Path | None = None,
                  m0e: pathlib.Path | None = None,
                  music_root: pathlib.Path | None = None,
-                 eval_workers: int = 4) -> dict | None:
+                 eval_workers: int = 4,
+                 subset: dict | None = None,
+                 fraction: float | None = None) -> dict | None:
     if arm not in ARMS or seed not in config["seeds"]:
         raise ValueError("S1 arm or seed is outside the registration")
     cache = load_cache_manifest(cache_manifest_path)
@@ -70,6 +109,14 @@ def run_training(*, arm: str, seed: int, config: dict,
     dev_rows = [row for row in records if row["split"] == "dev"]
     if len(train_rows) != 765 or len(dev_rows) != 215:
         raise ValueError("S1 cache split population changed")
+
+    # C1 restricts the training rows and nothing else. Without a subset this
+    # function must stay byte-identical to the one that produced S1, because
+    # C1's 100% arm is that run reused as an anchor rather than repeated.
+    subset_identity = None
+    if subset is not None:
+        train_rows, subset_identity = c1_training_rows(
+            subset, train_rows, fraction)
     product_inputs = (baseline_path, binary, source_manifest, m0e, music_root)
     if any(value is None for value in product_inputs):
         raise ValueError("binding S1 requires baseline and all product-eval inputs")
@@ -108,6 +155,10 @@ def run_training(*, arm: str, seed: int, config: dict,
     identity["arm"] = arm
     identity["seed"] = seed
     identity["baseline_sha256"] = file_sha256(baseline_path)
+    # Only when a subset is in play, so an S1 run's identity is unchanged and
+    # its checkpoints stay resumable and its anchor argument stays true.
+    if subset_identity is not None:
+        identity["c1"] = subset_identity
 
     set_deterministic(seed)
     model = BeatNetTrainable.from_checkpoint(source)
@@ -221,7 +272,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--eval-workers", type=int, default=4)
     parser.add_argument("--pause-file", type=pathlib.Path)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--subset", type=pathlib.Path,
+                        help="C1 subset artifact; omit for a full S1 run")
+    parser.add_argument("--fraction", type=float,
+                        help="C1 registered fraction, required with --subset")
     args = parser.parse_args(argv)
+    if (args.subset is None) != (args.fraction is None):
+        parser.error("--subset and --fraction are used together or not at all")
     try:
         _outside_repository(args.output_root, repository)
         if args.pause_file is not None:
@@ -233,8 +290,11 @@ def main(argv: list[str] | None = None) -> int:
         device = torch.device(args.device)
         if device.type == "cuda" and not torch.cuda.is_available():
             raise ValueError("CUDA requested but unavailable")
+        subset = (None if args.subset is None else
+                  json.loads(args.subset.read_text(encoding="utf-8")))
         result = run_training(
             arm=args.arm, seed=args.seed, config=config, source=args.source,
+            subset=subset, fraction=args.fraction,
             config_path=args.config,
             cache_manifest_path=args.cache, output_root=args.output_root,
             repository=repository, device=device, resume=args.resume,
