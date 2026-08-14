@@ -87,12 +87,29 @@ One hierarchy, generated once, before any C1 run:
 - **identical across the three training seeds.**
 
 The 330 training works are BPSD 24, Candombe 28, KRAISLER 16, Rubato 11 and
-RWC2 251. Within a corpus, works are ordered by
-`SHA256("tiktak-c1-v1\0" + corpus + "\0" + work_id)` then `work_id`, and each
-fraction takes the first `round(fraction * corpus_work_count)` of that order.
-The generated subset artifact records, per fraction and per corpus, **the exact
-work count and the total audio duration**, because a quarter of the works is not
-a quarter of the audio and the curve's x-axis has to say which it means.
+RWC2 251. The membership order is fixed to the byte, because a rule this cheap
+to state ambiguously is a rule two correct-looking implementations will disagree
+about:
+
+- key = `SHA256(b"tiktak-c1-v1" + b"\x00" + corpus + b"\x00" + work_id)`;
+- `corpus` and `work_id` are the manifest's own strings, **UTF-8 encoded with no
+  normalisation, case folding or trimming**;
+- the separator is a single `NUL` byte, and the salt is followed by one too;
+- works sort by lowercase hex digest **ascending**, ties broken by `work_id`
+  ascending as a byte string;
+- each fraction takes a prefix of that order.
+
+Prefix lengths are **tabulated rather than rounded**, so rounding semantics
+cannot drift:
+
+| fraction | BPSD | Candombe | KRAISLER | Rubato | RWC2 | total |
+|---|---:|---:|---:|---:|---:|---:|
+| 25% | 6 | 7 | 4 | 3 | 63 | **83** |
+| 50% | 12 | 14 | 8 | 6 | 126 | **166** |
+| 100% | 24 | 28 | 16 | 11 | 251 | **330** |
+
+The generated subset artifact records, per fraction and per corpus, the exact
+work count, record count and frame count.
 
 **This design estimates optimisation variance and not subset-sampling
 variance.** With one hierarchy shared by all seeds, a fortunate quarter is
@@ -150,6 +167,24 @@ produces an interval *conditional on those three trained models*. It answers
 "how would this differ on other works", not "how would this differ on another
 training run", and the second is the question a curve is asked. Seeds are
 resampled as paired clusters so the fractions stay paired within a seed.
+
+**The draw is specified to the operation, not just described**, because two
+correct-looking summarisers would otherwise report different intervals:
+
+```text
+works  = the 84 development work ids, sorted ascending as byte strings
+seeds  = (17, 29, 43) in that order
+for draw in 0 .. 1999:
+    rng        = numpy default_rng(draw)
+    seed_index = rng.integers(0, 3, 3)     # drawn first
+    work_index = rng.integers(0, 84, 84)   # drawn second
+    value[draw] = mean over w in work_index of
+                      ( mean over s in seed_index of  d[s][w] )
+```
+
+`d[s][w]` is the paired per-seed, per-work difference. The seed draw precedes
+the work draw and both come from the same generator, so the sequence is fixed;
+the interval is the 2.5th and 97.5th percentiles of `value`.
 
 **This is deliberately the weaker-powered choice, and an `inconclusive` from
 interval width is a registered, acceptable outcome rather than a failure.** A
@@ -225,15 +260,19 @@ last-common-epoch endpoint fall in different MCID classes, the outcome is
 `selection_sensitive/inconclusive` regardless of the table. Checkpoint choice may
 not be what decides a curve.
 
-**Why `under_fixed_recipe`.** At a fixed 50-epoch cap, 100% receives roughly four
-times the optimiser updates of 25%, so data volume and update count are
-confounded and growth cannot be attributed to data alone. The existing runner
-already records what settles it: if the smaller fractions **stopped early on
-patience** rather than reaching the cap, updates were not their binding
-constraint and the confound is largely defused. This is read from `stopped_early`
-and the learning histories, and it is committed to here rather than argued
-afterwards. If any fraction runs to the 50-epoch cap in any seed, the name keeps
-its suffix and the run does not claim `data-limited` unqualified.
+**Why `under_fixed_recipe`, and why the suffix never comes off here.** At a fixed
+50-epoch cap, 100% receives roughly four times the optimiser updates of 25%, so
+data volume and update count are confounded and growth cannot be attributed to
+data alone.
+
+An earlier draft of this document proposed dropping the suffix when the smaller
+fractions stopped early on patience. That was wrong and is withdrawn: early
+stopping means the **selected development metric did not improve within the
+patience window**, which is not the same as optimisation having converged. It is
+a diagnostic and is reported as one. **The suffix is unconditional in C1.**
+Removing it requires evidence C1 does not collect — a longer-schedule arm, or a
+compute-matched control that equalises updates across fractions — and either is
+a separate registration.
 
 `inconclusive` is also forced by: a digest mismatch, a dirty tree, a missing
 seed or fraction, a technical exclusion, a subset that is not nested or not
@@ -274,13 +313,12 @@ costs seconds, needs no training, and proves exactly the property the anchor
 depends on. The 765-record identity list and its order are digested into the
 subset artifact and into checkpoint identity.
 
-**The registered fractions are the work-level 25/50/100.** Works differ in
-length, so the frame-level fractions differ from them and are an *output* of the
-generator, computed and frozen in the subset artifact before training — not a
-constant asserted here. A pre-implementation estimate put them near 29% and 56%;
-that figure presupposes one particular reading of the ordering rule above, and a
-generator that differs in string construction or rounding will land elsewhere
-without being wrong. Whatever it produces is what gets frozen, and any figure
+**The registered fractions are the work-level 25/50/100**, and the frame-level
+fractions follow from them because works differ in length. Under the byte-exact
+rule and the count table above they are **29.31% and 55.68%**. Since that rule
+now admits one reading, a generator producing anything else has a defect rather
+than a defensible alternative, and the preflight treats a mismatch as fatal. The
+generator still computes and freezes them in the subset artifact; any figure
 drawn from this curve states which axis it uses.
 
 ## Operational contract
