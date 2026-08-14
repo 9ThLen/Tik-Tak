@@ -56,10 +56,15 @@ ParticleFilterConfig LiveTracker::resolveFilter(const LiveConfig& config) {
 }
 
 LiveTracker::LiveTracker(const LiveConfig& config)
+    // Declaration order, not reading order: `evidence_half_sec_` is declared
+    // above `bar_`, and members initialise in declaration order whatever this
+    // list says. GCC's -Wreorder is right to call the mismatch out, and MSVC
+    // does not, which is why it reached CI rather than a local build.
     : config_(config), odf_(config.odf), filter_(resolveFilter(config)), sync_(config.sync),
-      activation_tempo_(config.activation_tempo), bar_(config.bar),
+      activation_tempo_(config.activation_tempo),
       evidence_half_sec_(0.5 * static_cast<double>(config.odf.frameSize) /
-                         config.odf.sampleRate) {
+                         config.odf.sampleRate),
+      bar_(config.bar) {
     gate_start_.fill(std::numeric_limits<double>::infinity());
     gate_end_.fill(-std::numeric_limits<double>::infinity());
 }
