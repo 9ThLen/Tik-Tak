@@ -1737,28 +1737,41 @@ committed bundle with its own code and reproduced them exactly.
 
 ### What auditing the older runs turned up
 
-Checking whether M0a-M0e and S1 could be given the same treatment meant first
-asking whether their recorded artifacts still exist and still hash to what their
-reviews claim. Of 17 distinct digests cited across the seven reviews, 14 resolve
-on this machine. Two do not:
+Checking whether the older runs could be given the same treatment meant first
+asking whether the artifacts their reviews cite still exist and still hash to
+what the reviews claim. Across the eight reviews there are 31 distinct hex
+citations, 12 of them truncated in the prose (`e04881ec4344e451…`).
 
-| digest | cited by | what it is | status |
-|---|---|---|---|
-| `e04881ec…` | M0b, M0c | the product binary those runs used | **not on this disk** |
-| `05b9a97e…` | M0b | the M0b selection artifact | **not on this disk** |
+Three cited artifacts are **not present in what could be read on this machine**:
 
-The distinction matters and should not be overstated. **The outputs are intact**
-— `m0b-full-8w-1b0cb7c`, `m0c-full-8w-c4c5b0c` and the rest all still hash to
-their recorded values, so the evidence those reviews rest on is verifiable. What
-is gone is the ability to *regenerate* M0b and M0c: the binary that produced
-them no longer exists in any worktree here, and the four `dump_analysis.exe`
-builds that do exist all hash differently.
+| digest | cited by | what it is |
+|---|---|---|
+| `e04881ec…` | M0a, M0b, M0c, S0 | the product binary those runs used |
+| `81eceb2e…` | M0a, S0 | the input manifest those runs used |
+| `05b9a97e…` | M0b | the M0b selection artifact |
 
-So the retrofit is worth doing and its limit is known in advance: M0a, M0d, M0e
-and S1 can be given self-contained records checkable against a surviving
-toolchain; M0b and M0c can be given records checkable against their surviving
-outputs only. Neither is a reason to distrust the numbers. Both are a reason to
-stop citing a build by digest without keeping it.
+Everything else resolves: all eight cited run commits exist as git objects, so
+the *code* behind every run is recoverable, and every cited **output** still
+hashes to its recorded value — `m0a-full-8w-3b91cee`, `m0b-full-8w-1b0cb7c`,
+`m0c-full-8w-c4c5b0c`, `m0d-full-8w-b537626`, `m0e-full-8w-6811a16`,
+`s0-full-8w-5d645b2`. The evidence those reviews rest on is verifiable. What is
+gone is the ability to *regenerate* four of them: the binary exists in no
+worktree here, and the four surviving `dump_analysis.exe` builds all hash
+differently.
+
+| can be regenerated | records checkable against |
+|---|---|
+| M0d, M0e, S1, C1 | a surviving toolchain |
+| M0a, M0b, M0c, S0 | their surviving outputs only |
+
+Two honest limits on this audit. It skipped 70 paths it could not read
+(access-denied directories under the visualizations tree), so "not present"
+means "not found in what could be read". And a first version of it was wrong in
+both directions: it matched only full-length digests, so it saw 19 of the 31
+citations and missed the truncated ones — which is how M0a and S0 were initially
+misfiled as regenerable — and it counted git commit SHAs and a fragment of the
+artifact directory's UUID as missing artifacts. Any successor should classify a
+hex token before declaring it lost.
 
 **S1's verdict name is narrower than the run.** It compared two *trained* arms
 and found no difference in bar phase: −0.0045 [−0.0194, +0.0102] against a +0.03
