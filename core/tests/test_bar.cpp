@@ -239,6 +239,41 @@ LiveConfig liveBarConfig() {
     return config;
 }
 
+TEST(BarTracker, LatestPathReadoutFollowsAResolvedPhaseChange) {
+    auto config = barConfig();
+    config.resolver.phase_switch_cost = 0.0;
+
+    BarTracker opening(config);
+    Drive opening_at;
+    driveBarsFrom(opening, opening_at, 4, 8, 120.0, 0.9, 0.0,
+                  /*phase=*/0);
+    driveBarsFrom(opening, opening_at, 4, 2, 120.0, 0.9, 0.0,
+                  /*phase=*/2);
+
+    config.use_latest_path_downbeat = true;
+    BarTracker latest(config);
+    Drive latest_at;
+    driveBarsFrom(latest, latest_at, 4, 8, 120.0, 0.9, 0.0,
+                  /*phase=*/0);
+    driveBarsFrom(latest, latest_at, 4, 2, 120.0, 0.9, 0.0,
+                  /*phase=*/2);
+
+    const long long last = latest_at.index - 1;
+    ASSERT_EQ(opening_at.index, latest_at.index);
+    EXPECT_EQ(opening.pathPositionOf(last), 1);
+    EXPECT_EQ(latest.pathPositionOf(last), 1);
+    EXPECT_EQ(latest.positionOf(last), 1);
+    EXPECT_NE(opening.positionOf(last), latest.positionOf(last));
+}
+
+struct ObservedBeats {
+    std::vector<double> times;
+    static void observe(void* opaque, double beat, long long, double, int,
+                        int, bool) {
+        static_cast<ObservedBeats*>(opaque)->times.push_back(beat);
+    }
+};
+
 // Alternating strong and weak beats so the tempo is unambiguous, with the
 // downbeat channel high every `m` beats.
 //
@@ -280,6 +315,34 @@ TEST(LiveBar, IsOffUnlessAskedFor) {
     positionsOf(tracker, 120.0, 4, 20.0);
     EXPECT_EQ(tracker.beatsPerBar(), 0);
     EXPECT_EQ(tracker.barPosition(), -1);
+}
+
+TEST(LiveBar, AuditObserverSeesEveryBeatCountedByTheGrid) {
+    LiveConfig config = liveBarConfig();
+    ObservedBeats observed;
+    config.beat_observer = &ObservedBeats::observe;
+    config.beat_observer_context = &observed;
+    LiveTracker tracker(config);
+
+    const double period = 0.5;
+    for (int frame = 0; frame < 1000; ++frame) {
+        const double time = static_cast<double>(frame) / kFps;
+        const double nearest = std::round(time / period);
+        const bool pulse = std::fabs(time / period - nearest) < 0.02;
+        tracker.observe(time, pulse ? 0.95 : 0.02,
+                        (pulse && static_cast<int>(nearest) % 4 == 0) ? 0.9 : 0.05);
+        // A deliberately coarse consumer cadence. Whether an event is handed
+        // out or becomes late, the equality below requires the audit to see
+        // every event that advanced bar phase.
+        if (frame % 50 == 0) {
+            double beat = 0.0;
+            while (tracker.takeBeat(time, 0.05, &beat)) {}
+        }
+    }
+
+    const auto stats = tracker.stats();
+    ASSERT_GT(observed.times.size(), 0u);
+    EXPECT_EQ(observed.times.size(), stats.beats + stats.beats_late);
 }
 
 TEST(LiveBar, DoesNotMoveASingleBeat) {

@@ -457,6 +457,23 @@ residual is the instrument rather than the tracker, exactly as the RWC section
 records. The accented-oracle control it asked for is now worth more, not less:
 it is the only way to learn whether the last 3.6% is real.
 
+## S0: recurrent state carries bar-level evidence
+
+The preregistered reset-horizon experiment is preserved byte-for-byte as
+`s0_reset_gtzan_harmonix_20260811.raw.json`; the independent calculation and
+method review is `S0_RESET_REVIEW_20260811.md`.
+
+S0 is **positive**. R∞−R2 bar-phase F1 is `+0.158 [0.136, 0.180]` on GTZAN and
+`+0.237 [0.217, 0.258]` on Harmonix. Both lower bounds exceed the registered
+`0.05` margin, and every adjacent reset-horizon comparison passes the registered
+monotonicity rule. This promotes S1 stateful block training to an ablation over
+A2–A4; it is not itself evidence about a trained S1 model or a locked test.
+
+The review records one technical exclusion and a non-binding output defect:
+six unscorable GTZAN downbeat values made the raw secondary aggregate `NaN`.
+Neither enters the primary verdict. The raw artifact remains unchanged; future
+S0 output uses strict JSON and reports finite secondary support explicitly.
+
 ## A second documented negative: repaired sparse peak front end
 
 `peak_front_end.json`, produced by `eval.peak_front_end` at clean commit
@@ -2114,3 +2131,155 @@ from its annotations.** A tracker's own reading is an outcome, and using it as a
 covariate lets the thing being measured choose the axis it is measured on. The
 first version of this section did that and produced a monotone table in both
 arms that is not there.
+
+## M0a-M0e, S0, S1 and C1: where the preregistered causal results live
+
+The runs are reviewed in their own files rather than summarised here, because
+each carries a provenance block that a summary would strip.
+
+| run | verdict | review | raw |
+|---|---|---|---|
+| S0 — reset horizon | positive | [`S0_RESET_REVIEW_20260811.md`](S0_RESET_REVIEW_20260811.md) | `s0_reset_gtzan_harmonix_20260811.raw.json` |
+| M0a — oracle ladder | `band3_decoder_not_falsified` | [`M0A_REVIEW_20260811.md`](M0A_REVIEW_20260811.md) | **outside the repository** — path and SHA-256 in the review |
+| M0b — time-varying meter oracle ladder | `inconclusive` | [`M0B_REVIEW_20260812.md`](M0B_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
+| M0c — meter-transition trace | `mixed` | [`M0C_REVIEW_20260812.md`](M0C_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
+| M0d — decoder path-state reacquisition | `phase_hysteresis_bottleneck` | [`M0D_REVIEW_20260812.md`](M0D_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
+| M0e — paired non-oracle decoder regression | `non_oracle_candidate_regression` | [`M0E_REVIEW_20260812.md`](M0E_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
+| S1 — stateful block-training ablation | `stateful_training_negative` | [`S1_REVIEW_20260814.md`](S1_REVIEW_20260814.md) | **outside the repository** — path and SHA-256 in the review |
+| C1 — training-data scaling curve | `inconclusive` | [`C1_REVIEW_20260816.md`](C1_REVIEW_20260816.md) | [`C1_RECORDS_20260816.json`](C1_RECORDS_20260816.json) — per-work records, in the tree |
+
+**C1 is the first of these whose records are in the repository.** The others
+give an out-of-repository path and a digest, which lets a reviewer audit a claim
+but not recompute one — C1's first external reviewer could not repeat the
+arithmetic for exactly that reason. The bundle carries every per-work metric
+verbatim plus the SHA-256 of each file it was copied from, and no interval,
+class or verdict.
+
+**C1 is independently verified.** Two external reviews, both recorded in the
+review file. The first found the `selection_sensitive` justification wrong and a
+registered endpoint missing, and could not recompute anything because the runs
+were off-machine. The second recomputed the deciding endpoints from the
+committed bundle with its own code and reproduced them exactly.
+
+### What auditing the older runs turned up
+
+Checking whether the older runs could be given the same treatment meant first
+asking whether the artifacts their reviews cite still exist and still hash to
+what the reviews claim. Across the eight reviews there are 31 distinct hex
+citations, 12 of them truncated in the prose (`e04881ec4344e451…`).
+
+Three cited artifacts are **not present in what could be read on this machine**:
+
+| digest | cited by | what it is |
+|---|---|---|
+| `e04881ec…` | M0a, M0b, M0c, S0 | the product binary those runs used |
+| `81eceb2e…` | M0a, S0 | the input manifest those runs used |
+| `05b9a97e…` | M0b | the M0b selection artifact |
+
+Everything else resolves: all eight cited run commits exist as git objects, so
+the *code* behind every run is recoverable, and every cited **output** still
+hashes to its recorded value — `m0a-full-8w-3b91cee`, `m0b-full-8w-1b0cb7c`,
+`m0c-full-8w-c4c5b0c`, `m0d-full-8w-b537626`, `m0e-full-8w-6811a16`,
+`s0-full-8w-5d645b2`. The evidence those reviews rest on is verifiable. What is
+gone is the ability to *regenerate* four of them: the binary exists in no
+worktree here, and the four surviving `dump_analysis.exe` builds all hash
+differently.
+
+| can be regenerated | records checkable against |
+|---|---|
+| M0d, M0e, S1, C1 | a surviving toolchain |
+| M0a, M0b, M0c, S0 | their surviving outputs only |
+
+**The retrofit is complete, 2026-08-16.** All eight runs now carry a committed
+records bundle — 26.6 MB in total — and every one reproduced its review's
+published table from that bundle alone. Seven reproduced exactly. The eighth,
+M0e, reproduced every per-arm value exactly and its paired *intervals* only to
+the third decimal, because that document does not specify the paired draw
+precisely enough to repeat; details in its own review. Nothing in the retrofit
+changed a verdict, which is the useful result: the August reviews were doing
+their arithmetic correctly, and what was missing was never the numbers but the
+ability of anyone else to check them.
+
+Two honest limits on this audit. It skipped 70 paths it could not read
+(access-denied directories under the visualizations tree), so "not present"
+means "not found in what could be read". And a first version of it was wrong in
+both directions: it matched only full-length digests, so it saw 19 of the 31
+citations and missed the truncated ones — which is how M0a and S0 were initially
+misfiled as regenerable — and it counted git commit SHAs and a fragment of the
+artifact directory's UUID as missing artifacts. Any successor should classify a
+hex token before declaring it lost.
+
+**S1's verdict name is narrower than the run.** It compared two *trained* arms
+and found no difference in bar phase: −0.0045 [−0.0194, +0.0102] against a +0.03
+gate. The registered A0 diagnostics, added on review because none of the four
+verdict names can express this, show both trained arms beating the frozen
+published model by about +0.10 of bar-phase F1.
+
+**That +0.10 is one genre.** 72.4% of it comes from the seven Candombe works,
+where the frozen model scores 0.023 — chance — and the trained arms reach 0.970.
+Excluding Candombe the gain is +0.033 [+0.001, +0.068]; on RWC2, 63 of the 84
+works and the material closest to the product, +0.038 [−0.001, +0.077], which
+straddles zero. A3 adapts strongly to a genre the published model could not
+track at all and moves everything else a little or not measurably. What that
+does establish is *where* the missing capacity was: the frozen convolution and
+LSTM layer 0 already carry candombe's structure, and only the readout was wrong.
+
+The one effect clearing zero is operational: **−7.0 [−11.2, −3.4] false switches
+per five minutes** for the stateful arm. The absolute levels invite a stronger
+story — 47.3 untrained, 52.9 reset, 45.9 stateful — but against A0 neither arm
+separates (+5.57 [−4.45, +14.26] and −1.43 [−13.03, +7.68]), so "reset regresses
+churn and carried state fixes it" is not established. Only "stateful churns less
+than reset" is, and because the registered condition is a one-sided ceiling on
+an increase, it passes the gate without entering the verdict. It needs its own
+preregistered confirmation rather than the authority of this run.
+
+Three safety gates are recorded as failed and **all three intervals contain
+zero**: they fail as "not demonstrably inside the tolerance", not as "the
+candidate is worse". That is what these tolerances produced against the variance
+observed at 84 works rather than an inevitability — but they were sized for a
+candidate with a real effect whose cost needed bounding, and a registration that
+thinks a null is plausible should size the tolerance to the interval it can
+afford, or say in advance that a straddling interval is inconclusive rather than
+failed.
+
+**The M0a-M0e and S1 raw artifacts are not in the tree.** They were written to the
+tool's own output directory. Each review file is the durable pointer: absolute
+path, SHA-256, run commit, and a recomputation done from per-record data without
+reading the artifact's own summary. Any future run whose output lands outside
+`research/results/` needs the same treatment before its verdict is used
+anywhere.
+
+Two things the reviews carry that the verdicts do not:
+
+* **M0a's format-sensitivity guard is inert.** Both registered perturbations sit
+  inside the ±70 ms window `BarTracker` maximises over, and both come back at
+  exactly 0.0. M0b does not inherit that guard: its profiled-oracle replacement
+  is equivalent to A1 within 0.0011, while the positive control shifted by one
+  tactus collapses to 0.0019. Both registered M0b sensitivity conditions pass.
+* **The two corpora disagree about which input is the limit.** On GTZAN the
+  downbeat-channel gap is the wider one; on Harmonix it is the grid gap, and the
+  best rotation of the predicted grid buys 0.006 over what `BarTracker` already
+  chooses. On full-length material the phase decision is not where the loss is.
+  These are diagnostic gaps and not component costs — on both corpora the two
+  single-substitution gaps sum to more than the joint one, so the decoder is not
+  apportioning damage additively and no per-component share can be read off it.
+
+M0b adds a different boundary: static reference phase and grouping are strong,
+but only 0.0837 of annotated meter changes are acquired within two bars. Its
+verdict is therefore `inconclusive`, and the M0b-gated S2/metrical-adapter path
+remains closed pending a focused transition diagnostic.
+
+M0c supplies that trace but not a neural permission. Only 61/123 transitions
+fully observe the two-bar endpoint. Among 59 observable failures, 48 acquire
+late, at a median five new-meter bars. `acquired_late` was omitted from M0c's
+registered dominance gate, so the formal result is `mixed`; descriptively the
+delay class is 0.833 [0.700, 0.950] at work level.
+
+M0d closes that next gate under fixed oracle/reference evidence. Merely reading
+the latest path at the existing switch cost has no effect, and cost 8 remains
+null. At cost 2, acquisition within two bars improves by +0.581 [0.425, 0.731]
+while stable exact-position accuracy improves by +0.020 [0.011, 0.033]. Free
+switching is unsafe: the zero-cost control causes 3,829 path/held-output changes
+and loses 0.072 [-0.133, -0.018] stable accuracy. The formal result is
+`phase_hysteresis_bottleneck`; the next gate is a paired non-oracle decoder
+regression for the frozen cost-2 candidate, not S2 or a product-default change.

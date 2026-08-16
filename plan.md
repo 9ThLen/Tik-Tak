@@ -261,7 +261,13 @@ causal audio features ──► compact shared encoder
 - рука 1 **не проходить** → висновок **твердий**: вузьке місце в декодері або label contract, і більша мережа не виправдана. Це зупиняє neural-роботу і змінює план;
 - рука 1 проходить → висновок **попередній**. Клас-прайор 4/4 робить успіх неінформативним, і жоден гейт на ньому не ставиться.
 
-**M0b — після meter-diverse dev-набору, остаточний гейт** для grouping і фази. S2 і будь-який metrical adapter відкриваються тільки після нього.
+**M0b — meter-diverse dev-гейт** для grouping і фази. Прогін завершено з
+`inconclusive`: статичні A1 phase/grouping пройшли (`0.980/0.935`), але лише
+`0.0837` змін grouping були захоплені за два такти. Annotation-only аудит
+показав, що повна двотактова межа спостережувана лише для 61/123 RWC2
+переходів; решта right-censored. Тому M0b не відкриває S2/metrical adapter і не
+доводить decoder bottleneck. **M0c** спершу відокремлює stale decoder state,
+phase/sequence instability і right-censoring на тих самих A1 переходах.
 
 **Exit M0a:** або neural-гілку зупинено з твердим негативом, або зафіксовано, що вона не спростована — і це все, що наявні дані дозволяють стверджувати.
 
@@ -289,7 +295,9 @@ causal audio features ──► compact shared encoder
 
 Літери є ідентифікаторами, не порядком. **Критичний шлях до A5–A7 і фінального вироку P2: P1-C + P1-B1 → крива навчання → preregistered gate → comparative adaptation.** Ранні S0/A1/A2 можуть дати напрям раніше. Крива навчання йде на `P1-B1`, окремому training-корпусі, а **не** на протокольному пілоті `P1-B0` — §6.
 
-**P1-C. Training infrastructure** — має пріоритет, бо без неї неможлива крива навчання на `P1-B1`. PyTorch/CUDA під GTX 1660 Ti 6 GB; dataset/dataloader над наявним annotation contract; єдиний label-transform API (preserving / shifting / warping); детерміновані seeds, checkpoint/resume, config snapshot, manifest integration; tiny-set overfit до повного навчання.
+**P1-C. Training infrastructure** — **збудована й відпрацьована** (2026-08-16). PyTorch/CUDA під GTX 1660 Ti 6 GB; dataset/dataloader над наявним annotation contract; детерміновані seeds, checkpoint/resume, config snapshot, manifest integration. На ній пройшли два пререєстровані експерименти: S1 (`stateful_training_negative`) і C1 (`inconclusive`), разом дев'ять прогонів і близько 56 годин GPU. Реалізація на гілці `codex/m0a-s0-implementation`, у main ще не інтегрована.
+
+**C1 — це не та крива навчання, якої вимагає критичний шлях.** Вона міряла масштабування *наявного* корпусу частками 25/50/100 і повернула `inconclusive`: +0.0166 [−0.0143, +0.0485] на такті фази. Критичний шлях вимагає криву на `P1-B1`, окремому training-корпусі, якого ще не існує; його передумова — `P1-B0`. Тобто C1 звузила простір (учетверо більше *тих самих* даних не дає доказового приросту), але не просунула критичний шлях.
 
 **P1-B0. Protocol pilot** — ~20–30 незалежних виконань: capture/alignment feasibility, дисперсія, annotation cost/QC і click-bleed. Модельні рішення та learning curve заборонені.
 
@@ -313,7 +321,7 @@ causal audio features ──► compact shared encoder
 |---|---|---|
 | **S0. Reset/state-horizon diagnostic** | нічого не навчає: frozen BeatNet із примусовим reset кожні `2/4/8/16/32` с проти безперервного стану | **Немає** — безкоштовний, робиться сьогодні |
 | **S1. Stateful block training** | довгі суміжні блоки, LSTM state між ними, truncated BPTT з `detach` на межі, loss маскується на warm-up | **S0 позитивний** |
-| **S2. Training-only bar-position auxiliary head** | допоміжна голова позиції в такті, знімається перед експортом | **M0b** |
+| **S2. Training-only bar-position auxiliary head** | допоміжна голова позиції в такті, знімається перед експортом | **новий позитивний метричний гейт після M0c** |
 
 **S0 перед S1 — фальсифікація власної гіпотези до того, як за неї платити.** Аргумент за S1 такий: наш C++ шлях тримає recurrent state усю композицію, а навчання на незалежних уривках із reset ніколи не вчить стан нести структуру такту. Це правдоподібно, але не перевірено. S0 перевіряє його прямо й безкоштовно: якщо довгий стан **на inference** не покращує downbeat і фазу, то S1 не має найвищого пріоритету, і ми це знаємо до будь-якого навчання.
 
@@ -335,7 +343,7 @@ BEAST цього також не доводить: там модель навч�
 - калібрування помітно рухає кімнатну F → доменний розрив має форму калібрування, програма коротшає різко;
 - не рухає нічого → вагу несуть A5–A7 і реальний корпус, і це відомо рано.
 
-**Порядок з урахуванням залежностей.** S0 і A1–A4 не потребують нового корпусу і йдуть першими. **S1 — лише після позитивного S0**, як ablation поверх A2–A4, а не паралельно з ними. A5–A7 і clean↔room consistency потребують реальних парних даних, тобто чекають на `P1-B1` — наявних 5 пар для цього недостатньо. **S2 чекає на M0b**, не на M0a.
+**Порядок з урахуванням залежностей.** S0 і A1–A4 не потребують нового корпусу і йдуть першими. **S1 — лише після позитивного S0**, як ablation поверх A2–A4, а не паралельно з ними. A5–A7 і clean↔room consistency потребують реальних парних даних, тобто чекають на `P1-B1` — наявних 5 пар для цього недостатньо. M0b не відкрив S2; **S2 чекає на M0c і наступний позитивний метричний гейт**.
 
 **Центральний ризик, названий точно.** `+0.1383` — це **системний розрив** між frozen BeatNet і Beat This!, а не архітектурний. Обидві моделі held-out щодо GTZAN, але відрізняються ще й навчальними корпусами (5 проти 16), рецептом навчання та ємністю. Раніше в цьому плані він називався архітектурним — це було завужено.
 
@@ -483,7 +491,11 @@ frontend future        = 32 ms  (центроване вікно, незмінн
 6. **M0 oracle harness** — чотири руки через `BarTracker/resolveMeter`, метрики фази й grouping; denominator не оцінюється.
 6a. **S0 reset/state-horizon diagnostic** — frozen BeatNet, примусовий reset `2/4/8/16/32` с проти безперервного стану.
 6b. **M0-click розвилка** — пререєстроване рішення з трьох варіантів і фізичний directional micro-check до B0.
-6c. **Продуктова метрична машина станів** — умовна, після M0b.
+6c. **Продуктова метрична машина станів** — умовна, після M0c і позитивного
+    decoder-state counterfactual.
+6d. **M0c transition trace** — A1-only parity replay на 34 RWC2 change works;
+    per-transition state/phase trace, latency у tactus/bars і окремий облік
+    right-censoring. Діагностує наступне втручання, але сам не відкриває S2.
 7. **Causal delivery harness** — точний `L` у мс, окремий past-context sweep, latency tests.
 8. **Training foundation** — dataset, transforms, configs, smoke overfit, детермінований resume.
 9. **Early calibration read** — A1/A2 на 5 наявних кімнатних парах із leave-one-composition-out, лише directional.
@@ -501,7 +513,8 @@ Definition of done: артефакт несе commit/model/data digests, точ�
 
 Контракт §4 вимагає `unknown`, захоплення й події зміни. Нинішній `BarTracker` цього не дає: він тримає старе рішення при новому `unknown`, може одразу замінити утримуване рішення новим, не повертає мітку часу події зміни, і його резолвер викликається зі шляху долі ([live.cpp:442](core/src/tracking/live.cpp#L442)), через що `bar_tracking` і вимкнений — вмикання змушує beat-шлях алокувати.
 
-Умовна задача, що відкривається **після позитивного M0b**:
+Умовна задача, що відкривається **після позитивного метричного гейта**. Поточний
+M0b — `inconclusive`; M0c має спершу показати, чи домінує stale state:
 
 ```text
 UNKNOWN → ACQUIRING → LOCKED → CHANGING → LOCKED
@@ -523,7 +536,7 @@ UNKNOWN → ACQUIRING → LOCKED → CHANGING → LOCKED
 
 Документ називається виконавчою деталізацією, тому покладатися лише на формальне головенство парасольки було небезпечно: перша ж рука A1/A2 стартує рано. Розбіжність прибрано в цьому проході.
 
-Синхронізовано: S0/S1/S2 із залежностями та isolation protocol; `P1-B0`/`P1-B1`; annotation budget; розклад затримки з доданком 32 мс; tactus/`meter_family`/`notation_basis`; вилучення S3; M0a/M0b; leave-one-composition-out для п'яти пар; фізичний click micro-check; early futility rule. Подальша зміна будь-якого з цих контрактів має оновлювати обидва документи в одному change.
+Синхронізовано: S0/S1/S2 із залежностями та isolation protocol; `P1-B0`/`P1-B1`; annotation budget; розклад затримки з доданком 32 мс; tactus/`meter_family`/`notation_basis`; вилучення S3; M0a/M0b і M0c follow-up; leave-one-composition-out для п'яти пар; фізичний click micro-check; early futility rule. Подальша зміна будь-якого з цих контрактів має оновлювати обидва документи в одному change.
 
 ## Порядок у трьох рядках
 
@@ -541,7 +554,9 @@ P1-B0 протокольний пілот  ∥  P1-C інфраструктур�
 A2–A4  (+ S1 як ablation, якщо S0 підтвердив довгий стан)
 A5–A7  після реальних парних train-даних
 
-M0b  остаточний метричний гейт  →  S2 або metrical adapter
-                                →  продуктова машина станів
+M0b  meter-diverse гейт (`inconclusive`)
+ └─ M0c transition trace  →  decoder-state/phase counterfactual
+                         ⊣ S2, metrical adapter і продуктова машина станів
+                           лишаються закритими без нового позитивного гейта
 P5 mobile  →  P6 locked
 ```

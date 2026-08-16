@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 #include "dsp/dft.hpp"
@@ -265,6 +266,13 @@ public:
 
     void reset();
 
+    // Forget only the LSTM hidden/cell state. Feature framing, resampler
+    // history, previous spectral frame and frame clock continue untouched.
+    // This is narrower than reset() on purpose: the S0 experiment asks whether
+    // recurrent memory helps, and resetting the feature stream would measure an
+    // artificial audio discontinuity instead.
+    void resetModelState();
+
     // Feeds captured mono audio, invoking
     //     onActivation(double time_sec, double beat, double downbeat)
     // once per frame, 50 times a second of audio. `beat` includes downbeats,
@@ -276,8 +284,20 @@ public:
     // its sample count, and only the caller can see that happen.
     template <typename Fn>
     void process(const float* samples, std::size_t n, Fn&& onActivation) {
+        process(samples, n, [](double) { return false; },
+                std::forward<Fn>(onActivation));
+    }
+
+    // The predicate runs immediately before the network consumes a completed
+    // feature frame. Returning true resets only recurrent model state, so a
+    // caller can place a reset at "the first frame whose timestamp reaches H"
+    // without approximating it at an audio-buffer boundary.
+    template <typename ResetFn, typename Fn>
+    void process(const float* samples, std::size_t n, ResetFn&& shouldReset,
+                 Fn&& onActivation) {
         features_.process(samples, n, [&](const float* f, std::size_t count, double t) {
             (void)count;
+            if (shouldReset(t)) resetModelState();
             // Averaged in probability space, which is where the research seam
             // averaged them and therefore what the measured numbers describe.
             // Averaging the logits instead is a geometric mean of the odds and

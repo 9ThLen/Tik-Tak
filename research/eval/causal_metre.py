@@ -160,16 +160,20 @@ def measure_one(item: dict, binary: pathlib.Path, weights: pathlib.Path,
 
 def score_phase(beats: np.ndarray, positions: np.ndarray, meters: np.ndarray,
                 reference_downbeats: np.ndarray,
-                shift: int = 0) -> dict:
+                shift: int = 0, start_sec: float | None = None) -> dict:
     """F1 and F2 from the pre-registration's bar-phase addition.
 
-    Only beats after the metre first settled are scored: before that there is no
+    Only beats after the metre first answered are scored: before that there is no
     phase to be right or wrong about, and counting the unsettled prefix would
     mix "had not decided yet" into "decided wrong".
 
     `shift` rotates the bar line by that many positions, which is how the
     `random_phase` null is built — the same metre, the same settled grid, a
     different bar line.
+
+    `start_sec` adds an experiment-wide suffix cut after the arm has first
+    answered. M0a uses one value for all four arms; S0 uses its registered 2 s
+    common cold-start cut.
     """
     empty = {"f1": None, "precision": None, "recall": None,
              "phase_correct_share": None, "scored_beats": 0, "downbeats": 0}
@@ -186,6 +190,8 @@ def score_phase(beats: np.ndarray, positions: np.ndarray, meters: np.ndarray,
     positions = positions[first:]
     meters = meters[first:]
     usable = (positions >= 0) & (meters > 0)
+    if start_sec is not None:
+        usable &= beats >= start_sec
     if not usable.any():
         return empty
     beats = beats[usable]

@@ -1,0 +1,16 @@
+# Record bundles are addressed by SHA-256 from the reviews that cite them, so
+# their bytes must survive a round trip through git unchanged. With
+# core.autocrlf=true -- the default on the Windows machine these were produced
+# on -- git stores LF and checks out CRLF, so the working copy hashes to one
+# value here and another on Linux, and the digest printed in a review is then
+# only verifiable on the machine that wrote it. That is the exact portability
+# defect the bundles exist to remove.
+#
+# `-text` disables all end-of-line translation: what is committed is what is
+# checked out, on every platform.
+# The pattern must be `*RECORDS_*.json`, not `RECORDS_*.json`: a pattern with no
+# slash is matched against the whole basename, so `RECORDS_*.json` covers only a
+# file whose name starts with RECORDS_ and would silently leave both
+# C1_RECORDS_*.json and M0C_RECORDS_*.json translated. Verified with
+# `git check-attr text`.
+*RECORDS_*.json -text

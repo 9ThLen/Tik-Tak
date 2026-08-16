@@ -69,6 +69,7 @@
 #include "ml/beat_this_session.hpp"
 #endif
 #include "analysis/offline.hpp"
+#include "tracking/bar.hpp"
 #include "tracking/live.hpp"
 #include "tracking/particle.hpp"
 
@@ -417,6 +418,25 @@ struct OnlineOctavePolicy {
     }
 };
 
+struct BeatAudit {
+    std::size_t block_index = 0;
+    std::vector<double> beats;
+    std::vector<double> emit;
+    std::vector<double> positions;
+    std::vector<double> meters;
+    std::vector<double> confident;
+
+    static void observe(void* opaque, double beat_sec, long long,
+                        double, int meter, int position, bool is_confident) {
+        auto& self = *static_cast<BeatAudit*>(opaque);
+        self.beats.push_back(beat_sec);
+        self.emit.push_back(static_cast<double>(self.block_index));
+        self.positions.push_back(static_cast<double>(position));
+        self.meters.push_back(static_cast<double>(meter));
+        self.confident.push_back(is_confident ? 1.0 : 0.0);
+    }
+};
+
 bool readVetoSchedule(const char* path, AnchorVetoSchedule& schedule,
                       std::string& error) {
     std::vector<double> values;
@@ -638,6 +658,11 @@ int main(int argc, char** argv) {
     // real-time class that ships; a second pass through the same class cannot
     // disagree with the tracker about what the activation is.
     bool dump_activation = false;
+    // S0: reset only BeatNetModel's recurrent state immediately before the
+    // first feature frame at k * horizon. Zero keeps the ordinary uninterrupted
+    // model. This applies to the dumped activation pass, which is then replayed
+    // through the unchanged LiveTracker and BarTracker.
+    double activation_reset_horizon = 0.0;
     // Overrides for the live tracker's lock/release hysteresis, so a threshold
     // can be chosen on one batch and validated on another without a rebuild.
     double live_lock = 0.0;
@@ -674,6 +699,16 @@ int main(int argc, char** argv) {
     // rather than reconstructed because the reconstruction is a different
     // double: see the note on `activation_times` where it is printed.
     std::string activation_time_path;
+
+    // M0a: replay the shipped BarTracker on an explicitly supplied tactus
+    // grid. Beat values are timestamps; emit values are one-based 512-sample
+    // block indices. Keeping this beside activation replay preserves the exact
+    // frame and publication clocks without adding an experimental hook to the
+    // product class.
+    std::string bar_replay_beats_path;
+    std::string bar_replay_emit_path;
+    bool bar_latest_path_phase = false;
+    double bar_phase_switch_cost = std::numeric_limits<double>::quiet_NaN();
 
     // The matched-cost comparison policies, one at a time.
     OnlineOctavePolicy online_policy;
@@ -834,6 +869,20 @@ int main(int argc, char** argv) {
             dump_activation = true;
             continue;
         }
+        if (std::strcmp(argv[i], "--activation-reset-horizon") == 0) {
+            if (i + 1 >= argc) {
+                std::fprintf(stderr, "--activation-reset-horizon needs seconds\n");
+                return 2;
+            }
+            activation_reset_horizon = std::atof(argv[++i]);
+            if (!(activation_reset_horizon > 0.0) ||
+                !std::isfinite(activation_reset_horizon)) {
+                std::fprintf(stderr,
+                             "--activation-reset-horizon needs finite seconds > 0\n");
+                return 2;
+            }
+            continue;
+        }
         if (std::strcmp(argv[i], "--live-anchor-veto") == 0) {
             if (i + 1 >= argc) {
                 std::fprintf(stderr, "--live-anchor-veto needs a file\n");
@@ -876,6 +925,23 @@ int main(int argc, char** argv) {
             live_bars = true;
             continue;
         }
+        if (std::strcmp(argv[i], "--bar-latest-path-phase") == 0) {
+            bar_latest_path_phase = true;
+            continue;
+        }
+        if (std::strcmp(argv[i], "--bar-phase-switch-cost") == 0) {
+            if (i + 1 >= argc) {
+                std::fprintf(stderr, "--bar-phase-switch-cost needs a value\n");
+                return 2;
+            }
+            bar_phase_switch_cost = std::atof(argv[++i]);
+            if (!(bar_phase_switch_cost >= 0.0)) {
+                std::fprintf(stderr,
+                             "--bar-phase-switch-cost must be >= 0\n");
+                return 2;
+            }
+            continue;
+        }
         if (std::strcmp(argv[i], "--live-activation") == 0) {
             if (i + 1 >= argc) { std::fprintf(stderr, "--live-activation needs a file\n"); return 2; }
             activation_path = argv[++i];
@@ -905,6 +971,16 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--activation-emit") == 0) {
             if (i + 1 >= argc) { std::fprintf(stderr, "--activation-emit needs a file\n"); return 2; }
             activation_emit_path = argv[++i];
+            continue;
+        }
+        if (std::strcmp(argv[i], "--bar-replay-beats") == 0) {
+            if (i + 1 >= argc) { std::fprintf(stderr, "--bar-replay-beats needs a file\n"); return 2; }
+            bar_replay_beats_path = argv[++i];
+            continue;
+        }
+        if (std::strcmp(argv[i], "--bar-replay-emit") == 0) {
+            if (i + 1 >= argc) { std::fprintf(stderr, "--bar-replay-emit needs a file\n"); return 2; }
+            bar_replay_emit_path = argv[++i];
             continue;
         }
         if (std::strcmp(argv[i], "--activation-model-timing") == 0) {
@@ -1071,6 +1147,28 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "--odf-whitening-strength must be in [0, 1]\n");
         return 2;
     }
+    if (activation_reset_horizon > 0.0 &&
+        (!dump_activation || model_paths.empty())) {
+        std::fprintf(stderr,
+                     "--activation-reset-horizon requires --dump-activation "
+                     "and at least one --live-model\n");
+        return 2;
+    }
+    if (!bar_replay_beats_path.empty() != !bar_replay_emit_path.empty()) {
+        std::fprintf(stderr,
+                     "--bar-replay-beats and --bar-replay-emit are required together\n");
+        return 2;
+    }
+    if (!bar_replay_beats_path.empty() &&
+        (activation_path.empty() || downbeat_path.empty() ||
+         activation_emit_path.empty() || activation_time_path.empty() ||
+         !activation_model_timing || !live_bars)) {
+        std::fprintf(stderr,
+                     "bar replay requires --live-activation, --live-downbeat, "
+                     "--activation-emit, --activation-times, "
+                     "--activation-model-timing and --live-bars\n");
+        return 2;
+    }
 
     if (positional.empty() || positional.size() > 2) {
         std::fprintf(stderr,
@@ -1095,6 +1193,11 @@ int main(int argc, char** argv) {
                      "  --live-activation <file> [--activation-fps N]\n"
                      "                     drive the particle filter from this activation\n"
                      "  --activation-model-timing  replay BeatNet's frame availability\n"
+                     "  --activation-reset-horizon <s>\n"
+                     "                     reset only recurrent model state at k*s\n"
+                     "                     while dumping activation (S0 seam)\n"
+                     "  --bar-replay-beats <file> --bar-replay-emit <file>\n"
+                     "                     replay shipped BarTracker on this grid (M0a)\n"
                      "  --live-model <file>\n"
                      "                     the core computes the activation itself; repeat\n"
                      "                     the flag to average several checkpoints\n"
@@ -1210,6 +1313,14 @@ int main(int argc, char** argv) {
     std::vector<double> live_bar_positions;
     std::vector<double> live_bar_meters;
     std::vector<double> live_bar_confident;
+    std::vector<double> live_beat_emit;
+    std::vector<double> bar_replay_beats;
+    std::vector<double> bar_replay_emit;
+    std::vector<double> bar_replay_positions;
+    std::vector<double> bar_replay_path_positions;
+    std::vector<double> bar_replay_meters;
+    std::vector<double> bar_replay_confident;
+    BeatAudit beat_audit;
     int live_beats_per_bar = 0;
     int live_octave_offset = 0;
     double live_bpm = 0.0;
@@ -1334,6 +1445,32 @@ int main(int argc, char** argv) {
             return 1;
         }
     }
+    if (!bar_replay_beats_path.empty()) {
+        std::string complaint;
+        if (!readSalience(bar_replay_beats_path.c_str(), bar_replay_beats,
+                          complaint) ||
+            !readSalience(bar_replay_emit_path.c_str(), bar_replay_emit,
+                          complaint)) {
+            std::fprintf(stderr, "%s\n", complaint.c_str());
+            return 1;
+        }
+        if (bar_replay_beats.size() != bar_replay_emit.size()) {
+            std::fprintf(stderr,
+                         "--bar-replay-emit has %zu blocks for %zu beats\n",
+                         bar_replay_emit.size(), bar_replay_beats.size());
+            return 1;
+        }
+        for (std::size_t i = 0; i < bar_replay_emit.size(); ++i) {
+            if (!(bar_replay_emit[i] >= 1.0) ||
+                std::floor(bar_replay_emit[i]) != bar_replay_emit[i] ||
+                (i > 0 && bar_replay_emit[i] < bar_replay_emit[i - 1])) {
+                std::fprintf(stderr,
+                             "--bar-replay-emit must be nondecreasing positive "
+                             "integer block indices\n");
+                return 1;
+            }
+        }
+    }
     std::vector<double> model_downbeats;
     // Held by value in a deque rather than a vector: BeatNetWeights owns the
     // storage its member pointers point into, so a vector reallocating on push
@@ -1399,6 +1536,14 @@ int main(int argc, char** argv) {
         }
         live_config.anchor_octave_freeze = live_octave_freeze;
         live_config.bar_tracking = live_bars;
+        live_config.bar.use_latest_path_downbeat = bar_latest_path_phase;
+        if (!std::isnan(bar_phase_switch_cost)) {
+            live_config.bar.resolver.phase_switch_cost = bar_phase_switch_cost;
+        }
+        if (live_bars) {
+            live_config.beat_observer = &BeatAudit::observe;
+            live_config.beat_observer_context = &beat_audit;
+        }
         live_config.anchor_margin_abstain = live_margin_abstain;
         if (live_freeze_timeout > 0.0) {
             live_config.anchor_freeze_timeout_sec = live_freeze_timeout;
@@ -1414,6 +1559,8 @@ int main(int argc, char** argv) {
                 ? tiktak::tracking::LiveTracker(live_config)
                 : tiktak::tracking::LiveTracker(live_config, model_refs.data(),
                                                 model_refs.size());
+        tiktak::tracking::BarTracker replay_bar(live_config.bar);
+        std::size_t replay_next_beat = 0;
         if (live_seed && analysis.bpm > 0.0) {
             tracker.seedTempo(analysis.bpm);
         }
@@ -1444,6 +1591,8 @@ int main(int argc, char** argv) {
             // beat list at 50 Hz has to equal the beat list at 1 Hz.
             while (tracker.takeBeat(now, kLookahead, &beat)) {
                 live_beats.push_back(beat);
+                live_beat_emit.push_back(
+                    static_cast<double>(beat_audit.block_index));
                 // One per beat, in the same order, so the two columns can be
                 // read together. -1 is "nothing decided yet", which is a state
                 // and not a position.
@@ -1456,6 +1605,23 @@ int main(int argc, char** argv) {
                 live_bar_meters.push_back(
                     static_cast<double>(tracker.beatsPerBar()));
                 live_bar_confident.push_back(tracker.meterConfident() ? 1.0 : 0.0);
+            }
+            while (replay_next_beat < bar_replay_beats.size() &&
+                   bar_replay_emit[replay_next_beat] <=
+                       static_cast<double>(beat_audit.block_index)) {
+                const long long index =
+                    static_cast<long long>(replay_next_beat);
+                replay_bar.addBeat(bar_replay_beats[replay_next_beat], index);
+                replay_bar.update(now);
+                bar_replay_positions.push_back(
+                    static_cast<double>(replay_bar.positionOf(index)));
+                bar_replay_path_positions.push_back(
+                    static_cast<double>(replay_bar.pathPositionOf(index)));
+                bar_replay_meters.push_back(
+                    static_cast<double>(replay_bar.beatsPerBar()));
+                bar_replay_confident.push_back(
+                    replay_bar.confident() ? 1.0 : 0.0);
+                ++replay_next_beat;
             }
             // The total ban is worded "no octave change after first lock", so
             // the policy needs the publishing state. Latched with the shipped
@@ -1534,26 +1700,32 @@ int main(int argc, char** argv) {
                                ? activation_frame_times[frame]
                                : static_cast<double>(frame) * frame_sec;
                 };
-                double block_index = 0.0;
                 for (std::size_t pos = 0; pos < samples.size(); pos += kLiveBlock) {
                     const std::size_t take =
                         std::min(kLiveBlock, samples.size() - pos);
                     now += static_cast<double>(take) / rate;
-                    block_index += 1.0;
+                    ++beat_audit.block_index;
                     anchor_veto_schedule.decision_time_sec = now;
                     online_policy.decision_time_sec = now;
                     while (next_frame < activation.size() &&
                            (recorded
-                                ? activation_emit[next_frame] <= block_index
+                                ? activation_emit[next_frame] <=
+                                      static_cast<double>(beat_audit.block_index)
                                 : static_cast<double>(next_frame) * frame_sec +
                                       kAvailabilityDelay <= now)) {
                         if (downbeat_activation.empty()) {
                             tracker.observe(observation_time(next_frame),
                                             activation[next_frame]);
                         } else {
+                            const std::size_t gated_before = tracker.stats().gated;
                             tracker.observe(observation_time(next_frame),
                                             activation[next_frame],
                                             downbeat_activation[next_frame]);
+                            if (!bar_replay_beats.empty() &&
+                                tracker.stats().gated == gated_before) {
+                                replay_bar.observe(observation_time(next_frame),
+                                                   downbeat_activation[next_frame]);
+                            }
                         }
                         ++next_frame;
                     }
@@ -1564,6 +1736,7 @@ int main(int argc, char** argv) {
                 const double last_sec =
                     static_cast<double>(activation.size()) * frame_sec;
                 for (double clock = 0.0; clock < last_sec; clock += block_sec) {
+                    ++beat_audit.block_index;
                     anchor_veto_schedule.decision_time_sec = clock;
                     online_policy.decision_time_sec = clock;
                     while (next_frame < activation.size() &&
@@ -1573,10 +1746,17 @@ int main(int argc, char** argv) {
                                 static_cast<double>(next_frame) * frame_sec,
                                 activation[next_frame]);
                         } else {
+                            const std::size_t gated_before = tracker.stats().gated;
                             tracker.observe(
                                 static_cast<double>(next_frame) * frame_sec,
                                 activation[next_frame],
                                 downbeat_activation[next_frame]);
+                            if (!bar_replay_beats.empty() &&
+                                tracker.stats().gated == gated_before) {
+                                replay_bar.observe(
+                                    static_cast<double>(next_frame) * frame_sec,
+                                    downbeat_activation[next_frame]);
+                            }
                         }
                         ++next_frame;
                     }
@@ -1593,6 +1773,7 @@ int main(int argc, char** argv) {
                     now + static_cast<double>(take) / rate;
                 tracker.process(now, samples.data() + pos, take);
                 now += static_cast<double>(take) / rate;
+                ++beat_audit.block_index;
                 poll();
             }
         }
@@ -1755,7 +1936,7 @@ int main(int argc, char** argv) {
         // --live-activation and reproduce the run it came from.
         tiktak::ml::BeatNetActivation activation_pass(rate, model_refs.data(),
                                                       model_refs.size());
-        std::vector<double> at, beat_p, downbeat_p, emit;
+        std::vector<double> at, beat_p, downbeat_p, emit, model_resets;
         at.reserve(samples.size() / 441);
         beat_p.reserve(at.capacity());
         downbeat_p.reserve(at.capacity());
@@ -1784,17 +1965,29 @@ int main(int argc, char** argv) {
             // different run — visible as an activation replay whose BPM already
             // disagreed at 0.08 s. An integer has no such edge.
             std::size_t block_index = 0;
+            double next_model_reset = activation_reset_horizon;
             for (std::size_t pos = 0; pos < samples.size(); pos += kLiveBlock) {
                 const std::size_t take = std::min(kLiveBlock, samples.size() - pos);
                 ++block_index;
-                activation_pass.process(samples.data() + pos, take,
-                                        [&](double t, double beat, double downbeat) {
-                                            at.push_back(t);
-                                            beat_p.push_back(beat);
-                                            downbeat_p.push_back(downbeat);
-                                            emit.push_back(
-                                                static_cast<double>(block_index));
-                                        });
+                activation_pass.process(
+                    samples.data() + pos, take,
+                    [&](double frame_time) {
+                        if (!(activation_reset_horizon > 0.0) ||
+                            frame_time < next_model_reset) {
+                            return false;
+                        }
+                        model_resets.push_back(frame_time);
+                        do {
+                            next_model_reset += activation_reset_horizon;
+                        } while (next_model_reset <= frame_time);
+                        return true;
+                    },
+                    [&](double t, double beat, double downbeat) {
+                        at.push_back(t);
+                        beat_p.push_back(beat);
+                        downbeat_p.push_back(downbeat);
+                        emit.push_back(static_cast<double>(block_index));
+                    });
             }
         }
         const auto series = [](const char* name, const std::vector<double>& values,
@@ -1815,6 +2008,9 @@ int main(int argc, char** argv) {
         // different run, and it was the last of three reasons activation
         // replay could not reproduce the live core.
         series("activation_times", at, "%.17g");
+        std::printf("  \"activation_reset_horizon_sec\": %.17g,\n",
+                    activation_reset_horizon);
+        series("activation_model_resets", model_resets, "%.17g");
         // Which 512-sample block released each frame, counted from one. Handed
         // back through --activation-emit so the replay releases frames when the
         // model did rather than when their timestamps say they begin.
@@ -1856,6 +2052,14 @@ int main(int argc, char** argv) {
             }
             std::printf("],\n");
         };
+        const auto exact_column = [](const char* name,
+                                     const std::vector<double>& values) {
+            std::printf("  \"%s\": [", name);
+            for (std::size_t i = 0; i < values.size(); ++i) {
+                std::printf("%s%.17g", i == 0 ? "" : ",", values[i]);
+            }
+            std::printf("],\n");
+        };
         column("live_times", live_times);
         column("live_bpms", live_bpms);
         column("live_confidences", live_confidences);
@@ -1878,9 +2082,20 @@ int main(int argc, char** argv) {
         column("live_press_accepted", listener.press_accepted);
         std::printf("  \"live_octave_offset\": %d,\n", live_octave_offset);
         std::printf("  \"live_beats_per_bar\": %d,\n", live_beats_per_bar);
+        exact_column("live_beat_emit", live_beat_emit);
+        exact_column("live_bar_beats_all", beat_audit.beats);
+        exact_column("live_bar_emit_all", beat_audit.emit);
+        column("live_bar_positions_all", beat_audit.positions);
+        column("live_bar_meters_all", beat_audit.meters);
+        column("live_bar_confident_all", beat_audit.confident);
         column("live_bar_positions", live_bar_positions);
         column("live_bar_meters", live_bar_meters);
         column("live_bar_confident", live_bar_confident);
+        exact_column("bar_replay_beats", bar_replay_beats);
+        column("bar_replay_positions", bar_replay_positions);
+        column("bar_replay_path_positions", bar_replay_path_positions);
+        column("bar_replay_meters", bar_replay_meters);
+        column("bar_replay_confident", bar_replay_confident);
     }
     std::printf("  \"beats_per_bar\": %d,\n", beats_per_bar);
     std::printf("  \"downbeat_strength\": %.17g,\n", finiteOrZero(strength));
