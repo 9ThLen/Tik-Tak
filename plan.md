@@ -295,7 +295,9 @@ phase/sequence instability і right-censoring на тих самих A1 пере
 
 Літери є ідентифікаторами, не порядком. **Критичний шлях до A5–A7 і фінального вироку P2: P1-C + P1-B1 → крива навчання → preregistered gate → comparative adaptation.** Ранні S0/A1/A2 можуть дати напрям раніше. Крива навчання йде на `P1-B1`, окремому training-корпусі, а **не** на протокольному пілоті `P1-B0` — §6.
 
-**P1-C. Training infrastructure** — має пріоритет, бо без неї неможлива крива навчання на `P1-B1`. PyTorch/CUDA під GTX 1660 Ti 6 GB; dataset/dataloader над наявним annotation contract; єдиний label-transform API (preserving / shifting / warping); детерміновані seeds, checkpoint/resume, config snapshot, manifest integration; tiny-set overfit до повного навчання.
+**P1-C. Training infrastructure** — **збудована й відпрацьована** (2026-08-16). PyTorch/CUDA під GTX 1660 Ti 6 GB; dataset/dataloader над наявним annotation contract; детерміновані seeds, checkpoint/resume, config snapshot, manifest integration. На ній пройшли два пререєстровані експерименти: S1 (`stateful_training_negative`) і C1 (`inconclusive`), разом дев'ять прогонів і близько 56 годин GPU. Реалізація на гілці `codex/m0a-s0-implementation`, у main ще не інтегрована.
+
+**C1 — це не та крива навчання, якої вимагає критичний шлях.** Вона міряла масштабування *наявного* корпусу частками 25/50/100 і повернула `inconclusive`: +0.0166 [−0.0143, +0.0485] на такті фази. Критичний шлях вимагає криву на `P1-B1`, окремому training-корпусі, якого ще не існує; його передумова — `P1-B0`. Тобто C1 звузила простір (учетверо більше *тих самих* даних не дає доказового приросту), але не просунула критичний шлях.
 
 **P1-B0. Protocol pilot** — ~20–30 незалежних виконань: capture/alignment feasibility, дисперсія, annotation cost/QC і click-bleed. Модельні рішення та learning curve заборонені.
 

@@ -1764,6 +1764,16 @@ differently.
 | M0d, M0e, S1, C1 | a surviving toolchain |
 | M0a, M0b, M0c, S0 | their surviving outputs only |
 
+**The retrofit is complete, 2026-08-16.** All eight runs now carry a committed
+records bundle — 26.6 MB in total — and every one reproduced its review's
+published table from that bundle alone. Seven reproduced exactly. The eighth,
+M0e, reproduced every per-arm value exactly and its paired *intervals* only to
+the third decimal, because that document does not specify the paired draw
+precisely enough to repeat; details in its own review. Nothing in the retrofit
+changed a verdict, which is the useful result: the August reviews were doing
+their arithmetic correctly, and what was missing was never the numbers but the
+ability of anyone else to check them.
+
 Two honest limits on this audit. It skipped 70 paths it could not read
 (access-denied directories under the visualizations tree), so "not present"
 means "not found in what could be read". And a first version of it was wrong in
