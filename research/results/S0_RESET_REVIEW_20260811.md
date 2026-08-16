@@ -32,6 +32,21 @@ All 1,580 scored records have unique `(corpus, name)` keys, all six registered
 arms, exact reset schedules, and R∞ replay parity. Accounting closes exactly:
 `1,580 scored + 1 excluded = 1,581 selected`.
 
+**Records added 2026-08-16.** [`S0_RESET_RECORDS_20260816.json`](S0_RESET_RECORDS_20260816.json)
+(`dfafa7f12140b11b6c15f4355cf1f2e5e9790a77670e8f1cd1c65dc9e13845b1`) carries all
+1,580 records verbatim, with the artifact's own `summary` removed, so every
+table below can be recomputed by anyone holding the repository rather than only
+by someone holding this machine. All twelve primary arm means, both R∞−R2
+intervals, all ten adjacent-step intervals, the finite-only beat and downbeat
+secondaries with their 999/993/581 support, and the hostile
+one-excluded-track sensitivity at `+0.157 [0.135, 0.179]` were re-derived from
+that bundle alone and reproduce exactly.
+
+The run **cannot be repeated**: two of the artifacts cited above are absent from
+the machine holding the outputs — the product binary `e04881ec…` and the input
+manifest `81eceb2e…`, the same pair M0a lost. The outputs are verifiable; the
+run is not repeatable.
+
 ## Primary result
 
 Macro means are recording-level bar-phase F1 after the common 2.0 s initial
