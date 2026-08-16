@@ -1706,7 +1706,7 @@ covariate lets the thing being measured choose the axis it is measured on. The
 first version of this section did that and produced a monotone table in both
 arms that is not there.
 
-## M0a-M0e, S0 and S1: where the preregistered causal results live
+## M0a-M0e, S0, S1 and C1: where the preregistered causal results live
 
 The runs are reviewed in their own files rather than summarised here, because
 each carries a provenance block that a summary would strip.
@@ -1720,6 +1720,12 @@ each carries a provenance block that a summary would strip.
 | M0d — decoder path-state reacquisition | `phase_hysteresis_bottleneck` | [`M0D_REVIEW_20260812.md`](M0D_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
 | M0e — paired non-oracle decoder regression | `non_oracle_candidate_regression` | [`M0E_REVIEW_20260812.md`](M0E_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
 | S1 — stateful block-training ablation | `stateful_training_negative` | [`S1_REVIEW_20260814.md`](S1_REVIEW_20260814.md) | **outside the repository** — path and SHA-256 in the review |
+| C1 — training-data scaling curve | `inconclusive` | [`C1_REVIEW_20260816.md`](C1_REVIEW_20260816.md) | **outside the repository** — path and SHA-256 in the review |
+
+**C1's review is not yet independent.** It was written by the party that
+implemented the summariser, and says so at the top. The recomputation it records
+is between two scripts by one author; a second party still has to repeat it from
+the nine `result.json` files without reading `summary.json`.
 
 **S1's verdict name is narrower than the run.** It compared two *trained* arms
 and found no difference in bar phase: −0.0045 [−0.0194, +0.0102] against a +0.03
