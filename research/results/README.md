@@ -1729,10 +1729,36 @@ arithmetic for exactly that reason. The bundle carries every per-work metric
 verbatim plus the SHA-256 of each file it was copied from, and no interval,
 class or verdict.
 
-**C1's review is not yet independent.** It was written by the party that
-implemented the summariser, and says so at the top. The recomputation it records
-is between two scripts by one author; a second party still has to repeat it from
-the records without reading `summary.json`.
+**C1 is independently verified.** Two external reviews, both recorded in the
+review file. The first found the `selection_sensitive` justification wrong and a
+registered endpoint missing, and could not recompute anything because the runs
+were off-machine. The second recomputed the deciding endpoints from the
+committed bundle with its own code and reproduced them exactly.
+
+### What auditing the older runs turned up
+
+Checking whether M0a-M0e and S1 could be given the same treatment meant first
+asking whether their recorded artifacts still exist and still hash to what their
+reviews claim. Of 17 distinct digests cited across the seven reviews, 14 resolve
+on this machine. Two do not:
+
+| digest | cited by | what it is | status |
+|---|---|---|---|
+| `e04881ec…` | M0b, M0c | the product binary those runs used | **not on this disk** |
+| `05b9a97e…` | M0b | the M0b selection artifact | **not on this disk** |
+
+The distinction matters and should not be overstated. **The outputs are intact**
+— `m0b-full-8w-1b0cb7c`, `m0c-full-8w-c4c5b0c` and the rest all still hash to
+their recorded values, so the evidence those reviews rest on is verifiable. What
+is gone is the ability to *regenerate* M0b and M0c: the binary that produced
+them no longer exists in any worktree here, and the four `dump_analysis.exe`
+builds that do exist all hash differently.
+
+So the retrofit is worth doing and its limit is known in advance: M0a, M0d, M0e
+and S1 can be given self-contained records checkable against a surviving
+toolchain; M0b and M0c can be given records checkable against their surviving
+outputs only. Neither is a reason to distrust the numbers. Both are a reason to
+stop citing a build by digest without keeping it.
 
 **S1's verdict name is narrower than the run.** It compared two *trained* arms
 and found no difference in bar phase: −0.0045 [−0.0194, +0.0102] against a +0.03
