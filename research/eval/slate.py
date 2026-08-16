@@ -34,7 +34,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import pathlib
 import sys
 
@@ -43,7 +42,6 @@ import numpy as np
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from eval.make_sweep import deconvolve, sweep  # noqa: E402
-from eval.provenance import digest, experiment_provenance  # noqa: E402
 
 RATE = 48000
 
@@ -78,7 +76,53 @@ MIN_PEAK_TO_SIDELOBE_DB = 12.0
 
 # How far either side of the peak is excluded when measuring what it stands
 # above. The room's response is part of the peak, not a rival to it.
-GUARD_SECONDS = 0.05
+#
+# 0.05 was a guess, and it was too narrow. Measured on session 3, five of the
+# six limiting sidelobes sat at +53 to +61 ms from their peak -- the slate's own
+# response, just outside the old window, counted as a rival to itself. Widening
+# past that ridge is worth 8 to 14 dB on those five.
+#
+# It cannot be widened freely: the ambiguity this file exists to resolve is one
+# beat, so a rival a beat away has to stay outside the guard. 0.125 is at least
+# twice the observed ridge and under half a beat even at 200 BPM, which is
+# faster than anything these takes contain. The ridge is a property of the room
+# that was measured and should be rechecked in a new one; the beat bound is not.
+GUARD_SECONDS = 0.125
+
+# How far either side of the *expected* tail position the trailing slate is
+# looked for. The head cannot be bounded this tightly -- the capture's start
+# offset is exactly what is unknown -- but once the head is found the tail's
+# position is known to within clock drift, which measured 1.5 to 2.6 ms across a
+# whole take.
+#
+# This was 2.0, and that was the real cause of session 3's narrowest margin.
+# `build_take` leaves `LEAD_SECONDS` of silence between the music and the tail
+# slate, so a 2.0 s window reaches 0.5 s back into the music, and on
+# `0116_goodies` the loudest thing in the window was the end of the song, at
+# -1999.3 ms from the peak. No guard width reaches that far; only the window
+# does. Bounded below by drift and above by `LEAD_SECONDS`, 1.0 s sits inside a
+# wide interval rather than at a fitted optimum.
+#
+# It is a ceiling rather than the width, because the width is not a constant at
+# all: `lead_seconds` is written into every layout, and the bound that matters
+# is a fraction of *that*. A take built with a shorter pause -- which is exactly
+# what lengthening the tail gap for the phone's AGC would produce on the other
+# side -- would silently put a hard-coded 1.0 back inside the music, and the
+# symptom would again look like a weak slate.
+TAIL_SEARCH_MAX_HALF_WIDTH_SEC = 1.0
+TAIL_SEARCH_LEAD_FRACTION = 2.0 / 3.0
+
+# Head and tail must agree about where the take starts, after the interval
+# between them is removed. This is the check the peak-to-sidelobe margin was
+# only ever a proxy for: the margin asks whether a peak looks convincing, this
+# asks whether the two independent readings of the same take land in the same
+# place. A head slate read one beat early does not produce a slightly worse
+# margin -- it produces a drift of about half a second.
+#
+# No free parameter, and the bar does not need calibrating: measured drift is
+# 1.5 to 2.6 ms, one beat is around 480 ms, and 50 ms sits twenty times above
+# the first and ten times below the second. Nothing in between needs a decision.
+MAX_DRIFT_SEC = 0.05
 
 
 def slate(rate: int = RATE, seconds: float = SLATE_SECONDS,
@@ -116,25 +160,6 @@ def build_take(music: np.ndarray, rate: int = RATE,
     return np.concatenate(parts), layout
 
 
-def prepare_music(music: np.ndarray, source_rate: int, *,
-                  target_rate: int = RATE,
-                  peak: float | None = None) -> np.ndarray:
-    """Resample and optionally peak-normalise one mono source deterministically."""
-    out = np.asarray(music, dtype=np.float64)
-    if source_rate != target_rate:
-        from scipy.signal import resample_poly
-
-        factor = math.gcd(int(source_rate), int(target_rate))
-        out = resample_poly(out, target_rate // factor, source_rate // factor)
-    if peak is not None:
-        if not (0.0 < peak <= 1.0):
-            raise ValueError("music peak must be in (0, 1]")
-        measured = float(np.max(np.abs(out))) if len(out) else 0.0
-        if measured > 0.0:
-            out = out * (peak / measured)
-    return out
-
-
 def find_slate(capture: np.ndarray, rate: int = RATE,
                seconds: float = SLATE_SECONDS, f_low: float = SLATE_F_LOW,
                f_high: float = SLATE_F_HIGH,
@@ -155,6 +180,22 @@ def find_slate(capture: np.ndarray, rate: int = RATE,
         hi = min(len(magnitude), int(round(search[1] * rate)))
         if hi <= lo:
             return {"accepted": False, "reason": "empty search window"}
+        # A window can be too small to support the measurement at all. Once the
+        # peak and its guard are removed, what is left has to be at least a
+        # slate long, or the sidelobe is estimated from less material than the
+        # signal it is compared against. Swept on the session 3 captures, a
+        # +/-0.25 s tail window returned 0.180 dB -- peak and rival were the same
+        # ridge -- which reads as a terrible capture rather than as a
+        # misconfigured search. Refusing says which one it is.
+        #
+        # Only for a bounded search: an unbounded call measures whatever buffer
+        # it was handed, and that is the caller's business.
+        minimum = seconds + 2.0 * GUARD_SECONDS
+        if (hi - lo) / rate < minimum:
+            return {"accepted": False,
+                    "reason": (f"search window {(hi - lo) / rate:.3f} s is "
+                               f"below the {minimum:.3f} s this measurement "
+                               f"needs")}
 
     window = magnitude[lo:hi]
     if not len(window) or not np.any(window > 0):
@@ -191,6 +232,13 @@ def find_slate(capture: np.ndarray, rate: int = RATE,
         "peak_to_sidelobe_db": ratio_db,
         "accepted": bool(ratio_db >= MIN_PEAK_TO_SIDELOBE_DB),
         "threshold_db": MIN_PEAK_TO_SIDELOBE_DB,
+        # Reported because they decide the number above. The first session 3
+        # artifact recorded `threshold_db` -- the one of the three that turned
+        # out not to matter -- and neither of these, so reading it afterwards
+        # could not reveal which guard produced a 12.4 dB margin. A constant
+        # that is not in the artifact is no better than a variable one.
+        "guard_sec": GUARD_SECONDS,
+        "search_seconds": (hi - lo) / rate,
     }
 
 
@@ -212,8 +260,16 @@ def align_by_slate(capture: np.ndarray, layout: dict,
         return {"accepted": False, "reason": "head slate not found",
                 "head": head}
 
+    # A fraction of the take's own pause, not a constant: the window must not
+    # reach back into the music, and how far away the music is, is a property of
+    # the layout that built the take.
+    lead = float(layout.get("lead_seconds", TAIL_SEARCH_MAX_HALF_WIDTH_SEC))
+    half = min(TAIL_SEARCH_MAX_HALF_WIDTH_SEC, lead * TAIL_SEARCH_LEAD_FRACTION)
+
     out = {"head": head, "capture_seconds": len(capture) / rate,
            "music_offset_sec": head["offset_sec"] + music_start,
+           "tail_search_half_width_sec": half,
+           "max_drift_sec": MAX_DRIFT_SEC,
            "accepted": True}
 
     expected_tail = layout.get("tail_slate_start_sec")
@@ -222,8 +278,8 @@ def align_by_slate(capture: np.ndarray, layout: dict,
 
     centre = head["offset_sec"] + expected_tail
     tail = find_slate(capture, rate=rate, seconds=slate_len,
-                      search=(max(0.0, centre - 2.0),
-                              min(centre + 2.0, len(capture) / rate)))
+                      search=(max(0.0, centre - half),
+                              min(centre + half, len(capture) / rate)))
     out["tail"] = tail
     if not tail.get("accepted"):
         out["accepted"] = False
@@ -232,6 +288,18 @@ def align_by_slate(capture: np.ndarray, layout: dict,
 
     measured = tail["offset_sec"] - head["offset_sec"]
     out["drift_sec"] = float(measured - expected_tail)
+
+    # The primary check, and the only one here without a free parameter. Two
+    # independent readings of one take have to land in the same place; a head
+    # read a beat early shows up as half a second of "drift", not as a slightly
+    # worse margin. The margin stays as the secondary signal because it is what
+    # notices a capture degrading before it fails.
+    if abs(out["drift_sec"]) > MAX_DRIFT_SEC:
+        out["accepted"] = False
+        out["reason"] = (
+            f"head and tail disagree by {out['drift_sec'] * 1000:.1f} ms, "
+            f"above the {MAX_DRIFT_SEC * 1000:.0f} ms two-slate bar; one of "
+            f"them is not the slate it was taken for")
     return out
 
 
@@ -243,34 +311,18 @@ def main(argv: list[str] | None = None) -> int:
                         help="the track to wrap in slates")
     parser.add_argument("--output", type=pathlib.Path, required=True)
     parser.add_argument("--no-tail-slate", action="store_true")
-    parser.add_argument("--resample", action="store_true",
-                        help=f"resample non-{RATE} Hz input to {RATE} Hz")
-    parser.add_argument("--music-peak", type=float,
-                        help="normalise the music channel to this peak (0, 1]")
     args = parser.parse_args(argv)
 
     audio, rate = soundfile.read(str(args.music), dtype="float64",
                                  always_2d=True)
     mono = audio.mean(axis=1)
-    source_rate = int(rate)
-    if source_rate != RATE and not args.resample:
+    if int(rate) != RATE:
         print(f"expected {RATE} Hz, got {rate}; resample first",
               file=sys.stderr)
         return 1
-    try:
-        mono = prepare_music(mono, source_rate, peak=args.music_peak)
-    except ValueError as error:
-        print(str(error), file=sys.stderr)
-        return 2
 
     take, layout = build_take(mono, rate=RATE,
                               tail_slate=not args.no_tail_slate)
-    layout.update({
-        "source_rate": source_rate,
-        "music_peak": (float(np.max(np.abs(mono))) if len(mono) else 0.0),
-        "resampler": ("scipy.signal.resample_poly"
-                      if source_rate != RATE else "none"),
-    })
 
     # The same control `make_sweep` applies before writing anything: if the
     # marker does not deconvolve to a spike, nothing downstream can align to it
@@ -292,23 +344,7 @@ def main(argv: list[str] | None = None) -> int:
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     soundfile.write(str(args.output), take, RATE)
-    repository = pathlib.Path(__file__).resolve().parents[2]
-    layout["self_test"] = checked
-    layout["provenance"] = experiment_provenance(
-        repository,
-        {"source_audio": args.music},
-        generator="research/eval/slate.py",
-        output_audio=digest(args.output),
-        parameters={
-            "rate": RATE,
-            "slate_seconds": SLATE_SECONDS,
-            "slate_amplitude": SLATE_AMPLITUDE,
-            "lead_seconds": LEAD_SECONDS,
-            "music_peak": args.music_peak,
-            "tail_slate": not args.no_tail_slate,
-            "resample": args.resample,
-        },
-    )
+    layout["self_test"] = check
     args.output.with_suffix(".layout.json").write_text(
         json.dumps(layout, indent=2), encoding="utf-8")
     print(f"wrote {args.output} ({len(take) / RATE:.1f} s); "

@@ -12,9 +12,11 @@ import pytest
 from scipy.signal import fftconvolve
 
 from eval.room_recording import align
-from eval.slate import (LEAD_SECONDS, MIN_PEAK_TO_SIDELOBE_DB, RATE,
-                        align_by_slate, build_take, find_slate, prepare_music,
-                        slate)
+from eval.slate import (GUARD_SECONDS, LEAD_SECONDS, MAX_DRIFT_SEC,
+                        MIN_PEAK_TO_SIDELOBE_DB, RATE,
+                        TAIL_SEARCH_LEAD_FRACTION,
+                        TAIL_SEARCH_MAX_HALF_WIDTH_SEC, align_by_slate,
+                        build_take, find_slate, slate)
 
 BPM = 125.0
 BEAT_SEC = 60.0 / BPM
@@ -116,21 +118,6 @@ def test_the_slate_is_not_at_full_scale():
     assert peak <= 0.5
 
 
-def test_session_music_is_resampled_and_normalised_explicitly():
-    source_rate = 22050
-    source = np.sin(2 * np.pi * 440 * np.arange(source_rate) / source_rate)
-    prepared = prepare_music(source, source_rate, peak=0.7)
-
-    assert len(prepared) == pytest.approx(RATE, abs=1)
-    assert np.max(np.abs(prepared)) == pytest.approx(0.7, abs=1e-12)
-
-
-@pytest.mark.parametrize("peak", [0.0, -0.1, 1.01])
-def test_invalid_session_music_peak_is_refused(peak):
-    with pytest.raises(ValueError, match="music peak"):
-        prepare_music(np.ones(10), RATE, peak=peak)
-
-
 def test_the_take_says_where_the_music_starts():
     music = click_track(4.0)
     take, layout = build_take(music)
@@ -221,6 +208,114 @@ def test_the_offset_survives_the_room_that_was_actually_measured():
     got = align_by_slate(capture, layout)
     assert got["accepted"], got
     assert got["head"]["offset_sec"] == pytest.approx(truth, abs=0.01)
+
+
+def test_the_guard_clears_the_rooms_own_ridge_but_not_a_beat():
+    """Both bounds on `GUARD_SECONDS`, because only one of them is obvious.
+
+    Session 3 measured the slate's own response ridge at +53 to +61 ms from the
+    peak; a guard inside that counts the slate as its own rival. The upper bound
+    is the reason this cannot simply be made large: the ambiguity the slate
+    exists to resolve is one beat, and swallowing a beat would swallow the
+    answer.
+    """
+    assert GUARD_SECONDS >= 2 * 0.061, "guard must clear the measured ridge"
+    # The binding constraint is that a rival one beat away must stay *outside*
+    # the guard, so the guard must be under one beat at the fastest tempo worth
+    # protecting; half of it leaves a factor of two. 200 BPM is deliberately
+    # faster than anything in this corpus -- the session 3 takes are 115 to 125.
+    fastest_beat = 60.0 / 200.0
+    assert GUARD_SECONDS < fastest_beat / 2, "guard must stay well inside a beat"
+
+
+def test_the_tail_window_cannot_reach_back_into_the_music():
+    """The constant that actually caused session 3's narrowest margin.
+
+    `build_take` leaves `LEAD_SECONDS` between the music and the tail slate. A
+    window wider than that reads the end of the song as a rival to the slate,
+    which is what put `0116_goodies` at 12.4 dB against a 12 dB bar. The lower
+    bound is clock drift, measured at 1.5 to 2.6 ms across a whole take.
+    """
+    shipped = min(TAIL_SEARCH_MAX_HALF_WIDTH_SEC,
+                  LEAD_SECONDS * TAIL_SEARCH_LEAD_FRACTION)
+    assert shipped < LEAD_SECONDS
+    assert shipped > 0.1  # ~40x the observed drift
+
+
+def test_two_slates_disagreeing_is_refused_whatever_the_margins_say():
+    """The check the margin was only ever standing in for.
+
+    A head slate read one beat early does not look weak -- it looks fine, and
+    the take then scores a different bar. What it cannot do is agree with the
+    tail about where the take started. Both margins here are excellent and the
+    alignment is still refused.
+    """
+    take, layout = build_take(click_track(10.0))
+    capture = capture_of(take, 0.4)
+    got = align_by_slate(capture, layout)
+    assert got["accepted"]
+    assert abs(got["drift_sec"]) < 0.01
+    assert min(got["head"]["peak_to_sidelobe_db"],
+               got["tail"]["peak_to_sidelobe_db"]) > MIN_PEAK_TO_SIDELOBE_DB
+
+    # Move the tail slate a beat later than the layout claims, leaving both
+    # slates individually pristine.
+    beat = int(round(BEAT_SEC * RATE))
+    marker = int(round(layout["slate_seconds"] * RATE))
+    start = int(round((0.4 + layout["tail_slate_start_sec"]) * RATE))
+    displaced = np.concatenate([capture, np.zeros(beat)])
+    block = displaced[start:start + marker].copy()
+    displaced[start:start + marker] = 0.0
+    displaced[start + beat:start + beat + marker] = block
+
+    slipped = align_by_slate(displaced, layout)
+    assert not slipped["accepted"]
+    assert "disagree" in slipped["reason"]
+    assert slipped["tail"]["peak_to_sidelobe_db"] > MIN_PEAK_TO_SIDELOBE_DB
+
+
+def test_the_tail_window_is_a_fraction_of_the_takes_own_pause():
+    """Because `LEAD_SECONDS` is a thing we are actively planning to change.
+
+    A hard-coded window is safe only for the pause it was chosen against. Halve
+    the pause and a fixed 1.0 s reaches back into the music again -- the exact
+    defect this replaced -- so the width follows the layout that built the take.
+    """
+    _, generous = build_take(click_track(4.0), lead_seconds=1.5)
+    _, tight = build_take(click_track(4.0), lead_seconds=0.6)
+
+    def width(layout):
+        return min(TAIL_SEARCH_MAX_HALF_WIDTH_SEC,
+                   layout["lead_seconds"] * TAIL_SEARCH_LEAD_FRACTION)
+
+    assert width(generous) == TAIL_SEARCH_MAX_HALF_WIDTH_SEC
+    assert width(tight) < tight["lead_seconds"]
+    assert width(tight) == pytest.approx(0.4)
+
+
+def test_a_search_window_too_small_to_measure_is_refused_not_scored():
+    """0.180 dB reads as a ruined capture; it was a misconfigured window.
+
+    With the peak and its guard removed, a window this small leaves less
+    material than the slate itself, so the "sidelobe" is another sample of the
+    same ridge. The number that comes out is not a bad margin, it is not a
+    margin at all, and saying so is the difference between rerecording a take
+    and fixing a constant.
+    """
+    take, layout = build_take(click_track(6.0))
+    capture = capture_of(take, 0.3)
+    centre = 0.3 + layout["tail_slate_start_sec"]
+
+    refused = find_slate(capture, seconds=layout["slate_seconds"],
+                         search=(centre - 0.25, centre + 0.25))
+    assert not refused["accepted"]
+    assert "search window" in refused["reason"]
+    assert "peak_to_sidelobe_db" not in refused
+
+    wide = find_slate(capture, seconds=layout["slate_seconds"],
+                      search=(centre - TAIL_SEARCH_MAX_HALF_WIDTH_SEC,
+                              centre + TAIL_SEARCH_MAX_HALF_WIDTH_SEC))
+    assert wide["accepted"]
 
 
 def test_two_identical_slates_need_a_bounded_search():
