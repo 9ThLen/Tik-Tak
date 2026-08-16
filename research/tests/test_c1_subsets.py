@@ -203,6 +203,10 @@ def test_an_s1_run_identity_is_unchanged_when_no_subset_is_given():
     unconditionally would have made every existing S1 checkpoint unresumable and
     quietly falsified the reuse.
     """
+    # The only test in this file that genuinely needs the trainer, and so the
+    # only one that may be skipped where torch is absent. The rest guard the
+    # subset rules and now run everywhere.
+    pytest.importorskip("torch")
     from training.beatnet.trainer import checkpoint_identity
 
     identity = checkpoint_identity(
@@ -215,7 +219,7 @@ def test_an_s1_run_identity_is_unchanged_when_no_subset_is_given():
 
 
 def test_the_runner_filter_refuses_an_unregistered_fraction():
-    from training.beatnet.run import c1_training_rows
+    from training.beatnet.c1_subsets import c1_training_rows
 
     cache = _cache()
     subset = _valid_subset(cache)
@@ -232,7 +236,7 @@ def test_the_runner_filter_refuses_an_unregistered_fraction():
 def test_a_subset_without_a_cache_digest_or_provenance_is_refused():
     """`not in (None, ...)` was fail-open: a subset that never recorded which
     cache it came from passed the check that exists to catch exactly that."""
-    from training.beatnet.run import c1_training_rows
+    from training.beatnet.c1_subsets import c1_training_rows
 
     cache = _cache()
     rows = c1.training_rows(cache)
@@ -249,7 +253,7 @@ def test_a_subset_without_a_cache_digest_or_provenance_is_refused():
 
 
 def test_the_subset_digest_travels_into_run_identity():
-    from training.beatnet.run import c1_training_rows
+    from training.beatnet.c1_subsets import c1_training_rows
 
     cache = _cache()
     _, identity = c1_training_rows(
@@ -266,7 +270,7 @@ def test_the_registered_matrix_is_closed_by_the_runner():
     Retraining 1.00 would quietly replace the S1 runs the six-run design exists
     to reuse, and A3_reset is not a C1 arm at all.
     """
-    from training.beatnet.run import c1_training_rows
+    from training.beatnet.c1_subsets import c1_training_rows
 
     cache = _cache()
     subset = _valid_subset(cache)
@@ -280,7 +284,7 @@ def test_the_registered_matrix_is_closed_by_the_runner():
 
 
 def test_a_subset_from_another_cache_is_refused():
-    from training.beatnet.run import c1_training_rows
+    from training.beatnet.c1_subsets import c1_training_rows
 
     cache = _cache()
     subset = dict(_valid_subset(cache), cache_sha256="a" * 64)
@@ -292,7 +296,7 @@ def test_a_subset_from_another_cache_is_refused():
 
 def test_the_runner_filter_catches_a_digest_that_does_not_match():
     """A filter returning the right works in the wrong order would pass counts."""
-    from training.beatnet.run import c1_training_rows
+    from training.beatnet.c1_subsets import c1_training_rows
 
     cache = _cache()
     subset = _valid_subset(cache)
@@ -309,7 +313,7 @@ def test_a_cache_that_is_not_the_registered_one_is_refused_at_training_time():
     with nothing else, so another cache plus a subset generated from it agreed
     and passed.
     """
-    from training.beatnet.run import c1_training_rows
+    from training.beatnet.c1_subsets import c1_training_rows
 
     cache = _cache()
     other = "c" * 64
@@ -328,7 +332,7 @@ def test_a_cache_that_is_not_the_registered_one_is_refused_at_training_time():
      ("salt", "another-order", "membership salt")),
 )
 def test_subset_schema_and_membership_salt_are_identity(field, value, message):
-    from training.beatnet.run import c1_training_rows
+    from training.beatnet.c1_subsets import c1_training_rows
 
     cache = _cache()
     subset = _valid_subset(cache)
@@ -350,7 +354,7 @@ def test_a_run_without_the_subsets_own_digest_never_starts(digest):
     Worse, identity carried the empty value, so resume stayed self-consistent
     and the run would have completed.
     """
-    from training.beatnet.run import c1_training_rows
+    from training.beatnet.c1_subsets import c1_training_rows
 
     cache = _cache()
     with pytest.raises(ValueError, match="subset artifact's own digest"):
@@ -378,7 +382,7 @@ def test_training_requires_evidence_that_the_preflight_ran():
     The comparison still runs, in the generator; the training path needs the
     artifact to carry its result rather than repeat 26,000 blocks per job.
     """
-    from training.beatnet.run import c1_training_rows
+    from training.beatnet.c1_subsets import c1_training_rows
 
     cache = _cache()
     rows = c1.training_rows(cache)

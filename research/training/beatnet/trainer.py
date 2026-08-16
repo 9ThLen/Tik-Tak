@@ -18,7 +18,9 @@ from .data import Recording, contiguous_batches
 from .model import BeatNetTrainable
 
 
-ARMS = ("A3_reset", "A3_stateful")
+# Canonical definition lives in `arms`, which has no heavy imports; re-exported
+# here so every existing `from .trainer import ARMS` keeps working.
+from .arms import ARMS
 CLASS_WEIGHTS = (50.0, 400.0, 5.0)
 
 

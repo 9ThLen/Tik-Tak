@@ -12,7 +12,7 @@ from eval.provenance import digest, experiment_provenance
 
 from .cache import _atomic_json, _outside_repository
 from .data import file_sha256
-from .trainer import ARMS
+from .arms import ARMS
 
 
 SCHEMA = "tiktak.s1_summary/v1"

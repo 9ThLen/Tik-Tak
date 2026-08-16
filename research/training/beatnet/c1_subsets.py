@@ -317,3 +317,81 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+def c1_training_rows(subset: dict, train_rows: list[dict],
+                     fraction: float | None, *, arm: str,
+                     cache_sha256: str,
+                     subset_sha256: str) -> tuple[list[dict], dict]:
+    """Restrict the training rows to a registered C1 fraction.
+
+    Membership comes from the subset artifact; the order comes from the cache
+    manifest, and the two are not the same thing -- see `c1_subsets`. The
+    identity digest is recomputed from the emitted rows rather than copied, so a
+    filter that returned the right works in the wrong order is caught here
+    instead of silently training on a different schedule.
+    """
+    require_registered_corpus(subset)
+    if fraction is None:
+        raise ValueError("C1 requires an explicit --fraction")
+    # C1 registers exactly six runs. Nothing here stopped a subset run from
+    # training A3_reset, or from training 1.00 -- which is not a C1 run at all
+    # but the S1 anchor, and repeating it would quietly replace the thing the
+    # six-run design depends on being reused.
+    if arm != C1_ARM:
+        raise ValueError(f"C1 registers only {C1_ARM}, not {arm}")
+    if fraction not in C1_TRAINED_FRACTIONS:
+        raise ValueError(
+            f"C1 trains only {sorted(C1_TRAINED_FRACTIONS)}; "
+            f"{fraction:.2f} is the S1 anchor and is reused, not rerun")
+    key = f"{fraction:.2f}"
+    block = subset.get("fractions", {}).get(key)
+    if block is None:
+        raise ValueError(f"fraction {key} is not in the subset artifact")
+    order = work_order(train_rows)
+    selected = subset_rows(
+        train_rows, members(order, fraction))
+    if (len(selected) != block["records"]
+            or identity_digest(selected) != block["identity_sha256"]):
+        raise ValueError(f"fraction {key} does not match the subset artifact")
+    # The registered digest was checked only where subsets are *built*. On the
+    # path where one is *trained from*, the subset and the cache were required
+    # to agree with each other and with nothing else -- so another cache plus a
+    # subset generated from it agreed, and passed.
+    if cache_sha256 != REGISTERED_CACHE_SHA256:
+        raise ValueError(
+            f"cache digest {cache_sha256} is not the registered "
+            f"{REGISTERED_CACHE_SHA256}")
+    # Fail closed, not fail open: an earlier version accepted a subset with no
+    # `cache_sha256` at all, so an artifact that never recorded which cache it
+    # was built from passed the check that exists to catch exactly that.
+    if subset.get("cache_sha256") != cache_sha256:
+        raise ValueError(
+            "C1 subset records no cache digest, or a different one")
+    subset_provenance = subset.get("provenance") or {}
+    if subset_provenance.get("tree_clean") is not True:
+        raise ValueError("C1 subset artifact has no clean provenance")
+    # This used to call `assert_anchor_schedule` under `if fraction == 1.00`,
+    # which became unreachable the moment 1.00 was refused above -- a guard that
+    # could not fire, of the same family as the others, arrived at by deletion
+    # rather than by logic. The check itself still matters and still runs, in
+    # the generator; what the training path needs is evidence that it ran, so it
+    # requires the artifact to carry a passing preflight rather than repeating
+    # a 26,000-block comparison before every job.
+    require_registered_preflight(subset)
+    if (not isinstance(subset_sha256, str) or len(subset_sha256) != 64
+            or not all(c in "0123456789abcdef" for c in subset_sha256)):
+        raise ValueError(
+            "C1 requires the subset artifact's own digest; an unrecorded one "
+            "would train for hours and only be caught at summary time")
+    return selected, {
+        "fraction": fraction, "records": len(selected),
+        "cache_sha256": cache_sha256,
+        # The artifact that decides which works are trained belongs in identity
+        # by its own digest, not only by the fields copied out of it.
+        "subset_sha256": subset_sha256,
+        "subset_commit": subset_provenance.get("commit"),
+        "works": block["works"], "frames": block["frames"],
+        "identity_sha256": block["identity_sha256"],
+        "salt": subset.get("salt"),
+    }
