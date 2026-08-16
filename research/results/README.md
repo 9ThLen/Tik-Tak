@@ -1720,12 +1720,19 @@ each carries a provenance block that a summary would strip.
 | M0d — decoder path-state reacquisition | `phase_hysteresis_bottleneck` | [`M0D_REVIEW_20260812.md`](M0D_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
 | M0e — paired non-oracle decoder regression | `non_oracle_candidate_regression` | [`M0E_REVIEW_20260812.md`](M0E_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
 | S1 — stateful block-training ablation | `stateful_training_negative` | [`S1_REVIEW_20260814.md`](S1_REVIEW_20260814.md) | **outside the repository** — path and SHA-256 in the review |
-| C1 — training-data scaling curve | `inconclusive` | [`C1_REVIEW_20260816.md`](C1_REVIEW_20260816.md) | **outside the repository** — path and SHA-256 in the review |
+| C1 — training-data scaling curve | `inconclusive` | [`C1_REVIEW_20260816.md`](C1_REVIEW_20260816.md) | [`C1_RECORDS_20260816.json`](C1_RECORDS_20260816.json) — per-work records, in the tree |
+
+**C1 is the first of these whose records are in the repository.** The others
+give an out-of-repository path and a digest, which lets a reviewer audit a claim
+but not recompute one — C1's first external reviewer could not repeat the
+arithmetic for exactly that reason. The bundle carries every per-work metric
+verbatim plus the SHA-256 of each file it was copied from, and no interval,
+class or verdict.
 
 **C1's review is not yet independent.** It was written by the party that
 implemented the summariser, and says so at the top. The recomputation it records
 is between two scripts by one author; a second party still has to repeat it from
-the nine `result.json` files without reading `summary.json`.
+the records without reading `summary.json`.
 
 **S1's verdict name is narrower than the run.** It compared two *trained* arms
 and found no difference in bar phase: −0.0045 [−0.0194, +0.0102] against a +0.03
