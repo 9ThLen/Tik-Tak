@@ -8,4 +8,9 @@
 #
 # `-text` disables all end-of-line translation: what is committed is what is
 # checked out, on every platform.
-C1_RECORDS_*.json -text
+# The pattern must be `*RECORDS_*.json`, not `RECORDS_*.json`: a pattern with no
+# slash is matched against the whole basename, so `RECORDS_*.json` covers only a
+# file whose name starts with RECORDS_ and would silently leave both
+# C1_RECORDS_*.json and M0C_RECORDS_*.json translated. Verified with
+# `git check-attr text`.
+*RECORDS_*.json -text
