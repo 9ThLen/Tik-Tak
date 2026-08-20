@@ -2168,6 +2168,17 @@ numeric outputs only afterwards. It confirmed the verdict with no discrepancy
 above `1e-12` and recorded four non-invalidating wording/metadata findings in
 [`C1_INDEPENDENT_REVIEW_20260820.md`](C1_INDEPENDENT_REVIEW_20260820.md).
 
+**The next curve is registered as a stop.** Power was simulated from C1's own
+seed-by-work matrix, through the registered resample rather than a normal
+approximation, and validated against C1's measured width (0.0626 against
+0.0628). It says the binding constraint is the development population, not the
+seed count: forty seeds on the present 77 works -- sixty runs, of order three
+hundred GPU-hours -- still returns `inconclusive`, and every contrast available
+in C1 is undecided at +0.03, including the wider `F1_100 - F1_25` span. See
+[`PREREGISTERED_C2.md`](../eval/PREREGISTERED_C2.md), which registers entry
+conditions rather than a run, so that a later underpowered repeat cannot be
+reported as a result.
+
 ### What auditing the older runs turned up
 
 Checking whether the older runs could be given the same treatment meant first
