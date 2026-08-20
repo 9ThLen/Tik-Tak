@@ -2146,7 +2146,7 @@ each carries a provenance block that a summary would strip.
 | M0d — decoder path-state reacquisition | `phase_hysteresis_bottleneck` | [`M0D_REVIEW_20260812.md`](M0D_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
 | M0e — paired non-oracle decoder regression | `non_oracle_candidate_regression` | [`M0E_REVIEW_20260812.md`](M0E_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
 | S1 — stateful block-training ablation | `stateful_training_negative` | [`S1_REVIEW_20260814.md`](S1_REVIEW_20260814.md) | **outside the repository** — path and SHA-256 in the review |
-| C1 — training-data scaling curve | `inconclusive` | [`C1_REVIEW_20260816.md`](C1_REVIEW_20260816.md) | [`C1_RECORDS_20260816.json`](C1_RECORDS_20260816.json) — per-work records, in the tree |
+| C1 — training-data scaling curve | `inconclusive` | [`C1_REVIEW_20260816.md`](C1_REVIEW_20260816.md); [`independent review`](C1_INDEPENDENT_REVIEW_20260820.md) | [`C1_RECORDS_20260816.json`](C1_RECORDS_20260816.json) — per-work records, in the tree |
 
 **C1 is the first of these whose records are in the repository.** The others
 give an out-of-repository path and a digest, which lets a reviewer audit a claim
@@ -2155,11 +2155,18 @@ arithmetic for exactly that reason. The bundle carries every per-work metric
 verbatim plus the SHA-256 of each file it was copied from, and no interval,
 class or verdict.
 
-**C1 is independently verified.** Two external reviews, both recorded in the
-review file. The first found the `selection_sensitive` justification wrong and a
-registered endpoint missing, and could not recompute anything because the runs
-were off-machine. The second recomputed the deciding endpoints from the
-committed bundle with its own code and reproduced them exactly.
+The implementer's C1 review records two prior review passes, including the
+correction of the `selection_sensitive` justification and addition of the
+missing registered endpoint. Because the resulting review was still authored
+by the party that implemented C1, those passes were not used as independent
+acceptance evidence here.
+
+**C1 was independently accepted on 2026-08-20.** That audit authenticated all
+nine raw run files and all eighteen selected/common evaluations, reimplemented the
+registered bootstrap without importing the project summariser, and compared 155
+numeric outputs only afterwards. It confirmed the verdict with no discrepancy
+above `1e-12` and recorded four non-invalidating wording/metadata findings in
+[`C1_INDEPENDENT_REVIEW_20260820.md`](C1_INDEPENDENT_REVIEW_20260820.md).
 
 ### What auditing the older runs turned up
 

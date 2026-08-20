@@ -402,3 +402,19 @@ def test_training_requires_evidence_that_the_preflight_ran():
             c1_training_rows(subset, rows, 0.25, arm=c1.C1_ARM,
                              cache_sha256=c1.REGISTERED_CACHE_SHA256,
                              subset_sha256=SUBSET_SHA)
+
+
+def test_a_run_says_which_experiment_it_is():
+    """Every C1 artifact shipped labelled `S1`, because the label was a literal.
+
+    Nothing was ambiguous -- identity, digests and the `c1` block were right, so
+    the run stood -- but the artifact made a provenance claim that was false and
+    happened not to matter. The label now follows the same condition that adds
+    the `c1` identity block, so the two cannot disagree.
+    """
+    pytest.importorskip("torch")
+    from training.beatnet.run import experiment_label
+
+    assert experiment_label(None) == "S1"
+    assert experiment_label({"fraction": 0.25}) == "C1"
+    assert experiment_label({}) == "C1"
