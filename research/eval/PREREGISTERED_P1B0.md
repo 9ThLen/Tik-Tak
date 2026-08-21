@@ -91,23 +91,41 @@ With backing on an external device there is no reference signal, so echo
 cancellation is unavailable and only blind separation remains — weakest below
 roughly 1–2 kHz, which is where kick and bass carry most beat salience.
 
-## The click micro-check runs first
+## The click micro-check is struck, and why
 
-`plan.md:292` permits a cheap directional micro-check before the full pilot: the
-click physically played through a speaker and recaptured at several levels.
-Software mixing of a click into an existing capture does not count, because it
-reproduces neither room feedback nor AEC nor the self-confirming loop.
+Revised 2026-08-17. The earlier version ordered a click micro-check first,
+because click bleed had never been tested anywhere in this repository and every
+published number is an upper bound for a shell with audible output.
 
-It runs first because it is the one gate that can reject the protocol for an
-hour of work. The click-bleed condition has never been tested anywhere in this
-repository: every published number comes from a harness that plays no click, so
-every one is an upper bound for a shell with audible output.
+**The product will not emit an audible click while tracking.** That is
+`plan.md:287`, the second of the two options the plan already set out:
 
-| observation | consequence |
-|---|---|
-| alignment recoverable at every level tested | pilot proceeds with click bleed as a condition |
-| recoverable only below some level | pilot proceeds, that level recorded as a constraint before capture |
-| unrecoverable at product-plausible levels | pilot does not proceed as designed; the audible-output assumption is re-registered first |
+> **Не має** → під час чутного кліку стан явно заморожується, позначається
+> `stale`, і повторне захоплення не заявляється. Це чесно і дешево.
+
+The first option — adapt the metre through the click — needed a separate
+evidence channel, reference-click subtraction or AEC, and had to answer the
+self-confirmation argument at `plan.md:280`: the accent is *derived* from the
+bar decision, so feeding ungated frames would let an accented click confirm the
+very bar line it placed. `bar.hpp:38` records that the tracker loses most of the
+beat's evidence when it hears its own click, and that nothing on the output
+would look wrong. That option is not taken.
+
+So the micro-check has nothing left to gate. It existed to size a problem the
+product no longer claims to solve, and running it would spend fifty minutes of a
+two-hour ceiling measuring a condition that will not occur.
+
+**What this narrows, recorded rather than absorbed.** The product does not track
+through its own audible metronome. During audible click it freezes, marks
+`stale`, and does not claim reacquisition. Any later claim about tracking with
+the metronome on is outside what this programme measures or promises.
+
+**What it does not narrow.** A click from an *external* source — a drummer's
+in-ear feed leaking, a band's click through a PA — remains ordinary room
+interference, and is neither excluded nor addressed here. It carries none of the
+self-confirmation problem, because the tracker did not place that click. If it
+ever matters it needs its own registration; it is not this pilot's condition and
+its absence from the matrix is deliberate.
 
 ## The capture preflight, which is irreversible
 
@@ -163,7 +181,8 @@ source requires the check redone and recorded per item.
   pilot analysis is complete.
 - Changing the condition matrix or the split policy after captures exist,
   without a dated revision here.
-- Reporting feasibility without reporting the click micro-check outcome.
+- Reporting any result as evidence about tracking through an audible
+  metronome, which this programme no longer measures.
 - Reporting any result as evidence about live ensembles, or about annotation
   reliability.
 
