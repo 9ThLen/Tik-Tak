@@ -1380,6 +1380,17 @@ confidence series.** The beat list is what a listener hears, it is exact, and it
 is independent of how often anything is polled. That changes published numbers
 and is a decision rather than a fix, so it is recorded here and not applied.
 
+**Applied beside the headline, 2026-09-25, not instead of it.**
+`live_corpus_benchmark.py` now records `first_beat_at` per recording, and
+`verdict()` adds a reading, `usable_first_beat`, in which the acquisition clause
+is judged on the first emitted beat and every other clause is unchanged. The
+summaries carry `usable_rate_first_beat` beside `usable_rate`, the way
+`usable_rate_strict` sits beside it. The headline is unchanged, so every number
+above stays comparable, and the gap between the two columns is the sampling
+error. No corpus has been re-run with it yet, so no figure in this file
+quotes it. Replacing the headline is a separate decision, to take once the
+column has been seen on all three corpora.
+
 ## The causal bar: phase carries, metre cannot be measured here, and the gate fails
 
 `causal_metre_gtzan.json` and `causal_metre_harmonix.json`, from
