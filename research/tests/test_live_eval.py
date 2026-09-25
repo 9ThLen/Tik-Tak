@@ -150,6 +150,25 @@ def test_a_recording_that_never_acquires_is_not_also_called_never_settled():
     assert "never_settled" not in got["reasons_strict"]
 
 
+def test_a_late_poll_does_not_fail_a_recording_whose_first_beat_was_early():
+    # The aliasing case: the tracker was playing at 4.3 s, and a once-a-second
+    # poll first caught confidence over threshold at 16 s.
+    got = verdict(_result(acquired_at=16.02, first_beat_at=4.3))
+    assert not got["usable"]
+    assert "slow_acquisition" in got["reasons"]
+    assert got["usable_first_beat"] and got["reasons_first_beat"] == []
+
+
+def test_the_first_beat_reading_keeps_every_other_clause():
+    got = verdict(_result(first_beat_at=4.0, r70=0.1))
+    assert got["reasons_first_beat"] == ["too_few_beats"]
+    got = verdict(_result(first_beat_at=12.0))
+    assert got["usable"], "the headline still reads the polled confidence"
+    assert got["reasons_first_beat"] == ["slow_first_beat"]
+    got = verdict(_result(acquired_at=None, first_beat_at=None))
+    assert got["reasons_first_beat"] == ["no_beats"]
+
+
 def _timeline(bpms, confidences, beat_bpm=120.0, duration=80.0):
     """A per-second live history and a matching annotated beat grid."""
     times = np.arange(len(bpms), dtype=np.float64)

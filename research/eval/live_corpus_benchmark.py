@@ -515,8 +515,22 @@ def verdict(result: dict[str, Any]) -> dict[str, Any]:
         if best[1] is None or not math.isfinite(best[1]) or best[1] < MIN_RECALL:
             forgiving.append("too_few_beats")
 
+    # The same verdict with acquisition read off the beat list instead of the
+    # polled confidence: every other clause unchanged. Beside the headline, not
+    # replacing it, for the reason `settled_at` is -- every earlier number stays
+    # comparable, and the gap between the two is the size of the sampling error.
+    first_beat = [reason for reason in reasons
+                  if reason not in ("never_acquired", "slow_acquisition")]
+    beat_at = result.get("first_beat_at")
+    if beat_at is None or not math.isfinite(beat_at):
+        first_beat.insert(0, "no_beats")
+    elif beat_at > MAX_ACQUISITION_SEC:
+        first_beat.insert(0, "slow_first_beat")
+
     return {"usable": not reasons, "reasons": reasons,
             "usable_strict": not strict, "reasons_strict": strict,
+            "usable_first_beat": not first_beat,
+            "reasons_first_beat": first_beat,
             "usable_any_octave": not forgiving,
             "reasons_any_octave": forgiving}
 
@@ -549,6 +563,14 @@ def _score_one(
             "live_confidence": float(estimate.live_confidence),
             "live_spread": float(estimate.live_tempo_spread_octaves),
             "beats": len(estimate.beats),
+            # When the tracker first handed a beat out. `acquired_at` is read
+            # off a polled confidence series and, polled once a second, misses
+            # crossings by seconds through aliasing (results/README.md,
+            # "Acquisition was measured on a grid too coarse to see it"). The
+            # beat list is exact, needs no sampling, and is what a listener
+            # hears first.
+            "first_beat_at": (float(estimate.beats[0])
+                              if len(estimate.beats) else None),
             "late": int(estimate.live_beats_late),
         }
         if not item["annotated"]:
@@ -715,6 +737,11 @@ def summarize(mode: str, results: list[dict[str, Any]], wall: float) -> dict:
                 sum(result["usable_strict"] for result in part) / len(part)
                 if part else None
             ),
+            # The headline with acquisition taken from the first emitted beat.
+            "usable_rate_first_beat": (
+                sum(result["usable_first_beat"] for result in part) / len(part)
+                if part else None
+            ),
             # Every reason a recording failed for, so a corpus that fails on
             # latency is never confused with one that fails on octaves.
             "failure_reasons": {
@@ -740,6 +767,13 @@ def summarize(mode: str, results: list[dict[str, Any]], wall: float) -> dict:
             "p90_settle_sec": _finite_stat(
                 [result["settled_at"] for result in part
                  if result.get("settled_at") is not None],
+                lambda xs: np.percentile(xs, 90)),
+            "median_first_beat_sec": _finite_stat(
+                [result["first_beat_at"] for result in part
+                 if result.get("first_beat_at") is not None], np.median),
+            "p90_first_beat_sec": _finite_stat(
+                [result["first_beat_at"] for result in part
+                 if result.get("first_beat_at") is not None],
                 lambda xs: np.percentile(xs, 90)),
             "p90_acquisition_sec": _finite_stat(
                 [result["acquired_at"] for result in part
@@ -859,6 +893,7 @@ def summarize(mode: str, results: list[dict[str, Any]], wall: float) -> dict:
     rates = [by_corpus[c]["usable_rate"] for c in big]
     rates_any = [by_corpus[c]["usable_rate_any_octave"] for c in big]
     rates_strict = [by_corpus[c]["usable_rate_strict"] for c in big]
+    rates_first_beat = [by_corpus[c]["usable_rate_first_beat"] for c in big]
     rates_no_episode = [by_corpus[c]["no_wrong_level_episode_fraction"]
                         for c in big]
     pooled_failures: Counter[str] = Counter()
@@ -888,6 +923,12 @@ def summarize(mode: str, results: list[dict[str, Any]], wall: float) -> dict:
             float(np.mean(rates_strict)) if rates_strict else None),
         "usable_rate_strict_pooled": (
             sum(result["usable_strict"] for result in scored) / len(scored)
+            if scored else None
+        ),
+        "usable_rate_first_beat_macro": (
+            float(np.mean(rates_first_beat)) if rates_first_beat else None),
+        "usable_rate_first_beat_pooled": (
+            sum(result["usable_first_beat"] for result in scored) / len(scored)
             if scored else None
         ),
         # The share of recordings that never once slipped to the wrong metrical
