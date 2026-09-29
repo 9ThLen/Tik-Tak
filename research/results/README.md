@@ -2301,3 +2301,77 @@ switching is unsafe: the zero-cost control causes 3,829 path/held-output changes
 and loses 0.072 [-0.133, -0.018] stable accuracy. The formal result is
 `phase_hysteresis_bottleneck`; the next gate is a paired non-oracle decoder
 regression for the frozen cost-2 candidate, not S2 or a product-default change.
+
+## P1-B0 replay session: GTZAN through a room, 2026-09-29
+
+Preregistered in `research/eval/PREREGISTERED_P1B0.md` (revision 2026-09-25),
+scored by `research/eval/replay_programme.py score`, and kept per take in
+`P1B0_RECORDS_20260929.json` (scored at commit `e92e843`). Twenty GTZAN
+excerpts, two per genre and chosen by position, were played through the speaker
+from room sessions 1–3 and captured on an iPhone at 1 m and 3 m. The
+programmes were at two levels 12 dB apart, set in the file. The tracker is
+frozen BeatNet `model_1`. GTZAN is held out from it, so no training-set bias
+applies.
+
+The clean arm is each programme's own digital loopback, not the source excerpt.
+The tracker is not smooth enough for anything else (see *controls* below).
+
+| cell | aligned | F clean | F room | room − clean [95% CI] | usable room |
+|---|---:|---:|---:|---|---:|
+| near, normal | 19/20 | 0.789 | 0.473 | −0.316 [−0.433, −0.203] | 0.16 |
+| near, quiet | 20/20 | 0.704 | 0.342 | −0.362 [−0.495, −0.235] | 0.10 |
+| far, normal | 20/20 | 0.765 | 0.345 | −0.420 [−0.543, −0.303] | 0.05 |
+| far, quiet | 20/20 | 0.704 | 0.247 | −0.457 [−0.603, −0.306] | 0.10 |
+
+Clean `usable` is 0.60 at the normal level and 0.50 at the quiet one.
+
+**The room loss replicates on a held-out corpus.** Five Harmonix captures lost
+0.390 of mean F. Here every cell loses 0.32 to 0.46 on GTZAN, and every interval
+lies far outside the digital-path control. The room takes the usable rate from
+about half of excerpts to between one in twenty and one in six.
+
+**Distance and level are real but smaller, and not yet resolved.** Paired on the
+same excerpts, 3 m costs 0.114 [−0.256, +0.020] more room F than 1 m at the
+normal level and 0.095 [−0.220, +0.015] at the quiet one. Both intervals touch
+zero. The −12 dB level costs about 0.1 of room F at either distance. Part of
+that is the tracker's own level sensitivity, which the table removes by pairing
+each level with its own loopback: within-level losses grow from 0.316 to 0.362
+near and from 0.420 to 0.457 far.
+
+**Controls, with no room in either.** `digital_path`: float excerpt against its
+24-bit loopback, −0.005 [−0.035, +0.017], with 7 of 20 excerpts changed.
+`tracker_level`: quiet loopback against normal, −0.061 [−0.132, +0.001], with
+17 of 20 changed. The live tracker is deterministic but not smooth. `rock.00025`
+scores 0.622, 0.434 and 0.203 as float, 24-bit and 16-bit versions of the same
+music.
+
+**Gates.**
+
+- **A1 met:** 79 of 80 takes aligned at first attempt on two agreeing slates.
+  The one loss is `blues.00025` on near/normal: the phone started recording
+  about 1.4 s after playback, so that take's head slate was never captured. The
+  in-session `check` read that pass as 0/20, because it anchored on the first
+  slate only. It now takes a stated programme offset that places the windows and
+  nothing else.
+- **A2: finite, and beyond the resource.** The per-excerpt SD of the paired
+  difference is 0.27–0.35. For a ±0.03 half-width, the worst cell (far, quiet)
+  needs **511 [296, 1089]** excerpts. At ±0.05 that is about 184 [107, 392].
+  Under the preregistration the contract must now be narrowed explicitly:
+  either a wider half-width or fewer cells.
+- **A3 not decidable:** person-minutes were not logged.
+- **A4 met:** GTZAN is withheld from `model_1`.
+
+**Deviations from the registration, recorded rather than absorbed.**
+
+- The USB microphone was not recorded, so every cell is the phone and the
+  device factor is unmeasured.
+- Speaker model, playback chain and room dimensions were not recorded beyond
+  "the same as sessions 1–3".
+- The near/normal pass was not re-recorded after its in-session failure.
+- The phone's OS processing is recorded as the iPhone's standard processing,
+  left unchanged, with its contents unknown.
+
+By genre, averaged over cells (clean → room): disco 1.00 → 0.43, metal
+0.98 → 0.36 and country 0.73 → 0.20 lose the most. Blues 0.69 → 0.53 and rock
+0.65 → 0.43 lose the least. Twenty excerpts is two per genre, so this is
+description, not a finding.
