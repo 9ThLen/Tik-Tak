@@ -89,8 +89,10 @@ A1_ALIGNED_FRACTION = 0.90
 BOOTSTRAP_SEED = 20260925
 BOOTSTRAP_DRAWS = 10_000
 # A2: the full collection is sized to this half-width on a cell's mean paired
-# difference, and reported for the worst cell.
-A2_HALF_WIDTH = 0.03
+# difference, and reported for the worst cell. Registered at 0.03; narrowed to
+# 0.05 on 2026-09-29 after the session showed 0.03 needs 511 [296, 1089]
+# excerpts (PREREGISTERED_P1B0.md).
+A2_HALF_WIDTH = 0.05
 
 
 def sha256(path: pathlib.Path) -> str:
@@ -273,7 +275,15 @@ def validate_session(session: dict) -> None:
 
 def score(session_path: pathlib.Path, manifest: pathlib.Path,
           music: pathlib.Path, binary: pathlib.Path, model: pathlib.Path,
-          output: pathlib.Path) -> dict:
+          output: pathlib.Path, beat_this: pathlib.Path | None = None) -> dict:
+    """Score a session. With `beat_this`, the observation is Beat This!'s.
+
+    Its activation goes through `--live-activation` into the same
+    `LiveTracker`, exactly as `beat_this_front_end.py` does, so the decoder is
+    the shipped one and only the observation differs from the primary arm.
+    The clean arm is still the loopback: a second front end does not make the
+    first one's lesson about the digital path go away.
+    """
     import soundfile
 
     from eval.live_corpus_benchmark import _score_one, load_corpus
@@ -293,13 +303,31 @@ def score(session_path: pathlib.Path, manifest: pathlib.Path,
         files[f"programme_{level}"] = base / f"programme_{level}.wav"
     for index, entry in enumerate(session["captures"]):
         files[f"capture_{index}"] = base / entry["file"]
-    run_provenance = experiment_provenance(REPOSITORY, files,
-                                           experiment="p1b0_replay",
-                                           alignment="slate", rate=RATE)
+    if beat_this is not None:
+        files["beat_this"] = beat_this
+    run_provenance = experiment_provenance(
+        REPOSITORY, files, experiment="p1b0_replay", alignment="slate",
+        rate=RATE, front_end="beat_this" if beat_this else "beatnet")
+
+    if beat_this is None:
+        def tracked(item: dict, path: pathlib.Path) -> dict:
+            return _score_one(dict(item, audio=path), "model", binary, model)
+    else:
+        from eval.beat_this_front_end import (activation_of,
+                                              through_tracker)
+        from eval.beat_this_front_end import score as score_payload
+        from eval.beat_this_onnx import BeatThisOnnx
+
+        front_end = BeatThisOnnx(beat_this)
+
+        def tracked(item: dict, path: pathlib.Path) -> dict:
+            _, activation = activation_of(front_end, path)
+            return score_payload(item, through_tracker(binary, path, activation),
+                                 binary, model)
 
     items = {item["name"]: item for item in load_corpus(
         manifest, music, False, frozenset({"gtzan"}))}
-    aligned_dir = base / "aligned"
+    aligned_dir = base / ("aligned_beat_this" if beat_this else "aligned")
     aligned_dir.mkdir(exist_ok=True)
 
     def takes_of(capture: np.ndarray, level: str, tag: str,
@@ -320,8 +348,7 @@ def score(session_path: pathlib.Path, manifest: pathlib.Path,
             path = aligned_dir / f"{row['track']}__{tag}.wav"
             soundfile.write(str(path), capture[start:stop], RATE,
                             subtype="FLOAT")
-            yield row, _score_one(dict(items[row["track"]], audio=path),
-                                  "model", binary, model)
+            yield row, tracked(items[row["track"]], path)
 
     # The clean arm is the programme itself, read and cut exactly as a capture
     # is: same file, same 24-bit samples, same level. The live tracker is
@@ -340,9 +367,9 @@ def score(session_path: pathlib.Path, manifest: pathlib.Path,
             clean[level][row["track"]] = scored
     # Not an arm: the float excerpt the programme was built from, scored only
     # to report how far the digital path alone moves the tracker.
-    reference = {excerpt["track"]: _score_one(
-        dict(items[excerpt["track"]], audio=base / excerpt["clean"]),
-        "model", binary, model) for excerpt in selection["excerpts"]}
+    reference = {excerpt["track"]: tracked(items[excerpt["track"]],
+                                           base / excerpt["clean"])
+                 for excerpt in selection["excerpts"]}
 
     records = []
     for entry in session["captures"]:
@@ -459,6 +486,9 @@ def main(argv: list[str] | None = None) -> int:
     scored.add_argument("--binary", type=pathlib.Path, required=True)
     scored.add_argument("--model", type=pathlib.Path, required=True)
     scored.add_argument("--output", type=pathlib.Path, required=True)
+    scored.add_argument("--beat-this", type=pathlib.Path, default=None,
+                        help="score Beat This!'s observation through the same "
+                        "LiveTracker instead of BeatNet's")
     args = parser.parse_args(argv)
 
     if args.command == "build":
@@ -490,7 +520,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if found["a1_fraction_met"] else 1
 
     result = score(args.session, args.manifest, args.music, args.binary,
-                   args.model, args.output)
+                   args.model, args.output, args.beat_this)
     print(json.dumps(result["a1"]))
     print(json.dumps(result["a2"]))
     for name, row in result["controls"].items():

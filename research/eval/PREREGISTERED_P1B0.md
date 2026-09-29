@@ -305,3 +305,26 @@ score a capture whose `os_processing`, device model, channel count or file is
 missing. "unknown" is accepted when it is written down. The log also records
 room description and dimensions, speaker, playback chain, speaker volume,
 distances, background noise and the person-minutes that A3 needs.
+
+## Revision 2026-09-29: A2 narrowed to ±0.05, after the session
+
+Written after the session was scored. This is the explicit narrowing that A2
+requires when a budget does not fit, not a gate moved to make a result pass.
+
+At the registered ±0.03 half-width, the worst cell (far, quiet) needs 511
+[296, 1089] excerpts. The per-excerpt SD of the paired difference is 0.27–0.35,
+roughly the size of the effect itself. The contract is narrowed to a **±0.05**
+half-width on a cell's mean paired difference. The QC gates are unchanged:
+A1's two-slate rule, the loopback clean arm and the session-log refusals all
+stay as registered.
+
+What the narrowing costs: a ±0.05 interval resolves the room loss itself, 0.32–0.46,
+but not the distance and level contrasts between cells, which are about 0.1. A
+claim about those needs its own registration and sizing.
+
+The secondary arm is Beat This! (`final0`, `models/beat_this.onnx`), whose
+activation goes through `--live-activation` into the same `LiveTracker` and
+is scored on the same aligned takes with the same loopback clean arm. GTZAN is
+held out from `final0` as well. It is a whole-excerpt, bidirectional
+observation replayed causally, so it is a bound on what a better front end
+could give in this room, not a causal model's number.
