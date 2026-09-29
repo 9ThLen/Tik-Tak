@@ -62,11 +62,22 @@ def build_programme(takes: list[tuple[str, np.ndarray, dict]],
 
 
 def locate_takes(capture: np.ndarray, programme: dict,
-                 rate: int = RATE) -> list[dict]:
-    """Find each take inside one capture and align it on its own two slates."""
+                 rate: int = RATE,
+                 programme_offset: float | None = None) -> list[dict]:
+    """Find each take inside one capture and align it on its own two slates.
+
+    `programme_offset` is where the programme started in capture time, and is
+    given only when the first head slate is not in the capture at all -- a
+    recorder started after the play button, as the P1-B0 near/normal pass was.
+    It chooses search windows and nothing else: every take is still accepted
+    only on its own two slates, so a wrong hint refuses takes rather than
+    misplacing them, and a take whose head slate is missing is refused.
+    """
     entries = programme["takes"]
     if not entries:
         return []
+    if programme_offset is not None:
+        return _align_from(capture, entries, programme_offset, rate)
 
     # The programme's own start: the first take's head slate, searched over a
     # window wide enough for a slow hand on the record button.
@@ -87,8 +98,12 @@ def locate_takes(capture: np.ndarray, programme: dict,
                  "reason": ("programme head slate not found within the "
                             f"first {slop:.1f} s")}
                 for entry in entries]
-    programme_offset = anchor["offset_sec"] - first["offset_sec"]
+    return _align_from(capture, entries,
+                       anchor["offset_sec"] - first["offset_sec"], rate)
 
+
+def _align_from(capture: np.ndarray, entries: list[dict],
+                programme_offset: float, rate: int) -> list[dict]:
     out = []
     for entry in entries:
         layout = entry["layout"]

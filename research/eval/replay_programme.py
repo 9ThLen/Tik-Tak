@@ -209,8 +209,9 @@ def read_capture(path: pathlib.Path) -> tuple[np.ndarray, float]:
     return resample(mono, int(rate)), float(rate)
 
 
-def check(capture: np.ndarray, layout: dict) -> dict:
-    rows = locate_takes(capture, layout)
+def check(capture: np.ndarray, layout: dict,
+          programme_offset: float | None = None) -> dict:
+    rows = locate_takes(capture, layout, programme_offset=programme_offset)
     aligned = sum(row["accepted"] for row in rows)
     return {"takes": rows, "aligned": aligned, "total": len(rows),
             "a1_fraction_met": aligned >= A1_ALIGNED_FRACTION * len(rows)}
@@ -301,10 +302,11 @@ def score(session_path: pathlib.Path, manifest: pathlib.Path,
     aligned_dir = base / "aligned"
     aligned_dir.mkdir(exist_ok=True)
 
-    def takes_of(capture: np.ndarray, level: str, tag: str):
+    def takes_of(capture: np.ndarray, level: str, tag: str,
+                 programme_offset: float | None = None):
         """Every take of one capture, aligned, cut and scored -- or refused."""
         layout = layouts[level]
-        found = check(capture, layout)
+        found = check(capture, layout, programme_offset)
         for row, take in zip(found["takes"], layout["takes"]):
             if not row["accepted"]:
                 yield row, None
@@ -347,7 +349,11 @@ def score(session_path: pathlib.Path, manifest: pathlib.Path,
         capture, device_rate = read_capture(base / entry["file"])
         cell = {key: entry[key] for key in ("level", "distance", "device")}
         tag = "__".join(map(str, cell.values()))
-        for row, room in takes_of(capture, entry["level"], tag):
+        hint = entry.get("programme_offset_sec")
+        if hint is not None and not entry.get("programme_offset_why"):
+            raise ValueError(f"{entry['file']}: a programme offset needs its "
+                             "reason written beside it")
+        for row, room in takes_of(capture, entry["level"], tag, hint):
             record = dict(cell, track=row["track"], file=entry["file"],
                           device_rate=device_rate, aligned=row["accepted"])
             if room is None:
@@ -442,6 +448,9 @@ def main(argv: list[str] | None = None) -> int:
     checked = commands.add_parser("check")
     checked.add_argument("--layout", type=pathlib.Path, required=True)
     checked.add_argument("--capture", type=pathlib.Path, required=True)
+    checked.add_argument("--programme-offset", type=float, default=None,
+                         help="where the programme started in the capture, "
+                         "when its first slate was not recorded")
 
     scored = commands.add_parser("score")
     scored.add_argument("--session", type=pathlib.Path, required=True)
@@ -463,7 +472,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "check":
         layout = json.loads(args.layout.read_text(encoding="utf-8"))
         capture, rate = read_capture(args.capture)
-        found = check(capture, layout)
+        found = check(capture, layout, args.programme_offset)
         print(f"{args.capture.name}: {rate:.0f} Hz, "
               f"{len(capture) / RATE / 60:.1f} min")
         for row in found["takes"]:

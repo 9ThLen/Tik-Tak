@@ -142,3 +142,20 @@ def test_a2_brackets_its_own_estimate_and_grows_with_spread():
     assert narrow["ci95"][0] <= narrow["estimate"] <= narrow["ci95"][1]
     assert wide["estimate"] > narrow["estimate"]
     assert captures_needed([0.1]) is None
+
+
+def test_a_recorder_started_after_play_aligns_on_a_hint_and_loses_take_one():
+    """The near/normal pass: the first head slate was never recorded."""
+    programme, layout = _excerpt_programme(3)
+    late = 1.385
+    capture = np.concatenate([programme[int(round(late * RATE)):],
+                              np.zeros(RATE)])
+    assert check(capture, layout)["aligned"] == 0
+    found = check(capture, layout, programme_offset=-late)
+    assert [row["accepted"] for row in found["takes"]] == [False, True, True]
+
+
+def test_a_wrong_hint_refuses_rather_than_misplaces():
+    programme, layout = _excerpt_programme(3)
+    found = check(_record(programme, 1.0), layout, programme_offset=5.0)
+    assert found["aligned"] == 0
