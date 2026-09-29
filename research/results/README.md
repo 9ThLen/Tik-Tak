@@ -2353,11 +2353,12 @@ music.
   in-session `check` read that pass as 0/20, because it anchored on the first
   slate only. It now takes a stated programme offset that places the windows and
   nothing else.
-- **A2: finite, and beyond the resource.** The per-excerpt SD of the paired
-  difference is 0.27–0.35. For a ±0.03 half-width, the worst cell (far, quiet)
-  needs **511 [296, 1089]** excerpts. At ±0.05 that is about 184 [107, 392].
-  Under the preregistration the contract must now be narrowed explicitly:
-  either a wider half-width or fewer cells.
+- **A2: finite, and narrowed.** The per-excerpt SD of the paired difference
+  is 0.27–0.35. For a ±0.03 half-width, the worst cell (far, quiet) needs 511
+  [296, 1089] excerpts. The contract was narrowed to ±0.05 in a dated revision
+  written after the session. At ±0.05 the worst cell needs **184 [107, 392]**
+  for BeatNet and **152 [88, 323]** for Beat This!. A ±0.05 interval resolves the
+  room loss but not the ~0.1 contrasts between cells.
 - **A3 not decidable:** person-minutes were not logged.
 - **A4 met:** GTZAN is withheld from `model_1`.
 
@@ -2375,3 +2376,42 @@ By genre, averaged over cells (clean → room): disco 1.00 → 0.43, metal
 0.98 → 0.36 and country 0.73 → 0.20 lose the most. Blues 0.69 → 0.53 and rock
 0.65 → 0.43 lose the least. Twenty excerpts is two per genre, so this is
 description, not a finding.
+
+### Beat This! on the same takes: the room loss is mostly the front end's
+
+Scored with `--beat-this models/beat_this.onnx` (`final0`, also held out from
+GTZAN) and kept in `P1B0_BEAT_THIS_RECORDS_20260929.json` (commit `277a70c`).
+Its activation goes into the same `LiveTracker` and is paired with the same
+loopback clean arm. Beat This! is bidirectional over the whole excerpt, so this
+is a bound on what a better observation could give in this room, not a causal
+model's number.
+
+| cell | BeatNet clean → room | Beat This! clean → room | Beat This! room − clean [95% CI] | usable room, BeatNet / Beat This! |
+|---|---|---|---|---:|
+| near, normal | 0.789 → 0.473 | 0.846 → 0.794 | −0.052 [−0.121, +0.017] | 0.16 / 0.68 |
+| far, normal | 0.765 → 0.345 | 0.832 → 0.766 | −0.066 [−0.167, +0.036] | 0.05 / 0.55 |
+| near, quiet | 0.704 → 0.342 | 0.835 → 0.612 | −0.224 [−0.334, −0.121] | 0.10 / 0.30 |
+| far, quiet | 0.704 → 0.247 | 0.835 → 0.649 | −0.187 [−0.327, −0.057] | 0.10 / 0.60 |
+
+Beat This! clean `usable` is 0.65 at both levels.
+
+**At a normal level the room costs Beat This! almost nothing.** The loss is
+−0.05 to −0.07 and both intervals include zero. Its usable rate in the room,
+0.55–0.68, matches its clean rate of 0.65. The same takes cost BeatNet 0.32–0.42.
+Paired on the same room takes, Beat This! leads BeatNet by +0.27 to +0.42 of F,
+and every interval excludes zero. On clean audio it leads by only +0.06 to +0.13.
+This repeats, larger and on a held-out corpus, the Harmonix finding that the
+front end is worth most in a room (+0.212 room against +0.138 clean).
+
+**What does cost Beat This! is level, not distance.** Going from 1 m to 3 m moves
+its room F by −0.014 [−0.100, +0.073] at the normal level and +0.037
+[−0.111, +0.172] at the quiet one. Dropping 12 dB moves it by −0.150
+[−0.243, −0.071] at 1 m and −0.118 [−0.232, −0.022] at 3 m. Its own digital
+level control is +0.003 [−0.014, +0.020], so this is acoustic: the music sinking
+toward the room's noise floor and the phone's processing, not a model that
+dislikes quiet input. BeatNet's `tracker_level` control is −0.061, and its room
+loss is large at both levels. Its failure in a room does not depend on level
+the way Beat This!'s does.
+
+**Controls.** For Beat This!, `digital_path` is −0.008 [−0.046, +0.022] (7/20
+changed) and `tracker_level` is +0.003 [−0.014, +0.020] (9/20 changed).
