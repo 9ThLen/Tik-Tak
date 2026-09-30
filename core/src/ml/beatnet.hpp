@@ -146,6 +146,33 @@ private:
 // delay in its own streaming mode.
 //
 // Real-time safe: process() allocates nothing.
+// What happens to the capture before BeatNet's features are taken. Both are
+// off by default, because every published number was measured without them.
+struct BeatNetInput {
+    // Low-pass before the resampler decimates; see BeatNetFeatures::resample.
+    bool antialias = false;
+
+    // Lift anything quieter than this, in dBFS of the capture's own RMS, up to
+    // it; never cut. 0 is off.
+    //
+    // The features are log10(1 + |X|) with nothing in front, so a quieter
+    // input slides them toward the linear regime and the network sees shapes
+    // it was never trained on: on RWC a digital 24 dB cut alone costs beat F
+    // 0.117 and usable 0.032, and 12 dB costs 0.032 and 0.025
+    // (PREREGISTERED_quickfix_diagnostics.md, Q3). Phone captures arrive 15
+    // to 27 dB below their sources. Released music sits at -17.9 dBFS median
+    // active RMS as GTZAN measures it (199 files, IQR -21.0 to -14.6), so a
+    // floor near -20 lifts captures back into that range while leaving most
+    // clean files untouched.
+    //
+    // The level is a slow, symmetric average of frame power (5 s), updated only
+    // above -60 dBFS so silence does not drag it down, and the gain is at most
+    // +30 dB. Symmetric on purpose: a fast attack would dip the gain after
+    // every kick drum, which is a modulation at exactly the beat rate this
+    // front end exists to find.
+    double level_floor_dbfs = 0.0;
+};
+
 class BeatNetFeatures {
 public:
     static constexpr std::size_t kFeatures = BeatNetWeights::kFeatures;
@@ -159,10 +186,7 @@ public:
     // being fed; 8 covers everything down to 3 kHz.
     static constexpr std::size_t kMaxPerSample = 8;
 
-    // `antialias` puts a low-pass in front of the resampler when it decimates;
-    // see resample(). Off by default, because every measurement was made
-    // without it.
-    explicit BeatNetFeatures(double sampleRate, bool antialias = false);
+    explicit BeatNetFeatures(double sampleRate, const BeatNetInput& input = {});
 
     void reset();
 
@@ -213,6 +237,8 @@ private:
     // that process() takes back out, so the timestamps are unchanged.
     std::size_t resample(float sample, float* out);
     float lowpass(float sample);
+    // The floor's gain for the frame in buffer_, updating the level estimate.
+    float levelGain();
 
     // One model-rate sample in; true when a frame is complete in features_.
     bool accept(float sample);
@@ -248,6 +274,15 @@ private:
     std::vector<float> history_;
     std::size_t history_head_ = 0;
     std::size_t skip_ = 0;
+
+    // The optional level floor: the target power, and the running estimate of
+    // the capture's, first as a plain mean over a warm-up and then averaged.
+    bool level_active_ = false;
+    double floor_power_ = 0.0;
+    double level_alpha_ = 0.0;
+    double level_power_ = 0.0;
+    double warmup_power_ = 0.0;
+    std::size_t warmup_frames_ = 0;
 };
 
 // Audio in, beat activation out: the features and the network wired together.
@@ -280,7 +315,7 @@ private:
 class BeatNetActivation {
 public:
     BeatNetActivation(double sampleRate, const BeatNetWeights& weights,
-                      bool antialias = false);
+                      const BeatNetInput& input = {});
 
     // `weights` is `count` pointers, each to a valid() set that must outlive
     // this object; the core does no I/O and does not own them. A count of zero
@@ -290,7 +325,7 @@ public:
     // difference between those two is several points of the headline.
     BeatNetActivation(double sampleRate,
                       const BeatNetWeights* const* weights, std::size_t count,
-                      bool antialias = false);
+                      const BeatNetInput& input = {});
 
     // How many networks are being averaged. One, for the single-weight form.
     std::size_t networks() const { return models_.size(); }

@@ -549,7 +549,9 @@ namespace {
 
 // Mean of the magnitude features (the first 136) over every frame of `audio`.
 std::vector<double> meanBands(double rate, bool antialias, const std::vector<float>& audio) {
-    tiktak::ml::BeatNetFeatures features(rate, antialias);
+    tiktak::ml::BeatNetInput input;
+    input.antialias = antialias;
+    tiktak::ml::BeatNetFeatures features(rate, input);
     std::vector<double> sum(tiktak::ml::BeatNetFeatures::kFilters, 0.0);
     std::size_t frames = 0;
     features.process(audio.data(), audio.size(),
@@ -591,8 +593,10 @@ TEST(BeatNetFeatures, TheAntiAliasOptionLeavesThePassbandAndTheClockAlone) {
     // Same frames at the same times: the filter's delay is taken back out.
     std::vector<double> plain_times;
     std::vector<double> filtered_times;
-    tiktak::ml::BeatNetFeatures a(rate, false);
-    tiktak::ml::BeatNetFeatures b(rate, true);
+    tiktak::ml::BeatNetInput filtered_input;
+    filtered_input.antialias = true;
+    tiktak::ml::BeatNetFeatures a(rate);
+    tiktak::ml::BeatNetFeatures b(rate, filtered_input);
     a.process(tone.data(), tone.size(),
               [&](const float*, std::size_t, double t) { plain_times.push_back(t); });
     b.process(tone.data(), tone.size(),
@@ -607,4 +611,71 @@ TEST(BeatNetFeatures, AtTheModelsOwnRateTheOptionChangesNothing) {
     const double rate = tiktak::ml::BeatNetFeatures::kModelRate;
     const auto audio = tiktak::test::clickTrack(120.0, 3.0, rate);
     EXPECT_EQ(meanBands(rate, true, audio), meanBands(rate, false, audio));
+}
+
+// ----------------------------------------------------------- the level floor
+
+namespace {
+
+// Every frame's magnitude features (the first 136), after the first second.
+std::vector<std::vector<float>> framesAfterWarmup(const std::vector<float>& audio,
+                                                  const tiktak::ml::BeatNetInput& input) {
+    const double rate = tiktak::ml::BeatNetFeatures::kModelRate;
+    tiktak::ml::BeatNetFeatures features(rate, input);
+    std::vector<std::vector<float>> out;
+    features.process(audio.data(), audio.size(),
+                     [&](const float* values, std::size_t, double time) {
+                         if (time >= 1.5) {
+                             out.emplace_back(values, values + tiktak::ml::BeatNetFeatures::kFilters);
+                         }
+                     });
+    return out;
+}
+
+}  // namespace
+
+TEST(BeatNetFeatures, TheLevelFloorGivesAQuietCaptureTheLoudOnesFeatures) {
+    // A steady tone at -17 dBFS RMS, and the same tone 24 dB down. With the
+    // floor at the loud level the quiet one is lifted by exactly the cut, and
+    // since the DFT is linear its features come back as the loud one's.
+    const double rate = tiktak::ml::BeatNetFeatures::kModelRate;
+    const float amplitude = 0.2f;   // RMS 0.141, -17 dBFS
+    const auto loud = tiktak::test::sine(static_cast<std::size_t>(4.0 * rate), 440.0, rate, amplitude);
+    std::vector<float> quiet(loud);
+    for (float& s : quiet) s *= static_cast<float>(std::pow(10.0, -24.0 / 20.0));
+
+    tiktak::ml::BeatNetInput floor;
+    floor.level_floor_dbfs = 20.0 * std::log10(amplitude / std::sqrt(2.0));
+    const auto reference = framesAfterWarmup(loud, {});
+    const auto lifted = framesAfterWarmup(quiet, floor);
+    const auto unlifted = framesAfterWarmup(quiet, {});
+    ASSERT_EQ(reference.size(), lifted.size());
+    ASSERT_FALSE(reference.empty());
+
+    double gap_lifted = 0.0;
+    double gap_unlifted = 0.0;
+    for (std::size_t f = 0; f < reference.size(); ++f) {
+        for (std::size_t b = 0; b < reference[f].size(); ++b) {
+            gap_lifted = std::max(gap_lifted, static_cast<double>(std::fabs(lifted[f][b] - reference[f][b])));
+            gap_unlifted = std::max(gap_unlifted, static_cast<double>(std::fabs(unlifted[f][b] - reference[f][b])));
+        }
+    }
+    EXPECT_GT(gap_unlifted, 0.5) << "24 dB made no difference, so this tests nothing";
+    EXPECT_LT(gap_lifted, 0.01);
+}
+
+TEST(BeatNetFeatures, TheLevelFloorNeverCutsAndNeverTouchesSilence) {
+    const double rate = tiktak::ml::BeatNetFeatures::kModelRate;
+    tiktak::ml::BeatNetInput floor;
+    floor.level_floor_dbfs = -20.0;
+
+    // Louder than the floor: boost-only, so exactly the unfloored features.
+    const auto loud = tiktak::test::sine(static_cast<std::size_t>(3.0 * rate), 440.0, rate, 0.5f);
+    EXPECT_EQ(framesAfterWarmup(loud, floor), framesAfterWarmup(loud, {}));
+
+    // Silence is not evidence of a quiet capture and must not be lifted.
+    const std::vector<float> silence(static_cast<std::size_t>(3.0 * rate), 0.0f);
+    for (const auto& frame : framesAfterWarmup(silence, floor)) {
+        for (float v : frame) EXPECT_EQ(v, 0.0f);
+    }
 }

@@ -186,7 +186,7 @@ void BeatNetModel::forward(const float* features, float* probabilities) {
 
 // ---------------------------------------------------------------- features --
 
-BeatNetFeatures::BeatNetFeatures(double sampleRate, bool antialias)
+BeatNetFeatures::BeatNetFeatures(double sampleRate, const BeatNetInput& input)
     : ratio_(sampleRate / kModelRate),
       dft_(kFrameSize),
       bank_(kFrameSize, kModelRate, 24, 30.0, 17000.0, 440.0),
@@ -201,7 +201,14 @@ BeatNetFeatures::BeatNetFeatures(double sampleRate, bool antialias)
 
     // Only when decimating: at the model's own rate there is nothing to fold,
     // and the path stays bit for bit the one every number was measured on.
-    antialias_ = antialias && sampleRate > kModelRate * 1.001;
+    antialias_ = input.antialias && sampleRate > kModelRate * 1.001;
+
+    level_active_ = input.level_floor_dbfs < 0.0;
+    if (level_active_) {
+        floor_power_ = std::pow(10.0, input.level_floor_dbfs / 10.0);
+        const double hop_sec = static_cast<double>(kHopSize) / kModelRate;
+        level_alpha_ = 1.0 - std::exp(-hop_sec / 5.0);
+    }
     if (antialias_) {
         constexpr std::size_t kTaps = 63;
         constexpr double kCutoffHz = 10000.0;
@@ -269,6 +276,37 @@ void BeatNetFeatures::reset() {
     std::fill(history_.begin(), history_.end(), 0.0f);
     history_head_ = 0;
     skip_ = antialias_ ? (taps_.size() - 1) / 2 : 0;
+    level_power_ = 0.0;
+    warmup_power_ = 0.0;
+    warmup_frames_ = 0;
+}
+
+float BeatNetFeatures::levelGain() {
+    constexpr double kSilencePower = 1e-6;          // -60 dBFS
+    constexpr std::size_t kWarmupFrames = 50;       // one second of evidence
+    constexpr double kMaxGain = 31.622776601683793; // +30 dB
+
+    double power = 0.0;
+    for (std::size_t n = 0; n < kFrameSize; ++n) {
+        power += static_cast<double>(buffer_[n]) * static_cast<double>(buffer_[n]);
+    }
+    power /= static_cast<double>(kFrameSize);
+
+    if (power > kSilencePower) {
+        if (warmup_frames_ < kWarmupFrames) {
+            // Unity until a second of sound has been heard: a first frame that
+            // happens to be a lone quiet note should not set the gain.
+            warmup_power_ += power;
+            if (++warmup_frames_ == kWarmupFrames) {
+                level_power_ = warmup_power_ / static_cast<double>(kWarmupFrames);
+            }
+        } else {
+            level_power_ += level_alpha_ * (power - level_power_);
+        }
+    }
+    if (!(level_power_ > 0.0)) return 1.0f;
+    const double gain = std::sqrt(floor_power_ / level_power_);
+    return static_cast<float>(std::min(std::max(gain, 1.0), kMaxGain));
 }
 
 float BeatNetFeatures::lowpass(float sample) {
@@ -316,6 +354,13 @@ bool BeatNetFeatures::accept(float sample) {
     dft_.magnitude(windowed_.data(), spectrum_.data());
     bank_.apply(spectrum_.data(), features_.data());
 
+    // The DFT is linear, so a gain on the band magnitudes is exactly a gain on
+    // the audio, applied where it costs 136 multiplies instead of 1411.
+    if (level_active_) {
+        const float gain = levelGain();
+        for (std::size_t b = 0; b < kFilters; ++b) features_[b] *= gain;
+    }
+
     for (std::size_t b = 0; b < kFilters; ++b) {
         features_[b] = std::log10(features_[b] + 1.0f);
         // The difference is to one frame back, which is not a free choice: the
@@ -341,16 +386,16 @@ void BeatNetFeatures::advance() {
 // ------------------------------------------------------------- activation --
 
 BeatNetActivation::BeatNetActivation(double sampleRate, const BeatNetWeights& weights,
-                                     bool antialias)
-    : features_(sampleRate, antialias) {
+                                     const BeatNetInput& input)
+    : features_(sampleRate, input) {
     models_.reserve(1);
     models_.emplace_back(weights);
 }
 
 BeatNetActivation::BeatNetActivation(double sampleRate,
                                      const BeatNetWeights* const* weights,
-                                     std::size_t count, bool antialias)
-    : features_(sampleRate, antialias) {
+                                     std::size_t count, const BeatNetInput& input)
+    : features_(sampleRate, input) {
     assert(weights != nullptr && count > 0);
     // Reserved exactly, so the vector never reallocates -- BeatNetModel holds a
     // reference to its weights and so cannot be move-assigned, and growing the
