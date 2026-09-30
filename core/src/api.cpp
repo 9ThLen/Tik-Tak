@@ -748,8 +748,31 @@ void tt_player_stats_get(const tt_player* player, tt_player_stats* out) {
 
 /* ------------------------------------------------------------ live input -- */
 
+namespace {
+
+std::vector<const tiktak::ml::BeatNetWeights*> pointersTo(
+    const std::vector<tiktak::ml::BeatNetWeights>& weights) {
+    std::vector<const tiktak::ml::BeatNetWeights*> out;
+    out.reserve(weights.size());
+    for (const auto& w : weights) out.push_back(&w);
+    return out;
+}
+
+}  // namespace
+
 struct tt_live {
     explicit tt_live(const tiktak::tracking::LiveConfig& cfg) : impl(cfg) {}
+    tt_live(const tiktak::tracking::LiveConfig& cfg,
+            std::vector<tiktak::ml::BeatNetWeights>&& loaded)
+        : weights(std::move(loaded)),
+          refs(pointersTo(weights)),
+          impl(cfg, refs.data(), refs.size()) {}
+
+    // Declared, and so built, before the tracker and destroyed after it: the
+    // tracker keeps pointers into these. Moving the vector in above hands over
+    // its buffer, so the elements — and the pointers — do not move.
+    std::vector<tiktak::ml::BeatNetWeights> weights;
+    std::vector<const tiktak::ml::BeatNetWeights*> refs;
     tiktak::tracking::LiveTracker impl;
 };
 
@@ -806,6 +829,44 @@ tt_live* tt_live_create(const tt_live_config* cfg, tt_status* status) {
 
     if (status) *status = TT_OK;
     return handle;
+}
+
+tt_live* tt_live_create_with_models(const tt_live_config* cfg, const void* const* weights,
+                                    const size_t* sizes, size_t count, tt_status* status) {
+    const auto fail = [status](tt_status code) -> tt_live* {
+        if (status) *status = code;
+        return nullptr;
+    };
+
+    if (!cfg || !weights || !sizes || count == 0) return fail(TT_ERR_INVALID_ARG);
+
+    const tiktak::tracking::LiveConfig resolved = resolve(*cfg);
+    if (!resolved.valid()) return fail(TT_ERR_INVALID_ARG);
+
+    // Loaded in place, never copied: BeatNetWeights points into its own
+    // storage, and a copy would carry pointers into the original's.
+    std::vector<tiktak::ml::BeatNetWeights> loaded(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        if (!weights[i] || !loaded[i].load(weights[i], sizes[i])) {
+            return fail(TT_ERR_INVALID_ARG);
+        }
+    }
+
+    tt_live* handle = new (std::nothrow) tt_live(resolved, std::move(loaded));
+    if (!handle) return fail(TT_ERR_OUT_OF_MEMORY);
+    // The tracker makes the same all-or-none check; asked for a model, a
+    // handle that ended up on spectral flux is a failure, not a fallback.
+    if (handle->impl.models() != count) {
+        delete handle;
+        return fail(TT_ERR_INVALID_ARG);
+    }
+
+    if (status) *status = TT_OK;
+    return handle;
+}
+
+size_t tt_live_model_count(const tt_live* live) {
+    return live ? live->impl.models() : 0;
 }
 
 void tt_live_destroy(tt_live* live) { delete live; }

@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -1281,7 +1282,131 @@ TEST(LiveApi, NullHandleIsHarmless) {
     tt_live_config_defaults(nullptr, 48000.0);
     tt_live_estimate_get(nullptr, 0.0, nullptr);
     tt_live_stats_get(nullptr, nullptr);
+    EXPECT_EQ(tt_live_model_count(nullptr), 0u);
     tt_live_destroy(nullptr);
+}
+
+namespace {
+
+// A BeatNet weight file with made-up parameters, in the layout
+// models/export_beatnet.py writes: "TTBN", version 1, then the shapes
+// (features 272, conv channels 2, kernel 10, hidden 150, layers 2, classes 3),
+// then 402,325 little-endian floats — 1,609,332 bytes, the size of the real
+// checkpoints. Spelled out rather than taken from the core's headers because
+// this file sees the API only as a shell does. What is tested is the wiring,
+// which made-up weights exercise as well as real ones.
+std::vector<unsigned char> stubBeatNetFile() {
+    constexpr std::uint32_t kHeader[7] = {1, 272, 2, 10, 150, 2, 3};
+    constexpr std::size_t kParameters = 402325;
+    constexpr std::size_t kHeaderBytes = 4 + 7 * 4;
+    std::vector<unsigned char> out(kHeaderBytes + kParameters * 4);
+    std::memcpy(out.data(), "TTBN", 4);
+    const auto put = [&out](std::size_t at, std::uint32_t value) {
+        for (std::size_t b = 0; b < 4; ++b) {
+            out[at + b] = static_cast<unsigned char>((value >> (8 * b)) & 0xFF);
+        }
+    };
+    for (std::size_t i = 0; i < 7; ++i) put(4 + 4 * i, kHeader[i]);
+    for (std::size_t i = 0; i < kParameters; ++i) {
+        const float value = 0.05f * static_cast<float>(std::sin(0.7 * static_cast<double>(i)));
+        std::uint32_t bits = 0;
+        std::memcpy(&bits, &value, sizeof(bits));
+        put(kHeaderBytes + 4 * i, bits);
+    }
+    return out;
+}
+
+}  // namespace
+
+TEST(LiveApi, TheLearnedFrontEndCrossesTheBoundary) {
+    // Every BeatNet number the research quotes was measured on this front end,
+    // and before this entry point a shell on the C API could only build
+    // spectral flux.
+    tt_live_config cfg;
+    tt_live_config_defaults(&cfg, 48000.0);
+
+    // Copied in: the caller's buffer is gone before the first sample arrives.
+    tt_status status = TT_ERR_UNSUPPORTED;
+    tt_live* live = nullptr;
+    {
+        const std::vector<unsigned char> blob = stubBeatNetFile();
+        const void* files[] = {blob.data()};
+        const size_t sizes[] = {blob.size()};
+        live = tt_live_create_with_models(&cfg, files, sizes, 1, &status);
+    }
+    ASSERT_NE(live, nullptr) << tt_status_string(status);
+    EXPECT_EQ(status, TT_OK);
+    EXPECT_EQ(tt_live_model_count(live), 1u);
+
+    const auto audio = tiktak::test::clickTrack(120.0, 4.0, 48000.0, 0.5);
+    constexpr std::size_t kBlock = 512;
+    double time = 0.0;
+    for (std::size_t i = 0; i + kBlock <= audio.size(); i += kBlock) {
+        tt_live_process(live, time, audio.data() + i, kBlock);
+        time += static_cast<double>(kBlock) / 48000.0;
+    }
+    tt_live_stats stats;
+    tt_live_stats_get(live, &stats);
+    // Fifty frames a second, the model's rate, not the ODF's.
+    EXPECT_NEAR(static_cast<double>(stats.frames), 200.0, 4.0);
+    tt_live_destroy(live);
+
+    Live flux{cfg};
+    EXPECT_EQ(tt_live_model_count(flux.handle), 0u) << "the default did not move";
+}
+
+TEST(LiveApi, SeveralFilesAreOneEnsemble) {
+    tt_live_config cfg;
+    tt_live_config_defaults(&cfg, 48000.0);
+    const std::vector<unsigned char> blob = stubBeatNetFile();
+    const void* files[] = {blob.data(), blob.data(), blob.data()};
+    const size_t sizes[] = {blob.size(), blob.size(), blob.size()};
+
+    tt_status status = TT_ERR_UNSUPPORTED;
+    tt_live* live = tt_live_create_with_models(&cfg, files, sizes, 3, &status);
+    ASSERT_NE(live, nullptr) << tt_status_string(status);
+    EXPECT_EQ(tt_live_model_count(live), 3u);
+    tt_live_destroy(live);
+}
+
+TEST(LiveApi, AModelThatDoesNotLoadCreatesNothing) {
+    // All or none: a shell that asked for the model and silently got spectral
+    // flux would be running the weaker path believing it ran the other.
+    tt_live_config cfg;
+    tt_live_config_defaults(&cfg, 48000.0);
+    const std::vector<unsigned char> blob = stubBeatNetFile();
+    const std::vector<unsigned char> truncated(blob.begin(), blob.end() - 4);
+
+    const auto refused = [&cfg](const void* const* files, const size_t* sizes,
+                                size_t count) {
+        tt_status status = TT_OK;
+        tt_live* live = tt_live_create_with_models(&cfg, files, sizes, count, &status);
+        const bool ok = live == nullptr && status == TT_ERR_INVALID_ARG;
+        tt_live_destroy(live);
+        return ok;
+    };
+
+    const void* short_file[] = {truncated.data()};
+    const size_t short_size[] = {truncated.size()};
+    EXPECT_TRUE(refused(short_file, short_size, 1));
+
+    const void* mixed[] = {blob.data(), truncated.data()};
+    const size_t mixed_sizes[] = {blob.size(), truncated.size()};
+    EXPECT_TRUE(refused(mixed, mixed_sizes, 2)) << "one bad checkpoint refuses the ensemble";
+
+    const void* with_null[] = {blob.data(), nullptr};
+    const size_t null_sizes[] = {blob.size(), blob.size()};
+    EXPECT_TRUE(refused(with_null, null_sizes, 2));
+
+    const void* files[] = {blob.data()};
+    const size_t sizes[] = {blob.size()};
+    EXPECT_TRUE(refused(files, sizes, 0));
+    EXPECT_TRUE(refused(nullptr, sizes, 1));
+    EXPECT_TRUE(refused(files, nullptr, 1));
+
+    tt_status status = TT_OK;
+    EXPECT_EQ(tt_live_create_with_models(nullptr, files, sizes, 1, &status), nullptr);
+    EXPECT_EQ(status, TT_ERR_INVALID_ARG);
 }
 
 TEST(LiveApi, ManualModeWaitsForTheRoomAndThenKeepsTheUsersTempo) {

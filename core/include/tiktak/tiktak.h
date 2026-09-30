@@ -739,6 +739,35 @@ typedef struct tt_live_config {
 TT_API void tt_live_config_defaults(tt_live_config* cfg, double sample_rate);
 
 TT_API tt_live* tt_live_create(const tt_live_config* cfg, tt_status* status);
+
+/*
+ * The same tracker on the learned front end: BeatNet, from the weight files
+ * models/export_beatnet.py writes (`.ttw`), handed over as bytes because the
+ * core owns no files. The bytes are copied, so the caller may free them as
+ * soon as this returns. One file runs one network; several are averaged over
+ * a single front end, which is the ensemble measured in research/results.
+ *
+ * Every live number the research quotes for BeatNet was measured on this
+ * front end, and tt_live_create cannot reach it: on GTZAN, held out from the
+ * published checkpoint, the learned front end is usable on 42.6% of recordings
+ * against 13.4% for spectral flux (research/results, the live usable rate).
+ * It is not the default because it costs 1.6 MB and tens of MFLOP a second
+ * per network against flux's few hundred kFLOP, and which of those a device
+ * should spend is the shell's decision.
+ *
+ * All or none. If any file fails to load — wrong size, wrong shapes, a null
+ * entry — nothing is created and the status is TT_ERR_INVALID_ARG. A tracker
+ * that quietly fell back to spectral flux would be the less accurate path
+ * running under the belief that it is the other one.
+ */
+TT_API tt_live* tt_live_create_with_models(const tt_live_config* cfg,
+                                           const void* const* weights,
+                                           const size_t* sizes, size_t count,
+                                           tt_status* status);
+
+/* Networks the tracker runs: 0 on spectral flux. */
+TT_API size_t tt_live_model_count(const tt_live* live);
+
 TT_API void tt_live_destroy(tt_live* live);
 
 /*
@@ -753,6 +782,12 @@ TT_API void tt_live_process(tt_live* live, double stream_time_sec,
  * When our own click will reach the microphone: the moment it is *heard*,
  * output latency and room delay already added by the caller. The core cannot
  * work it out — only the shell knows what the round trip measured.
+ *
+ * Only when it *can* reach the microphone. Through headphones, or any output
+ * the microphone cannot hear, do not call this: there is no click to keep out,
+ * and the gate would only blind the tracker to the music around exactly the
+ * beats it predicted — about a quarter of all frames at 120 BPM with the
+ * learned front end.
  */
 TT_API void tt_live_gate_click(tt_live* live, double heard_time_sec);
 
