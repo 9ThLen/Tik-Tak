@@ -124,6 +124,22 @@ TEST(LiveMetronome, GatesTheClicksItPlays) {
     EXPECT_GT(metronome.stats().gated, 0u);
 }
 
+TEST(LiveMetronome, ThroughHeadphonesItPlaysWithoutBlindingItself) {
+    // The same room and the same clicks, but the microphone cannot hear them:
+    // gating would withhold the music around every beat for nothing.
+    LiveMetronomeConfig cfg = config();
+    cfg.gate_own_clicks = false;
+    LiveMetronome metronome{cfg};
+    metronome.start();
+
+    const auto room = tiktak::test::clickTrack(120.0, 16.0, kRate, 1.0);
+    const auto clicks = run(metronome, room);
+
+    EXPECT_GT(metronome.stats().beats, 10u);
+    EXPECT_FALSE(clicks.empty());
+    EXPECT_EQ(metronome.stats().gated, 0u);
+}
+
 TEST(LiveMetronome, PlaysNothingUntilStarted) {
     LiveMetronome metronome{config()};
 

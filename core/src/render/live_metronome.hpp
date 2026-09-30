@@ -27,6 +27,14 @@ struct LiveMetronomeConfig {
     // time between one output callback and the next.
     double lookahead_sec = 0.05;
 
+    // Whether the microphone can hear the click at all. On a loudspeaker it
+    // can, and each click is gated out of the tracker's input so that it does
+    // not lock onto itself. Through headphones it cannot, and the gate would
+    // only blind the tracker to the music around exactly the beats it
+    // predicted — about a quarter of all frames at 120 BPM with the learned
+    // front end. The shell knows which it is; this class cannot.
+    bool gate_own_clicks = true;
+
     bool valid() const;
 };
 
@@ -55,6 +63,14 @@ struct LiveMetronomeConfig {
 class LiveMetronome {
 public:
     explicit LiveMetronome(const LiveMetronomeConfig& config);
+    // On the learned front end: one BeatNet checkpoint, or several averaged.
+    // The weights are the caller's and must outlive the metronome. All or
+    // none, as tracking::LiveTracker decides — a bad entry leaves it on
+    // spectral flux, and usingModel() is how to tell.
+    LiveMetronome(const LiveMetronomeConfig& config,
+                  const ml::BeatNetWeights* const* weights, std::size_t count);
+
+    bool usingModel() const { return tracker_.usingModel(); }
 
     const LiveMetronomeConfig& config() const { return config_; }
 

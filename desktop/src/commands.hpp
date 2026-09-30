@@ -52,6 +52,11 @@ struct Options {
     // no bench, because its verdicts would be believed about the wrong thing.
     bool tap_mic = false;
     std::string model_path;          // BeatNet weights; empty = spectral flux
+
+    // `listen`: the click cannot reach the microphone, so it is not gated out
+    // of what the tracker hears. Gating without a click to keep out only
+    // blinds the tracker around the beats it predicted.
+    bool headphones = false;
 };
 
 // Returns false and fills `error` on a bad argument, rather than guessing.

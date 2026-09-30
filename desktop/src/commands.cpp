@@ -181,23 +181,28 @@ void tapMicCallback(void* user, double stream_time_sec, const float* input, floa
     }
 }
 
+// BeatNet weights from `path` into `weights`; an empty path leaves them
+// unloaded, which every caller reads as "run on spectral flux". False, having
+// said why, when a path was given and did not load.
+bool loadBeatNet(const std::string& path, tiktak::ml::BeatNetWeights& weights) {
+    if (path.empty()) return true;
+    std::ifstream file(path, std::ios::binary);
+    if (!file) {
+        std::fprintf(stderr, "tiktak: cannot read %s\n", path.c_str());
+        return false;
+    }
+    const std::vector<unsigned char> blob{std::istreambuf_iterator<char>(file),
+                                          std::istreambuf_iterator<char>()};
+    if (!weights.load(blob.data(), blob.size())) {
+        std::fprintf(stderr, "tiktak: %s is not a BeatNet weight file\n", path.c_str());
+        return false;
+    }
+    return true;
+}
+
 int cmdTapMic(const Options& options) {
-    std::vector<unsigned char> blob;
-    if (!options.model_path.empty()) {
-        std::ifstream file(options.model_path, std::ios::binary);
-        if (!file) {
-            std::fprintf(stderr, "tiktak: cannot read %s\n", options.model_path.c_str());
-            return 1;
-        }
-        blob.assign(std::istreambuf_iterator<char>(file),
-                    std::istreambuf_iterator<char>());
-    }
     tiktak::ml::BeatNetWeights weights;
-    if (!blob.empty() && !weights.load(blob.data(), blob.size())) {
-        std::fprintf(stderr, "tiktak: %s is not a BeatNet weight file\n",
-                     options.model_path.c_str());
-        return 1;
-    }
+    if (!loadBeatNet(options.model_path, weights)) return 1;
 
     // The device is opened before the tracker is built, and this order is the
     // whole point of `open`/`begin`. A tracker is sized in samples, so building
@@ -509,6 +514,8 @@ bool parseOptions(const std::vector<std::string>& args, Options& options, std::s
             options.click = true;
         } else if (arg == "--mic") {
             options.tap_mic = true;
+        } else if (arg == "--headphones") {
+            options.headphones = true;
         } else if (arg == "--model") {
             if (!has_value) {
                 error = arg + " needs a path";
@@ -592,6 +599,13 @@ void printUsage() {
         "which beat starts the bar when the audio cannot say.\n"
         "  --no-click         the track alone, no metronome\n"
         "  --no-cache         re-analyse even when the beat grid is cached\n"
+        "\n"
+        "Listen options:\n"
+        "  --model PATH       BeatNet weights (.ttw); without it the tracker runs\n"
+        "                     on spectral flux, the far less accurate front end\n"
+        "  --headphones       the microphone cannot hear the click, so do not gate\n"
+        "                     it out — gating then only blinds the tracker\n"
+        "  --manual N         your tempo; the room is asked only where the beat is\n"
         "\n"
         "Tap options:\n"
         "  --mic              compare against the live tracker listening to the\n"
@@ -942,12 +956,22 @@ int cmdListen(const Options& options) {
     // clock is the capture stream's, so the click has to leave early by the
     // whole way out and back. That is the number `measure` reports.
     cfg.round_trip_sec = options.output_latency_sec;
+    cfg.gate_own_clicks = !options.headphones;
     if (!cfg.valid()) {
         std::fprintf(stderr, "tiktak: those settings do not make a live metronome\n");
         return 2;
     }
 
-    LiveMetronome metronome(cfg);
+    // Before the metronome, which keeps a pointer to them.
+    tiktak::ml::BeatNetWeights weights;
+    if (!loadBeatNet(options.model_path, weights)) return 1;
+    const tiktak::ml::BeatNetWeights* model[] = {&weights};
+
+    LiveMetronome metronome = weights.valid() ? LiveMetronome(cfg, model, 1)
+                                              : LiveMetronome(cfg);
+    std::printf("front end: %s; own click %s\n",
+                metronome.usingModel() ? "BeatNet" : "spectral flux",
+                cfg.gate_own_clicks ? "gated (loudspeaker)" : "not gated (headphones)");
     if (options.manual_bpm > 0.0) {
         // Manual + sync: the tempo is not up for discussion, and the room is
         // asked only where the beat falls. Nothing plays until it answers.

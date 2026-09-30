@@ -14,6 +14,10 @@ bool LiveMetronome::Stats::clean() const {
 LiveMetronome::LiveMetronome(const LiveMetronomeConfig& config)
     : config_(config), tracker_(config.tracker), click_(config.click) {}
 
+LiveMetronome::LiveMetronome(const LiveMetronomeConfig& config,
+                             const ml::BeatNetWeights* const* weights, std::size_t count)
+    : config_(config), tracker_(config.tracker, weights, count), click_(config.click) {}
+
 void LiveMetronome::start() { running_ = true; }
 
 void LiveMetronome::stop() { running_ = false; }
@@ -47,8 +51,8 @@ void LiveMetronome::process(double stream_time_sec, float* out, std::size_t fram
             // The click we just committed to will be heard by the microphone at
             // the beat itself: the round trip taken off the submission is added
             // back by the journey. So the window to ignore is the prediction,
-            // unadjusted.
-            tracker_.gateClick(beat);
+            // unadjusted — when there is anything to hear; see gate_own_clicks.
+            if (config_.gate_own_clicks) tracker_.gateClick(beat);
         }
     }
 
