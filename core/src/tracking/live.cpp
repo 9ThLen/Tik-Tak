@@ -72,7 +72,7 @@ LiveTracker::LiveTracker(const LiveConfig& config)
 LiveTracker::LiveTracker(const LiveConfig& config, const ml::BeatNetWeights& weights)
     : LiveTracker(config) {
     if (!weights.valid()) return;
-    model_.emplace(config.odf.sampleRate, weights);
+    model_.emplace(config.odf.sampleRate, weights, config.beatnet_antialias);
     evidence_half_sec_ = 0.5 * static_cast<double>(ml::BeatNetFeatures::kFrameSize) /
                          ml::BeatNetFeatures::kModelRate;
 }
@@ -90,7 +90,7 @@ LiveTracker::LiveTracker(const LiveConfig& config,
     for (std::size_t i = 0; i < count; ++i) {
         if (weights[i] == nullptr || !weights[i]->valid()) return;
     }
-    model_.emplace(config.odf.sampleRate, weights, count);
+    model_.emplace(config.odf.sampleRate, weights, count, config.beatnet_antialias);
     evidence_half_sec_ = 0.5 * static_cast<double>(ml::BeatNetFeatures::kFrameSize) /
                          ml::BeatNetFeatures::kModelRate;
 }

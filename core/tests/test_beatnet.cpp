@@ -542,3 +542,69 @@ TEST(BeatNetActivation, ADownbeatIsAlsoABeat) {
                            EXPECT_LE(beat, 1.0);
                        });
 }
+
+// ------------------------------------------------------ the anti-alias option
+
+namespace {
+
+// Mean of the magnitude features (the first 136) over every frame of `audio`.
+std::vector<double> meanBands(double rate, bool antialias, const std::vector<float>& audio) {
+    tiktak::ml::BeatNetFeatures features(rate, antialias);
+    std::vector<double> sum(tiktak::ml::BeatNetFeatures::kFilters, 0.0);
+    std::size_t frames = 0;
+    features.process(audio.data(), audio.size(),
+                     [&](const float* values, std::size_t, double) {
+                         for (std::size_t b = 0; b < sum.size(); ++b) sum[b] += values[b];
+                         ++frames;
+                     });
+    for (double& v : sum) v /= static_cast<double>(std::max<std::size_t>(frames, 1));
+    return sum;
+}
+
+double total(const std::vector<double>& bands) {
+    double t = 0.0;
+    for (double v : bands) t += v;
+    return t;
+}
+
+}  // namespace
+
+TEST(BeatNetFeatures, TheAntiAliasOptionStopsHighContentFoldingIntoTheBands) {
+    // 16 kHz at 48 kHz is above what 22.05 kHz can hold. Decimated by plain
+    // interpolation it folds back to about 6 kHz, into bands the network
+    // reads; low-passed first, almost nothing is left of it.
+    const double rate = 48000.0;
+    const auto tone = tiktak::test::sine(static_cast<std::size_t>(2.0 * rate), 16000.0, rate, 0.5f);
+    const double folded = total(meanBands(rate, false, tone));
+    const double filtered = total(meanBands(rate, true, tone));
+    EXPECT_GT(folded, 1.0) << "the tone did not fold, so this tests nothing";
+    EXPECT_LT(filtered, 0.1 * folded);
+}
+
+TEST(BeatNetFeatures, TheAntiAliasOptionLeavesThePassbandAndTheClockAlone) {
+    const double rate = 48000.0;
+    const auto tone = tiktak::test::sine(static_cast<std::size_t>(2.0 * rate), 1000.0, rate, 0.5f);
+    const auto plain = meanBands(rate, false, tone);
+    const auto filtered = meanBands(rate, true, tone);
+    EXPECT_NEAR(total(filtered), total(plain), 0.02 * total(plain));
+
+    // Same frames at the same times: the filter's delay is taken back out.
+    std::vector<double> plain_times;
+    std::vector<double> filtered_times;
+    tiktak::ml::BeatNetFeatures a(rate, false);
+    tiktak::ml::BeatNetFeatures b(rate, true);
+    a.process(tone.data(), tone.size(),
+              [&](const float*, std::size_t, double t) { plain_times.push_back(t); });
+    b.process(tone.data(), tone.size(),
+              [&](const float*, std::size_t, double t) { filtered_times.push_back(t); });
+    ASSERT_FALSE(filtered_times.empty());
+    for (std::size_t i = 0; i < filtered_times.size(); ++i) {
+        EXPECT_DOUBLE_EQ(filtered_times[i], plain_times[i]);
+    }
+}
+
+TEST(BeatNetFeatures, AtTheModelsOwnRateTheOptionChangesNothing) {
+    const double rate = tiktak::ml::BeatNetFeatures::kModelRate;
+    const auto audio = tiktak::test::clickTrack(120.0, 3.0, rate);
+    EXPECT_EQ(meanBands(rate, true, audio), meanBands(rate, false, audio));
+}

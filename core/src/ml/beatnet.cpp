@@ -186,7 +186,7 @@ void BeatNetModel::forward(const float* features, float* probabilities) {
 
 // ---------------------------------------------------------------- features --
 
-BeatNetFeatures::BeatNetFeatures(double sampleRate)
+BeatNetFeatures::BeatNetFeatures(double sampleRate, bool antialias)
     : ratio_(sampleRate / kModelRate),
       dft_(kFrameSize),
       bank_(kFrameSize, kModelRate, 24, 30.0, 17000.0, 440.0),
@@ -198,6 +198,45 @@ BeatNetFeatures::BeatNetFeatures(double sampleRate)
     assert(sampleRate > 0.0);
     assert(bank_.bands() == kFilters);
     assert(kModelRate / sampleRate < static_cast<double>(kMaxPerSample));
+
+    // Only when decimating: at the model's own rate there is nothing to fold,
+    // and the path stays bit for bit the one every number was measured on.
+    antialias_ = antialias && sampleRate > kModelRate * 1.001;
+    if (antialias_) {
+        constexpr std::size_t kTaps = 63;
+        constexpr double kCutoffHz = 10000.0;
+        constexpr double kBeta = 6.0;   // Kaiser: about 60 dB of stopband
+        const auto bessel0 = [](double x) {
+            double sum = 1.0;
+            double term = 1.0;
+            for (int k = 1; k < 32; ++k) {
+                const double half = x / (2.0 * static_cast<double>(k));
+                term *= half * half;
+                sum += term;
+            }
+            return sum;
+        };
+        const double pi = 3.14159265358979323846;
+        const double fc = kCutoffHz / sampleRate;
+        const double mid = static_cast<double>(kTaps - 1) / 2.0;
+        std::vector<double> taps(kTaps);
+        double total = 0.0;
+        for (std::size_t n = 0; n < kTaps; ++n) {
+            const double x = static_cast<double>(n) - mid;
+            const double sinc =
+                x == 0.0 ? 2.0 * fc : std::sin(2.0 * pi * fc * x) / (pi * x);
+            const double r = x / mid;
+            const double window =
+                bessel0(kBeta * std::sqrt(std::max(0.0, 1.0 - r * r))) / bessel0(kBeta);
+            taps[n] = sinc * window;
+            total += taps[n];
+        }
+        taps_.resize(kTaps);
+        for (std::size_t n = 0; n < kTaps; ++n) {
+            taps_[n] = static_cast<float>(taps[n] / total);   // unity gain at DC
+        }
+        history_.assign(kTaps, 0.0f);
+    }
 
     // Symmetric Hann, not the periodic one dsp::hannWindow builds. The
     // difference is one sample in 1411 and it would be invisible in any
@@ -227,6 +266,23 @@ void BeatNetFeatures::reset() {
     input_index_ = 0;
     output_index_ = 0;
     previous_sample_ = 0.0f;
+    std::fill(history_.begin(), history_.end(), 0.0f);
+    history_head_ = 0;
+    skip_ = antialias_ ? (taps_.size() - 1) / 2 : 0;
+}
+
+float BeatNetFeatures::lowpass(float sample) {
+    history_[history_head_] = sample;
+    history_head_ = (history_head_ + 1) % history_.size();
+    // history_head_ now indexes the oldest sample. The taps are symmetric, so
+    // which end is which does not change the answer.
+    double sum = 0.0;
+    const std::size_t size = history_.size();
+    for (std::size_t k = 0; k < size; ++k) {
+        sum += static_cast<double>(taps_[k]) *
+               static_cast<double>(history_[(history_head_ + k) % size]);
+    }
+    return static_cast<float>(sum);
 }
 
 std::size_t BeatNetFeatures::resample(float sample, float* out) {
@@ -284,16 +340,17 @@ void BeatNetFeatures::advance() {
 
 // ------------------------------------------------------------- activation --
 
-BeatNetActivation::BeatNetActivation(double sampleRate, const BeatNetWeights& weights)
-    : features_(sampleRate) {
+BeatNetActivation::BeatNetActivation(double sampleRate, const BeatNetWeights& weights,
+                                     bool antialias)
+    : features_(sampleRate, antialias) {
     models_.reserve(1);
     models_.emplace_back(weights);
 }
 
 BeatNetActivation::BeatNetActivation(double sampleRate,
                                      const BeatNetWeights* const* weights,
-                                     std::size_t count)
-    : features_(sampleRate) {
+                                     std::size_t count, bool antialias)
+    : features_(sampleRate, antialias) {
     assert(weights != nullptr && count > 0);
     // Reserved exactly, so the vector never reallocates -- BeatNetModel holds a
     // reference to its weights and so cannot be move-assigned, and growing the

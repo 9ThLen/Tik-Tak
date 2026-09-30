@@ -240,6 +240,13 @@ struct LiveConfig {
     // way: the bar decision reads the downbeat channel, which no other part of
     // this tracker consumes, and writes nothing back.
     bool bar_tracking = false;
+
+    // Low-pass the capture before BeatNet's resampler decimates it; see
+    // ml::BeatNetFeatures::resample. Off, because every published live number
+    // was measured through the plain interpolator — on 22.05 kHz corpora,
+    // where it never decimates, and on 44.1 kHz ones, where it folds 11-22 kHz
+    // into bands the network reads. Every phone capture is 48 kHz.
+    bool beatnet_antialias = false;
     BarTracker::Config bar;
 
     BeatObserver beat_observer = nullptr;

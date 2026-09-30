@@ -159,7 +159,10 @@ public:
     // being fed; 8 covers everything down to 3 kHz.
     static constexpr std::size_t kMaxPerSample = 8;
 
-    explicit BeatNetFeatures(double sampleRate);
+    // `antialias` puts a low-pass in front of the resampler when it decimates;
+    // see resample(). Off by default, because every measurement was made
+    // without it.
+    explicit BeatNetFeatures(double sampleRate, bool antialias = false);
 
     void reset();
 
@@ -171,7 +174,19 @@ public:
     void process(const float* samples, std::size_t n, Fn&& onFrame) {
         float staged[kMaxPerSample];
         for (std::size_t i = 0; i < n; ++i) {
-            const std::size_t produced = resample(samples[i], staged);
+            float sample = samples[i];
+            if (antialias_) {
+                sample = lowpass(sample);
+                // The filter's first delay-worth of output belongs to before
+                // the stream began; dropping exactly that keeps every filtered
+                // sample at the time of the input it stands for, so frame
+                // times do not move.
+                if (skip_ > 0) {
+                    --skip_;
+                    continue;
+                }
+            }
+            const std::size_t produced = resample(sample, staged);
             for (std::size_t j = 0; j < produced; ++j) {
                 if (accept(staged[j])) {
                     onFrame(features_.data(), features_.size(), frameTimeSec());
@@ -191,7 +206,13 @@ private:
     // reads. Whether a proper polyphase decimator moves the numbers is an open
     // question and a measurable one; it is not something to change quietly
     // underneath results that were obtained without it.
+    //
+    // Hence `antialias`, off unless asked for: a 63-tap windowed-sinc low-pass
+    // at 10 kHz ahead of the interpolator, only when decimating. About 3 MMAC/s
+    // at 48 kHz against the network's twenty, and a delay of 31 input samples
+    // that process() takes back out, so the timestamps are unchanged.
     std::size_t resample(float sample, float* out);
+    float lowpass(float sample);
 
     // One model-rate sample in; true when a frame is complete in features_.
     bool accept(float sample);
@@ -219,6 +240,14 @@ private:
     std::size_t input_index_ = 0;
     std::size_t output_index_ = 0;
     float previous_sample_ = 0.0f;
+
+    // The optional anti-alias filter: taps, a ring of recent input, and how
+    // many filtered samples are still owed to the time before the stream.
+    bool antialias_ = false;
+    std::vector<float> taps_;
+    std::vector<float> history_;
+    std::size_t history_head_ = 0;
+    std::size_t skip_ = 0;
 };
 
 // Audio in, beat activation out: the features and the network wired together.
@@ -250,7 +279,8 @@ private:
 // the usable rate. What the mean suppresses is the failure the corpora contain.
 class BeatNetActivation {
 public:
-    BeatNetActivation(double sampleRate, const BeatNetWeights& weights);
+    BeatNetActivation(double sampleRate, const BeatNetWeights& weights,
+                      bool antialias = false);
 
     // `weights` is `count` pointers, each to a valid() set that must outlive
     // this object; the core does no I/O and does not own them. A count of zero
@@ -259,7 +289,8 @@ public:
     // produce a working tracker that is not the one being measured, and the
     // difference between those two is several points of the headline.
     BeatNetActivation(double sampleRate,
-                      const BeatNetWeights* const* weights, std::size_t count);
+                      const BeatNetWeights* const* weights, std::size_t count,
+                      bool antialias = false);
 
     // How many networks are being averaged. One, for the single-weight form.
     std::size_t networks() const { return models_.size(); }
