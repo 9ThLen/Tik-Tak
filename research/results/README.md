@@ -31,6 +31,80 @@ the 2,760 annotated recordings here as evaluation ground, leaving Harmonix,
 RWC and SMC. That is a cost of the ensemble, not merely of testing it, and it is
 the strongest argument for recording new material.
 
+## The octave hold does not carry to Harmonix; the level floor earns a phone test
+
+`octave_hold_and_level_floor/*.json`, per-track records in
+`per_track/octave_hold_and_level_floor/`, answering
+`eval/PREREGISTERED_octave_hold_and_level_floor.md`. Fourteen arms, one binary,
+clean tree at `badfe76`. BeatNet `model_1`, `--live-sample-hz 50`, macro over
+corpora with n >= 30, differences from `eval/compare_live_runs.py`. Every arm
+whose code path is unchanged reproduces its earlier counterpart exactly, on
+every recording:
+
+* RWC at -24 dB, against batch one;
+* GTZAN at 0 dB, against the click-gate run;
+* Harmonix hold-off at the default seed, against batch one.
+
+### C — the hold, on the corpus it was not tuned on
+
+Harmonix, 581 aligned recordings, three seeds each (the default, 1 and 2):
+
+| configuration | episode-free per seed | mean (SD) | usable mean (SD) | beat F | correct time |
+|---|---|---:|---:|---:|---:|
+| hold off | 0.461 0.456 0.451 | 0.456 (0.005) | 0.376 (0.008) | 0.804 | 0.777 |
+| hold 20 s | 0.441 0.453 0.441 | 0.445 (0.007) | 0.372 (0.001) | 0.799 | 0.762 |
+| hold minus off | | **-0.012** | -0.004 | -0.005 | -0.015 |
+
+Seed by seed, beat F falls 0.004-0.005 and correct time 0.014-0.016, every
+paired interval clear of zero.
+
+*Registered decision:* the hold needed an episode-free gain above twice the
+larger SD (0.014), no fall in usable, and correct time not down by 0.03. It
+loses on episode-free, usable falls slightly, and only the guard holds. **The
+hold stays off**, and RWC's +0.047 is reported as RWC-only.
+
+That reading assumes the core's `OctaveHold` behaves as the research seam did
+on RWC. Batch three did not check it on RWC, so an unregistered implementation
+check is queued: `--live-anchor-hold 20` against batch one's
+`q2_debounce20_rwc`. Whatever it shows, the decision above stands.
+
+### L — the level floor
+
+`--live-level-floor -20` against the matching unfloored arm:
+
+| corpus, input | beat F unfloored → floored | usable unfloored → floored |
+|---|---|---|
+| RWC, -24 dB | 0.455 → **0.559** | 0.132 → 0.152 |
+| RWC, -12 dB | 0.541 → 0.554 | 0.139 → 0.157 |
+| RWC, 0 dB | 0.572 → 0.565 | 0.164 → 0.174 |
+| GTZAN, 0 dB (held out) | 0.691 → 0.687 | 0.459 → 0.459 |
+| SMC, -24 dB | 0.136 → 0.222 | 0.018 → 0.037 |
+| SMC, 0 dB | 0.235 → 0.232 | 0.032 → 0.028 |
+
+*Registered decision:* at -24 dB on RWC the floor had to recover at least half
+of the loss in both beat F and usable. It recovers 0.104 of the 0.117 beat F
+lost (89%) and 0.020 of the 0.032 usable (62%). GTZAN at 0 dB loses nothing on
+usable, which is within the noise floor. Both conditions hold, so **the next
+step is the P1-B0 phone captures**, registered separately before they are
+scored. Until then the floor stays off.
+
+Two things the rule did not ask about, reported so that the phone test is read
+with them in mind:
+
+* **GTZAN beat F.** At 0 dB it falls 0.004 [-0.008, +0.000]. That is about 2.5
+  times RWC's across-seed beat-F SD, from lifting its quieter excerpts.
+* **SMC wrong-level episodes.** At SMC's own level the floor lowers
+  episode-free by **0.083** [-0.143, -0.023]. Lifting quiet recordings makes the
+  tracker more active (0.54 to 0.58 of the time) and more confident (median
+  0.15 to 0.19), and more of that activity is at a wrong level. Correct time
+  moves -0.008.
+  * The same effect runs the other way at -24 dB unfloored. There SMC's
+    episode-free reads 0.465, against 0.309 at 0 dB, only because a starved
+    tracker is active 34% of the time. The floor restores both the activity and
+    the 0.309.
+  * An episode-free rate is only comparable between arms that are active for a
+    similar share of the time.
+
 ## The click gate costs far more than the click it hides
 
 `click_gate_and_antialias/*.json`, per-track records in
