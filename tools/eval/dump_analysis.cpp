@@ -769,6 +769,22 @@ int main(int argc, char** argv) {
     double live_roughening = 0.0;
     double live_regeneration = -1.0;  // 0 is a meaningful value here
 
+    // The filter's own sampling, which no run had varied: one fixed seed and a
+    // cloud of 512. The tracker turns differences far below audibility into
+    // different verdicts on some recordings, so how much of a per-recording
+    // result is the draw, rather than the music, is a number every paired
+    // comparison needs and nobody had measured. 0 leaves the core's values.
+    double live_rng_seed = 0.0;
+    double live_particles = 0.0;
+
+    // A digital gain, in dB, on what the live tracker hears and on nothing
+    // else. BeatNet's features are log10(1 + |X|) with no scale in front, so
+    // what it sees depends on the level: 12 dB down alone changed 17 of 20
+    // excerpts. This is the dose-response arm for that — the look, with no core
+    // change, at whether normalising the level is worth building. 0 is the
+    // ungained path exactly.
+    double live_input_gain_db = 0.0;
+
     // Soft octave holding: the filter's tempo prior is re-centred on what an
     // autocorrelation over the activation history makes of the tempo, instead
     // of on a fixed belief about musical tempo. Off in the core by default,
@@ -835,6 +851,8 @@ int main(int argc, char** argv) {
         {"--live-beat-gain", &live_beat_gain},
         {"--live-roughening", &live_roughening},
         {"--live-regeneration", &live_regeneration},
+        {"--live-rng-seed", &live_rng_seed},
+        {"--live-particles", &live_particles},
         {"--live-anchor-width", &live_anchor_width},
         {"--live-anchor-margin", &live_anchor_margin},
         {"--live-anchor-window", &live_anchor_window},
@@ -1072,6 +1090,21 @@ int main(int argc, char** argv) {
                 return 2;
             }
             beats_path = argv[++i];
+            continue;
+        }
+
+        // Signed, unlike every knob in the table below: a gain is as often a cut.
+        if (std::strcmp(argv[i], "--live-input-gain-db") == 0) {
+            if (i + 1 >= argc) {
+                std::fprintf(stderr, "--live-input-gain-db needs a value\n");
+                return 2;
+            }
+            char* end = nullptr;
+            live_input_gain_db = std::strtod(argv[++i], &end);
+            if (end == argv[i] || *end != '\0' || !std::isfinite(live_input_gain_db)) {
+                std::fprintf(stderr, "--live-input-gain-db must be a finite number\n");
+                return 2;
+            }
             continue;
         }
 
@@ -1518,6 +1551,12 @@ int main(int argc, char** argv) {
         if (live_regeneration >= 0.0) {
             live_config.filter.regeneration = live_regeneration;
         }
+        if (live_rng_seed > 0.0) {
+            live_config.filter.seed = static_cast<std::uint64_t>(live_rng_seed);
+        }
+        if (live_particles > 0.0) {
+            live_config.filter.particles = static_cast<std::size_t>(live_particles);
+        }
         live_config.anchor_tempo = live_anchor;
         if (!live_anchor_veto_path.empty()) {
             live_config.anchor_bpm_resolver = &AnchorVetoSchedule::callback;
@@ -1765,13 +1804,26 @@ int main(int argc, char** argv) {
                 }
             }
         } else {
+            // Scaled a block at a time into a scratch buffer, so the gain touches
+            // the tracker's input and nothing the offline analysis above read.
+            const bool gained = live_input_gain_db != 0.0;
+            const auto live_gain =
+                static_cast<float>(std::pow(10.0, live_input_gain_db / 20.0));
+            std::vector<float> gained_block(gained ? kLiveBlock : 0);
             for (std::size_t pos = 0; pos < samples.size(); pos += kLiveBlock) {
                 const std::size_t take = std::min(kLiveBlock, samples.size() - pos);
                 anchor_veto_schedule.decision_time_sec =
                     now + static_cast<double>(take) / rate;
                 online_policy.decision_time_sec =
                     now + static_cast<double>(take) / rate;
-                tracker.process(now, samples.data() + pos, take);
+                const float* block = samples.data() + pos;
+                if (gained) {
+                    for (std::size_t k = 0; k < take; ++k) {
+                        gained_block[k] = block[k] * live_gain;
+                    }
+                    block = gained_block.data();
+                }
+                tracker.process(now, block, take);
                 now += static_cast<double>(take) / rate;
                 ++beat_audit.block_index;
                 poll();
