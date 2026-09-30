@@ -69,6 +69,7 @@
 #include "ml/beat_this_session.hpp"
 #endif
 #include "analysis/offline.hpp"
+#include "render/click.hpp"
 #include "tracking/bar.hpp"
 #include "tracking/live.hpp"
 #include "tracking/particle.hpp"
@@ -790,6 +791,21 @@ int main(int argc, char** argv) {
     // ungained path exactly.
     double live_input_gain_db = 0.0;
 
+    // A listening metronome on a loudspeaker, closed around the tracker: our own
+    // click mixed into what it hears at every beat it hands out, and each of
+    // those beats gated out of its input as LiveMetronome gates them. No
+    // published live number had either — the tracker was always scored deaf to
+    // its own output — so these are the arms that price speaker mode. The gain
+    // is on the click's nominal sound; NaN mixes nothing.
+    bool live_click_gate = false;
+    double live_click_db = std::numeric_limits<double>::quiet_NaN();
+    // ActivationTempoConfig::mask_gaps off: gaps heard as silence, the old
+    // behaviour, for the arm that compares it with the mask under gating.
+    bool live_anchor_gap_zeros = false;
+    // LiveConfig::beatnet_antialias: low-pass the capture before BeatNet's
+    // resampler decimates it. Inert on 22.05 kHz audio, where it never does.
+    bool live_antialias = false;
+
     // Soft octave holding: the filter's tempo prior is re-centred on what an
     // autocorrelation over the activation history makes of the tempo, instead
     // of on a fixed belief about musical tempo. Off in the core by default,
@@ -1103,6 +1119,31 @@ int main(int argc, char** argv) {
             continue;
         }
 
+        if (std::strcmp(argv[i], "--live-click-gate") == 0) {
+            live_click_gate = true;
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-anchor-gap-zeros") == 0) {
+            live_anchor_gap_zeros = true;
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-antialias") == 0) {
+            live_antialias = true;
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-click-db") == 0) {
+            if (i + 1 >= argc) {
+                std::fprintf(stderr, "--live-click-db needs a value\n");
+                return 2;
+            }
+            char* end = nullptr;
+            live_click_db = std::strtod(argv[++i], &end);
+            if (end == argv[i] || *end != '\0' || !std::isfinite(live_click_db)) {
+                std::fprintf(stderr, "--live-click-db must be a finite number\n");
+                return 2;
+            }
+            continue;
+        }
         // Signed, unlike every knob in the table below: a gain is as often a cut.
         if (std::strcmp(argv[i], "--live-input-gain-db") == 0) {
             if (i + 1 >= argc) {
@@ -1638,6 +1679,8 @@ int main(int argc, char** argv) {
         if (live_anchor_min_window > 0.0) {
             live_config.activation_tempo.min_window_sec = live_anchor_min_window;
         }
+        if (live_anchor_gap_zeros) live_config.activation_tempo.mask_gaps = false;
+        live_config.beatnet_antialias = live_antialias;
         tiktak::tracking::LiveTracker tracker =
             model_refs.empty()
                 ? tiktak::tracking::LiveTracker(live_config)
@@ -1664,6 +1707,19 @@ int main(int argc, char** argv) {
         const double sample_period =
             live_sample_hz > 0.0 ? 1.0 / live_sample_hz : 1.0;
         double next_sample = sample_period;
+        // Our own click, when the run mixes it back in: rendered at the file's
+        // rate into the blocks the tracker has yet to hear, exactly where
+        // LiveMetronome would have put it with a zero round trip.
+        const bool mix_click = !std::isnan(live_click_db);
+        tiktak::render::ClickConfig click_config;
+        click_config.sample_rate = rate;
+        if (mix_click) {
+            const double gain = std::pow(10.0, live_click_db / 20.0);
+            click_config.downbeat.gain *= gain;
+            click_config.beat.gain *= gain;
+            click_config.subdivision.gain *= gain;
+        }
+        tiktak::render::ClickRenderer own_click(click_config);
         const auto poll = [&]() {
             // Before the beats are taken, so a press decided at this instant
             // reaches the grid this instant rather than one block late.
@@ -1675,6 +1731,8 @@ int main(int argc, char** argv) {
             // beat list at 50 Hz has to equal the beat list at 1 Hz.
             while (tracker.takeBeat(now, kLookahead, &beat)) {
                 live_beats.push_back(beat);
+                if (mix_click) own_click.schedule(beat, tiktak::schedule::BeatKind::Beat);
+                if (live_click_gate) tracker.gateClick(beat);
                 live_beat_emit.push_back(
                     static_cast<double>(beat_audit.block_index));
                 // One per beat, in the same order, so the two columns can be
@@ -1854,7 +1912,7 @@ int main(int argc, char** argv) {
             const bool gained = live_input_gain_db != 0.0;
             const auto live_gain =
                 static_cast<float>(std::pow(10.0, live_input_gain_db / 20.0));
-            std::vector<float> gained_block(gained ? kLiveBlock : 0);
+            std::vector<float> gained_block(gained || mix_click ? kLiveBlock : 0);
             for (std::size_t pos = 0; pos < samples.size(); pos += kLiveBlock) {
                 const std::size_t take = std::min(kLiveBlock, samples.size() - pos);
                 anchor_veto_schedule.decision_time_sec =
@@ -1866,6 +1924,13 @@ int main(int argc, char** argv) {
                     for (std::size_t k = 0; k < take; ++k) {
                         gained_block[k] = block[k] * live_gain;
                     }
+                    block = gained_block.data();
+                }
+                if (mix_click) {
+                    if (block != gained_block.data()) {
+                        std::copy(block, block + take, gained_block.begin());
+                    }
+                    own_click.mix(now, gained_block.data(), take);
                     block = gained_block.data();
                 }
                 tracker.process(now, block, take);
