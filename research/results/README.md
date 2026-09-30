@@ -31,6 +31,41 @@ the 2,760 annotated recordings here as evaluation ground, leaving Harmonix,
 RWC and SMC. That is a cost of the ensemble, not merely of testing it, and it is
 the strongest argument for recording new material.
 
+## The learned path's accent gate: better with a stricter phase, but not demonstrably
+
+`learned_accent_calibration_gtzan.json`, answering
+`eval/PREREGISTERED_learned_accent_calibration.md`. Commit `79ec955`, clean
+tree, 999 GTZAN recordings through `dump_analysis --learned`, split by name
+hash into 488 validation and 511 held-out (`jazz.00054` is a broken file).
+"Wrong" here is the README's own verdict — wrong metre, or right metre and the
+annotated bar lines under-recalled — which is stricter than the "rendered F
+below 0.5" of the section below, so its conditional error reads higher.
+
+| thresholds (phase, meter) | half | coverage | wrong | conditional error |
+|---|---|---:|---:|---:|
+| provisional (0.25, 0.40) | validation | 65.0% | 5.3% (<= 7.7%) | 8.2% (<= 11.8%) |
+| provisional (0.25, 0.40) | held-out | 66.5% | 5.9% (<= 8.3%) | 8.9% (<= 12.4%) |
+| chosen (1.036, 0.420) | validation | 59.5% | 2.9% (<= 4.8%) | 4.8% (<= 8.0%) |
+| chosen (1.036, 0.420) | held-out | 57.6% | 4.3% (<= 6.5%) | 7.5% (<= 11.1%) |
+
+Bounds are the upper 95% Wilson ends, which is what the budgets (5% wrong, 10%
+conditional) are applied to.
+
+**The registered condition fails, and the provisional pair stays.** On the
+validation half a much stricter phase margin (1.036) carries both budgets; on
+the held-out half its point estimates stay inside them (4.3%, 7.5%) but the
+upper bounds do not (6.5%, 11.1%). `evidence_gap`: that needs at least 660
+independent groups and 327 shown ones with no further errors, against 507 and
+292 here; the provisional pair would need 849 and 421. GTZAN alone cannot
+certify this budget for either pair, and each excerpt was counted as its own
+group although GTZAN repeats some artists — so the true bounds are, if
+anything, wider.
+
+What the table does say: the stricter phase margin buys about 1.4 points of
+conditional error for about 9 points of coverage on held-out material. Whether
+that trade is worth making is a product judgement the budget cannot make until
+there is more independent material to bound it with.
+
 ## The learned file path, measured through the product's own analyser
 
 `learned_file_path_gtzan.json` (records beside it), answering
