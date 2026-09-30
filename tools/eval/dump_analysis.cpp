@@ -802,9 +802,11 @@ int main(int argc, char** argv) {
     // ActivationTempoConfig::mask_gaps off: gaps heard as silence, the old
     // behaviour, for the arm that compares it with the mask under gating.
     bool live_anchor_gap_zeros = false;
-    // LiveConfig::beatnet_antialias: low-pass the capture before BeatNet's
+    // BeatNetInput::antialias: low-pass the capture before BeatNet's
     // resampler decimates it. Inert on 22.05 kHz audio, where it never does.
     bool live_antialias = false;
+    // BeatNetInput::level_floor_dbfs: lift quieter captures to this; 0 is off.
+    double live_level_floor = 0.0;
 
     // Soft octave holding: the filter's tempo prior is re-centred on what an
     // autocorrelation over the activation history makes of the tempo, instead
@@ -819,6 +821,9 @@ int main(int argc, char** argv) {
     double live_anchor_margin = -1.0;
     double live_anchor_window = 0.0;
     double live_anchor_min_window = 0.0;
+    // LiveConfig::anchor_octave_hold_sec: the core's own octave hold, as
+    // against --live-octave-debounce, the research seam it was measured on.
+    double live_anchor_hold = 0.0;
 
     // How often the per-second series below are sampled. One a second is what
     // every experiment before this one was measured at and stays the default,
@@ -878,6 +883,7 @@ int main(int argc, char** argv) {
         {"--live-anchor-margin", &live_anchor_margin},
         {"--live-anchor-window", &live_anchor_window},
         {"--live-anchor-min-window", &live_anchor_min_window},
+        {"--live-anchor-hold", &live_anchor_hold},
         {"--live-freeze-timeout", &live_freeze_timeout},
         {"--live-sample-hz", &live_sample_hz},
         {"--odf-whitening-strength", &odf_whitening_strength},
@@ -1129,6 +1135,19 @@ int main(int argc, char** argv) {
         }
         if (std::strcmp(argv[i], "--live-antialias") == 0) {
             live_antialias = true;
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-level-floor") == 0) {
+            if (i + 1 >= argc) {
+                std::fprintf(stderr, "--live-level-floor needs dBFS\n");
+                return 2;
+            }
+            char* end = nullptr;
+            live_level_floor = std::strtod(argv[++i], &end);
+            if (end == argv[i] || *end != 0 || !(live_level_floor < 0.0)) {
+                std::fprintf(stderr, "--live-level-floor must be a negative dBFS\n");
+                return 2;
+            }
             continue;
         }
         if (std::strcmp(argv[i], "--live-click-db") == 0) {
@@ -1679,8 +1698,10 @@ int main(int argc, char** argv) {
         if (live_anchor_min_window > 0.0) {
             live_config.activation_tempo.min_window_sec = live_anchor_min_window;
         }
+        if (live_anchor_hold > 0.0) live_config.anchor_octave_hold_sec = live_anchor_hold;
         if (live_anchor_gap_zeros) live_config.activation_tempo.mask_gaps = false;
-        live_config.beatnet_antialias = live_antialias;
+        live_config.beatnet_input.antialias = live_antialias;
+        live_config.beatnet_input.level_floor_dbfs = live_level_floor;
         tiktak::tracking::LiveTracker tracker =
             model_refs.empty()
                 ? tiktak::tracking::LiveTracker(live_config)
