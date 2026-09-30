@@ -31,6 +31,51 @@ the 2,760 annotated recordings here as evaluation ground, leaving Harmonix,
 RWC and SMC. That is a cost of the ensemble, not merely of testing it, and it is
 the strongest argument for recording new material.
 
+## The level floor in a real room: a gain in every cell, too few excerpts to decide
+
+`p1b0_level_floor/p1b0_level_floor.json`, answering
+`eval/PREREGISTERED_p1b0_level_floor.md`.
+
+* **Material:** the 119 aligned P1-B0 takes, 79 phone room takes and 40
+  loopback.
+* **Run:** one binary, clean tree at `97f7ca1`, BeatNet `model_1`.
+* **Design:** three paired seeds per arm, with the excerpt as the unit.
+
+A three-take smoke run checked the script after the registration was written
+and before it was committed. The registration did not change.
+
+| cell | F, floor off | F, floor on | difference [95% CI] |
+|---|---:|---:|---:|
+| near, normal (19 excerpts) | 0.502 | 0.547 | +0.045 [-0.083, +0.176] |
+| far, normal | 0.372 | 0.397 | +0.025 [-0.124, +0.166] |
+| near, quiet | 0.365 | 0.455 | +0.090 [-0.065, +0.249] |
+| far, quiet | 0.283 | 0.371 | +0.088 [-0.060, +0.221] |
+| loopback, normal | 0.735 | 0.746 | +0.010 [-0.031, +0.049] |
+| loopback, quiet | 0.703 | 0.726 | +0.024 [-0.031, +0.080] |
+
+*Registered decision:* the primary is the two quiet cells, averaged per
+excerpt. It gains **+0.089 [-0.033, +0.209]**, which clears +0.05, but its
+interval reaches zero. The result is therefore **underpowered**, and the floor
+stays off. To reach ±0.05, the quiet cells need 126 [73, 269] captures and the
+normal cells 107 [62, 228]. The harm check, +0.042 [-0.070, +0.152], shows no
+loss.
+
+What the run does say, with that uncertainty attached:
+
+* **Direction.** The sign agrees with the bench in all six cells, and the gain
+  is largest where the captures are quietest.
+* **The level is a minority of the room's loss.** Against each arm's own
+  loopback, the quiet cells lose 0.34 and 0.42 without the floor, and 0.27 and
+  0.36 with it. That is a fifth recovered at best; the rest is the room itself,
+  as the earlier repairs found.
+* **Usable is too sparse to read in a room.** Each cell has 0-4 usable excerpts
+  of 20. The far cells drop from 2-3 to 0-1, and the near cells do not move.
+* **Episode-free moves both ways.** Far/normal goes from 0.58 to 0.42, and
+  near/quiet from 0.43 to 0.68. Twenty excerpts cannot separate that from noise.
+
+The seed SDs of each cell's mean F run 0.005-0.048. That is well under the
+between-excerpt spread, which is what sets these intervals.
+
 ## The octave hold does not carry to Harmonix; the level floor earns a phone test
 
 `octave_hold_and_level_floor/*.json`, per-track records in
