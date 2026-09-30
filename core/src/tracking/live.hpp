@@ -9,6 +9,7 @@
 #include "ml/beatnet.hpp"
 #include "tracking/bar.hpp"
 #include "tracking/activation_tempo.hpp"
+#include "tracking/octave_hold.hpp"
 #include "tracking/particle.hpp"
 #include "tracking/sync.hpp"
 
@@ -215,6 +216,15 @@ struct LiveConfig {
     // a long stretch of weak margin expires instead of renewing itself.
     double anchor_freeze_timeout_sec = 4.0;
 
+    // Hold the anchor's metrical level until a proposal an octave away has
+    // persisted this long; 0 is off. See tracking::OctaveHold for what it is
+    // and what it measured: on RWC, 20 s took usable +0.028 and episode-free
+    // +0.047 at no cost in correct time, against a five-seed noise floor of
+    // 0.005 and 0.016 — single seeds on a development corpus, so off until a
+    // registered run on Harmonix says otherwise. Unlike anchor_octave_freeze,
+    // which acts on a weak margin and measured nothing, this acts on duration.
+    double anchor_octave_hold_sec = 0.0;
+
     // Publish nothing while the margin is weak.
     //
     // A diagnostic bound, not a shippable mode: a tracker that says nothing
@@ -241,12 +251,10 @@ struct LiveConfig {
     // this tracker consumes, and writes nothing back.
     bool bar_tracking = false;
 
-    // Low-pass the capture before BeatNet's resampler decimates it; see
-    // ml::BeatNetFeatures::resample. Off, because every published live number
-    // was measured through the plain interpolator — on 22.05 kHz corpora,
-    // where it never decimates, and on 44.1 kHz ones, where it folds 11-22 kHz
-    // into bands the network reads. Every phone capture is 48 kHz.
-    bool beatnet_antialias = false;
+    // What happens to the capture before BeatNet's features: an anti-alias
+    // low-pass ahead of its resampler, and a level floor. See ml::BeatNetInput;
+    // both off, because every published live number was measured without them.
+    ml::BeatNetInput beatnet_input;
     BarTracker::Config bar;
 
     BeatObserver beat_observer = nullptr;
@@ -1178,6 +1186,7 @@ private:
     BeatParticleFilter filter_;
     PhaseSync sync_;
     ActivationTempo activation_tempo_;
+    OctaveHold octave_hold_;
 
     // Engaged only by the constructor that was handed weights. Held by value
     // rather than behind a pointer so that the audio path has no indirection
