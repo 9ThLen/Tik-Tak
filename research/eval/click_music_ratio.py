@@ -11,7 +11,7 @@ nothing measures the music. This measures it. Per recording, it compares:
 Both figures are for the 0 dB arm; a -12 dB arm is 12 dB lower.
 
     cd research
-    .venv/Scripts/python -m eval.click_music_ratio --output ../research/results/click_gate_and_antialias/click_music_ratio.json
+    .venv/Scripts/python -m eval.click_music_ratio --music ../music         --output results/click_gate_and_antialias/click_music_ratio.json
 """
 
 from __future__ import annotations
@@ -72,10 +72,12 @@ def main(argv: list[str] | None = None) -> int:
     repository = pathlib.Path(__file__).resolve().parents[2]
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--music", type=pathlib.Path, default=repository / "music",
+                        help="the corpora's root; a worktree has none of its own")
     parser.add_argument("--output", type=pathlib.Path, required=True)
     args = parser.parse_args(argv)
-    sets = {"rwc": (repository / "music" / "rwc2" / "manifest.csv", None),
-            "gtzan": (repository / "music" / "ground-truth" / "manifest.csv", {"gtzan"})}
+    sets = {"rwc": (args.music / "rwc2" / "manifest.csv", None),
+            "gtzan": (args.music / "ground-truth" / "manifest.csv", {"gtzan"})}
     result: dict = {"click": {"gain": GAIN, "length_sec": LENGTH, "energy": CLICK_ENERGY},
                     "corpora": {}, "unreadable": []}
     for label, (manifest, corpora) in sets.items():
