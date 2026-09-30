@@ -31,6 +31,93 @@ the 2,760 annotated recordings here as evaluation ground, leaving Harmonix,
 RWC and SMC. That is a cost of the ensemble, not merely of testing it, and it is
 the strongest argument for recording new material.
 
+## Four diagnostics after the activation-tempo fix, and the noise floor under all of them
+
+`quickfix_diagnostics/*.json`, per-track records in
+`per_track/quickfix_diagnostics/`, answering
+`eval/PREREGISTERED_quickfix_diagnostics.md`. Thirty-one arms, all clean
+trees: base at `75fcde7` (main), quickfix at `4554162`. BeatNet `model_1`,
+`--live-sample-hz 50`, macro over corpora with n >= 30. Differences below come
+from `eval/compare_live_runs.py`, and the first thing to read is Q1, because it
+changes how every other row can be read.
+
+### Q1 — the particle draw is as large as the effects being measured
+
+Only `--live-rng-seed` varies; RWC, five seeds each:
+
+| cloud | usable (SD) | episode-free (SD) | beat F (SD) | verdict flips, usable / episode-free |
+|---|---|---|---|---|
+| 512 (ships) | 0.168 (0.005) | 0.226 (**0.016**) | 0.572 (0.0015) | 5.1% / 9.3% |
+| 2048 | 0.171 (0.004) | 0.219 (0.006) | **0.592** (0.0007) | 3.5% / 5.4% |
+
+The default seed against seed 2 — the same code — gives episode-free
+**+0.026 [+0.007, +0.048]**. A paired bootstrap over recordings treats one draw
+as the truth, so on this tracker it is anti-conservative: a difference in
+usable or episode-free is a finding only once it clears the across-seed SD, and
+earlier RWC differences of 0.02-0.03 on those endpoints (debounce, the total
+ban, the ensemble's cost gates) should be re-read with that in mind. Beat F and
+correct time are ten times steadier.
+
+*Registered decision:* 2048 particles beat 512 on usable by more than the SD on
+two seeds of five, not four, so the default stays. Two things the rule did not
+ask about stand out: 2048 gains **+0.020 beat F** at a seed SD of 0.001, and
+halves-to-thirds the seed noise. Both are worth a registered run with the phone
+cost measured.
+
+### Q0 — the activation-tempo fix, on the bench
+
+| corpus | usable | episode-free | beat F | correct time |
+|---|---:|---:|---:|---:|
+| RWC | -0.005 | -0.029 | +0.004 | +0.008 |
+| Harmonix | +0.016 | +0.005 | **+0.009** [+0.007, +0.012] | +0.005 |
+| GTZAN (held out) | +0.010 | -0.008 | **+0.006** [+0.001, +0.010] | +0.005 |
+
+Usable and episode-free move inside the seed noise, in both directions — the
+RWC episode-free row is the default seed landing lowest of five, not the fix.
+Beat F and correct time rise on all three corpora. At stream origin 0 the
+binning defect touched 1-2% of frames; the fix exists for the device, where it
+touched a quarter to a third, and on the bench it costs nothing and gains a
+little.
+
+### Q2 — holding the octave for longer than six seconds
+
+RWC, the research seam `--live-octave-debounce`, against the quickfix baseline:
+
+| arm | usable | episode-free | strict | correct time |
+|---|---:|---:|---:|---:|
+| debounce 10 s | +0.013 | +0.027 | +0.010 | +0.002 |
+| **debounce 20 s** | **+0.028** | **+0.047** | +0.020 | **-0.001** |
+| debounce 30 s | +0.030 | +0.050 | +0.023 | -0.005 |
+| debounce 60 s | +0.033 | +0.055 | +0.023 | -0.012 |
+| total ban | +0.038 | +0.060 | +0.023 | **-0.034** |
+
+Monotone in the hold, one-sided in which recordings move (9 better and none
+worse on usable at 20 s), and 20 s clears the noise floor by more than five
+SDs on usable and about three on episode-free while costing no correct time.
+The total ban fails the guard at -0.034, exactly what it cost in the veto
+experiment. *Registered decision:* 10-60 s are candidates, and the hold earns a
+confirmatory run on Harmonix — now registered as
+`PREREGISTERED_octave_hold_and_level_floor.md`, through a core implementation
+(`tracking::OctaveHold`), averaged over three seeds.
+
+### Q3 — how much the level alone costs BeatNet
+
+Digital gain on the live input only, against 0 dB:
+
+| gain | -24 dB | -12 dB | -6 dB | +6 dB | +12 dB |
+|---|---:|---:|---:|---:|---:|
+| RWC usable | -0.032 | -0.025 | -0.005 | +0.002 | -0.040 |
+| RWC beat F | **-0.117** | -0.032 | -0.012 | -0.011 | **-0.068** |
+| SMC beat F | **-0.099** | -0.041 | -0.018 | -0.006 | -0.012 |
+
+The recording's own level is the optimum, and BeatNet loses on both sides of
+it — the features are `log10(1 + |X|)` with nothing in front, so a level is a
+position on that curve. *Registered decision:* -12 and -24 dB lose more than
+twice the noise floor on RWC usable, so a boost-only level floor is worth
+building; it now exists (`ml::BeatNetInput::level_floor_dbfs`, off) and its
+first test is registered. The loss at +12 dB says a two-sided level window may
+be worth asking about later; nothing here registered that.
+
 ## The learned path's accent gate: better with a stricter phase, but not demonstrably
 
 `learned_accent_calibration_gtzan.json`, answering
