@@ -240,6 +240,18 @@ TT_API size_t tt_offline_downbeat_count(const tt_offline* offline);
 TT_API size_t tt_offline_downbeats(const tt_offline* offline, double* out, size_t capacity);
 
 /*
+ * The grid index to hand tt_player_config.downbeat_offset: the bar phase that
+ * holds the most of the bar lines above, below tt_offline_beats_per_bar. -1
+ * when there are none.
+ *
+ * Use this, not the first bar line. The analysis may move where the bar
+ * starts partway through a song, and a player given one offset carries it
+ * across the whole of it; the first bar line is the intro's phase, which can
+ * be a beat or two from the body's.
+ */
+TT_API int tt_offline_downbeat_offset(const tt_offline* offline);
+
+/*
  * How far to trust those bar lines. All three are in the active salience
  * backend's units and answer different questions. They may be compared with
  * thresholds calibrated for that backend, but not with raw values from a
@@ -567,9 +579,10 @@ typedef struct tt_player_config {
 
     /* Grid beat `downbeat_offset` is a bar's first beat, and every
        beats_per_bar-th after it. Both come from the offline analysis —
-       tt_offline_beats_per_bar and the first of tt_offline_downbeats — with
-       the offset left settable so the user can shift which beat is "the one"
-       when the analysis is unsure or simply wrong. */
+       tt_offline_beats_per_bar and tt_offline_downbeat_offset, not the first
+       of tt_offline_downbeats — with the offset left settable so the user can
+       shift which beat is "the one" when the analysis is unsure or simply
+       wrong. */
     int beats_per_bar;          /* 0 -> 4                                      */
     int downbeat_offset;        /* 0-based grid index; negative rejected       */
     /* Whether bar starts are distinguished at all. Read literally:

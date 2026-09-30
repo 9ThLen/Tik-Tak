@@ -154,4 +154,33 @@ OfflineResult analyseOffline(const float* samples, std::size_t n, const OfflineC
     return analyzer.finish();
 }
 
+int playbackDownbeatOffset(const OfflineResult& result) {
+    const int per_bar = result.beats_per_bar;
+    if (per_bar <= 0 || result.downbeats.empty() || result.beats.empty()) return -1;
+
+    std::vector<std::size_t> votes(static_cast<std::size_t>(per_bar), 0);
+    int first_phase = -1;
+    std::size_t at = 0;
+    for (const double downbeat : result.downbeats) {
+        // Bar lines are beats by construction, so one forward walk finds each.
+        // The slack is for a grid that came back through the cache, where both
+        // lists went through the same conversion but not the same arithmetic.
+        while (at < result.beats.size() && result.beats[at] < downbeat - 1e-9) ++at;
+        if (at == result.beats.size()) break;
+        if (std::abs(result.beats[at] - downbeat) > 1e-6) continue;
+        const auto phase = static_cast<int>(at % static_cast<std::size_t>(per_bar));
+        if (first_phase < 0) first_phase = phase;
+        ++votes[static_cast<std::size_t>(phase)];
+    }
+    if (first_phase < 0) return -1;
+
+    int best = first_phase;
+    for (int phase = 0; phase < per_bar; ++phase) {
+        if (votes[static_cast<std::size_t>(phase)] > votes[static_cast<std::size_t>(best)]) {
+            best = phase;
+        }
+    }
+    return best;
+}
+
 }  // namespace tiktak::analysis

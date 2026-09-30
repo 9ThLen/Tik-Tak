@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <string>
@@ -501,6 +502,15 @@ TEST(OfflineApi, FindsTheBarLinesOfATrackThatHasThem) {
     std::vector<double> two(2);
     EXPECT_EQ(tt_offline_downbeats(offline.handle, two.data(), 2), 2u);
     EXPECT_DOUBLE_EQ(two[0], bars[0]);
+
+    // One phase throughout, so the offset a player is handed is the grid
+    // index of the first bar line — counted in the grid's beats, which need
+    // not start at the audio's first one.
+    std::vector<double> beats(tt_offline_beat_count(offline.handle));
+    tt_offline_beats(offline.handle, beats.data(), beats.size());
+    const auto first = std::lower_bound(beats.begin(), beats.end(), bars[0] - 1e-9);
+    EXPECT_EQ(tt_offline_downbeat_offset(offline.handle),
+              static_cast<int>(first - beats.begin()));
 }
 
 TEST(OfflineApi, BarLinesCanBeDeclined) {
@@ -517,6 +527,7 @@ TEST(OfflineApi, BarLinesCanBeDeclined) {
     EXPECT_GT(tt_offline_beat_count(offline.handle), 0u);
     EXPECT_EQ(tt_offline_beats_per_bar(offline.handle), 0);
     EXPECT_EQ(tt_offline_downbeat_count(offline.handle), 0u);
+    EXPECT_EQ(tt_offline_downbeat_offset(offline.handle), -1);
 }
 
 TEST(OfflineApi, ZeroedConfigFallsBackToDefaults) {
@@ -544,6 +555,7 @@ TEST(OfflineApi, ResultsAreUnavailableUntilFinish) {
     // half-computed grid.
     EXPECT_DOUBLE_EQ(tt_offline_bpm(offline.handle), 0.0);
     EXPECT_EQ(tt_offline_beat_count(offline.handle), 0u);
+    EXPECT_EQ(tt_offline_downbeat_offset(offline.handle), -1);
 
     ASSERT_EQ(tt_offline_finish(offline.handle), TT_OK);
     EXPECT_GT(tt_offline_beat_count(offline.handle), 0u);
@@ -659,6 +671,7 @@ TEST(OfflineApi, NullHandleIsHarmless) {
     EXPECT_EQ(tt_offline_beats_per_bar(nullptr), 0);
     EXPECT_EQ(tt_offline_downbeat_count(nullptr), 0u);
     EXPECT_EQ(tt_offline_downbeats(nullptr, beats, 4), 0u);
+    EXPECT_EQ(tt_offline_downbeat_offset(nullptr), -1);
     EXPECT_DOUBLE_EQ(tt_offline_downbeat_strength(nullptr), 0.0);
     EXPECT_DOUBLE_EQ(tt_offline_downbeat_phase_margin(nullptr), 0.0);
 

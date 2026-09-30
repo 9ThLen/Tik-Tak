@@ -339,4 +339,25 @@ private:
 // Convenience wrapper for callers that already hold the whole signal.
 OfflineResult analyseOffline(const float* samples, std::size_t n, const OfflineConfig& config);
 
+// The grid index a player that knows only one bar offset should count bars
+// from: the phase that holds the most of `result.downbeats`, as an index below
+// `beats_per_bar`. -1 when there are no bar lines to take it from.
+//
+// Not the first downbeat, which is what callers were told to use. The bar
+// lines come from a decoder that may move the phase mid-song
+// (DownbeatConfig::phase_switch_cost), and a player built on one offset
+// extends whichever phase it is handed across the whole song. The first
+// downbeat is the intro's phase, so an intro read a beat or two away from the
+// body played the body wrong from start to finish — worse than the pinned
+// phase that shipped before the decoder could move at all, and invisible to
+// every score, since they all read `downbeats` and not what is played. The
+// phase covering the most bar lines is the pinned answer's counterpart over the
+// decoded path. Ties keep the first downbeat's phase, so wherever the phase
+// never moved — nearly every recording — this is exactly the old answer.
+//
+// The quick repair, not the real one: that hands the player every bar line
+// instead of an offset, and is needed before any source that moves the phase
+// freely, such as a learned downbeat head, can drive playback.
+int playbackDownbeatOffset(const OfflineResult& result);
+
 }  // namespace tiktak::analysis

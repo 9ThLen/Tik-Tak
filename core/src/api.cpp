@@ -307,6 +307,11 @@ size_t tt_offline_downbeats(const tt_offline* offline, double* out, size_t capac
     return count;
 }
 
+int tt_offline_downbeat_offset(const tt_offline* offline) {
+    if (!offline || !offline->finished) return -1;
+    return tiktak::analysis::playbackDownbeatOffset(offline->result);
+}
+
 double tt_offline_downbeat_strength(const tt_offline* offline) {
     if (!offline || !offline->finished) return 0.0;
     return offline->result.downbeat_strength;

@@ -345,3 +345,50 @@ TEST(Offline, TheObjectiveIsReportedAndIsPositiveWhenBeatsWereFound) {
     EXPECT_TRUE(none.beats.empty());
     EXPECT_DOUBLE_EQ(none.beat_objective_per_beat, 0.0);
 }
+
+namespace {
+
+// A result as the movable phase can produce it: an intro whose bars start on
+// grid beat `intro_phase` for `intro_bars`, then the body on `body_phase`.
+OfflineResult movedPhase(int intro_phase, int intro_bars, int body_phase, int body_bars) {
+    OfflineResult result;
+    result.beats_per_bar = 4;
+    for (int i = 0; i < 4 * (intro_bars + body_bars + 1); ++i) {
+        result.beats.push_back(0.5 * static_cast<double>(i));
+    }
+    for (int bar = 0; bar < intro_bars; ++bar) {
+        result.downbeats.push_back(result.beats[static_cast<std::size_t>(4 * bar + intro_phase)]);
+    }
+    for (int bar = intro_bars; bar < intro_bars + body_bars; ++bar) {
+        result.downbeats.push_back(result.beats[static_cast<std::size_t>(4 * bar + body_phase)]);
+    }
+    return result;
+}
+
+}  // namespace
+
+TEST(Offline, APlayerIsHandedTheBodysBarPhaseNotTheIntros) {
+    // The player knows one offset and extends it across the song. Handing it
+    // the first bar line accented two bars of intro right and twenty bars of
+    // song a beat off; the phase covering most bar lines gets the song right.
+    EXPECT_EQ(tiktak::analysis::playbackDownbeatOffset(movedPhase(1, 2, 2, 20)), 2);
+    EXPECT_EQ(tiktak::analysis::playbackDownbeatOffset(movedPhase(3, 20, 0, 2)), 3);
+}
+
+TEST(Offline, WhereThePhaseNeverMovedTheOffsetIsTheFirstBarLine) {
+    // Nearly every recording, and the answer callers were given before: kept
+    // exactly, including on a tie, which goes to the first bar line's phase.
+    const OfflineResult steady = movedPhase(3, 0, 3, 12);
+    EXPECT_EQ(tiktak::analysis::playbackDownbeatOffset(steady), 3);
+    EXPECT_EQ(tiktak::analysis::playbackDownbeatOffset(movedPhase(1, 4, 2, 4)), 1);
+}
+
+TEST(Offline, NoBarLinesMeansNoOffsetRatherThanZero) {
+    OfflineResult none = movedPhase(0, 0, 0, 8);
+    none.downbeats.clear();
+    EXPECT_EQ(tiktak::analysis::playbackDownbeatOffset(none), -1);
+
+    OfflineResult no_meter = movedPhase(0, 0, 0, 8);
+    no_meter.beats_per_bar = 0;
+    EXPECT_EQ(tiktak::analysis::playbackDownbeatOffset(no_meter), -1);
+}

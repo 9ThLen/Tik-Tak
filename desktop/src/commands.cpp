@@ -407,15 +407,6 @@ double findClick(const float* window, std::size_t frames,
     return best_offset;
 }
 
-// Which beat of the grid a bar line falls on. The downbeats are a subset of the
-// beats by construction, so this is a lookup and not a nearest-match: the small
-// slack absorbs the round trip through the cache, where both went through the
-// same decimal conversion but not necessarily the same arithmetic.
-int beatIndexOf(const std::vector<double>& beats, double downbeat) {
-    const auto at = std::lower_bound(beats.begin(), beats.end(), downbeat - 1e-9);
-    return static_cast<int>(at - beats.begin());
-}
-
 }  // namespace
 
 // ---------------------------------------------------------------- arguments --
@@ -1279,7 +1270,7 @@ int cmdTrack(const Options& options) {
         // otherwise an even click is the only answer that does not invent one.
         if (grid.beats_per_bar == options.beats_per_bar && !grid.downbeats.empty() &&
             grid.downbeat_phase_margin >= analysis.downbeat.min_phase_margin) {
-            downbeat_offset = beatIndexOf(grid.beats, grid.downbeats.front());
+            downbeat_offset = tiktak::analysis::playbackDownbeatOffset(grid);
             accent = true;
             std::printf("bar starts on beat %d, from the audio\n", downbeat_offset + 1);
         } else if (grid.beats_per_bar > 0 && grid.beats_per_bar != options.beats_per_bar) {
@@ -1292,7 +1283,7 @@ int cmdTrack(const Options& options) {
         }
     } else if (grid.downbeat_confident) {
         beats_per_bar = grid.beats_per_bar;
-        downbeat_offset = beatIndexOf(grid.beats, grid.downbeats.front());
+        downbeat_offset = tiktak::analysis::playbackDownbeatOffset(grid);
         accent = true;
     } else if (!grid.beats.empty()) {
         // Nothing was detected and nothing was asserted. Counting fours from the
