@@ -64,9 +64,13 @@ loses on episode-free, usable falls slightly, and only the guard holds. **The
 hold stays off**, and RWC's +0.047 is reported as RWC-only.
 
 That reading assumes the core's `OctaveHold` behaves as the research seam did
-on RWC. Batch three did not check it on RWC, so an unregistered implementation
-check is queued: `--live-anchor-hold 20` against batch one's
-`q2_debounce20_rwc`. Whatever it shows, the decision above stands.
+on RWC, and an unregistered implementation check confirms it
+(`check_core_hold20_rwc.json`, same binary, default seed). Against batch one's
+`q2_debounce20_rwc`, every usable, strict and episode-free verdict is
+identical. 304 of 328 recordings are identical in every respect, and beat F
+differs by 0.0004 [-0.0013, +0.0002]. The core hold reproduces the seam's
++0.028 usable and +0.047 episode-free on RWC exactly, so Harmonix's loss
+belongs to the corpus, not to the port.
 
 ### L — the level floor
 
