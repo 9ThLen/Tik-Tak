@@ -31,6 +31,51 @@ the 2,760 annotated recordings here as evaluation ground, leaving Harmonix,
 RWC and SMC. That is a cost of the ensemble, not merely of testing it, and it is
 the strongest argument for recording new material.
 
+## The closed loop, dry run: without the gate the metronome never stops
+
+`closed_loop/dry_run.json` is the dry run that
+`eval/PREREGISTERED_closed_loop_room.md` requires before any room pass.
+
+* **What ran:** the five registered passes through `tiktak loop --simulate-ms
+  40`. This is the digital loop through the same code as the room session,
+  with no speaker, room or microphone.
+* **Build:** clean tree at `117234f`.
+* **Programme:** P1-B0's 20 held-out GTZAN excerpts. The tracker runs straight
+  through them.
+* **Click:** -8 and -20 dB against the music, measured rather than nominal.
+
+| arm | F | usable | gap locked share | gap confidence trend | after 30 s of silence |
+|---|---:|---:|---:|---:|---|
+| silent click | 0.764 | 0.60 | 0.69 | -0.17 | stopped after 13 s |
+| -8 dB, gated | 0.502 | 0.15 | 0.61 | -0.12 | stopped at once |
+| -8 dB, ungated | 0.616 | 0.45 | **0.93** | +0.08 | **still clicking, confidence 0.78** |
+| -20 dB, gated | 0.542 | 0.20 | 0.71 | -0.07 | stopped at once |
+| -20 dB, ungated | 0.716 | 0.55 | **0.96** | +0.11 | **still clicking, confidence 0.81** |
+
+Read against the registered rule, as the no-room control and not the decision:
+
+* **F.** The ungated arms beat the gated ones by +0.114 [+0.04, +0.19] and
+  +0.174 [+0.07, +0.28]. The bench's finding reproduces through the desktop
+  metronome.
+* **Self-sustain.** The ungated arms also keep themselves going. Their gap
+  locked share exceeds the silent click's by +0.24 [+0.13, +0.37] and +0.27
+  [+0.16, +0.40], and 30 s into silence they are still clicking at 0.78-0.81
+  confidence. The gated arms stop at once; the silent click coasts for 13 s,
+  then stops.
+* **What the rule says here.** In a digital loop the rule's "keep the gate"
+  branch fires, and it fires on self-sustain, not on F. The bench (G3, G7)
+  never looked at silence, because a recording ends when its music does, and
+  this is what the independent review asked about. Whether a real speaker,
+  room and microphone feed the click back as faithfully is what the room
+  session will answer.
+* **A separate question.** With no click at all, the tracker still coasts
+  about 13 s past the end of the music. A metronome that keeps clicking that
+  long after the music stops is a product question of its own, apart from the
+  gate.
+
+**Validity.** The scorer recovered the simulated 40 ms lag exactly, at both the
+first and the last take. The click ratios came out at -8.05 and -20.05 dB.
+
 ## The level floor in a real room: a gain in every cell, too few excerpts to decide
 
 `p1b0_level_floor/p1b0_level_floor.json`, answering

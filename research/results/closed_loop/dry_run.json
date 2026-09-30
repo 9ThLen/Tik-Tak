@@ -1,0 +1,2101 @@
+{
+ "schema": "tiktak.closed_loop_result/v1",
+ "session": "dry-run",
+ "passes": {
+  "l0_silent": {
+   "pass": "l0_silent",
+   "tail": {
+    "seconds": 30.0,
+    "beats": 35,
+    "last_beat_after_sec": 13.138243333333435,
+    "final_confidence": 1.7854838709677418e-05,
+    "locked_share": 0.30707610146862485
+   },
+   "settings": {
+    "click_db": 0.0,
+    "click_silent": true,
+    "gated": false,
+    "round_trip_sec": 0.04,
+    "front_end": "beatnet",
+    "model": "beatnet_model_1.ttw",
+    "simulated_ms": 40.0,
+    "device": {
+     "capture": "simulated",
+     "playback": "simulated",
+     "backend": "none",
+     "period_frames": 480
+    },
+    "stats": {
+     "beats": 1603,
+     "beats_late": 3,
+     "clicks_late": 0,
+     "clicks_overflowed": 0,
+     "voices_stolen": 0,
+     "discontinuities": 0,
+     "capture_discontinuities": 0,
+     "gated": 0
+    }
+   },
+   "lag_sec": {
+    "first": 0.04,
+    "last": 0.04,
+    "drift_per_hour": 0.0
+   },
+   "clarity": {
+    "first": 0.9999999999999999,
+    "last": 1.0
+   },
+   "gate_misalignment_sec": null,
+   "records": [
+    {
+     "track": "blues.00025",
+     "f_measure": 0.4067796610169492,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.0,
+     "click_to_music_db": null,
+     "sustain": {
+      "beats": 33,
+      "ratio": 1.9156440000000003,
+      "last_beat_after_sec": 10.657047666666664,
+      "locked_share": 0.5781818181818181,
+      "confidence_trend": -0.28595484000000004
+     }
+    },
+    {
+     "track": "blues.00075",
+     "f_measure": 0.9387755102040817,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 1.0,
+     "click_to_music_db": null,
+     "sustain": {
+      "beats": 23,
+      "ratio": 1.068117909090907,
+      "last_beat_after_sec": 10.690666333333326,
+      "locked_share": 0.6254545454545455,
+      "confidence_trend": -0.52260594
+     }
+    },
+    {
+     "track": "classical.00025",
+     "f_measure": 0.5641025641025641,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.39728217426059154,
+     "click_to_music_db": null,
+     "sustain": {
+      "beats": 26,
+      "ratio": 1.0702285454545506,
+      "last_beat_after_sec": 10.668210999999985,
+      "locked_share": 0.9781818181818182,
+      "confidence_trend": 0.049887219999999954
+     }
+    },
+    {
+     "track": "classical.00075",
+     "f_measure": 0.3835616438356165,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.381294964028777,
+     "click_to_music_db": null,
+     "sustain": {
+      "beats": 2,
+      "ratio": 0.09780709090909086,
+      "last_beat_after_sec": 10.700610666666677,
+      "locked_share": 0.08,
+      "confidence_trend": 0.16497878666666665
+     }
+    },
+    {
+     "track": "country.00025",
+     "f_measure": 0.65625,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.48361310951239006,
+     "click_to_music_db": null,
+     "sustain": {
+      "beats": 13,
+      "ratio": 0.9741821818181822,
+      "last_beat_after_sec": 10.725347333333332,
+      "locked_share": 0.39090909090909093,
+      "confidence_trend": -0.3550442999999999
+     }
+    },
+    {
+     "track": "country.00075",
+     "f_measure": 0.9,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 1.0,
+     "click_to_music_db": null,
+     "sustain": {
+      "beats": 24,
+      "ratio": 1.3552014545454576,
+      "last_beat_after_sec": 10.697517000000033,
+      "locked_share": 0.9545454545454546,
+      "confidence_trend": -0.1823280133333332
+     }
+    },
+    {
+     "track": "disco.00025",
+     "f_measure": 1.0,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 1.0,
+     "click_to_music_db": null,
+     "sustain": {
+      "beats": 25,
+      "ratio": 1.0950318181818182,
+      "last_beat_after_sec": 10.683123666666688,
+      "locked_share": 0.9418181818181818,
+      "confidence_trend": -0.31215725333333333
+     }
+    },
+    {
+     "track": "disco.00075",
+     "f_measure": 0.9909909909909909,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 1.0,
+     "click_to_music_db": null,
+     "sustain": {
+      "beats": 25,
+      "ratio": 1.0290659090909093,
+      "last_beat_after_sec": 10.743662166666695,
+      "locked_share": 0.9163636363636364,
+      "confidence_trend": -0.1849183666666666
+     }
+    },
+    {
+     "track": "hiphop.00025",
+     "f_measure": 0.8863636363636365,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 1.0,
+     "click_to_music_db": null,
+     "sustain": {
+      "beats": 24,
+      "ratio": 1.2412123636363606,
+      "last_beat_after_sec": 10.991283833333398,
+      "locked_share": 0.7927272727272727,
+      "confidence_trend": -0.24058109333333333
+     }
+    },
+    {
+     "track": "hiphop.00075",
+     "f_measure": 0.8493150684931505,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9256594724220624,
+     "click_to_music_db": null,
+     "sustain": {
+      "beats": 23,
+      "ratio": 1.3714460909090909,
+      "last_beat_after_sec": 10.693025500000033,
+      "locked_share": 0.9418181818181818,
+      "confidence_trend": -0.26180721333333323
+     }
+    },
+    {
+     "track": "jazz.00024",
+     "f_measure": 0.5744680851063829,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.6688,
+     "click_to_music_db": null,
+     "sustain": {
+      "beats": 5,
+      "ratio": 0.25568409090909083,
+      "last_beat_after_sec": 10.721792166666717,
+      "locked_share": 0.12727272727272726,
+      "confidence_trend": 0.11803364000000001
+     }
+    },
+    {
+     "track": "jazz.00075",
+     "f_measure": 0.4122137404580153,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.0,
+     "click_to_music_db": null,
+     "sustain": {
+      "beats": 26,
+      "ratio": 0.6723245454545493,
+      "last_beat_after_sec": 10.674957833333394,
+      "locked_share": 0.5072727272727273,
+      "confidence_trend": 0.20699421333333334
+     }
+    },
+    {
+     "track": "metal.00025",
+     "f_measure": 1.0,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9992,
+     "click_to_music_db": null,
+     "sustain": {
+      "beats": 25,
+      "ratio": 0.9894852272727289,
+      "last_beat_after_sec": 10.697730333333425,
+      "locked_share": 0.8927272727272727,
+      "confidence_trend": -0.15433395999999994
+     }
+    },
+    {
+     "track": "metal.00075",
+     "f_measure": 0.888888888888889,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9304,
+     "click_to_music_db": null,
+     "sustain": {
+      "beats": 24,
+      "ratio": 1.1525541818181828,
+      "last_beat_after_sec": 10.719939833333342,
+      "locked_share": 0.9036363636363637,
+      "confidence_trend": -0.32577020000000007
+     }
+    },
+    {
+     "track": "pop.00025",
+     "f_measure": 0.9841269841269841,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9984,
+     "click_to_music_db": null,
+     "sustain": {
+      "beats": 20,
+      "ratio": 1.4565236363636362,
+      "last_beat_after_sec": 10.7592943333334,
+      "locked_share": 0.9363636363636364,
+      "confidence_trend": -0.32000213333333344
+     }
+    },
+    {
+     "track": "pop.00075",
+     "f_measure": 1.0,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 1.0,
+     "click_to_music_db": null,
+     "sustain": {
+      "beats": 22,
+      "ratio": 1.2770979999999992,
+      "last_beat_after_sec": 10.683386833333316,
+      "locked_share": 0.9272727272727272,
+      "confidence_trend": -0.23793526666666664
+     }
+    },
+    {
+     "track": "reggae.00024",
+     "f_measure": 0.9824561403508771,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9992006394884093,
+     "click_to_music_db": null,
+     "sustain": {
+      "beats": 16,
+      "ratio": 0.6248276363636375,
+      "last_beat_after_sec": 10.682770499999947,
+      "locked_share": 0.38545454545454544,
+      "confidence_trend": -0.17596
+     }
+    },
+    {
+     "track": "reggae.00074",
+     "f_measure": 0.38554216867469876,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.5304,
+     "click_to_music_db": null,
+     "sustain": {
+      "beats": 29,
+      "ratio": 1.8824005454545423,
+      "last_beat_after_sec": 10.66617999999994,
+      "locked_share": 0.9690909090909091,
+      "confidence_trend": -0.15211635999999995
+     }
+    },
+    {
+     "track": "rock.00025",
+     "f_measure": 0.4810126582278481,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.7072,
+     "click_to_music_db": null,
+     "sustain": {
+      "beats": 18,
+      "ratio": 0.9404083636363652,
+      "last_beat_after_sec": 10.686634666666578,
+      "locked_share": 0.08,
+      "confidence_trend": 0.047003493333333396
+     }
+    },
+    {
+     "track": "rock.00075",
+     "f_measure": 1.0,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9992006394884093,
+     "click_to_music_db": null,
+     "sustain": {
+      "beats": 18,
+      "ratio": 0.998458000000012,
+      "last_beat_after_sec": 8.81593933333329,
+      "locked_share": 0.8911111111111111,
+      "confidence_trend": -0.2923921066666665
+     }
+    }
+   ]
+  },
+  "l1_loud_gated": {
+   "pass": "l1_loud_gated",
+   "tail": {
+    "seconds": 30.0,
+    "beats": 0,
+    "last_beat_after_sec": 0.0,
+    "final_confidence": 0.0,
+    "locked_share": 0.0
+   },
+   "settings": {
+    "click_db": -4.4,
+    "click_silent": false,
+    "gated": true,
+    "round_trip_sec": 0.04,
+    "front_end": "beatnet",
+    "model": "beatnet_model_1.ttw",
+    "simulated_ms": 40.0,
+    "device": {
+     "capture": "simulated",
+     "playback": "simulated",
+     "backend": "none",
+     "period_frames": 480
+    },
+    "stats": {
+     "beats": 1600,
+     "beats_late": 6,
+     "clicks_late": 0,
+     "clicks_overflowed": 0,
+     "voices_stolen": 0,
+     "discontinuities": 0,
+     "capture_discontinuities": 0,
+     "gated": 9543
+    }
+   },
+   "lag_sec": {
+    "first": 0.04,
+    "last": 0.04,
+    "drift_per_hour": 0.0
+   },
+   "clarity": {
+    "first": 0.9419233515411526,
+    "last": 0.951401350285995
+   },
+   "gate_misalignment_sec": 0.0,
+   "records": [
+    {
+     "track": "blues.00025",
+     "f_measure": 0.2931034482758621,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.03357314148681055,
+     "click_to_music_db": -7.330229115095587,
+     "sustain": {
+      "beats": 29,
+      "ratio": 1.6834447272727278,
+      "last_beat_after_sec": 10.899794666666665,
+      "locked_share": 0.8636363636363636,
+      "confidence_trend": -0.36920947333333315
+     }
+    },
+    {
+     "track": "blues.00075",
+     "f_measure": 0.8958333333333333,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9640287769784173,
+     "click_to_music_db": -12.441819804940163,
+     "sustain": {
+      "beats": 29,
+      "ratio": 1.346757363636361,
+      "last_beat_after_sec": 9.786445333333319,
+      "locked_share": 0.6945454545454546,
+      "confidence_trend": -0.6195412333333333
+     }
+    },
+    {
+     "track": "classical.00025",
+     "f_measure": 0.2545454545454545,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.6139088729016786,
+     "click_to_music_db": -2.050550431786472,
+     "sustain": {
+      "beats": 30,
+      "ratio": 1.2348790909090968,
+      "last_beat_after_sec": 10.66966499999998,
+      "locked_share": 0.96,
+      "confidence_trend": -0.303682
+     }
+    },
+    {
+     "track": "classical.00075",
+     "f_measure": 0.3333333333333333,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.0,
+     "click_to_music_db": 8.159098971369843,
+     "sustain": {
+      "beats": 25,
+      "ratio": 1.2225886363636358,
+      "last_beat_after_sec": 9.01076066666667,
+      "locked_share": 0.7727272727272727,
+      "confidence_trend": -0.40228457333333334
+     }
+    },
+    {
+     "track": "country.00025",
+     "f_measure": 0.3243243243243243,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.15987210231814547,
+     "click_to_music_db": -6.756638111160208,
+     "sustain": {
+      "beats": 26,
+      "ratio": 1.9483643636363643,
+      "last_beat_after_sec": 10.69425133333334,
+      "locked_share": 0.9527272727272728,
+      "confidence_trend": 0.0969412799999998
+     }
+    },
+    {
+     "track": "country.00075",
+     "f_measure": 0.65,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 1.0,
+     "click_to_music_db": -12.232128954713197,
+     "sustain": {
+      "beats": 7,
+      "ratio": 0.3952670909090918,
+      "last_beat_after_sec": 10.955889000000013,
+      "locked_share": 0.24181818181818182,
+      "confidence_trend": -0.05568217333333331
+     }
+    },
+    {
+     "track": "disco.00025",
+     "f_measure": 0.7524752475247524,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9576338928856915,
+     "click_to_music_db": -7.441308670433112,
+     "sustain": {
+      "beats": 24,
+      "ratio": 1.0512305454545454,
+      "last_beat_after_sec": 10.632697666666672,
+      "locked_share": 0.8654545454545455,
+      "confidence_trend": 0.2970268733333334
+     }
+    },
+    {
+     "track": "disco.00075",
+     "f_measure": 0.6,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9808,
+     "click_to_music_db": -6.726831949054429,
+     "sustain": {
+      "beats": 28,
+      "ratio": 1.1525538181818185,
+      "last_beat_after_sec": 10.752267166666684,
+      "locked_share": 1.0,
+      "confidence_trend": -0.005699400000000021
+     }
+    },
+    {
+     "track": "hiphop.00025",
+     "f_measure": 0.2682926829268293,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.8337330135891287,
+     "click_to_music_db": -14.875307072522798,
+     "sustain": {
+      "beats": 11,
+      "ratio": 0.5688889999999986,
+      "last_beat_after_sec": 10.968027833333394,
+      "locked_share": 0.26181818181818184,
+      "confidence_trend": -0.1563606333333333
+     }
+    },
+    {
+     "track": "hiphop.00075",
+     "f_measure": 0.4675324675324675,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9512390087929656,
+     "click_to_music_db": -14.134649487101179,
+     "sustain": {
+      "beats": 25,
+      "ratio": 1.4907022727272727,
+      "last_beat_after_sec": 10.660814500000072,
+      "locked_share": 0.9054545454545454,
+      "confidence_trend": 0.22318305999999988
+     }
+    },
+    {
+     "track": "jazz.00024",
+     "f_measure": 0.29906542056074764,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.3072,
+     "click_to_music_db": -2.67308776362884,
+     "sustain": {
+      "beats": 7,
+      "ratio": 0.3579577272727272,
+      "last_beat_after_sec": 10.687738166666747,
+      "locked_share": 0.23272727272727273,
+      "confidence_trend": -0.11174060666666663
+     }
+    },
+    {
+     "track": "jazz.00075",
+     "f_measure": 0.328125,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.03117505995203837,
+     "click_to_music_db": -7.48361555087567,
+     "sustain": {
+      "beats": 32,
+      "ratio": 0.8274763636363683,
+      "last_beat_after_sec": 10.85914183333341,
+      "locked_share": 0.7872727272727272,
+      "confidence_trend": -0.024228539999999965
+     }
+    },
+    {
+     "track": "metal.00025",
+     "f_measure": 0.7543859649122806,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9672,
+     "click_to_music_db": -5.472975189863969,
+     "sustain": {
+      "beats": 30,
+      "ratio": 1.1873822727272747,
+      "last_beat_after_sec": 10.680378333333465,
+      "locked_share": 0.9563636363636364,
+      "confidence_trend": -0.15845813333333325
+     }
+    },
+    {
+     "track": "metal.00075",
+     "f_measure": 0.7021276595744681,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 1.0,
+     "click_to_music_db": -14.291205486135647,
+     "sustain": {
+      "beats": 25,
+      "ratio": 1.2005772727272739,
+      "last_beat_after_sec": 10.697462833333361,
+      "locked_share": 0.9690909090909091,
+      "confidence_trend": -0.10971036666666673
+     }
+    },
+    {
+     "track": "pop.00025",
+     "f_measure": 0.5106382978723405,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.4224,
+     "click_to_music_db": -14.143673557488373,
+     "sustain": {
+      "beats": 3,
+      "ratio": 0.21847854545454545,
+      "last_beat_after_sec": 1.6227793333333693,
+      "locked_share": 0.15454545454545454,
+      "confidence_trend": -0.33398270666666663
+     }
+    },
+    {
+     "track": "pop.00075",
+     "f_measure": 0.4545454545454546,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.616,
+     "click_to_music_db": -13.209037233970571,
+     "sustain": {
+      "beats": 25,
+      "ratio": 1.4512477272727264,
+      "last_beat_after_sec": 10.945721833333323,
+      "locked_share": 0.9781818181818182,
+      "confidence_trend": -0.05291555333333331
+     }
+    },
+    {
+     "track": "reggae.00024",
+     "f_measure": 0.8214285714285714,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9608313349320543,
+     "click_to_music_db": -7.747903719152207,
+     "sustain": {
+      "beats": 7,
+      "ratio": 0.2733620909090914,
+      "last_beat_after_sec": 10.777447499999994,
+      "locked_share": 0.24727272727272728,
+      "confidence_trend": -0.1553859466666667
+     }
+    },
+    {
+     "track": "reggae.00074",
+     "f_measure": 0.2916666666666667,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.0712,
+     "click_to_music_db": -13.198091396096668,
+     "sustain": {
+      "beats": 8,
+      "ratio": 0.5192829090909082,
+      "last_beat_after_sec": 10.74289699999997,
+      "locked_share": 0.24545454545454545,
+      "confidence_trend": -0.08038557999999996
+     }
+    },
+    {
+     "track": "rock.00025",
+     "f_measure": 0.2,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.5504,
+     "click_to_music_db": -10.19676305607496,
+     "sustain": {
+      "beats": 3,
+      "ratio": 0.15673472727272753,
+      "last_beat_after_sec": 10.590910666666673,
+      "locked_share": 0.05272727272727273,
+      "confidence_trend": 0.12776919333333334
+     }
+    },
+    {
+     "track": "rock.00075",
+     "f_measure": 0.8453608247422681,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9368505195843325,
+     "click_to_music_db": -8.345601653868421,
+     "sustain": {
+      "beats": 2,
+      "ratio": 0.11093977777777911,
+      "last_beat_after_sec": 1.121697333333259,
+      "locked_share": 0.14888888888888888,
+      "confidence_trend": -0.30183502000000006
+     }
+    }
+   ]
+  },
+  "l2_loud_ungated": {
+   "pass": "l2_loud_ungated",
+   "tail": {
+    "seconds": 30.0,
+    "beats": 82,
+    "last_beat_after_sec": 29.943465333333393,
+    "final_confidence": 0.7846331290322581,
+    "locked_share": 0.9846461949265688
+   },
+   "settings": {
+    "click_db": -4.4,
+    "click_silent": false,
+    "gated": false,
+    "round_trip_sec": 0.04,
+    "front_end": "beatnet",
+    "model": "beatnet_model_1.ttw",
+    "simulated_ms": 40.0,
+    "device": {
+     "capture": "simulated",
+     "playback": "simulated",
+     "backend": "none",
+     "period_frames": 480
+    },
+    "stats": {
+     "beats": 1877,
+     "beats_late": 3,
+     "clicks_late": 0,
+     "clicks_overflowed": 0,
+     "voices_stolen": 0,
+     "discontinuities": 0,
+     "capture_discontinuities": 0,
+     "gated": 0
+    }
+   },
+   "lag_sec": {
+    "first": 0.04,
+    "last": 0.04,
+    "drift_per_hour": 0.0
+   },
+   "clarity": {
+    "first": 0.9394687130778903,
+    "last": 0.9295741416904489
+   },
+   "gate_misalignment_sec": null,
+   "records": [
+    {
+     "track": "blues.00025",
+     "f_measure": 0.3225806451612903,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.0,
+     "click_to_music_db": -7.330229115095587,
+     "sustain": {
+      "beats": 32,
+      "ratio": 1.8575941818181823,
+      "last_beat_after_sec": 10.589079666666663,
+      "locked_share": 0.9690909090909091,
+      "confidence_trend": 0.17680187333333341
+     }
+    },
+    {
+     "track": "blues.00075",
+     "f_measure": 0.8979591836734694,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 1.0,
+     "click_to_music_db": -12.441819804940163,
+     "sustain": {
+      "beats": 23,
+      "ratio": 1.068117909090907,
+      "last_beat_after_sec": 10.846197333333322,
+      "locked_share": 0.9563636363636364,
+      "confidence_trend": -0.12710403333333342
+     }
+    },
+    {
+     "track": "classical.00025",
+     "f_measure": 0.33057851239669417,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.2509992006394884,
+     "click_to_music_db": -2.050550431786472,
+     "sustain": {
+      "beats": 38,
+      "ratio": 1.5641801818181893,
+      "last_beat_after_sec": 10.993424999999988,
+      "locked_share": 0.9890909090909091,
+      "confidence_trend": 0.13022059333333336
+     }
+    },
+    {
+     "track": "classical.00075",
+     "f_measure": 0.20408163265306123,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.4876099120703437,
+     "click_to_music_db": 8.159098971369843,
+     "sustain": {
+      "beats": 27,
+      "ratio": 1.3203957272727265,
+      "last_beat_after_sec": 10.649867666666665,
+      "locked_share": 0.9672727272727273,
+      "confidence_trend": 0.044267226666666715
+     }
+    },
+    {
+     "track": "country.00025",
+     "f_measure": 0.20408163265306123,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.0,
+     "click_to_music_db": -6.756638111160208,
+     "sustain": {
+      "beats": 29,
+      "ratio": 2.0,
+      "last_beat_after_sec": 10.847134333333344,
+      "locked_share": 0.9218181818181819,
+      "confidence_trend": 0.16645889333333336
+     }
+    },
+    {
+     "track": "country.00075",
+     "f_measure": 0.825,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 1.0,
+     "click_to_music_db": -12.232128954713197,
+     "sustain": {
+      "beats": 19,
+      "ratio": 1.0728678181818205,
+      "last_beat_after_sec": 10.74228800000003,
+      "locked_share": 0.9818181818181818,
+      "confidence_trend": 0.07919938000000004
+     }
+    },
+    {
+     "track": "disco.00025",
+     "f_measure": 1.0,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 1.0,
+     "click_to_music_db": -7.441308670433112,
+     "sustain": {
+      "beats": 25,
+      "ratio": 1.0950318181818182,
+      "last_beat_after_sec": 10.820512666666673,
+      "locked_share": 0.990909090909091,
+      "confidence_trend": 0.09654142666666665
+     }
+    },
+    {
+     "track": "disco.00075",
+     "f_measure": 0.9909909909909909,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9976,
+     "click_to_music_db": -6.726831949054429,
+     "sustain": {
+      "beats": 26,
+      "ratio": 1.0702285454545457,
+      "last_beat_after_sec": 10.664104166666675,
+      "locked_share": 0.9709090909090909,
+      "confidence_trend": -0.05213565333333314
+     }
+    },
+    {
+     "track": "hiphop.00025",
+     "f_measure": 0.6279069767441862,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9016786570743405,
+     "click_to_music_db": -14.875307072522798,
+     "sustain": {
+      "beats": 21,
+      "ratio": 1.0860608181818157,
+      "last_beat_after_sec": 10.782517833333372,
+      "locked_share": 0.990909090909091,
+      "confidence_trend": -0.12165599999999999
+     }
+    },
+    {
+     "track": "hiphop.00075",
+     "f_measure": 0.7368421052631579,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9936051159072742,
+     "click_to_music_db": -14.134649487101179,
+     "sustain": {
+      "beats": 18,
+      "ratio": 1.0733056363636364,
+      "last_beat_after_sec": 10.913328500000034,
+      "locked_share": 0.9418181818181818,
+      "confidence_trend": 0.04362246000000003
+     }
+    },
+    {
+     "track": "jazz.00024",
+     "f_measure": 0.2222222222222222,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.156,
+     "click_to_music_db": -2.67308776362884,
+     "sustain": {
+      "beats": 20,
+      "ratio": 1.0227363636363633,
+      "last_beat_after_sec": 10.730579166666757,
+      "locked_share": 0.9836363636363636,
+      "confidence_trend": 0.20771785999999992
+     }
+    },
+    {
+     "track": "jazz.00075",
+     "f_measure": 0.39694656488549623,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.0,
+     "click_to_music_db": -7.48361555087567,
+     "sustain": {
+      "beats": 36,
+      "ratio": 0.9309109090909145,
+      "last_beat_after_sec": 10.820456833333424,
+      "locked_share": 0.9636363636363636,
+      "confidence_trend": 0.13883245333333322
+     }
+    },
+    {
+     "track": "metal.00025",
+     "f_measure": 0.9310344827586207,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9952,
+     "click_to_music_db": -5.472975189863969,
+     "sustain": {
+      "beats": 28,
+      "ratio": 1.1082234545454563,
+      "last_beat_after_sec": 10.699714333333418,
+      "locked_share": 0.9545454545454546,
+      "confidence_trend": 0.0129581333333334
+     }
+    },
+    {
+     "track": "metal.00075",
+     "f_measure": 0.8791208791208791,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9392,
+     "click_to_music_db": -14.291205486135647,
+     "sustain": {
+      "beats": 22,
+      "ratio": 1.056508000000001,
+      "last_beat_after_sec": 10.520647833333442,
+      "locked_share": 0.990909090909091,
+      "confidence_trend": 0.029958640000000036
+     }
+    },
+    {
+     "track": "pop.00025",
+     "f_measure": 0.6129032258064516,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9536,
+     "click_to_music_db": -14.143673557488373,
+     "sustain": {
+      "beats": 17,
+      "ratio": 1.2380450909090908,
+      "last_beat_after_sec": 10.81653033333339,
+      "locked_share": 0.990909090909091,
+      "confidence_trend": -0.09690133333333328
+     }
+    },
+    {
+     "track": "pop.00075",
+     "f_measure": 0.9743589743589743,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 1.0,
+     "click_to_music_db": -13.209037233970571,
+     "sustain": {
+      "beats": 17,
+      "ratio": 0.986848454545454,
+      "last_beat_after_sec": 10.573576833333277,
+      "locked_share": 0.9618181818181818,
+      "confidence_trend": 0.21094359333333346
+     }
+    },
+    {
+     "track": "reggae.00024",
+     "f_measure": 0.8596491228070176,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9960031974420464,
+     "click_to_music_db": -7.747903719152207,
+     "sustain": {
+      "beats": 28,
+      "ratio": 1.0934483636363657,
+      "last_beat_after_sec": 10.675518499999953,
+      "locked_share": 0.9781818181818182,
+      "confidence_trend": -0.03808742666666676
+     }
+    },
+    {
+     "track": "reggae.00074",
+     "f_measure": 0.23300970873786409,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.0,
+     "click_to_music_db": -13.198091396096668,
+     "sustain": {
+      "beats": 33,
+      "ratio": 2.0,
+      "last_beat_after_sec": 10.728264999999965,
+      "locked_share": 0.9963636363636363,
+      "confidence_trend": 0.05735148000000001
+     }
+    },
+    {
+     "track": "rock.00025",
+     "f_measure": 0.08955223880597014,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.5696,
+     "click_to_music_db": -10.19676305607496,
+     "sustain": {
+      "beats": 6,
+      "ratio": 0.31346945454545505,
+      "last_beat_after_sec": 10.72513866666668,
+      "locked_share": 0.19818181818181818,
+      "confidence_trend": 0.4674283066666667
+     }
+    },
+    {
+     "track": "rock.00075",
+     "f_measure": 0.98989898989899,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9904076738609112,
+     "click_to_music_db": -8.345601653868421,
+     "sustain": {
+      "beats": 20,
+      "ratio": 1.109397777777791,
+      "last_beat_after_sec": 8.893278333333342,
+      "locked_share": 0.9844444444444445,
+      "confidence_trend": 0.23664671333333354
+     }
+    }
+   ]
+  },
+  "l3_quiet_gated": {
+   "pass": "l3_quiet_gated",
+   "tail": {
+    "seconds": 30.0,
+    "beats": 0,
+    "last_beat_after_sec": 0.0,
+    "final_confidence": 0.0,
+    "locked_share": 0.0
+   },
+   "settings": {
+    "click_db": -16.4,
+    "click_silent": false,
+    "gated": true,
+    "round_trip_sec": 0.04,
+    "front_end": "beatnet",
+    "model": "beatnet_model_1.ttw",
+    "simulated_ms": 40.0,
+    "device": {
+     "capture": "simulated",
+     "playback": "simulated",
+     "backend": "none",
+     "period_frames": 480
+    },
+    "stats": {
+     "beats": 1580,
+     "beats_late": 5,
+     "clicks_late": 0,
+     "clicks_overflowed": 0,
+     "voices_stolen": 0,
+     "discontinuities": 0,
+     "capture_discontinuities": 0,
+     "gated": 9404
+    }
+   },
+   "lag_sec": {
+    "first": 0.04,
+    "last": 0.04,
+    "drift_per_hour": 0.0
+   },
+   "clarity": {
+    "first": 0.9962787612070383,
+    "last": 0.9965926667839599
+   },
+   "gate_misalignment_sec": 0.0,
+   "records": [
+    {
+     "track": "blues.00025",
+     "f_measure": 0.40336134453781514,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.0,
+     "click_to_music_db": -19.330229115095587,
+     "sustain": {
+      "beats": 30,
+      "ratio": 1.7414945454545459,
+      "last_beat_after_sec": 10.837565666666663,
+      "locked_share": 0.8127272727272727,
+      "confidence_trend": -0.5433699066666666
+     }
+    },
+    {
+     "track": "blues.00075",
+     "f_measure": 0.5111111111111111,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.7354116706634692,
+     "click_to_music_db": -24.44181980494016,
+     "sustain": {
+      "beats": 23,
+      "ratio": 1.068117909090907,
+      "last_beat_after_sec": 10.802704333333324,
+      "locked_share": 0.9509090909090909,
+      "confidence_trend": -0.2524943666666666
+     }
+    },
+    {
+     "track": "classical.00025",
+     "f_measure": 0.6078431372549019,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.8553157474020784,
+     "click_to_music_db": -14.050550431786471,
+     "sustain": {
+      "beats": 26,
+      "ratio": 1.0702285454545506,
+      "last_beat_after_sec": 10.77148799999999,
+      "locked_share": 1.0,
+      "confidence_trend": 0.02636088000000003
+     }
+    },
+    {
+     "track": "classical.00075",
+     "f_measure": 0.3272727272727273,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.0,
+     "click_to_music_db": -3.8409010286301566,
+     "sustain": {
+      "beats": 32,
+      "ratio": 1.5649134545454537,
+      "last_beat_after_sec": 10.962933666666657,
+      "locked_share": 0.9963636363636363,
+      "confidence_trend": 0.010609900000000061
+     }
+    },
+    {
+     "track": "country.00025",
+     "f_measure": 0.6666666666666666,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.6083133493205436,
+     "click_to_music_db": -18.756638111160207,
+     "sustain": {
+      "beats": 25,
+      "ratio": 1.8734272727272734,
+      "last_beat_after_sec": 10.974226333333348,
+      "locked_share": 0.39454545454545453,
+      "confidence_trend": -0.2581230133333334
+     }
+    },
+    {
+     "track": "country.00075",
+     "f_measure": 0.375,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 1.0,
+     "click_to_music_db": -24.232128954713197,
+     "sustain": {
+      "beats": 2,
+      "ratio": 0.11293345454545481,
+      "last_beat_after_sec": 0.9670710000000327,
+      "locked_share": 0.10545454545454545,
+      "confidence_trend": -0.1527501666666667
+     }
+    },
+    {
+     "track": "disco.00025",
+     "f_measure": 0.8349514563106797,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9608313349320543,
+     "click_to_music_db": -19.44130867043311,
+     "sustain": {
+      "beats": 24,
+      "ratio": 1.0512305454545454,
+      "last_beat_after_sec": 10.900856666666698,
+      "locked_share": 0.9418181818181818,
+      "confidence_trend": 0.15554629333333325
+     }
+    },
+    {
+     "track": "disco.00075",
+     "f_measure": 0.6666666666666666,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.956,
+     "click_to_music_db": -18.72683194905443,
+     "sustain": {
+      "beats": 23,
+      "ratio": 0.9467406363636366,
+      "last_beat_after_sec": 10.732901166666693,
+      "locked_share": 0.9127272727272727,
+      "confidence_trend": -0.007637159999999921
+     }
+    },
+    {
+     "track": "hiphop.00025",
+     "f_measure": 0.4810126582278481,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.7058353317346123,
+     "click_to_music_db": -26.8753070725228,
+     "sustain": {
+      "beats": 27,
+      "ratio": 1.3963639090909057,
+      "last_beat_after_sec": 10.652469833333384,
+      "locked_share": 0.9618181818181818,
+      "confidence_trend": 0.28444566000000004
+     }
+    },
+    {
+     "track": "hiphop.00075",
+     "f_measure": 0.2465753424657534,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.7665867306155076,
+     "click_to_music_db": -26.134649487101175,
+     "sustain": {
+      "beats": 20,
+      "ratio": 1.192561818181818,
+      "last_beat_after_sec": 10.598543500000062,
+      "locked_share": 0.9236363636363636,
+      "confidence_trend": -0.1953344866666667
+     }
+    },
+    {
+     "track": "jazz.00024",
+     "f_measure": 0.5301204819277109,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.8352,
+     "click_to_music_db": -14.673087763628839,
+     "sustain": {
+      "beats": 26,
+      "ratio": 1.3295572727272724,
+      "last_beat_after_sec": 10.68346716666673,
+      "locked_share": 0.8818181818181818,
+      "confidence_trend": 0.2609480133333334
+     }
+    },
+    {
+     "track": "jazz.00075",
+     "f_measure": 0.5029940119760479,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9000799360511591,
+     "click_to_music_db": -19.48361555087567,
+     "sustain": {
+      "beats": 15,
+      "ratio": 0.38787954545454767,
+      "last_beat_after_sec": 10.785123833333387,
+      "locked_share": 0.2290909090909091,
+      "confidence_trend": -0.023914820000000087
+     }
+    },
+    {
+     "track": "metal.00025",
+     "f_measure": 0.5357142857142857,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9504,
+     "click_to_music_db": -17.472975189863966,
+     "sustain": {
+      "beats": 30,
+      "ratio": 1.1873822727272747,
+      "last_beat_after_sec": 10.684547333333398,
+      "locked_share": 0.9890909090909091,
+      "confidence_trend": -0.04953228666666665
+     }
+    },
+    {
+     "track": "metal.00075",
+     "f_measure": 0.8478260869565217,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9392,
+     "click_to_music_db": -26.291205486135645,
+     "sustain": {
+      "beats": 26,
+      "ratio": 1.2486003636363647,
+      "last_beat_after_sec": 10.693892833333393,
+      "locked_share": 0.9963636363636363,
+      "confidence_trend": -0.01729940666666674
+     }
+    },
+    {
+     "track": "pop.00025",
+     "f_measure": 0.24489795918367344,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.5048,
+     "click_to_music_db": -26.14367355748837,
+     "sustain": {
+      "beats": 11,
+      "ratio": 0.801088,
+      "last_beat_after_sec": 10.741864333333297,
+      "locked_share": 0.6527272727272727,
+      "confidence_trend": -0.33747610000000006
+     }
+    },
+    {
+     "track": "pop.00075",
+     "f_measure": 0.691358024691358,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9424,
+     "click_to_music_db": -25.20903723397057,
+     "sustain": {
+      "beats": 25,
+      "ratio": 1.4512477272727264,
+      "last_beat_after_sec": 10.693910833333348,
+      "locked_share": 0.9709090909090909,
+      "confidence_trend": 0.23830071999999985
+     }
+    },
+    {
+     "track": "reggae.00024",
+     "f_measure": 0.9557522123893805,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9840127897681854,
+     "click_to_music_db": -19.747903719152205,
+     "sustain": {
+      "beats": 30,
+      "ratio": 1.1715518181818203,
+      "last_beat_after_sec": 10.200470499999938,
+      "locked_share": 0.9236363636363636,
+      "confidence_trend": -0.1342586999999999
+     }
+    },
+    {
+     "track": "reggae.00074",
+     "f_measure": 0.18666666666666665,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.6128,
+     "click_to_music_db": -25.198091396096665,
+     "sustain": {
+      "beats": 4,
+      "ratio": 0.2596414545454541,
+      "last_beat_after_sec": 10.673393999999917,
+      "locked_share": 0.2309090909090909,
+      "confidence_trend": -0.07455412666666672
+     }
+    },
+    {
+     "track": "rock.00025",
+     "f_measure": 0.30952380952380953,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.5088,
+     "click_to_music_db": -22.19676305607496,
+     "sustain": {
+      "beats": 6,
+      "ratio": 0.31346945454545505,
+      "last_beat_after_sec": 10.674388666666687,
+      "locked_share": 0.13818181818181818,
+      "confidence_trend": 0.13809198666666667
+     }
+    },
+    {
+     "track": "rock.00075",
+     "f_measure": 0.92,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9888089528377298,
+     "click_to_music_db": -20.34560165386842,
+     "sustain": {
+      "beats": 2,
+      "ratio": 0.11093977777777911,
+      "last_beat_after_sec": 1.1977743333333137,
+      "locked_share": 0.1688888888888889,
+      "confidence_trend": -0.416263
+     }
+    }
+   ]
+  },
+  "l4_quiet_ungated": {
+   "pass": "l4_quiet_ungated",
+   "tail": {
+    "seconds": 30.0,
+    "beats": 76,
+    "last_beat_after_sec": 29.69336033333343,
+    "final_confidence": 0.805293370967742,
+    "locked_share": 0.9993324432576769
+   },
+   "settings": {
+    "click_db": -16.4,
+    "click_silent": false,
+    "gated": false,
+    "round_trip_sec": 0.04,
+    "front_end": "beatnet",
+    "model": "beatnet_model_1.ttw",
+    "simulated_ms": 40.0,
+    "device": {
+     "capture": "simulated",
+     "playback": "simulated",
+     "backend": "none",
+     "period_frames": 480
+    },
+    "stats": {
+     "beats": 1768,
+     "beats_late": 4,
+     "clicks_late": 0,
+     "clicks_overflowed": 0,
+     "voices_stolen": 0,
+     "discontinuities": 0,
+     "capture_discontinuities": 0,
+     "gated": 0
+    }
+   },
+   "lag_sec": {
+    "first": 0.04,
+    "last": 0.04,
+    "drift_per_hour": 0.0
+   },
+   "clarity": {
+    "first": 0.995723694975226,
+    "last": 0.9950757995112727
+   },
+   "gate_misalignment_sec": null,
+   "records": [
+    {
+     "track": "blues.00025",
+     "f_measure": 0.3333333333333333,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.0,
+     "click_to_music_db": -19.330229115095587,
+     "sustain": {
+      "beats": 37,
+      "ratio": 2.0,
+      "last_beat_after_sec": 10.812881666666662,
+      "locked_share": 0.9854545454545455,
+      "confidence_trend": 0.17697370666666667
+     }
+    },
+    {
+     "track": "blues.00075",
+     "f_measure": 0.9183673469387755,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 1.0,
+     "click_to_music_db": -24.44181980494016,
+     "sustain": {
+      "beats": 23,
+      "ratio": 1.068117909090907,
+      "last_beat_after_sec": 10.875678333333326,
+      "locked_share": 1.0,
+      "confidence_trend": -0.0654860266666667
+     }
+    },
+    {
+     "track": "classical.00025",
+     "f_measure": 0.7238095238095238,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.8625099920063949,
+     "click_to_music_db": -14.050550431786471,
+     "sustain": {
+      "beats": 26,
+      "ratio": 1.0702285454545506,
+      "last_beat_after_sec": 10.784609999999986,
+      "locked_share": 0.9836363636363636,
+      "confidence_trend": 0.3458240666666666
+     }
+    },
+    {
+     "track": "classical.00075",
+     "f_measure": 0.3063063063063063,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.0,
+     "click_to_music_db": -3.8409010286301566,
+     "sustain": {
+      "beats": 20,
+      "ratio": 0.9780709090909085,
+      "last_beat_after_sec": 10.548345666666677,
+      "locked_share": 0.9890909090909091,
+      "confidence_trend": 0.14094641333333324
+     }
+    },
+    {
+     "track": "country.00025",
+     "f_measure": 0.5454545454545454,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.5963229416466826,
+     "click_to_music_db": -18.756638111160207,
+     "sustain": {
+      "beats": 24,
+      "ratio": 1.7984901818181824,
+      "last_beat_after_sec": 10.801091333333346,
+      "locked_share": 0.98,
+      "confidence_trend": -0.0014871999999999108
+     }
+    },
+    {
+     "track": "country.00075",
+     "f_measure": 0.825,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 1.0,
+     "click_to_music_db": -24.232128954713197,
+     "sustain": {
+      "beats": 19,
+      "ratio": 1.0728678181818205,
+      "last_beat_after_sec": 10.828820000000036,
+      "locked_share": 0.9781818181818182,
+      "confidence_trend": 0.05330837999999993
+     }
+    },
+    {
+     "track": "disco.00025",
+     "f_measure": 1.0,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 1.0,
+     "click_to_music_db": -19.44130867043311,
+     "sustain": {
+      "beats": 24,
+      "ratio": 1.0512305454545454,
+      "last_beat_after_sec": 10.74486566666667,
+      "locked_share": 0.9709090909090909,
+      "confidence_trend": -0.03999701333333339
+     }
+    },
+    {
+     "track": "disco.00075",
+     "f_measure": 0.9909909909909909,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 1.0,
+     "click_to_music_db": -18.72683194905443,
+     "sustain": {
+      "beats": 25,
+      "ratio": 1.0290659090909093,
+      "last_beat_after_sec": 10.785648166666704,
+      "locked_share": 0.9981818181818182,
+      "confidence_trend": 0.00688297333333332
+     }
+    },
+    {
+     "track": "hiphop.00025",
+     "f_measure": 0.8735632183908046,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 1.0,
+     "click_to_music_db": -26.8753070725228,
+     "sustain": {
+      "beats": 25,
+      "ratio": 1.2929295454545424,
+      "last_beat_after_sec": 10.678698833333385,
+      "locked_share": 0.990909090909091,
+      "confidence_trend": 0.08931331333333314
+     }
+    },
+    {
+     "track": "hiphop.00075",
+     "f_measure": 0.6578947368421053,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9832134292565947,
+     "click_to_music_db": -26.134649487101175,
+     "sustain": {
+      "beats": 18,
+      "ratio": 1.0733056363636364,
+      "last_beat_after_sec": 10.585559500000045,
+      "locked_share": 0.9945454545454545,
+      "confidence_trend": -0.013414760000000081
+     }
+    },
+    {
+     "track": "jazz.00024",
+     "f_measure": 0.30612244897959184,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.7208,
+     "click_to_music_db": -14.673087763628839,
+     "sustain": {
+      "beats": 23,
+      "ratio": 1.1761468181818178,
+      "last_beat_after_sec": 10.771482166666715,
+      "locked_share": 0.9709090909090909,
+      "confidence_trend": 0.3101871333333334
+     }
+    },
+    {
+     "track": "jazz.00075",
+     "f_measure": 0.40310077519379844,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.0,
+     "click_to_music_db": -19.48361555087567,
+     "sustain": {
+      "beats": 27,
+      "ratio": 0.6981831818181858,
+      "last_beat_after_sec": 10.806790833333423,
+      "locked_share": 0.9927272727272727,
+      "confidence_trend": 0.18858250666666676
+     }
+    },
+    {
+     "track": "metal.00025",
+     "f_measure": 1.0,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9992,
+     "click_to_music_db": -17.472975189863966,
+     "sustain": {
+      "beats": 28,
+      "ratio": 1.1082234545454563,
+      "last_beat_after_sec": 10.915800333333436,
+      "locked_share": 0.9763636363636363,
+      "confidence_trend": 0.13844782666666655
+     }
+    },
+    {
+     "track": "metal.00075",
+     "f_measure": 0.8936170212765957,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 1.0,
+     "click_to_music_db": -26.291205486135645,
+     "sustain": {
+      "beats": 23,
+      "ratio": 1.104531090909092,
+      "last_beat_after_sec": 10.95447983333338,
+      "locked_share": 0.9981818181818182,
+      "confidence_trend": 0.10692674000000002
+     }
+    },
+    {
+     "track": "pop.00025",
+     "f_measure": 0.9841269841269841,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9952,
+     "click_to_music_db": -26.14367355748837,
+     "sustain": {
+      "beats": 16,
+      "ratio": 1.165218909090909,
+      "last_beat_after_sec": 10.912889333333396,
+      "locked_share": 0.990909090909091,
+      "confidence_trend": -0.01959703333333329
+     }
+    },
+    {
+     "track": "pop.00075",
+     "f_measure": 1.0,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 1.0,
+     "click_to_music_db": -25.20903723397057,
+     "sustain": {
+      "beats": 19,
+      "ratio": 1.1029482727272721,
+      "last_beat_after_sec": 10.801432833333365,
+      "locked_share": 0.9781818181818182,
+      "confidence_trend": 0.04929520666666665
+     }
+    },
+    {
+     "track": "reggae.00024",
+     "f_measure": 0.9824561403508771,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 1.0,
+     "click_to_music_db": -19.747903719152205,
+     "sustain": {
+      "beats": 25,
+      "ratio": 0.9762931818181836,
+      "last_beat_after_sec": 10.84373949999997,
+      "locked_share": 0.9945454545454545,
+      "confidence_trend": -0.06090034666666666
+     }
+    },
+    {
+     "track": "reggae.00074",
+     "f_measure": 0.3529411764705882,
+     "usable": false,
+     "episode_free": false,
+     "correct_share_of_eligible": 0.4176,
+     "click_to_music_db": -25.198091396096665,
+     "sustain": {
+      "beats": 24,
+      "ratio": 1.5578487272727246,
+      "last_beat_after_sec": 10.971555999999964,
+      "locked_share": 0.9981818181818182,
+      "confidence_trend": 0.11675402000000001
+     }
+    },
+    {
+     "track": "rock.00025",
+     "f_measure": 0.22857142857142856,
+     "usable": false,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.5008,
+     "click_to_music_db": -22.19676305607496,
+     "sustain": {
+      "beats": 11,
+      "ratio": 0.5746940000000009,
+      "last_beat_after_sec": 10.681547666666688,
+      "locked_share": 0.4381818181818182,
+      "confidence_trend": 0.6097452266666668
+     }
+    },
+    {
+     "track": "rock.00075",
+     "f_measure": 1.0,
+     "usable": true,
+     "episode_free": true,
+     "correct_share_of_eligible": 0.9992006394884093,
+     "click_to_music_db": -20.34560165386842,
+     "sustain": {
+      "beats": 19,
+      "ratio": 1.0539278888889017,
+      "last_beat_after_sec": 8.672845333333271,
+      "locked_share": 1.0,
+      "confidence_trend": -0.030227586666666695
+     }
+    }
+   ]
+  }
+ },
+ "arms": {
+  "l0_silent": {
+   "f": 0.7642423870420342,
+   "usable": 0.6,
+   "episode_free": 0.75,
+   "gap_locked_share": 0.691010101010101,
+   "gap_confidence_trend": -0.17085048466666666,
+   "gap_click_ratio": 1.0733850795454556,
+   "tail": {
+    "seconds": 30.0,
+    "beats": 35,
+    "last_beat_after_sec": 13.138243333333435,
+    "final_confidence": 1.7854838709677418e-05,
+    "locked_share": 0.30707610146862485
+   },
+   "click_to_music_db_median": null,
+   "lag_sec": {
+    "first": 0.04,
+    "last": 0.04,
+    "drift_per_hour": 0.0
+   },
+   "gate_misalignment_sec": null
+  },
+  "l1_loud_gated": {
+   "f": 0.5023392076049576,
+   "usable": 0.15,
+   "episode_free": 0.6,
+   "gap_locked_share": 0.6145353535353537,
+   "gap_confidence_trend": -0.12480907666666667,
+   "gap_click_ratio": 0.9199058161616168,
+   "tail": {
+    "seconds": 30.0,
+    "beats": 0,
+    "last_beat_after_sec": 0.0,
+    "final_confidence": 0.0,
+    "locked_share": 0.0
+   },
+   "click_to_music_db_median": -8.046752686510313,
+   "lag_sec": {
+    "first": 0.04,
+    "last": 0.04,
+    "drift_per_hour": 0.0
+   },
+   "gate_misalignment_sec": 0.0
+  },
+  "l2_loud_ungated": {
+   "f": 0.6164359044469199,
+   "usable": 0.45,
+   "episode_free": 0.65,
+   "gap_locked_share": 0.9341313131313133,
+   "gap_confidence_trend": 0.08315322933333336,
+   "gap_click_ratio": 1.2033685252525266,
+   "tail": {
+    "seconds": 30.0,
+    "beats": 82,
+    "last_beat_after_sec": 29.943465333333393,
+    "final_confidence": 0.7846331290322581,
+    "locked_share": 0.9846461949265688
+   },
+   "click_to_music_db_median": -8.046752686510313,
+   "lag_sec": {
+    "first": 0.04,
+    "last": 0.04,
+    "drift_per_hour": 0.0
+   },
+   "gate_misalignment_sec": null
+  },
+  "l3_quiet_gated": {
+   "f": 0.5422657324771814,
+   "usable": 0.2,
+   "episode_free": 0.8,
+   "gap_locked_share": 0.709080808080808,
+   "gap_confidence_trend": -0.06743520433333333,
+   "gap_click_ratio": 1.0139684888888894,
+   "tail": {
+    "seconds": 30.0,
+    "beats": 0,
+    "last_beat_after_sec": 0.0,
+    "final_confidence": 0.0,
+    "locked_share": 0.0
+   },
+   "click_to_music_db_median": -20.046752686510313,
+   "lag_sec": {
+    "first": 0.04,
+    "last": 0.04,
+    "drift_per_hour": 0.0
+   },
+   "gate_misalignment_sec": 0.0
+  },
+  "l4_quiet_ungated": {
+   "f": 0.7162827988518125,
+   "usable": 0.55,
+   "episode_free": 0.75,
+   "gap_locked_share": 0.9604545454545456,
+   "gap_confidence_trend": 0.10510387733333333,
+   "gap_click_ratio": 1.1476161262626272,
+   "tail": {
+    "seconds": 30.0,
+    "beats": 76,
+    "last_beat_after_sec": 29.69336033333343,
+    "final_confidence": 0.805293370967742,
+    "locked_share": 0.9993324432576769
+   },
+   "click_to_music_db_median": -20.046752686510313,
+   "lag_sec": {
+    "first": 0.04,
+    "last": 0.04,
+    "drift_per_hour": 0.0
+   },
+   "gate_misalignment_sec": null
+  }
+ },
+ "comparisons": {
+  "l2_loud_ungated_minus_l1_loud_gated": {
+   "f_measure": {
+    "n": 20,
+    "mean": 0.11409669684196215,
+    "ci95": [
+     0.03952068748023703,
+     0.19178038788347332
+    ]
+   },
+   "usable": {
+    "n": 20,
+    "mean": 0.3,
+    "ci95": [
+     0.1,
+     0.5
+    ]
+   },
+   "locked_share": {
+    "n": 20,
+    "mean": 0.3195959595959596,
+    "ci95": [
+     0.17517853535353536,
+     0.47228712121212113
+    ]
+   },
+   "confidence_trend": {
+    "n": 20,
+    "mean": 0.20796230600000004,
+    "ci95": [
+     0.11564283796666668,
+     0.30252302855
+    ]
+   }
+  },
+  "l4_quiet_ungated_minus_l3_quiet_gated": {
+   "f_measure": {
+    "n": 20,
+    "mean": 0.17401706637463124,
+    "ci95": [
+     0.06743388957316457,
+     0.2832799754021445
+    ]
+   },
+   "usable": {
+    "n": 20,
+    "mean": 0.35,
+    "ci95": [
+     0.15,
+     0.55
+    ]
+   },
+   "locked_share": {
+    "n": 20,
+    "mean": 0.25137373737373736,
+    "ci95": [
+     0.12090454545454547,
+     0.39764696969696967
+    ]
+   },
+   "confidence_trend": {
+    "n": 20,
+    "mean": 0.17253908166666665,
+    "ci95": [
+     0.0795514483666666,
+     0.2700566954166666
+    ]
+   }
+  },
+  "l1_loud_gated_minus_l0_silent": {
+   "f_measure": {
+    "n": 20,
+    "mean": -0.2619031794370765,
+    "ci95": [
+     -0.3333422842558203,
+     -0.19369187510421704
+    ]
+   },
+   "locked_share": {
+    "n": 20,
+    "mean": -0.07647474747474747,
+    "ci95": [
+     -0.2583414141414141,
+     0.09809494949494943
+    ]
+   },
+   "confidence_trend": {
+    "n": 20,
+    "mean": 0.04604140799999998,
+    "ci95": [
+     -0.07463557254166665,
+     0.16514626999999987
+    ]
+   }
+  },
+  "l2_loud_ungated_minus_l0_silent": {
+   "f_measure": {
+    "n": 20,
+    "mean": -0.14780648259511436,
+    "ci95": [
+     -0.21325772281458116,
+     -0.08655426714866751
+    ]
+   },
+   "locked_share": {
+    "n": 20,
+    "mean": 0.24312121212121215,
+    "ci95": [
+     0.1313015151515152,
+     0.3712477272727272
+    ]
+   },
+   "confidence_trend": {
+    "n": 20,
+    "mean": 0.2540037140000001,
+    "ci95": [
+     0.1719716077666667,
+     0.3345946208916667
+    ]
+   }
+  },
+  "l3_quiet_gated_minus_l0_silent": {
+   "f_measure": {
+    "n": 20,
+    "mean": -0.221976654564853,
+    "ci95": [
+     -0.32704140920016295,
+     -0.12467057155463855
+    ]
+   },
+   "locked_share": {
+    "n": 20,
+    "mean": 0.018070707070707053,
+    "ci95": [
+     -0.17723131313131313,
+     0.20991136363636356
+    ]
+   },
+   "confidence_trend": {
+    "n": 20,
+    "mean": 0.10341528033333329,
+    "ci95": [
+     0.010522200658333303,
+     0.19621214315
+    ]
+   }
+  },
+  "l4_quiet_ungated_minus_l0_silent": {
+   "f_measure": {
+    "n": 20,
+    "mean": -0.04795958819022178,
+    "ci95": [
+     -0.09103642112859284,
+     -0.00751695309513701
+    ]
+   },
+   "locked_share": {
+    "n": 20,
+    "mean": 0.2694444444444445,
+    "ci95": [
+     0.15470303030303034,
+     0.39981818181818185
+    ]
+   },
+   "confidence_trend": {
+    "n": 20,
+    "mean": 0.275954362,
+    "ci95": [
+     0.21236100587499998,
+     0.33797039866666667
+    ]
+   }
+  }
+ },
+ "provenance": {
+  "schema": "tiktak.provenance/v1",
+  "utc": "2026-09-30T19:32:00Z",
+  "commit": "117234fdd3af73651f0465cbd7fb42485072d354",
+  "tree_clean": true,
+  "python": "3.11.15",
+  "platform": "Windows",
+  "programme": {
+   "name": "programme_normal.wav",
+   "bytes": 120987086,
+   "sha256": "f584031007fa075c829583c77a2838a0f4ebeb1c68111ae61c05f98ebf0aaa9d"
+  },
+  "layout": {
+   "name": "programme_normal.layout.json",
+   "bytes": 6686,
+   "sha256": "9151beec6e2131e538e669a53dcdde0958a8c3f52e34173db381117c5a49d787"
+  },
+  "manifest": {
+   "name": "manifest.csv",
+   "bytes": 608574,
+   "sha256": "81eceb2edcc0b9915a5bc60992cb2142ad30c88339427faaf4de38ab50e6e5cd"
+  },
+  "l0_silent.json": {
+   "name": "l0_silent.json",
+   "bytes": 1744561,
+   "sha256": "b8d4214a36c0966a79aafbf7f06297d194d952f0609c828a71cc15eae386d48c"
+  },
+  "l0_silent.wav": {
+   "name": "l0_silent.wav",
+   "bytes": 167076114,
+   "sha256": "08d17e33f02ebcd97fb001eaf888b85a5053feaf06860d91a6ad5b5c1f5e3c6c"
+  },
+  "l1_loud_gated.json": {
+   "name": "l1_loud_gated.json",
+   "bytes": 1746414,
+   "sha256": "035e313ada712620f507b76bfafb5e44d156aa5c7164c8918dd363c8da3e8e04"
+  },
+  "l1_loud_gated.wav": {
+   "name": "l1_loud_gated.wav",
+   "bytes": 167076114,
+   "sha256": "54a9b83838fa02b053b3f12682d45576a00d16b45d24504b7e9a59f328ac5696"
+  },
+  "l2_loud_ungated.json": {
+   "name": "l2_loud_ungated.json",
+   "bytes": 1748136,
+   "sha256": "d970e9c3f9d63d980a16df55c660f8b804083266f2d66b7e76017eeace715e65"
+  },
+  "l2_loud_ungated.wav": {
+   "name": "l2_loud_ungated.wav",
+   "bytes": 167076114,
+   "sha256": "87959b53a00f5f0aaf6875462038949bee1d83e47a67e760385477baed274752"
+  },
+  "l3_quiet_gated.json": {
+   "name": "l3_quiet_gated.json",
+   "bytes": 1744048,
+   "sha256": "b0196687f75da4db504d41dc6c060ab95e083890d8175f52170850d48a84a92b"
+  },
+  "l3_quiet_gated.wav": {
+   "name": "l3_quiet_gated.wav",
+   "bytes": 167076114,
+   "sha256": "7aba7036956e7c827dfb4467980144bb44a6d8177022482b32df521519b33608"
+  },
+  "l4_quiet_ungated.json": {
+   "name": "l4_quiet_ungated.json",
+   "bytes": 1744988,
+   "sha256": "2c2bd5c98cb71af9eecd30d2c08277bdf8eed94c71dccd71136b5a16bdc66773"
+  },
+  "l4_quiet_ungated.wav": {
+   "name": "l4_quiet_ungated.wav",
+   "bytes": 167076114,
+   "sha256": "bc5ad03790e70dc7a034b2b3695b06b703ae99f027e8bdb6ca1d9e6887a98a59"
+  },
+  "experiment": "closed_loop"
+ }
+}
