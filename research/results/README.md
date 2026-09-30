@@ -255,7 +255,8 @@ or measured:
   echo canceller does. Subtracting the rendered waveform is not enough. It is
   a research direction, not a cheap replacement for the gate.
 * **A quieter click.** Post hoc, in all four arm-corpus pairs, the click's cost
-  grows with its level against the music (Spearman -0.08 to -0.19). Quiet
+  grows with its level against the music (Spearman -0.08 to -0.19,
+  `eval/click_cost_by_level.py`, `click_gate_and_antialias/click_cost_by_level.json`). Quiet
   recordings differ in other ways too, so this is a direction, not a threshold.
   What ratio is safe in a room is for the closed-loop test; the bench's gains
   cannot say.
