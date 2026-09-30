@@ -516,6 +516,19 @@ bool parseOptions(const std::vector<std::string>& args, Options& options, std::s
             options.tap_mic = true;
         } else if (arg == "--headphones") {
             options.headphones = true;
+        } else if (arg == "--no-gate") {
+            options.no_gate = true;
+        } else if (arg == "--external") {
+            options.external = true;
+        } else if (arg == "--click-db") {
+            if (!need(value)) return false;
+            options.click_db = value;
+        } else if (arg == "--tail") {
+            if (!need(value)) return false;
+            options.tail_sec = value;
+        } else if (arg == "--simulate-ms") {
+            if (!need(value)) return false;
+            options.simulate_ms = value;
         } else if (arg == "--model") {
             if (!has_value) {
                 error = arg + " needs a path";
@@ -570,6 +583,7 @@ void printUsage() {
         "  tiktak track FILE                 play a file with the click on its own beats\n"
         "  tiktak listen                     click on the beat of what the microphone hears\n"
         "  tiktak tap FILE                   play a file, you tap along, and it compares\n"
+        "  tiktak loop PROGRAMME -o PREFIX   the closed loop in a real room: play, click, record\n"
         "\n"
         "Options:\n"
         "  --bpm N            tempo (120)\n"
@@ -646,6 +660,24 @@ void printUsage() {
         "automatic mode cannot follow — but it refuses to fall in with a room whose\n"
         "beat is not the one asked for, rather than clicking somewhere and calling\n"
         "it synchronised.\n"
+        "\n"
+        "Loop options:\n"
+        "  --model PATH       BeatNet weights (.ttw)\n"
+        "  --click-db N       the click's gain on its nominal level (0)\n"
+        "  --no-gate          on a loudspeaker, and still not gated\n"
+        "  --no-click         a silent click: every beat taken, nothing played\n"
+        "  --external         the programme plays from another device; start it\n"
+        "                     just after this does, and give --tail room for that\n"
+        "  --tail S           listen on after the programme ends (10)\n"
+        "  --simulate-ms N    no device: what is played comes back N ms later,\n"
+        "                     untouched -- the digital loop, for a dry run\n"
+        "\n"
+        "`loop` is the closed loop in a real room. It plays the programme through\n"
+        "the speaker with the metronome's own click on top while the microphone\n"
+        "feeds the tracker, and writes PREFIX.wav, what the microphone heard, and\n"
+        "PREFIX.json, every beat handed out and the estimate at 50 Hz, both on\n"
+        "the tracker's clock. research/eval/closed_loop.py runs the registered arms\n"
+        "and scores them.\n"
         "\n"
         "`track` analyses the file once and caches the beat grid next to it\n"
         "(.tiktak/<content-hash>.grid), so the second start is instant. With -o\n"
@@ -1062,6 +1094,324 @@ int cmdListen(const Options& options) {
 
     reportListen(metronome, elapsed);
     return metronome.stats().clean() ? 0 : 1;
+}
+
+// -------------------------------------------------------------------- loop --
+
+namespace {
+
+// Everything the loop's callback touches, sized before the device starts: the
+// audio thread allocates nothing, so every buffer here is as long as the run
+// can be, and a write past the end is dropped rather than grown.
+struct LoopState {
+    tiktak::render::LiveMetronome* metronome = nullptr;
+    const std::vector<float>* programme = nullptr;
+    bool play_programme = true;
+    double sample_rate = 0.0;
+
+    std::vector<float> capture;
+    std::atomic<std::size_t> position{0};
+    double first_stream_sec = -1.0;
+
+    std::vector<double> beats;
+    std::atomic<std::size_t> beat_count{0};
+
+    static constexpr double kSeriesStep = 0.02;  // 50 Hz, as the bench samples
+    std::vector<double> series_time, series_bpm, series_confidence, series_spread;
+    std::atomic<std::size_t> series_count{0};
+    double next_sample_sec = -1.0;
+};
+
+void loopBeat(void* context, double beat_sec) {
+    auto* state = static_cast<LoopState*>(context);
+    const std::size_t k = state->beat_count.load(std::memory_order_relaxed);
+    if (k < state->beats.size()) {
+        state->beats[k] = beat_sec;
+        state->beat_count.store(k + 1, std::memory_order_release);
+    }
+}
+
+// The duplex callback. The programme goes out first, then the room comes in
+// and the click is mixed over the programme, so what leaves the speaker is
+// exactly what a phone playing along with the music would add to the room.
+void loopCallback(void* user, double stream_time_sec, const float* input, float* output,
+                  std::size_t frames) {
+    auto* state = static_cast<LoopState*>(user);
+    if (state->first_stream_sec < 0.0) {
+        state->first_stream_sec = stream_time_sec;
+        state->next_sample_sec = stream_time_sec;
+    }
+    const std::size_t at = state->position.load(std::memory_order_relaxed);
+    const std::vector<float>& programme = *state->programme;
+
+    for (std::size_t i = 0; i < frames; ++i) {
+        const std::size_t k = at + i;
+        output[i] = state->play_programme && k < programme.size() ? programme[k] : 0.0f;
+    }
+    if (input != nullptr) {
+        state->metronome->capture(stream_time_sec, input, frames);
+        const std::size_t room = state->capture.size() > at ? state->capture.size() - at : 0;
+        if (room > 0) {
+            std::copy(input, input + std::min(frames, room),
+                      state->capture.begin() + static_cast<std::ptrdiff_t>(at));
+        }
+    }
+    state->metronome->process(stream_time_sec, output, frames);
+
+    // The estimate on the tracker's own clock, as dump_analysis samples it, so
+    // the scorer can judge acquisition and wrong-level episodes the same way.
+    const double end = stream_time_sec + static_cast<double>(frames) / state->sample_rate;
+    std::size_t n = state->series_count.load(std::memory_order_relaxed);
+    while (state->next_sample_sec < end && n < state->series_time.size()) {
+        const auto estimate = state->metronome->estimate(state->next_sample_sec);
+        state->series_time[n] = state->next_sample_sec;
+        state->series_bpm[n] = estimate.bpm;
+        state->series_confidence[n] = estimate.confidence;
+        state->series_spread[n] = estimate.tempo_spread_octaves;
+        state->series_count.store(++n, std::memory_order_release);
+        state->next_sample_sec += LoopState::kSeriesStep;
+    }
+    state->position.store(at + frames, std::memory_order_relaxed);
+}
+
+void writeSeries(std::FILE* file, const char* name, const std::vector<double>& values,
+                 std::size_t count, bool last) {
+    std::fprintf(file, "  \"%s\": [", name);
+    for (std::size_t i = 0; i < count; ++i) {
+        std::fprintf(file, "%s%.6f", i ? "," : "", values[i]);
+    }
+    std::fprintf(file, "]%s\n", last ? "" : ",");
+}
+
+std::string baseName(const std::string& path) {
+    const std::size_t cut = path.find_last_of("/\\");
+    return cut == std::string::npos ? path : path.substr(cut + 1);
+}
+
+}  // namespace
+
+// The closed loop in a real room. The programme plays through the speaker with
+// the metronome's own click mixed on top, and the microphone feeds the tracker,
+// so the tracker hears its own clicks through a real speaker, room and
+// microphone -- the one thing no digital bench can stand in for. Everything
+// needed to score the pass afterwards is written beside it: what the
+// microphone heard, every beat handed to the click, and the estimate at 50 Hz.
+// See research/eval/PREREGISTERED_closed_loop_room.md and eval/closed_loop.py.
+int cmdLoop(const Options& options) {
+#if defined(TIKTAK_HAVE_DECODE)
+    using tiktak::render::LiveMetronome;
+    using tiktak::render::LiveMetronomeConfig;
+
+    if (options.track_path.empty() || options.output_path.empty()) {
+        std::fprintf(stderr, "tiktak: loop needs a programme and -o PREFIX\n");
+        return 2;
+    }
+    if (!(options.tail_sec >= 0.0)) {
+        std::fprintf(stderr, "tiktak: --tail must not be negative\n");
+        return 2;
+    }
+
+    auto decoder = tiktak::decode::Decoder::open(options.track_path.c_str());
+    if (!decoder) {
+        std::fprintf(stderr, "tiktak: %s is not a WAV, FLAC or MP3 file\n",
+                     options.track_path.c_str());
+        return 1;
+    }
+    const double rate = decoder->info().sample_rate;
+    std::vector<float> programme;
+    {
+        float block[65536];
+        for (;;) {
+            const std::size_t got = decoder->readMono(block, 65536);
+            if (got == 0) break;
+            programme.insert(programme.end(), block, block + got);
+        }
+    }
+    if (programme.empty()) {
+        std::fprintf(stderr, "tiktak: %s decoded to nothing\n", options.track_path.c_str());
+        return 1;
+    }
+
+    // The programme's rate is not negotiable: played at any other rate it is a
+    // different piece of music, and every annotation would be wrong.
+    const bool simulated = options.simulate_ms >= 0.0;
+    LoopState state;
+    Device device;
+    if (!simulated && !device.open(loopCallback, &state, rate, true, options.device_name)) {
+        std::fprintf(stderr, "tiktak: %s\n", device.error().c_str());
+        return 1;
+    }
+    if (!simulated && std::fabs(device.sample_rate() - rate) > 0.5) {
+        std::fprintf(stderr, "tiktak: the device runs at %.0f Hz, the programme at %.0f Hz\n",
+                     device.sample_rate(), rate);
+        return 1;
+    }
+
+    const bool silent = options.no_click;
+    const bool gated = !(options.headphones || options.no_gate || silent);
+    LiveMetronomeConfig cfg;
+    cfg.tracker = tiktak::tracking::liveConfigFor(rate);
+    cfg.click.sample_rate = rate;
+    // A silent click still takes every beat, so the pass can be scored: it is
+    // the room with nothing of ours in it, the baseline the other arms need.
+    const double gain = silent ? 0.0 : std::pow(10.0, options.click_db / 20.0);
+    cfg.click.downbeat.gain *= gain;
+    cfg.click.beat.gain *= gain;
+    cfg.click.subdivision.gain *= gain;
+    cfg.round_trip_sec = options.output_latency_sec;
+    cfg.gate_own_clicks = gated;
+    if (!cfg.valid()) {
+        std::fprintf(stderr, "tiktak: those settings do not make a live metronome\n");
+        return 2;
+    }
+
+    tiktak::ml::BeatNetWeights weights;
+    if (!loadBeatNet(options.model_path, weights)) return 1;
+    const tiktak::ml::BeatNetWeights* model[] = {&weights};
+    LiveMetronome metronome = weights.valid() ? LiveMetronome(cfg, model, 1)
+                                              : LiveMetronome(cfg);
+
+    const std::size_t total =
+        programme.size() + static_cast<std::size_t>(options.tail_sec * rate);
+    state.metronome = &metronome;
+    state.programme = &programme;
+    state.play_programme = !options.external;
+    state.sample_rate = rate;
+    state.capture.assign(total + static_cast<std::size_t>(rate), 0.0f);
+    state.beats.assign(static_cast<std::size_t>(static_cast<double>(total) / rate * 8.0) + 64, 0.0);
+    const std::size_t samples =
+        static_cast<std::size_t>(static_cast<double>(total) / rate / LoopState::kSeriesStep) + 256;
+    state.series_time.assign(samples, 0.0);
+    state.series_bpm.assign(samples, 0.0);
+    state.series_confidence.assign(samples, 0.0);
+    state.series_spread.assign(samples, 0.0);
+    metronome.setBeatObserver(loopBeat, &state);
+    metronome.start();
+
+    std::printf("front end: %s; click %s, %+.1f dB; own click %s; round trip %.1f ms\n",
+                metronome.usingModel() ? "BeatNet" : "spectral flux",
+                silent ? "silent" : "audible", options.click_db,
+                gated ? "gated" : "not gated", cfg.round_trip_sec * 1000.0);
+    if (cfg.round_trip_sec <= 0.0 && !silent) {
+        std::printf("no round trip given: measure it with `tiktak measure` and pass --latency-ms\n");
+    }
+    const std::string capture_name = simulated ? "simulated" : device.name();
+    const std::string playback_name = simulated ? "simulated" : device.playback_name();
+    const std::string backend = simulated ? "none" : device.backend();
+    const std::size_t period = simulated ? 480 : device.period_frames();
+    if (simulated) {
+        std::printf("simulated: what is played comes back %.1f ms later, untouched\n",
+                    options.simulate_ms);
+    } else {
+        if (!device.begin()) {
+            std::fprintf(stderr, "tiktak: %s\n", device.error().c_str());
+            return 1;
+        }
+        std::printf("%s in, %s out, via %s -- %.0f Hz, %zu-frame periods\n",
+                    capture_name.c_str(), playback_name.c_str(), backend.c_str(),
+                    device.sample_rate(), period);
+    }
+    std::printf("%s: %.1f s of programme%s, then %.1f s of listening\n",
+                baseName(options.track_path).c_str(), static_cast<double>(programme.size()) / rate,
+                options.external ? " (played from elsewhere -- start it now)" : "",
+                options.tail_sec);
+
+    if (simulated) {
+        // Everything that left the speaker, so that each block can hear the one
+        // that went out `delay` samples before it.
+        const auto delay = static_cast<std::size_t>(std::lround(options.simulate_ms / 1000.0 * rate));
+        std::vector<float> played(total + period, 0.0f);
+        std::vector<float> in(period), out(period);
+        for (std::size_t at = 0; at < total; at += period) {
+            const std::size_t n = std::min(period, total - at);
+            for (std::size_t i = 0; i < n; ++i) {
+                in[i] = at + i >= delay ? played[at + i - delay] : 0.0f;
+            }
+            loopCallback(&state, static_cast<double>(at) / rate, in.data(), out.data(), n);
+            std::copy(out.begin(), out.begin() + static_cast<std::ptrdiff_t>(n),
+                      played.begin() + static_cast<std::ptrdiff_t>(at));
+        }
+    }
+    double next_report = 0.0;
+    while (state.position.load(std::memory_order_relaxed) < total) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        const double done = static_cast<double>(state.position.load()) / rate;
+        if (done >= next_report) {
+            // The last sample the audio thread finished, not a fresh estimate:
+            // the tracker belongs to that thread while the device runs.
+            const std::size_t n = state.series_count.load(std::memory_order_acquire);
+            std::printf("  %6.1f s   %6.1f BPM   confidence %.2f   beats %zu\n", done,
+                        n ? state.series_bpm[n - 1] : 0.0,
+                        n ? state.series_confidence[n - 1] : 0.0, state.beat_count.load());
+            std::fflush(stdout);
+            next_report += 10.0;
+        }
+    }
+    metronome.stop();
+    if (!simulated) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        device.stop();
+    }
+
+    const std::size_t heard = std::min(state.position.load(), state.capture.size());
+    state.capture.resize(heard);
+    const std::string wav_path = options.output_path + ".wav";
+    const std::string log_path = options.output_path + ".json";
+    if (!writeWavFloat(wav_path, state.capture, rate)) {
+        std::fprintf(stderr, "tiktak: could not write %s\n", wav_path.c_str());
+        return 1;
+    }
+
+    std::FILE* log = std::fopen(log_path.c_str(), "w");
+    if (log == nullptr) {
+        std::fprintf(stderr, "tiktak: could not write %s\n", log_path.c_str());
+        return 1;
+    }
+    const LiveMetronome::Stats stats = metronome.stats();
+    std::fprintf(log, "{\n  \"schema\": \"tiktak.closed_loop_pass/v1\",\n");
+    std::fprintf(log, "  \"programme\": \"%s\",\n", baseName(options.track_path).c_str());
+    std::fprintf(log, "  \"programme_frames\": %zu,\n", programme.size());
+    std::fprintf(log, "  \"sample_rate\": %.1f,\n", rate);
+    std::fprintf(log, "  \"external\": %s,\n", options.external ? "true" : "false");
+    std::fprintf(log, "  \"click_db\": %.3f,\n", options.click_db);
+    std::fprintf(log, "  \"click_silent\": %s,\n", silent ? "true" : "false");
+    std::fprintf(log, "  \"gated\": %s,\n", gated ? "true" : "false");
+    std::fprintf(log, "  \"round_trip_sec\": %.6f,\n", cfg.round_trip_sec);
+    std::fprintf(log, "  \"front_end\": \"%s\",\n", metronome.usingModel() ? "beatnet" : "flux");
+    std::fprintf(log, "  \"model\": \"%s\",\n", baseName(options.model_path).c_str());
+    std::fprintf(log, "  \"tail_sec\": %.3f,\n", options.tail_sec);
+    std::fprintf(log, "  \"first_stream_sec\": %.6f,\n", state.first_stream_sec);
+    std::fprintf(log, "  \"frames_heard\": %zu,\n", heard);
+    std::fprintf(log, "  \"simulated_ms\": %.3f,\n", simulated ? options.simulate_ms : -1.0);
+    std::fprintf(log, "  \"device\": {\"capture\": \"%s\", \"playback\": \"%s\", "
+                      "\"backend\": \"%s\", \"period_frames\": %zu},\n",
+                 capture_name.c_str(), playback_name.c_str(), backend.c_str(), period);
+    std::fprintf(log, "  \"stats\": {\"beats\": %zu, \"beats_late\": %zu, \"clicks_late\": %zu, "
+                      "\"clicks_overflowed\": %zu, \"voices_stolen\": %zu, "
+                      "\"discontinuities\": %zu, \"capture_discontinuities\": %zu, "
+                      "\"gated\": %zu},\n",
+                 stats.beats, stats.beats_late, stats.clicks_late, stats.clicks_overflowed,
+                 stats.voices_stolen, stats.discontinuities, stats.capture_discontinuities,
+                 stats.gated);
+    writeSeries(log, "beats", state.beats, state.beat_count.load(std::memory_order_acquire),
+                false);
+    const std::size_t sampled = state.series_count.load(std::memory_order_acquire);
+    writeSeries(log, "live_times", state.series_time, sampled, false);
+    writeSeries(log, "live_bpms", state.series_bpm, sampled, false);
+    writeSeries(log, "live_confidences", state.series_confidence, sampled, false);
+    writeSeries(log, "live_tempo_spreads_octaves", state.series_spread, sampled, true);
+    std::fprintf(log, "}\n");
+    std::fclose(log);
+
+    std::printf("wrote %s and %s -- %zu beats, %zu frames gated\n", wav_path.c_str(),
+                log_path.c_str(), state.beat_count.load(), stats.gated);
+    return stats.clean() ? 0 : 1;
+#else
+    (void)options;
+    std::fprintf(stderr,
+                 "tiktak: this build has no decoder -- rebuild with -DTIKTAK_BUILD_DECODE=ON\n");
+    return 2;
+#endif
 }
 
 #if defined(TIKTAK_HAVE_DECODE)

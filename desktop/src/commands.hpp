@@ -57,6 +57,17 @@ struct Options {
     // of what the tracker hears. Gating without a click to keep out only
     // blinds the tracker around the beats it predicted.
     bool headphones = false;
+
+    // `loop`: the closed loop in a real room. The programme plays through the
+    // speaker with the click on top, unless it is played from another device.
+    double click_db = 0.0;           // on the click's nominal gain
+    bool no_gate = false;            // on a loudspeaker, and still not gated
+    bool external = false;           // the programme comes from elsewhere
+    double tail_sec = 10.0;          // listening on after the programme ends
+    // No device: what leaves the speaker comes back this many milliseconds
+    // later, untouched. The digital loop, through the same code as the room,
+    // for checking the pass and its scorer before anyone sets up a room.
+    double simulate_ms = -1.0;
 };
 
 // Returns false and fills `error` on a bad argument, rather than guessing.
@@ -70,6 +81,7 @@ int cmdMeasure(const Options& options);
 int cmdTrack(const Options& options);
 int cmdListen(const Options& options);
 int cmdTap(const Options& options);
+int cmdLoop(const Options& options);
 
 void printUsage();
 
