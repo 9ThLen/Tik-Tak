@@ -724,7 +724,7 @@ typedef struct tt_live_config {
 
     /* Confidence to start handing out beats at, and to stop at. Between them
        the tracker coasts at the last tempo it was sure of, which is what a
-       musician does when the band drops out for a bar. 0 -> 0.35 / 0.15.      */
+       musician does when the band drops out for a bar. 0 -> 0.25 / 0.02.      */
     double lock_confidence;
     double release_confidence;
     /* Decide the bar length and bar line from the model's downbeat channel.
@@ -798,9 +798,13 @@ TT_API void tt_live_seed_tempo(tt_live* live, double bpm, double spread_octaves)
  *
  * Refused, changing nothing, in three cases: in manual mode, where the tempo is
  * already the user's and tt_live_set_manual_tempo is the way to change it;
- * before the tracker has an estimate to move; and when doubling or halving
- * would leave the configured BPM range. The last is refused rather than clamped
- * so that a press either means what it says or visibly does nothing.
+ * before the tracker has an estimate to move; and when the result would put two
+ * beats inside one observation window, faster than any front end here can
+ * separate — about 470 BPM with the learned one. The configured BPM range is
+ * *not* a reason: it says what tempo music is likely to be, and a press is the
+ * user's statement about this music, so the range moves with it the way it
+ * would for a typed tempo. Refused rather than clamped, so that a press either
+ * means what it says or visibly does nothing.
  *
  * Survives tt_live_reset, which forgets audio and not the user.
  */

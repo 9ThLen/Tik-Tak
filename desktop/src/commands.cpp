@@ -6,6 +6,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
+#include <iterator>
 #include <thread>
 #include <vector>
 
@@ -24,8 +26,6 @@
 #if defined(TIKTAK_HAVE_DECODE)
 #include <cstdint>
 #include <filesystem>
-#include <fstream>
-#include <iterator>
 
 #include "analysis/grid_cache.hpp"
 #include "analysis/offline.hpp"
