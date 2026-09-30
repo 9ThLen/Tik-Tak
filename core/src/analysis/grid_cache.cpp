@@ -126,7 +126,9 @@ struct Sha256 {
 // 4: the tempo hypotheses are ranked on an objective that no longer counts
 // beats trim() removed from the start, so a grid cached under 3 may carry a
 // tempo the analysis would not choose now.
-constexpr std::uint32_t kVersion = 4;
+// 5: a grid may come from the learned front end, and says so; the fingerprint
+// carries the model's identity and the learned resolver's configuration.
+constexpr std::uint32_t kVersion = 5;
 
 constexpr std::uint8_t kMagic[4] = {'T', 'T', 'G', 'R'};
 
@@ -234,16 +236,35 @@ std::uint64_t fingerprint(const OfflineConfig& c) {
         put64(bytes, static_cast<std::uint64_t>(m.beats_per_bar));
         putF64(bytes, m.prior);
     }
+    // Which network answered, if any. A grid from one model is not another
+    // model's answer, nor the onset path's — and the onset path's own grid is
+    // fingerprinted with 0 here, so nothing cached before a model existed can
+    // be handed back to a caller that asked for one.
+    put64(bytes, c.learned_model_id);
+    if (c.learned_model_id != 0) {
+        const DownbeatConfig& l = c.learned_downbeat;
+        putF64(bytes, l.min_salience_range);
+        putF64(bytes, l.min_phase_margin);
+        putF64(bytes, l.min_meter_margin);
+        put64(bytes, static_cast<std::uint64_t>(l.min_bars));
+        putF64(bytes, l.phase_switch_cost);
+        for (const MeterCandidate& m : l.meters) {
+            put64(bytes, static_cast<std::uint64_t>(m.beats_per_bar));
+            putF64(bytes, m.prior);
+        }
+    }
     return fnv1a(bytes.data(), bytes.size());
 }
 
 // magic, version, fingerprint, bpm, confidence, estimated bpm, frame count,
-// beats per bar, downbeat strength, downbeat margin, beat count, downbeat
-// count — everything before the two arrays of times.
-constexpr std::size_t kHeaderSize = 4 + 4 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8;
+// beats per bar, downbeat strength, phase margin, meter margin, confident,
+// source, beat count, downbeat count — everything before the two arrays of
+// times.
+constexpr std::size_t kHeaderSize = 4 + 4 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8;
 constexpr std::size_t kChecksumSize = 8;
-constexpr std::size_t kBeatCountOffset = 88;
-constexpr std::size_t kDownbeatCountOffset = 96;
+constexpr std::size_t kSourceOffset = 88;
+constexpr std::size_t kBeatCountOffset = 96;
+constexpr std::size_t kDownbeatCountOffset = 104;
 
 }  // namespace
 
@@ -280,6 +301,7 @@ std::vector<std::uint8_t> serializeGrid(const OfflineResult& result,
     putF64(out, result.downbeat_phase_margin);
     putF64(out, result.downbeat_meter_margin);
     put64(out, result.downbeat_confident ? 1u : 0u);
+    put64(out, static_cast<std::uint64_t>(result.source));
     put64(out, result.beats.size());
     put64(out, result.downbeats.size());
     for (double beat : result.beats) putF64(out, beat);
@@ -318,6 +340,9 @@ bool deserializeGrid(const std::uint8_t* bytes, std::size_t n,
     result.downbeat_phase_margin = getF64(bytes + 64);
     result.downbeat_meter_margin = getF64(bytes + 72);
     result.downbeat_confident = get64(bytes + 80) != 0;
+    const std::uint64_t source = get64(bytes + kSourceOffset);
+    if (source > static_cast<std::uint64_t>(GridSource::Learned)) return false;
+    result.source = static_cast<GridSource>(source);
     result.beats.resize(static_cast<std::size_t>(beat_count));
     for (std::size_t i = 0; i < result.beats.size(); ++i) {
         result.beats[i] = getF64(bytes + kHeaderSize + i * 8);

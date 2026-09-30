@@ -1,12 +1,14 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
 #include "analysis/downbeat.hpp"
 #include "analysis/tempo.hpp"
 #include "analysis/tracker.hpp"
 #include "dsp/odf.hpp"
+#include "ml/beat_this.hpp"
 
 namespace tiktak::analysis {
 
@@ -61,13 +63,44 @@ struct OfflineConfig {
     // optimum is broad — anything from 0.75 to 2.0 lands within 3 points —
     // which is the reason to believe it at all.
     double tempo_fit_weight = 1.5;
+
+    // Which network OfflineAnalyzer::setModel will run, for the grid cache: a
+    // grid from the learned front end is a different answer from the onset
+    // path's, and from another model's. The core never sees the weights, only
+    // this number, which the caller derives from them. 0 means no model.
+    std::uint64_t learned_model_id = 0;
+
+    // Bar lines on the learned front end: the same resolver, fed the model's
+    // downbeat probability at each beat instead of the onset cues. A
+    // probability is not in the cues' units, so it has its own configuration.
+    //
+    // The switch cost is measured: 20 is the only cost whose gain cleared zero
+    // on a learned activation over full-length songs, out of fold (+0.0066
+    // [+0.0022, +0.0116] on Harmonix; see downbeat.hpp). The three thresholds
+    // are *not*: they are the cue backend's numbers carried over by argument,
+    // and DownbeatConfig itself says a new salience must calibrate its own.
+    // Until that is measured on held-out material, an accent decided by
+    // `downbeat_confident` on this path is provisional.
+    DownbeatConfig learned_downbeat = [] {
+        DownbeatConfig c;
+        c.phase_switch_cost = 20.0;
+        return c;
+    }();
 };
+
+// Where a grid came from. The learned front end falls back to the onset path
+// when it cannot answer, so a caller that asked for the model has to be told
+// which one it got.
+enum class GridSource : std::uint8_t { Onsets = 0, Learned = 1 };
 
 struct OfflineResult {
     std::vector<double> beats;   // beat times, seconds from the start of the audio
     // The tempo the beats were tracked at: `bpm_hint` when one was given,
     // otherwise `estimated_bpm`.
     double bpm = 0.0;
+    // How much to believe `bpm`. On the onset path, how strongly the onset
+    // function repeats at it; on the learned path, how regular the grid is —
+    // see OfflineAnalyzer::finishLearned for why the two differ.
     double tempo_confidence = 0.0;
     // What the audio itself says, measured even when a hint overrode it — so
     // manual mode can tell the user their 120 sounds like 90 instead of
@@ -116,6 +149,14 @@ struct OfflineResult {
     // Cheap: about 32 bytes a beat, so a twenty-minute track costs under a
     // hundred kilobytes against the tens of megabytes its audio occupied.
     std::vector<BeatFeature> beat_features;
+
+    GridSource source = GridSource::Onsets;
+
+    // On the learned front end, the bar lines the model's own downbeat head
+    // picked, independently of any metre — what the research path used to
+    // play. Kept to be compared against, never played: the player needs a
+    // metre and a phase, which is what `downbeats` above carries.
+    std::vector<double> model_downbeats;
 };
 
 // ------------------------------------------- what this scores on real songs
@@ -305,6 +346,19 @@ public:
     // Clears all collected frames and the ODF state, ready for another file.
     void reset();
 
+    // The learned front end: Beat This!, run one chunk at a time by `runner`,
+    // with everything around the network done here. Call before the first
+    // feed(), with the model's identity in OfflineConfig::learned_model_id
+    // (`model_id`). From then on feed() also keeps the audio, and finish()
+    // takes the beats from the model's activations and the bar lines from
+    // resolveMeter fed its downbeat probability.
+    //
+    // It falls back to the onset path — reported through
+    // OfflineResult::source — when the runner fails, when the model finds
+    // fewer than two beats, and when a tempo hint was given: a hint is an
+    // instruction the model's own peaks cannot follow.
+    void setModel(ml::ChunkRunner runner, void* context, std::uint64_t model_id);
+
     // The collected onset function and its frame times, for diagnostics and for
     // the parity harness.
     const std::vector<double>& odfValues() const { return odf_values_; }
@@ -325,6 +379,10 @@ private:
     // that wins on prior-weighted fit. See OfflineConfig::tempo_hypotheses.
     BeatResult trackBestHypothesis(double fps, double fallback_bpm);
 
+    // The learned front end's half of finish(). False when it cannot answer,
+    // and the onset path runs instead.
+    bool finishLearned(OfflineResult& result);
+
     OfflineConfig config_;
     dsp::Odf odf_;
     TempoEstimator tempo_;
@@ -334,6 +392,10 @@ private:
     std::vector<double> frame_times_;
     std::vector<double> odf_low_;
     std::vector<float> chroma_;  // frame-major, kBins per frame
+
+    ml::ChunkRunner runner_ = nullptr;
+    void* runner_context_ = nullptr;
+    std::vector<float> audio_;   // kept only while a model is set
 };
 
 // Convenience wrapper for callers that already hold the whole signal.

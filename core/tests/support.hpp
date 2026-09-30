@@ -33,6 +33,19 @@ inline void addBurst(std::vector<float>& buffer, std::size_t at, std::size_t len
     }
 }
 
+// A tone under a raised-cosine envelope. Smooth on purpose: addBurst starts in
+// one sample, and that step is a broadband click every band hears — right for
+// a drum, wrong wherever a test needs a tone to stay in its own band.
+inline void addSmoothTone(std::vector<float>& out, std::size_t at, std::size_t length,
+                          double hz, double sampleRate, float amplitude = 0.5f) {
+    for (std::size_t i = 0; i < length && at + i < out.size(); ++i) {
+        const double phase = static_cast<double>(i) / static_cast<double>(length);
+        const double envelope = 0.5 - 0.5 * std::cos(kTwoPi * phase);
+        const double time = static_cast<double>(i) / sampleRate;
+        out[at + i] += amplitude * static_cast<float>(envelope * std::sin(kTwoPi * hz * time));
+    }
+}
+
 // A metronome-like click track: a percussive burst on every beat, alternating
 // between a low "kick" and a higher "snare" so the material has the two-beat
 // pattern that makes naive autocorrelation pick the wrong period.

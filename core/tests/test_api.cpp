@@ -514,6 +514,98 @@ TEST(OfflineApi, FindsTheBarLinesOfATrackThatHasThem) {
               static_cast<int>(first - beats.begin()));
 }
 
+namespace {
+
+// A stand-in for the network behind tt_offline_set_model: "beat" wherever the
+// frame is loud, graded as a real logit is. It only has to be a good model of
+// the tone track below for the test to check the boundary — that the core
+// calls the shell's function, uses what it returns, and says so.
+struct LoudnessModel {
+    int calls = 0;
+    int fail = 0;
+};
+
+int loudnessChunk(void* context, const float* spectrogram, size_t frames, size_t mels,
+                  float* beat_logits, float* downbeat_logits) {
+    auto* model = static_cast<LoudnessModel*>(context);
+    ++model->calls;
+    if (model->fail) return 0;
+    for (size_t j = 0; j < frames; ++j) {
+        float loudness = 0.0f;
+        for (size_t m = 0; m < mels; ++m) loudness += spectrogram[j * mels + m];
+        beat_logits[j] = loudness - 5.0f;
+        downbeat_logits[j] = -8.0f;
+    }
+    return 1;
+}
+
+std::vector<float> smoothPulse(double bpm, double seconds, double rate) {
+    std::vector<float> out(static_cast<std::size_t>(seconds * rate), 0.0f);
+    const auto burst = static_cast<std::size_t>(0.06 * rate);
+    for (double t = 1.0; t + 0.1 < seconds; t += 60.0 / bpm) {
+        tiktak::test::addSmoothTone(out, static_cast<std::size_t>(t * rate) - burst / 2,
+                                    burst, 4000.0, rate);
+    }
+    return out;
+}
+
+}  // namespace
+
+TEST(OfflineApi, TheLearnedFrontEndIsTheShellsNetworkAndTheCoresEverythingElse) {
+    const std::vector<float> audio = smoothPulse(120.0, 20.0, kOfflineRate);
+
+    LoudnessModel model;
+    Offline offline{offlineDefaults()};
+    ASSERT_NE(offline.handle, nullptr);
+    ASSERT_EQ(tt_offline_set_model(offline.handle, &loudnessChunk, &model, 7), TT_OK);
+    ASSERT_EQ(tt_offline_feed(offline.handle, audio.data(), audio.size()), TT_OK);
+    ASSERT_EQ(tt_offline_finish(offline.handle), TT_OK);
+
+    EXPECT_GT(model.calls, 0) << "the core never called the shell's network";
+    EXPECT_EQ(tt_offline_grid_learned(offline.handle), 1);
+    EXPECT_NEAR(tt_offline_bpm(offline.handle), 120.0, 1.0);
+    std::vector<double> beats(tt_offline_beat_count(offline.handle));
+    ASSERT_GT(beats.size(), 30u);
+    tt_offline_beats(offline.handle, beats.data(), beats.size());
+    for (double beat : beats) {
+        const double n = (beat - 1.0) / 0.5;
+        EXPECT_LT(std::fabs(n - std::round(n)) * 0.5, 0.025) << "beat at " << beat;
+    }
+
+    // Too late once audio has gone by unkept.
+    EXPECT_EQ(tt_offline_set_model(offline.handle, &loudnessChunk, &model, 7),
+              TT_ERR_INVALID_ARG);
+}
+
+TEST(OfflineApi, AFailingNetworkStillLeavesTheUserAGrid) {
+    const std::vector<float> audio = smoothPulse(120.0, 20.0, kOfflineRate);
+    LoudnessModel model;
+    model.fail = 1;
+    Offline offline{offlineDefaults()};
+    ASSERT_EQ(tt_offline_set_model(offline.handle, &loudnessChunk, &model, 7), TT_OK);
+    ASSERT_EQ(tt_offline_feed(offline.handle, audio.data(), audio.size()), TT_OK);
+    ASSERT_EQ(tt_offline_finish(offline.handle), TT_OK);
+    EXPECT_EQ(tt_offline_grid_learned(offline.handle), 0);
+    EXPECT_GT(tt_offline_beat_count(offline.handle), 0u) << "the onset path answered instead";
+}
+
+TEST(OfflineApi, AModelNeedsAnIdentityAndCanBeRemoved) {
+    LoudnessModel model;
+    Offline offline{offlineDefaults()};
+    EXPECT_EQ(tt_offline_set_model(offline.handle, &loudnessChunk, &model, 0),
+              TT_ERR_INVALID_ARG) << "the cache could not tell this model from none";
+    EXPECT_EQ(tt_offline_set_model(nullptr, &loudnessChunk, &model, 7), TT_ERR_INVALID_ARG);
+    EXPECT_EQ(tt_offline_set_model(offline.handle, &loudnessChunk, &model, 7), TT_OK);
+    EXPECT_EQ(tt_offline_set_model(offline.handle, nullptr, nullptr, 0), TT_OK);
+
+    const std::vector<float> audio = smoothPulse(120.0, 12.0, kOfflineRate);
+    ASSERT_EQ(tt_offline_feed(offline.handle, audio.data(), audio.size()), TT_OK);
+    ASSERT_EQ(tt_offline_finish(offline.handle), TT_OK);
+    EXPECT_EQ(model.calls, 0);
+    EXPECT_EQ(tt_offline_grid_learned(offline.handle), 0);
+    EXPECT_EQ(tt_offline_grid_learned(nullptr), 0);
+}
+
 TEST(OfflineApi, BarLinesCanBeDeclined) {
     const std::vector<float> audio = tiktak::test::bandTrack(120.0, 8, 4, kOfflineRate);
 

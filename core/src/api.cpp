@@ -201,7 +201,24 @@ struct tt_offline {
     tiktak::analysis::OfflineAnalyzer impl;
     tiktak::analysis::OfflineResult result;
     bool finished = false;
+    bool fed = false;
+    // The shell's network, called through learnedChunk below.
+    tt_learned_chunk_fn run = nullptr;
+    void* run_context = nullptr;
 };
+
+namespace {
+
+// The C function the shell gave, in the shape the core asks for.
+bool learnedChunk(void* context, const float* spectrogram, std::size_t frames,
+                  std::size_t mels, float* beat_logits, float* downbeat_logits) {
+    const auto* offline = static_cast<const tt_offline*>(context);
+    return offline != nullptr && offline->run != nullptr &&
+           offline->run(offline->run_context, spectrogram, frames, mels, beat_logits,
+                        downbeat_logits) != 0;
+}
+
+}  // namespace
 
 void tt_offline_config_defaults(tt_offline_config* cfg, double sample_rate) {
     if (!cfg) return;
@@ -244,11 +261,33 @@ void tt_offline_destroy(tt_offline* offline) { delete offline; }
 tt_status tt_offline_feed(tt_offline* offline, const float* samples, size_t n) {
     if (!offline || (n > 0 && !samples)) return TT_ERR_INVALID_ARG;
     offline->impl.feed(samples, n);
+    if (n > 0) offline->fed = true;
     // More audio invalidates the previous answer rather than extending it, so
     // a caller that forgets to finish again reads nothing instead of stale
     // beats.
     offline->finished = false;
     return TT_OK;
+}
+
+tt_status tt_offline_set_model(tt_offline* offline, tt_learned_chunk_fn run, void* context,
+                               uint64_t model_id) {
+    if (!offline) return TT_ERR_INVALID_ARG;
+    // Too late once audio has gone past unkept: the model would be handed the
+    // end of a song and asked about all of it.
+    if (offline->fed) return TT_ERR_INVALID_ARG;
+    if (run != nullptr && model_id == 0) return TT_ERR_INVALID_ARG;
+    offline->run = run;
+    offline->run_context = run != nullptr ? context : nullptr;
+    offline->impl.setModel(run != nullptr ? &learnedChunk : nullptr, offline, model_id);
+    offline->finished = false;
+    return TT_OK;
+}
+
+int tt_offline_grid_learned(const tt_offline* offline) {
+    return offline && offline->finished &&
+                   offline->result.source == tiktak::analysis::GridSource::Learned
+               ? 1
+               : 0;
 }
 
 tt_status tt_offline_finish(tt_offline* offline) {
@@ -263,6 +302,7 @@ void tt_offline_reset(tt_offline* offline) {
     offline->impl.reset();
     offline->result = tiktak::analysis::OfflineResult{};
     offline->finished = false;
+    offline->fed = false;
 }
 
 double tt_offline_bpm(const tt_offline* offline) {

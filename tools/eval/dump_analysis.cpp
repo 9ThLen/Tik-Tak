@@ -726,6 +726,11 @@ int main(int argc, char** argv) {
     // resamples to the model's rate, runs the network and picks the peaks —
     // the same code an app would run, not a research approximation of it.
     std::string beat_this_path;
+    // The product's learned file path: the analyser itself runs Beat This!
+    // through the seam a phone would use, so bpm, metre, bar lines and margins
+    // all come from one decision. --beat-this, the research seam, only swaps
+    // the beats and the bar lines in after the onset analysis has run.
+    std::string learned_path;
     // The tempo posterior's shape, so the octave choice can be swept over a real
     // annotated corpus without a rebuild per point. Zero means "leave the
     // shipped default alone", the same convention --live-lock already uses.
@@ -1008,6 +1013,11 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--beat-this") == 0) {
             if (i + 1 >= argc) { std::fprintf(stderr, "--beat-this needs a model\n"); return 2; }
             beat_this_path = argv[++i];
+            continue;
+        }
+        if (std::strcmp(argv[i], "--learned") == 0) {
+            if (i + 1 >= argc) { std::fprintf(stderr, "--learned needs a model\n"); return 2; }
+            learned_path = argv[++i];
             continue;
         }
         if (std::strcmp(argv[i], "--live-model") == 0) {
@@ -1325,6 +1335,41 @@ int main(int argc, char** argv) {
         config.downbeat.phase_switch_cost = phase_switch_cost;
     }
     tiktak::analysis::OfflineAnalyzer analyzer(config);
+
+#if TIKTAK_HAVE_ML
+    // Declared here so it outlives finish(), which is where it runs.
+    tiktak::ml::BeatThisSession learned_session;
+    if (!learned_path.empty()) {
+        if (!beat_this_path.empty()) {
+            std::fprintf(stderr, "--learned and --beat-this ask the same model two ways; "
+                                 "pick one\n");
+            return 2;
+        }
+        std::vector<unsigned char> model_bytes;
+        if (!readBytes(learned_path.c_str(), model_bytes)) {
+            std::fprintf(stderr, "cannot read %s\n", learned_path.c_str());
+            return 1;
+        }
+        if (!learned_session.open(learned_path)) {
+            std::fprintf(stderr, "%s\n", learned_session.reason().c_str());
+            return 1;
+        }
+        // The model's identity for the grid cache, from its bytes. This tool
+        // never caches, but the analyser is given what a shell would give it.
+        std::uint64_t model_id = 0xcbf29ce484222325ull;
+        for (const unsigned char byte : model_bytes) {
+            model_id ^= byte;
+            model_id *= 0x100000001b3ull;
+        }
+        analyzer.setModel(&tiktak::ml::BeatThisSession::runChunk, &learned_session,
+                          model_id != 0 ? model_id : 1);
+    }
+#else
+    if (!learned_path.empty()) {
+        std::fprintf(stderr, "--learned needs a build with TIKTAK_BUILD_ML=ON\n");
+        return 2;
+    }
+#endif
 
     // Fed in blocks that are not a multiple of the hop, for the same reason
     // dump_beats does it: a decoder hands over whatever size it likes and the
@@ -1958,6 +2003,8 @@ int main(int argc, char** argv) {
                 salience_path.empty() ? "cues" : "file");
     std::printf("  \"beats_source\": \"%s\",\n",
                 beats_source);
+    std::printf("  \"grid_source\": \"%s\",\n",
+                analysis.source == tiktak::analysis::GridSource::Learned ? "learned" : "onsets");
     std::printf("  \"sample_rate\": %.17g,\n", rate);
     std::printf("  \"duration_sec\": %.17g,\n", static_cast<double>(samples.size()) / rate);
     std::printf("  \"bpm\": %.17g,\n", finiteOrZero(analysis.bpm));
@@ -2180,6 +2227,10 @@ int main(int argc, char** argv) {
     std::printf("],\n");
 
     printTimes("beats", beats, false);
+    // On the learned path, the bar lines the model's head picked on its own,
+    // beside the resolver's: what the research seam used to report, kept so the
+    // two can be scored against each other.
+    printTimes("model_downbeats", analysis.model_downbeats, false);
     printTimes("downbeats", downbeats, true);
     std::printf("}\n");
 

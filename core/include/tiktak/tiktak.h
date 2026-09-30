@@ -13,6 +13,7 @@
 #define TIKTAK_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -215,7 +216,11 @@ TT_API double tt_offline_bpm(const tt_offline* offline);
 TT_API double tt_offline_estimated_bpm(const tt_offline* offline);
 
 /* 0..1: how strongly the onset function repeats at that tempo. 0 means no
-   periodicity was found, which is not the same as a slow tempo. */
+   periodicity was found, which is not the same as a slow tempo.
+   When the learned front end answered (tt_offline_grid_learned), it is how
+   regular the grid is instead — the share of beat gaps within 15% of the
+   median one — because that path's failure is irregular peaks, and there the
+   tempo is only the grid's median gap and this number is what says so. */
 TT_API double tt_offline_confidence(const tt_offline* offline);
 
 TT_API size_t tt_offline_beat_count(const tt_offline* offline);
@@ -250,6 +255,47 @@ TT_API size_t tt_offline_downbeats(const tt_offline* offline, double* out, size_
  * be a beat or two from the body's.
  */
 TT_API int tt_offline_downbeat_offset(const tt_offline* offline);
+
+/*
+ * The learned front end for file analysis: Beat This!, whose network the shell
+ * runs and whose everything else the core does. The core computes the model's
+ * log-mel input from the audio fed, cuts it into chunks exactly as the
+ * reference does, stitches the answers, picks the beats, measures the tempo
+ * off them and decides the bar lines from the model's downbeat probability.
+ * The shell supplies one function: run the network on one chunk. That is the
+ * only part that differs between ONNX Runtime on a desktop and Core ML on a
+ * phone, and so the only part that can.
+ *
+ * `run` receives TT_LEARNED_CHUNK_FRAMES rows of TT_LEARNED_MELS values
+ * (row-major, zero past the end of the song) and must write as many beat and
+ * downbeat *logits*, returning 1, or return 0 on any failure.
+ *
+ * Call before the first tt_offline_feed; the audio is kept from then on,
+ * because the network wants the whole song. `model_id` identifies the network
+ * for the grid cache — derive it from the weights, since a grid from one model
+ * is not another's answer — and must be non-zero. NULL `run` removes the
+ * model.
+ *
+ * If the network fails, finds fewer than two beats, or a tempo hint was given,
+ * the analysis falls back to the onset path; tt_offline_grid_learned says
+ * which one answered. Measured on GTZAN, which the published checkpoints
+ * never saw, this front end gains 0.10 of beat F and 0.14 of CMLt over the
+ * onset path. Its bar lines' confidence thresholds are not yet calibrated for
+ * probabilities; treat tt_offline_downbeat_confident on this path as
+ * provisional.
+ */
+#define TT_LEARNED_CHUNK_FRAMES 1500
+#define TT_LEARNED_MELS 128
+#define TT_LEARNED_FRAME_RATE 50.0
+
+typedef int (*tt_learned_chunk_fn)(void* context, const float* spectrogram, size_t frames,
+                                   size_t mels, float* beat_logits, float* downbeat_logits);
+
+TT_API tt_status tt_offline_set_model(tt_offline* offline, tt_learned_chunk_fn run,
+                                      void* context, uint64_t model_id);
+
+/* 1 when the finished grid came from the learned front end, 0 otherwise. */
+TT_API int tt_offline_grid_learned(const tt_offline* offline);
 
 /*
  * How far to trust those bar lines. All three are in the active salience
