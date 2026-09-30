@@ -87,4 +87,44 @@ struct BeatGrid {
 BeatGrid pickBeats(const float* beat_logits, const float* downbeat_logits,
                    std::size_t frames, double frameRate = BeatThisFeatures::kFrameRate);
 
+// --------------------------------------------------------- the inference seam
+
+// The network, one chunk at a time: `spectrogram` holds `frames` rows of
+// `mels` log-mel values, zero past the end of the song, and the runner writes
+// `frames` beat logits and `frames` downbeat logits. False on any failure.
+//
+// This is all of Beat This! a platform has to supply. Features, chunking,
+// stitching and peak picking are the core's, so ONNX Runtime on a desktop and
+// Core ML on a phone differ in this one function and cannot drift anywhere
+// else. A plain function pointer and a context rather than a std::function,
+// because the same thing has to cross the C API.
+using ChunkRunner = bool (*)(void* context, const float* spectrogram, std::size_t frames,
+                             std::size_t mels, float* beat_logits, float* downbeat_logits);
+
+// Frames per inference chunk, and the border discarded at each edge.
+// Transcribed from the reference port rather than chosen: the model's answer
+// near a chunk boundary is worse than in the middle, and these two numbers are
+// how the reference arranges for no frame to be read from an edge if any chunk
+// covers it away from one.
+constexpr std::size_t kChunkFrames = 1500;
+constexpr std::size_t kBorderFrames = 6;
+
+struct Activations {
+    // Raw logits, one per frame at 50 frames a second. Logits rather than
+    // probabilities because the peak picker's threshold is "above zero", and
+    // passing these through a sigmoid first would only move where that
+    // threshold has to be written.
+    std::vector<float> beat;
+    std::vector<float> downbeat;
+};
+
+// The whole spectrogram through `runner`, arranged and stitched exactly as the
+// reference port does it: chunks of kChunkFrames starting from -kBorderFrames,
+// the last one pulled back to end on the tail, and overlaps resolved by keeping
+// the earlier chunk, whose answer was computed further from its edge. False,
+// with `out` left empty, when any chunk fails — half a song's activations are
+// not an answer.
+bool runChunked(const float* spectrogram, std::size_t frames, std::size_t mels,
+                ChunkRunner runner, void* context, Activations& out);
+
 }  // namespace tiktak::ml

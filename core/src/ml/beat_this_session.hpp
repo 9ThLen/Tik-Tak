@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include "ml/beat_this.hpp"
+
 namespace tiktak::ml {
 
 // Beat This! inference, through ONNX Runtime.
@@ -27,13 +29,10 @@ namespace tiktak::ml {
 // licensed; see NOTICE.md. Nothing here is retrained.
 class BeatThisSession {
 public:
-    // Frames per inference chunk, and the border discarded at each edge.
-    // Transcribed from the reference port rather than chosen: the model's
-    // answer near a chunk boundary is worse than in the middle, and these two
-    // numbers are how the reference arranges for no frame to be read from an
-    // edge if any chunk covers it away from one.
-    static constexpr std::size_t kChunkFrames = 1500;
-    static constexpr std::size_t kBorderFrames = 6;
+    // The core's, where the chunking now lives (ml::runChunked); kept here so
+    // callers that named them through this class still compile.
+    static constexpr std::size_t kChunkFrames = ml::kChunkFrames;
+    static constexpr std::size_t kBorderFrames = ml::kBorderFrames;
 
     BeatThisSession();
     ~BeatThisSession();
@@ -48,17 +47,18 @@ public:
     bool isOpen() const;
     const std::string& reason() const { return reason_; }
 
-    struct Activations {
-        // Raw logits, one per frame at 50 frames a second. Logits rather than
-        // probabilities because the peak picker's threshold is "above zero",
-        // and passing these through a sigmoid first would only move where that
-        // threshold has to be written.
-        std::vector<float> beat;
-        std::vector<float> downbeat;
-    };
+    using Activations = ml::Activations;
 
     // `spectrogram` is (frames, mels) row-major, as BeatThisFeatures produces.
+    // Empty when the session is closed or any chunk fails.
     Activations run(const float* spectrogram, std::size_t frames, std::size_t mels);
+
+    // One chunk through the network, in the shape ml::ChunkRunner asks for,
+    // with `context` the session. This is what an OfflineAnalyzer is handed to
+    // run the learned front end on the desktop; a phone hands it Core ML
+    // instead, through the same signature.
+    static bool runChunk(void* context, const float* spectrogram, std::size_t frames,
+                         std::size_t mels, float* beat_logits, float* downbeat_logits);
 
 private:
     struct Impl;
