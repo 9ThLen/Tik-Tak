@@ -31,6 +31,44 @@ the 2,760 annotated recordings here as evaluation ground, leaving Harmonix,
 RWC and SMC. That is a cost of the ensemble, not merely of testing it, and it is
 the strongest argument for recording new material.
 
+## 2048 particles off RWC: a real gain everywhere, below the bar on Harmonix
+
+`particles_2048/*.json`, per-track records in `per_track/particles_2048/`,
+answering `eval/PREREGISTERED_particles_2048.md`.
+
+* **Build:** one binary (SHA-256 `8494fd25622e…`), clean tree at `3e139eb`.
+* **Model:** BeatNet `model_1`.
+* **Design:** three seeds, paired seed by seed. The 512 arms on Harmonix and
+  GTZAN's default seed are batch three's runs of the same binary with the same
+  flags. Unchanged paths reproduce exactly, so these are reused as registered.
+
+| corpus | beat F, 512 → 2048 | per seed | usable | episode-free |
+|---|---|---|---:|---:|
+| GTZAN (held out) | 0.690 → 0.705 | +0.014 +0.017 +0.016 | **+0.019** | -0.002 |
+| Harmonix | 0.804 → 0.812 | +0.007 +0.009 +0.007 | +0.005 | -0.007 |
+
+**Cost.** Run single-process and interleaved on ten recordings, 2048 particles
+take **1.53 times** the wall time per second of audio: 0.032 s against 0.049 s
+on this desktop. The whole live path gets slower, BeatNet included.
+
+*Registered decision:* 2048 had to raise beat F by at least 0.010 on both
+corpora, with every seed positive and no loss in usable or episode-free beyond
+twice the across-seed SD.
+
+* **GTZAN** meets all of it.
+* **Harmonix** has every seed positive and passes the guard, but its mean,
+  +0.008, is under 0.010.
+
+**512 stays.** The rule's fallback wording, "reported as RWC-only", does not
+fit the data, so it is corrected here. The beat-F gain has the same sign on all
+three corpora and every seed: RWC +0.020, GTZAN +0.016, Harmonix +0.008. It
+also cuts the across-seed SD of beat F by two thirds or more. What it does not
+do is clear the materiality bar on Harmonix, and it costs half as much compute
+again.
+
+Whether that trade is worth it is a product question. On a phone it needs the
+phone's own cost measurement, which this desktop timing does not stand in for.
+
 ## The closed loop, dry run: without the gate the metronome never stops
 
 `closed_loop/dry_run.json` is the dry run that
