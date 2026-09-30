@@ -94,6 +94,34 @@ TEST(LiveMetronome, ClicksOnTheBeatsItHearsInTheRoom) {
     EXPECT_TRUE(stats.clean());
 }
 
+TEST(LiveMetronome, TellsAnObserverEveryBeatItPlays) {
+    // A harness logging what was played sees exactly the beats the click got,
+    // in the tracker's clock, which is the clock the room was heard in.
+    LiveMetronome metronome{config()};
+    std::vector<double> seen;
+    metronome.setBeatObserver(
+        [](void* context, double beat_sec) {
+            static_cast<std::vector<double>*>(context)->push_back(beat_sec);
+        },
+        &seen);
+    seen.reserve(64);
+    metronome.start();
+
+    auto room = tiktak::test::clickTrack(120.0, 16.0, kRate, 1.0);
+    room.resize(room.size() + static_cast<std::size_t>(0.4 * kRate), 0.0f);
+    const std::vector<double> clicks = run(metronome, room);
+
+    ASSERT_GT(seen.size(), 12u);
+    EXPECT_EQ(seen.size(), metronome.stats().beats);
+    ASSERT_EQ(seen.size(), clicks.size());
+    for (std::size_t i = seen.size() / 2; i < seen.size(); ++i) {
+        EXPECT_LT(offGrid(seen[i], 120.0, 1.0), 0.05) << "beat " << i << " at " << seen[i];
+        // No round trip here, so the beat and the click it produced coincide
+        // to within the click's own attack.
+        EXPECT_LT(std::fabs(seen[i] - clicks[i]), 0.01) << "beat " << i;
+    }
+}
+
 TEST(LiveMetronome, PutsTheClickOutEarlyByTheRoundTrip) {
     // With a 30 ms round trip the click has to leave 30 ms before the beat it
     // is meant to coincide with, or it arrives late by exactly that much.

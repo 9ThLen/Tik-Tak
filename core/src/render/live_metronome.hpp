@@ -87,6 +87,16 @@ public:
 
     tracking::BeatEstimate estimate(double now_sec) const { return tracker_.estimate(now_sec); }
 
+    // Every beat the tracker hands to the click, in the tracker's clock, called
+    // on the audio thread as it is taken, whether or not its click still fits.
+    // For a harness that has to know what was played and when: it must neither
+    // block nor allocate. Null turns it off.
+    using BeatObserver = void (*)(void* context, double beat_sec);
+    void setBeatObserver(BeatObserver observer, void* context) {
+        observer_ = observer;
+        observer_context_ = context;
+    }
+
     // Hands the tracker a tempo to start from: an offline analysis of the same
     // song, or one the user typed.
     void seedTempo(double bpm, double spread_octaves = 0.05) {
@@ -128,6 +138,8 @@ private:
 
     bool running_ = false;
     std::size_t beats_ = 0;
+    BeatObserver observer_ = nullptr;
+    void* observer_context_ = nullptr;
 };
 
 }  // namespace tiktak::render

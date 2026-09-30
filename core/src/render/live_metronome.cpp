@@ -53,6 +53,7 @@ void LiveMetronome::process(double stream_time_sec, float* out, std::size_t fram
             // back by the journey. So the window to ignore is the prediction,
             // unadjusted — when there is anything to hear; see gate_own_clicks.
             if (config_.gate_own_clicks) tracker_.gateClick(beat);
+            if (observer_ != nullptr) observer_(observer_context_, beat);
         }
     }
 
