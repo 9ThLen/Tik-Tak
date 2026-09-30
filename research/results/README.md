@@ -179,6 +179,45 @@ decides whether the gate is removed or redesigned, and it is registered on its
 own, before running, as `PREREGISTERED_click_gate_loud_ungated.md` on the
 harness branch.
 
+### The fourth cell: a loud click without the gate
+
+`click_gate_and_antialias/g7_loud_nogate_*.json`, answering
+`eval/PREREGISTERED_click_gate_loud_ungated.md`. Same binary (SHA-256
+`9cb7961c4d02…`), clean tree at `bf085dd`, default seed.
+
+| usable, difference | RWC | GTZAN |
+|---|---:|---:|
+| G7 against G6: what the gate does at 0 dB | **+0.120** [+0.090, +0.152] | **+0.261** [+0.232, +0.290] |
+| G7 against G0: a loud click, ungated | -0.037 [-0.064, -0.012] | -0.097 [-0.120, -0.076] |
+| G3 against G0: a -12 dB click, ungated (for scale) | -0.012 | -0.023 |
+
+In the first row, 45 RWC recordings are better and none worse; on GTZAN, 270
+are better and 9 worse. Against G0, G7 loses beat F 0.097 on RWC and 0.082 on
+GTZAN, where a -12 dB click lost 0.041 and 0.024.
+
+*Registered decision:* G7 beats G6 by far more than the noise floor on both
+corpora, so the gate buys nothing at either level measured. The recommendation
+is therefore no gate by default. The C API's instruction to gate would be
+withdrawn, and the confidence a shell reports in speaker mode flagged as
+inflated. The product change waits for the project's owner and a speaker-mode
+check on real captures.
+
+**What the rule does not say, and the numbers do:** without the gate a loud
+click is not free either. At 0 dB the self-lock the C API warns about is real:
+
+* median confidence is 0.80, against 0.28 on RWC;
+* 30% of RWC recordings emit more than 1.5 times the annotated beats, against
+  8% at baseline and 22% at -12 dB;
+* GTZAN's usable rate falls from 0.459 to 0.361.
+
+At that level, dropping the gate is the better of two bad options. Two things
+could keep the music's beat and lose the click, and neither is built or
+measured yet:
+
+* suppression that knows the click, by subtracting the rendered waveform;
+* a click kept at least 12 dB under the music, where ungated it costs 0.01-0.02
+  usable.
+
 ### Anti-aliasing BeatNet's resampler: closed
 
 | A1 against G0 | usable | episode-free | beat F |
