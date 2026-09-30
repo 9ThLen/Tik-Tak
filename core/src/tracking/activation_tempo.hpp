@@ -83,9 +83,15 @@ struct ActivationTempoConfig {
     // promise.
     double window_sec = 6.0;
 
-    // No answer before this much has been heard, which is the whole window: a
-    // partially filled ring is zero-padded, and padding is silence the
-    // autocorrelation would read as evidence about the tempo.
+    // No answer before this much has been heard. It is the whole window, but
+    // not for the reason this comment used to give. The ring is not read
+    // zero-padded: recompute() uses only the frames written, removes their
+    // mean and normalises each lag by the pairs it actually has, so an answer
+    // from four seconds is an estimate from four seconds, not four seconds
+    // diluted by two of silence. The two are tied because that is the
+    // configuration every number above was measured with. Answering the first
+    // anchor from a shorter prefix while keeping the six-second window is a
+    // separate arm, and an unmeasured one (`--live-anchor-min-window`).
     double min_window_sec = 6.0;
 
     // The autocorrelation is recomputed at most this often. It is a 4096-point
@@ -99,6 +105,22 @@ struct ActivationTempoConfig {
     // fifty a second or the ODF's rate, nor whether that rate is exactly
     // uniform.
     double fps = 50.0;
+
+    // What a gap in the observations holds. The lag axis is time, so a gap
+    // keeps its place in the history either way; the question is only what is
+    // in it.
+    //
+    // Unheard, by default: the frames are marked missing, the mean is taken
+    // over what was heard, and each lag is normalised by the pairs that were
+    // both heard. The alternative writes silence, and the gaps a listening
+    // metronome makes are not silence. It blinds itself around every click it
+    // plays, and it plays one on every beat it predicts, so the zeros land at
+    // exactly the tracker's own period and the autocorrelation reads them back
+    // as evidence for the tempo it is already at — a wrong octave included.
+    // With no gaps the two are the same arithmetic, bit for bit. They differ
+    // only where frames were gated or dropped, and no published corpus number
+    // had either.
+    bool mask_gaps = true;
 
     bool valid() const;
 };
@@ -194,7 +216,9 @@ private:
     std::vector<double> grid_;      // candidate tempi, BPM
     std::vector<double> prior_;     // log-normal weight per candidate
     std::vector<double> ring_;      // activation history, oldest at head_
+    std::vector<double> seen_;      // 1 where ring_ holds a heard frame, 0 where not
     std::vector<double> linear_;    // ring_ unwrapped, oldest first
+    std::vector<double> linear_seen_;  // seen_ unwrapped alongside it
     std::vector<double> acf_;
     std::vector<double> posterior_;
     std::vector<double> scratch_re_;
