@@ -189,9 +189,19 @@ BeatResult BeatTracker::track(const double* odf, const double* times, std::size_
     // Read off the sequence that was kept, not off the whole array: trim() may
     // have dropped beats from either end, and the cumulative score at the last
     // surviving frame still includes everything the backtrace passed through.
+    // Reading it there handles the end; the start needs what had accumulated
+    // before the first surviving beat taken back out. The transition *into*
+    // that beat stays in, exactly as the path's own first beat keeps the
+    // penalty of the gap it started from, so a sequence with nothing trimmed
+    // at the start scores bit for bit what it always did. Without the
+    // subtraction every trimmed beat was credited to a denominator that no
+    // longer counted it, and a grid grown into a quiet intro outscored the
+    // sequence it actually returned — 3.5% in the case its test reproduces.
     if (!frames_.empty()) {
-        result.objective_per_beat =
-            cumulative_[frames_.back()] / static_cast<double>(frames_.size());
+        double kept = cumulative_[frames_.back()];
+        const std::int64_t before = backlink_[frames_.front()];
+        if (before >= 0) kept -= cumulative_[static_cast<std::size_t>(before)];
+        result.objective_per_beat = kept / static_cast<double>(frames_.size());
     }
     return result;
 }

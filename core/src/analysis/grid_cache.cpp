@@ -122,7 +122,11 @@ struct Sha256 {
 // Bumped whenever the analysis itself changes in a way that makes old grids
 // wrong, not just whenever the byte layout changes: a cache of results from a
 // better-tuned tracker is stale even if it still parses.
-constexpr std::uint32_t kVersion = 3;
+//
+// 4: the tempo hypotheses are ranked on an objective that no longer counts
+// beats trim() removed from the start, so a grid cached under 3 may carry a
+// tempo the analysis would not choose now.
+constexpr std::uint32_t kVersion = 4;
 
 constexpr std::uint8_t kMagic[4] = {'T', 'T', 'G', 'R'};
 
@@ -205,6 +209,10 @@ std::uint64_t fingerprint(const OfflineConfig& c) {
     putF64(bytes, c.odf.chromaMaxHz);
     putF64(bytes, c.tracker.tightness);
     put64(bytes, c.tracker.trim ? 1 : 0);
+    // Both decide which tempo hypothesis wins, and neither was in here before
+    // version 4 — harmless only because no shell could set them.
+    put64(bytes, static_cast<std::uint64_t>(c.tempo_hypotheses));
+    putF64(bytes, c.tempo_fit_weight);
     putF64(bytes, c.bpm_hint);
     put64(bytes, c.find_downbeats ? 1 : 0);
     putF64(bytes, c.downbeat.low_weight);

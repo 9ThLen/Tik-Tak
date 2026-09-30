@@ -145,6 +145,29 @@ def test_a_manual_tempo_is_not_second_guessed_by_the_search():
     assert beats.bpm == pytest.approx(180.0)
 
 
+def test_the_objective_is_read_off_the_beats_that_were_kept():
+    # The core's Tracker.TheObjectiveIsReadOffTheBeatsThatWereKept, mirrored so
+    # the reference cannot drift from it: a quiet intro that trim() removes,
+    # every gap exactly one period so no transition costs anything, and the
+    # objective is then the mean local score of the beats kept. Before the fix
+    # the trimmed intro stayed in the numerator: 7.983 against 7.711.
+    from tiktak.tracker import _local_score
+
+    frames, rate = 2000, 100.0
+    odf = np.zeros(frames)
+    odf[::50] = 1.0
+    odf[:300:50] = 0.2
+    times = np.arange(frames) / rate
+
+    result = track_beats(odf, times, rate, bpm=120.0)
+    assert result.frames[0] >= 300, "the quiet intro was not trimmed"
+    assert np.all(np.diff(result.frames) == 50)
+
+    local = _local_score(odf, 50.0)
+    assert result.objective_per_beat == pytest.approx(
+        float(np.mean(local[result.frames])), abs=1e-9)
+
+
 def test_rejects_mismatched_inputs():
     with pytest.raises(ValueError):
         track_beats(np.zeros(10), np.zeros(5), 100.0, bpm=120.0)
