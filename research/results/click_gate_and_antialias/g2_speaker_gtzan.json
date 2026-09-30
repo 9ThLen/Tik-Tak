@@ -1,0 +1,270 @@
+{
+  "provenance": {
+    "schema": "tiktak.provenance/v1",
+    "utc": "2026-09-30T14:02:24Z",
+    "commit": "5bc76b772774ea02a7f500539b520c85b2f232cb",
+    "tree_clean": true,
+    "python": "3.11.15",
+    "platform": "Windows",
+    "binary": {
+      "name": "dump_analysis.exe",
+      "bytes": 1080320,
+      "sha256": "9cb7961c4d025ce68585bb367cb2e1f53d9e394cc58c6ab0d3d0d055d4c5a95b"
+    },
+    "model": {
+      "name": "beatnet_model_1.ttw",
+      "bytes": 1609332,
+      "sha256": "812ed11af745885127cfb967e7db847c9bdef44b8e2c80c79cf875f790b978f1"
+    },
+    "also_models": [],
+    "corpora": {
+      "gtzan": {
+        "files": 1000,
+        "annotated": 1000
+      }
+    }
+  },
+  "protocol": {
+    "causal": true,
+    "callback_samples": 512,
+    "poll_seconds": 1.0,
+    "warmup_seconds": 5.0,
+    "lock_confidence": 0.25,
+    "release_confidence": 0.02,
+    "octave_tolerance_percent": 8.0,
+    "seeded": false,
+    "tracker_flags": [
+      "--live-sample-hz",
+      "50",
+      "--live-click-db",
+      "-12",
+      "--live-click-gate"
+    ],
+    "usable": {
+      "max_acquisition_sec": 8.0,
+      "min_precision_70ms": 0.8,
+      "min_recall_70ms": 0.8,
+      "max_wrong_octave_sec": 4.0,
+      "settle_sec": 4.0,
+      "acquisition": "the pass criterion uses acquired_at, the first confidence lock, which does not ask whether the level was right — a brief wrong lock inside the limit can carry a recording past it. settled_at is reported beside it and is the first locked stretch at the annotated level lasting settle_sec; acquisition_was_a_false_start_fraction is how often the two disagree in the direction that flatters us",
+      "aggregate": "macro-average over corpora with n >= 30",
+      "failure_reasons": "share of ALL recordings in the corpus failing for each reason; one recording can fail for several, so they do not sum to the failure rate",
+      "any_octave": "oracle: the grid is read at half (both phases) or twice its rate and judged at whichever agrees best, over the whole recording — an upper bound on any control the player could be given"
+    },
+    "reference_bpm": "local median of up to 10 neighbouring annotated intervals",
+    "switch_definition": "half/normal/double state change while hysteresis-active; reacquisition changes reported separately"
+  },
+  "summaries": [
+    {
+      "mode": "model",
+      "attempted": 1000,
+      "success": 999,
+      "scored": 999,
+      "usable_rate_macro": 0.09109109109109109,
+      "usable_rate_any_octave_macro": 0.0980980980980981,
+      "usable_rate_pooled": 0.09109109109109109,
+      "usable_rate_any_octave_pooled": 0.0980980980980981,
+      "usable_rate_strict_macro": 0.0890890890890891,
+      "usable_rate_strict_pooled": 0.0890890890890891,
+      "no_wrong_level_episode_macro": 0.6476476476476476,
+      "no_wrong_level_episode_pooled": 0.6476476476476476,
+      "failure_reasons": {
+        "too_few_beats": 0.9019019019019019,
+        "wrong_beats": 0.8208208208208209,
+        "wrong_octave": 0.35235235235235235,
+        "slow_acquisition": 0.015015015015015015,
+        "never_acquired": 0.003003003003003003
+      },
+      "failures": [
+        {
+          "corpus": "gtzan",
+          "name": "jazz.00054",
+          "error": "dump_analysis failed on <audio>/jazz.00054.wav: <audio>/jazz.00054.wav is not a WAV, FLAC or MP3 file"
+        }
+      ],
+      "quality": {
+        "f_measure": 0.5066915771959921,
+        "cmlt": 0.4468110880266875,
+        "amlt": 0.5211195928842186,
+        "p70": 0.5355766534253623,
+        "r70": 0.5003649071187107,
+        "coverage": 0.9872889586596888
+      },
+      "silent_tracks": 4,
+      "median_final_confidence": 0.432058904,
+      "median_final_spread_octaves": 0.0180871063,
+      "active_fraction": 0.8936174755443006,
+      "octave": {
+        "tracks_with_switch": 532,
+        "track_fraction": 0.5325325325325325,
+        "total_switches": 1411,
+        "within_lock_switches": 1201,
+        "reacquire_switches": 210,
+        "switches_per_audio_hour": 169.3536060021848,
+        "active_state_shares": {
+          "same": 0.6792260554945552,
+          "half": 0.06395035386582704,
+          "double": 0.09009476935094993,
+          "other": 0.16672882128866787,
+          "zero": 0.0
+        },
+        "final_states": {
+          "other": 195,
+          "same": 662,
+          "double": 82,
+          "half": 60
+        }
+      },
+      "by_corpus": {
+        "gtzan": {
+          "n": 999,
+          "usable_rate": 0.09109109109109109,
+          "usable_rate_any_octave": 0.0980980980980981,
+          "usable_rate_strict": 0.0890890890890891,
+          "failure_reasons": {
+            "too_few_beats": 0.9019019019019019,
+            "wrong_beats": 0.8208208208208209,
+            "wrong_octave": 0.35235235235235235,
+            "slow_acquisition": 0.015015015015015015,
+            "never_acquired": 0.003003003003003003
+          },
+          "median_acquisition_sec": 4.04,
+          "median_settle_sec": 5.016,
+          "p90_settle_sec": 12.832999999999998,
+          "p90_acquisition_sec": 4.3075,
+          "mean_correct_share_of_eligible": 0.6070207334630499,
+          "correct_share_of_eligible_time_pooled": 0.6069682730349574,
+          "correct_share_of_active": 0.6792260554945552,
+          "no_wrong_level_episode_fraction": 0.6476476476476476,
+          "median_longest_correct_run_sec": 9.214,
+          "switches_per_five_minutes": 16.934140475356187,
+          "never_settled_fraction": 0.24724724724724725,
+          "acquisition_was_a_false_start_fraction": 0.38238238238238237,
+          "f_measure": 0.5066915771959921,
+          "cmlt": 0.4468110880266875,
+          "switch_tracks": 532,
+          "switches": 1411,
+          "switches_per_hour": 169.3536060021848,
+          "final_same_fraction": 0.6626626626626627,
+          "final_half": 60,
+          "final_double": 82,
+          "final_other_or_zero": 195
+        }
+      },
+      "top_switching": [
+        {
+          "corpus": "gtzan",
+          "name": "blues.00013",
+          "switches": 10,
+          "within": 10,
+          "reacquire": 0,
+          "final_bpm": 111.53107398593156,
+          "final_state": "same"
+        },
+        {
+          "corpus": "gtzan",
+          "name": "jazz.00017",
+          "switches": 9,
+          "within": 9,
+          "reacquire": 0,
+          "final_bpm": 100.91349945042093,
+          "final_state": "half"
+        },
+        {
+          "corpus": "gtzan",
+          "name": "blues.00015",
+          "switches": 8,
+          "within": 7,
+          "reacquire": 1,
+          "final_bpm": 102.88662825388177,
+          "final_state": "same"
+        },
+        {
+          "corpus": "gtzan",
+          "name": "blues.00028",
+          "switches": 8,
+          "within": 7,
+          "reacquire": 1,
+          "final_bpm": 103.4998769785416,
+          "final_state": "same"
+        },
+        {
+          "corpus": "gtzan",
+          "name": "metal.00003",
+          "switches": 8,
+          "within": 7,
+          "reacquire": 1,
+          "final_bpm": 100.24258068694796,
+          "final_state": "half"
+        },
+        {
+          "corpus": "gtzan",
+          "name": "blues.00054",
+          "switches": 7,
+          "within": 7,
+          "reacquire": 0,
+          "final_bpm": 178.2351715698065,
+          "final_state": "same"
+        },
+        {
+          "corpus": "gtzan",
+          "name": "classical.00053",
+          "switches": 7,
+          "within": 7,
+          "reacquire": 0,
+          "final_bpm": 107.10949310202268,
+          "final_state": "half"
+        },
+        {
+          "corpus": "gtzan",
+          "name": "country.00042",
+          "switches": 7,
+          "within": 7,
+          "reacquire": 0,
+          "final_bpm": 204.55278026142045,
+          "final_state": "same"
+        },
+        {
+          "corpus": "gtzan",
+          "name": "jazz.00047",
+          "switches": 7,
+          "within": 7,
+          "reacquire": 0,
+          "final_bpm": 142.4178256275265,
+          "final_state": "other"
+        },
+        {
+          "corpus": "gtzan",
+          "name": "reggae.00084",
+          "switches": 7,
+          "within": 7,
+          "reacquire": 0,
+          "final_bpm": 100.35671530962607,
+          "final_state": "same"
+        },
+        {
+          "corpus": "gtzan",
+          "name": "hiphop.00073",
+          "switches": 7,
+          "within": 6,
+          "reacquire": 1,
+          "final_bpm": 94.43335074561557,
+          "final_state": "same"
+        },
+        {
+          "corpus": "gtzan",
+          "name": "pop.00006",
+          "switches": 7,
+          "within": 6,
+          "reacquire": 1,
+          "final_bpm": 91.73407978449953,
+          "final_state": "same"
+        }
+      ],
+      "harmonix_four": [],
+      "audio_hours": 8.331679692617806,
+      "wall_seconds": 222.66374290012754,
+      "rtf": 0.007423597878982592
+    }
+  ]
+}

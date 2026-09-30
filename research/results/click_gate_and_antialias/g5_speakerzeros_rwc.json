@@ -1,0 +1,412 @@
+{
+  "provenance": {
+    "schema": "tiktak.provenance/v1",
+    "utc": "2026-09-30T13:23:21Z",
+    "commit": "5bc76b772774ea02a7f500539b520c85b2f232cb",
+    "tree_clean": true,
+    "python": "3.11.15",
+    "platform": "Windows",
+    "binary": {
+      "name": "dump_analysis.exe",
+      "bytes": 1080320,
+      "sha256": "9cb7961c4d025ce68585bb367cb2e1f53d9e394cc58c6ab0d3d0d055d4c5a95b"
+    },
+    "model": {
+      "name": "beatnet_model_1.ttw",
+      "bytes": 1609332,
+      "sha256": "812ed11af745885127cfb967e7db847c9bdef44b8e2c80c79cf875f790b978f1"
+    },
+    "also_models": [],
+    "corpora": {
+      "rwc-classical": {
+        "files": 61,
+        "annotated": 61
+      },
+      "rwc-genre": {
+        "files": 102,
+        "annotated": 102
+      },
+      "rwc-jazz": {
+        "files": 50,
+        "annotated": 50
+      },
+      "rwc-pop": {
+        "files": 100,
+        "annotated": 100
+      },
+      "rwc-royalty-free": {
+        "files": 15,
+        "annotated": 15
+      }
+    }
+  },
+  "protocol": {
+    "causal": true,
+    "callback_samples": 512,
+    "poll_seconds": 1.0,
+    "warmup_seconds": 5.0,
+    "lock_confidence": 0.25,
+    "release_confidence": 0.02,
+    "octave_tolerance_percent": 8.0,
+    "seeded": false,
+    "tracker_flags": [
+      "--live-sample-hz",
+      "50",
+      "--live-click-db",
+      "-12",
+      "--live-click-gate",
+      "--live-anchor-gap-zeros"
+    ],
+    "usable": {
+      "max_acquisition_sec": 8.0,
+      "min_precision_70ms": 0.8,
+      "min_recall_70ms": 0.8,
+      "max_wrong_octave_sec": 4.0,
+      "settle_sec": 4.0,
+      "acquisition": "the pass criterion uses acquired_at, the first confidence lock, which does not ask whether the level was right — a brief wrong lock inside the limit can carry a recording past it. settled_at is reported beside it and is the first locked stretch at the annotated level lasting settle_sec; acquisition_was_a_false_start_fraction is how often the two disagree in the direction that flatters us",
+      "aggregate": "macro-average over corpora with n >= 30",
+      "failure_reasons": "share of ALL recordings in the corpus failing for each reason; one recording can fail for several, so they do not sum to the failure rate",
+      "any_octave": "oracle: the grid is read at half (both phases) or twice its rate and judged at whichever agrees best, over the whole recording — an upper bound on any control the player could be given"
+    },
+    "reference_bpm": "local median of up to 10 neighbouring annotated intervals",
+    "switch_definition": "half/normal/double state change while hysteresis-active; reacquisition changes reported separately"
+  },
+  "summaries": [
+    {
+      "mode": "model",
+      "attempted": 328,
+      "success": 328,
+      "scored": 328,
+      "usable_rate_macro": 0.005,
+      "usable_rate_any_octave_macro": 0.005,
+      "usable_rate_pooled": 0.009146341463414634,
+      "usable_rate_any_octave_pooled": 0.009146341463414634,
+      "usable_rate_strict_macro": 0.0025,
+      "usable_rate_strict_pooled": 0.003048780487804878,
+      "no_wrong_level_episode_macro": 0.15411764705882353,
+      "no_wrong_level_episode_pooled": 0.1951219512195122,
+      "failure_reasons": {
+        "too_few_beats": 0.9878048780487805,
+        "wrong_beats": 0.9329268292682927,
+        "wrong_octave": 0.8048780487804879,
+        "slow_acquisition": 0.04573170731707317
+      },
+      "failures": [],
+      "quality": {
+        "f_measure": 0.44322039046422834,
+        "cmlt": 0.32489584927845794,
+        "amlt": 0.39972616392347177,
+        "p70": 0.47242858028319323,
+        "r70": 0.4386882129773033,
+        "coverage": 1.1104389424388899
+      },
+      "silent_tracks": 0,
+      "median_final_confidence": 0.4641868655,
+      "median_final_spread_octaves": 0.0173747866,
+      "active_fraction": 0.8231647876322229,
+      "octave": {
+        "tracks_with_switch": 287,
+        "track_fraction": 0.875,
+        "total_switches": 2989,
+        "within_lock_switches": 2243,
+        "reacquire_switches": 746,
+        "switches_per_audio_hour": 127.74137161657654,
+        "active_state_shares": {
+          "same": 0.5266007890256487,
+          "half": 0.05901602406845909,
+          "double": 0.13044661251969328,
+          "other": 0.2826540841431259,
+          "zero": 0.001282490243073082
+        },
+        "final_states": {
+          "other": 185,
+          "double": 26,
+          "same": 104,
+          "zero": 2,
+          "half": 11
+        }
+      },
+      "by_corpus": {
+        "rwc-classical": {
+          "n": 61,
+          "usable_rate": 0.0,
+          "usable_rate_any_octave": 0.0,
+          "usable_rate_strict": 0.0,
+          "failure_reasons": {
+            "wrong_beats": 1.0,
+            "too_few_beats": 1.0,
+            "wrong_octave": 1.0,
+            "slow_acquisition": 0.06557377049180328
+          },
+          "median_acquisition_sec": 4.11,
+          "median_settle_sec": 34.62,
+          "p90_settle_sec": 210.8,
+          "p90_acquisition_sec": 7.14,
+          "mean_correct_share_of_eligible": 0.1456126552869189,
+          "correct_share_of_eligible_time_pooled": 0.1572503899227606,
+          "correct_share_of_active": 0.1957043400977633,
+          "no_wrong_level_episode_fraction": 0.0,
+          "median_longest_correct_run_sec": 4.009999999999998,
+          "switches_per_five_minutes": 5.387222811602455,
+          "never_settled_fraction": 0.4918032786885246,
+          "acquisition_was_a_false_start_fraction": 0.819672131147541,
+          "f_measure": 0.2762800620747173,
+          "cmlt": 0.08479259485515736,
+          "switch_tracks": 47,
+          "switches": 347,
+          "switches_per_hour": 63.6412779412854,
+          "final_same_fraction": 0.04918032786885246,
+          "final_half": 2,
+          "final_double": 4,
+          "final_other_or_zero": 52
+        },
+        "rwc-genre": {
+          "n": 102,
+          "usable_rate": 0.0,
+          "usable_rate_any_octave": 0.0,
+          "usable_rate_strict": 0.0,
+          "failure_reasons": {
+            "too_few_beats": 0.9901960784313726,
+            "wrong_beats": 0.9509803921568627,
+            "wrong_octave": 0.8235294117647058,
+            "slow_acquisition": 0.06862745098039216
+          },
+          "median_acquisition_sec": 4.04,
+          "median_settle_sec": 9.845,
+          "p90_settle_sec": 53.68,
+          "p90_acquisition_sec": 6.8518,
+          "mean_correct_share_of_eligible": 0.4653363652159563,
+          "correct_share_of_eligible_time_pooled": 0.45316039477086345,
+          "correct_share_of_active": 0.5415811941310856,
+          "no_wrong_level_episode_fraction": 0.17647058823529413,
+          "median_longest_correct_run_sec": 18.958000000000006,
+          "switches_per_five_minutes": 10.087112646336315,
+          "never_settled_fraction": 0.20588235294117646,
+          "acquisition_was_a_false_start_fraction": 0.5588235294117647,
+          "f_measure": 0.464201554834604,
+          "cmlt": 0.338788614838613,
+          "switch_tracks": 86,
+          "switches": 827,
+          "switches_per_hour": 118.58241106416709,
+          "final_same_fraction": 0.29411764705882354,
+          "final_half": 3,
+          "final_double": 9,
+          "final_other_or_zero": 60
+        },
+        "rwc-jazz": {
+          "n": 50,
+          "usable_rate": 0.0,
+          "usable_rate_any_octave": 0.0,
+          "usable_rate_strict": 0.0,
+          "failure_reasons": {
+            "too_few_beats": 1.0,
+            "wrong_beats": 0.96,
+            "wrong_octave": 0.9,
+            "slow_acquisition": 0.02
+          },
+          "median_acquisition_sec": 4.063,
+          "median_settle_sec": 15.14,
+          "p90_settle_sec": 56.85599999999998,
+          "p90_acquisition_sec": 4.835300000000001,
+          "mean_correct_share_of_eligible": 0.4447964888052329,
+          "correct_share_of_eligible_time_pooled": 0.4208633533161005,
+          "correct_share_of_active": 0.5096205252671752,
+          "no_wrong_level_episode_fraction": 0.1,
+          "median_longest_correct_run_sec": 19.789999999999996,
+          "switches_per_five_minutes": 10.313058624008798,
+          "never_settled_fraction": 0.16,
+          "acquisition_was_a_false_start_fraction": 0.78,
+          "f_measure": 0.4033923680410743,
+          "cmlt": 0.2584269876961686,
+          "switch_tracks": 44,
+          "switches": 450,
+          "switches_per_hour": 121.4326501066574,
+          "final_same_fraction": 0.26,
+          "final_half": 1,
+          "final_double": 7,
+          "final_other_or_zero": 29
+        },
+        "rwc-pop": {
+          "n": 100,
+          "usable_rate": 0.02,
+          "usable_rate_any_octave": 0.02,
+          "usable_rate_strict": 0.01,
+          "failure_reasons": {
+            "too_few_beats": 0.98,
+            "wrong_beats": 0.88,
+            "wrong_octave": 0.66,
+            "slow_acquisition": 0.01
+          },
+          "median_acquisition_sec": 4.04,
+          "median_settle_sec": 6.0954999999999995,
+          "p90_settle_sec": 30.630000000000003,
+          "p90_acquisition_sec": 4.964800000000004,
+          "mean_correct_share_of_eligible": 0.62981908823002,
+          "correct_share_of_eligible_time_pooled": 0.6277182437286867,
+          "correct_share_of_active": 0.7636671402850943,
+          "no_wrong_level_episode_fraction": 0.34,
+          "median_longest_correct_run_sec": 21.35000000000001,
+          "switches_per_five_minutes": 16.318097486928647,
+          "never_settled_fraction": 0.04,
+          "acquisition_was_a_false_start_fraction": 0.44,
+          "f_measure": 0.5356444669024899,
+          "cmlt": 0.4720076659229292,
+          "switch_tracks": 97,
+          "switches": 1290,
+          "switches_per_hour": 191.7707480470765,
+          "final_same_fraction": 0.51,
+          "final_half": 3,
+          "final_double": 6,
+          "final_other_or_zero": 40
+        },
+        "rwc-royalty-free": {
+          "n": 15,
+          "usable_rate": 0.06666666666666667,
+          "usable_rate_any_octave": 0.06666666666666667,
+          "usable_rate_strict": 0.0,
+          "failure_reasons": {
+            "too_few_beats": 0.9333333333333333,
+            "wrong_beats": 0.8,
+            "wrong_octave": 0.5333333333333333,
+            "slow_acquisition": 0.13333333333333333
+          },
+          "median_acquisition_sec": 4.04,
+          "median_settle_sec": 7.4885,
+          "p90_settle_sec": 49.86200000000004,
+          "p90_acquisition_sec": 8.8928,
+          "mean_correct_share_of_eligible": 0.6493805216628072,
+          "correct_share_of_eligible_time_pooled": 0.6540466480417028,
+          "correct_share_of_active": 0.7748288105503424,
+          "no_wrong_level_episode_fraction": 0.4666666666666667,
+          "median_longest_correct_run_sec": 18.439999999999998,
+          "switches_per_five_minutes": 12.04432310904127,
+          "never_settled_fraction": 0.06666666666666667,
+          "acquisition_was_a_false_start_fraction": 0.4,
+          "f_measure": 0.49603870668512207,
+          "cmlt": 0.44766237243531676,
+          "switch_tracks": 13,
+          "switches": 75,
+          "switches_per_hour": 138.93727280264088,
+          "final_same_fraction": 0.4666666666666667,
+          "final_half": 2,
+          "final_double": 0,
+          "final_other_or_zero": 6
+        }
+      },
+      "top_switching": [
+        {
+          "corpus": "rwc-jazz",
+          "name": "RWC_J034",
+          "switches": 44,
+          "within": 40,
+          "reacquire": 4,
+          "final_bpm": 167.03931031776847,
+          "final_state": "same"
+        },
+        {
+          "corpus": "rwc-pop",
+          "name": "RWC_P060",
+          "switches": 44,
+          "within": 35,
+          "reacquire": 9,
+          "final_bpm": 167.83326574895844,
+          "final_state": "other"
+        },
+        {
+          "corpus": "rwc-pop",
+          "name": "RWC_P100",
+          "switches": 44,
+          "within": 28,
+          "reacquire": 16,
+          "final_bpm": 144.83554298222816,
+          "final_state": "other"
+        },
+        {
+          "corpus": "rwc-pop",
+          "name": "RWC_P056",
+          "switches": 40,
+          "within": 30,
+          "reacquire": 10,
+          "final_bpm": 81.22659173268707,
+          "final_state": "other"
+        },
+        {
+          "corpus": "rwc-jazz",
+          "name": "RWC_J050",
+          "switches": 38,
+          "within": 27,
+          "reacquire": 11,
+          "final_bpm": 157.82302913858507,
+          "final_state": "same"
+        },
+        {
+          "corpus": "rwc-pop",
+          "name": "RWC_P057",
+          "switches": 31,
+          "within": 25,
+          "reacquire": 6,
+          "final_bpm": 70.53738891115833,
+          "final_state": "same"
+        },
+        {
+          "corpus": "rwc-classical",
+          "name": "RWC_C011",
+          "switches": 31,
+          "within": 20,
+          "reacquire": 11,
+          "final_bpm": 101.56807779239863,
+          "final_state": "other"
+        },
+        {
+          "corpus": "rwc-pop",
+          "name": "RWC_P080",
+          "switches": 27,
+          "within": 24,
+          "reacquire": 3,
+          "final_bpm": 79.01600405085875,
+          "final_state": "same"
+        },
+        {
+          "corpus": "rwc-genre",
+          "name": "RWC_G038",
+          "switches": 26,
+          "within": 22,
+          "reacquire": 4,
+          "final_bpm": 158.30685023401188,
+          "final_state": "other"
+        },
+        {
+          "corpus": "rwc-genre",
+          "name": "RWC_G005",
+          "switches": 26,
+          "within": 20,
+          "reacquire": 6,
+          "final_bpm": 166.7101391593955,
+          "final_state": "double"
+        },
+        {
+          "corpus": "rwc-genre",
+          "name": "RWC_G092",
+          "switches": 26,
+          "within": 20,
+          "reacquire": 6,
+          "final_bpm": 168.23993527867725,
+          "final_state": "other"
+        },
+        {
+          "corpus": "rwc-classical",
+          "name": "RWC_C003",
+          "switches": 26,
+          "within": 19,
+          "reacquire": 7,
+          "final_bpm": 97.75866910874521,
+          "final_state": "other"
+        }
+      ],
+      "harmonix_four": [],
+      "audio_hours": 23.398840658856116,
+      "wall_seconds": 1021.1976473999675,
+      "rtf": 0.012123079827003917
+    }
+  ]
+}
