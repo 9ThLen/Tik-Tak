@@ -741,10 +741,21 @@ TT_API void tt_player_stats_get(const tt_player* player, tt_player_stats* out);
  *   calls it, the number passed to tt_live_process and tt_live_take_beat has to
  *   come from one timeline, or the beats come out shifted by the difference.
  *
- * - Declare its own click through tt_live_gate_click. A metronome listening
- *   through a microphone hears itself, and a click is the most onset-like
- *   sound there is; ungated, the tracker locks onto its own output, reports
- *   full confidence and stops following the room.
+ * - Know whether its own click can reach the microphone.
+ *
+ *   Through headphones it cannot, so never call tt_live_gate_click. A gate with
+ *   nothing to hide blinds the tracker around exactly the beats it predicted.
+ *   On the bench that alone took BeatNet's usable rate from 0.46 to 0.09 on
+ *   GTZAN.
+ *
+ *   On a loudspeaker, declare each click through tt_live_gate_click. A
+ *   metronome listening through a microphone hears itself, and ungated, its
+ *   own click inflates the confidence reported and can pull the tracker onto
+ *   its own output. On the bench, with the click mixed in digitally and no
+ *   room, the gate cost more than the click it hid, at both levels tried.
+ *   Whether that holds through a real speaker and microphone has not been
+ *   measured, and until it has, the shipped behaviour stands. The numbers are
+ *   in research/results/README.md, under the click gate.
  *
  * tt_live_process, tt_live_take_beat, tt_live_estimate and tt_live_gate_click
  * are real-time safe. Create, seed and reset are not.

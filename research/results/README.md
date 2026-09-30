@@ -109,7 +109,7 @@ with them in mind:
   * An episode-free rate is only comparable between arms that are active for a
     similar share of the time.
 
-## The click gate costs far more than the click it hides
+## On the bench, the click gate costs far more than the click it hides
 
 `click_gate_and_antialias/*.json`, per-track records in
 `per_track/click_gate_and_antialias/`, answering
@@ -121,7 +121,28 @@ into the input at every beat the tracker hands out, with a zero round trip.
 `--live-click-gate` calls `gateClick` exactly where `LiveMetronome` does: every
 beat, unconditionally, at the predicted beat. The noise floor is Q1's
 across-seed SD below — 0.005 usable, 0.016 episode-free, 0.0015 beat F —
-measured on RWC and applied to GTZAN as registered.
+measured on RWC and applied to GTZAN as registered. One SD is a weak bar. It can
+carry the gate's effects, which are thirty to seventy SDs with paired intervals
+far from zero. The small differences here cannot rest on it: G3 against G0 on
+RWC, A1's +0.020 and the G4/G5 comparisons would need paired arms on several
+identical seeds before they could decide anything.
+
+**What this bench is, and is not.** The click is mixed in digitally, with no
+acoustic delay, no echo, and no colouring by a speaker or microphone. Only
+BeatNet was measured; the spectral-flux path was not.
+
+The gains scale the click's nominal amplitude, not its level against the music.
+Measured afterwards, against each recording's own level:
+
+* At "0 dB", the click's power averaged over one annotated beat is a median
+  6.8 dB under the music's on RWC (IQR 2.4-11.7 dB under) and 8.4 dB under on
+  GTZAN. Its loudest 50 ms sits 3-4 dB under the music's loud moments.
+* At "-12 dB", the beat-averaged power is 19-20 dB under.
+
+Every conclusion below is about this digital loop. Whether it holds through a
+real speaker and microphone is for a closed-loop room test (see the fourth
+cell). The levels come from `eval/click_music_ratio.py`
+(`click_gate_and_antialias/click_music_ratio.json`).
 
 | arm, difference against G0 | RWC usable | RWC beat F | GTZAN usable | GTZAN beat F |
 |---|---:|---:|---:|---:|
@@ -142,9 +163,9 @@ worse on GTZAN.
 * **G2 against G0.** A loudspeaker, as shipped, costs nearly everything.
 * **G3 against G2.** G3 is far better, not merely no worse. On RWC usable it
   gains +0.147 [+0.114, +0.182], with 55 recordings better and none worse. On
-  GTZAN it gains +0.344 [+0.314, +0.374], 348 better and 4 worse. At -12 dB the
-  gate buys nothing. On usable it costs more than ten times what the click
-  does, and on beat F three to seven times.
+  GTZAN it gains +0.344 [+0.314, +0.374], 348 better and 4 worse. On this
+  bench, at -12 dB nominal, the gate buys nothing. On usable it costs more
+  than ten times what the click does, and on beat F three to seven times.
 * **G4 against G1, G5 against G2.** Zeros are no worse than the mask on usable
   or episode-free: all eight differences lie within ±0.023, every interval
   through zero. The mask's argument was right in principle and immaterial in
@@ -163,16 +184,17 @@ of the evidence it concentrates on.
 * AMLt falls with CMLt (0.58 to 0.41 on RWC), so this is not a clean off-beat
   lock: the tracker keeps losing and retaking the beat.
 
-**What the ungated click does.** The C API's warning (`tiktak.h`, "Declare its
-own click") is half right. Ungated at -12 dB, the tracker hears itself:
+**What the ungated click does.** On the bench, the C API's old warning ("Declare
+its own click") is half right. Ungated at -12 dB, the tracker hears itself:
 
 * Its confidence is inflated: median 0.84, against 0.28 on RWC.
 * 22% of RWC recordings emit more than 1.5 times the annotated beats, against
   8% at baseline. That is the signature of a lock onto its own output.
 
 "Stops following the room" is not what the endpoints show, though: correct
-time moves -0.022 on RWC and -0.003 on GTZAN. The confidence a shell displays
-in speaker mode is therefore unreliable, which is a finding of its own.
+time moves -0.022 on RWC and -0.003 on GTZAN. So, on the bench, the confidence
+reported with an audible, ungated click is inflated, which is a finding of its
+own.
 
 G6 shows that a louder click also leaks through the gate: -0.025 beat F against
 G2 on RWC. The LSTM has already heard the click by the time its frame is
@@ -200,11 +222,20 @@ are better and 9 worse. Against G0, G7 loses beat F 0.097 on RWC and 0.082 on
 GTZAN, where a -12 dB click lost 0.041 and 0.024.
 
 *Registered decision:* G7 beats G6 by far more than the noise floor on both
-corpora, so the gate buys nothing at either level measured. The recommendation
-is therefore no gate by default. The C API's instruction to gate would be
-withdrawn, and the confidence a shell reports in speaker mode flagged as
-inflated. The product change waits for the project's owner and a speaker-mode
-check on real captures.
+corpora, so on this bench the gate buys nothing at either gain measured. As the
+rule itself says, that is not yet a product change.
+
+* **Loudspeaker.** Removing the gate is a candidate for a real closed-loop
+  test, in which each arm plays its own clicks and hears them through a real
+  speaker and microphone. A replay of recorded music, such as P1-B0, cannot
+  answer it. The test should also check whether an ungated metronome keeps
+  itself going once the music stops.
+* **Headphones.** No acoustic test is needed. G1 has no click in the input at
+  all, so the gate there is pure loss, and `tiktak.h` now says not to call it.
+
+The registration's own phrase, "when the click is as loud as the music", was
+wrong for the reason given above: at 0 dB the click's beat-averaged power sits
+7-8 dB under the music's.
 
 **What the rule does not say, and the numbers do:** without the gate a loud
 click is not free either. At 0 dB the self-lock the C API warns about is real:
@@ -214,15 +245,22 @@ click is not free either. At 0 dB the self-lock the C API warns about is real:
   8% at baseline and 22% at -12 dB;
 * GTZAN's usable rate falls from 0.459 to 0.361.
 
-At that level, dropping the gate is the better of two bad options. Two things
-could keep the music's beat and lose the click, and neither is built or
-measured yet:
+At that gain, on the bench, dropping the gate is the better of two bad options.
+Two directions could keep the music's beat and lose the click. Neither is built
+or measured:
 
-* suppression that knows the click, by subtracting the rendered waveform;
-* a click kept at least 12 dB under the music, where ungated it costs 0.01-0.02
-  usable.
+* **Suppression that knows the click.** The microphone hears a delayed copy,
+  coloured by the speaker, the room and the microphone. This therefore means
+  estimating at least the delay, the gain and the acoustic path, as an adaptive
+  echo canceller does. Subtracting the rendered waveform is not enough. It is
+  a research direction, not a cheap replacement for the gate.
+* **A quieter click.** Post hoc, in all four arm-corpus pairs, the click's cost
+  grows with its level against the music (Spearman -0.08 to -0.19). Quiet
+  recordings differ in other ways too, so this is a direction, not a threshold.
+  What ratio is safe in a room is for the closed-loop test; the bench's gains
+  cannot say.
 
-### Anti-aliasing BeatNet's resampler: closed
+### Anti-aliasing BeatNet's resampler: this implementation is closed
 
 | A1 against G0 | usable | episode-free | beat F |
 |---|---:|---:|---:|
@@ -232,7 +270,9 @@ measured yet:
 *Registered decision:* the anti-aliased front end had to gain on usable by more
 than the noise floor on both RWC and SMC. It does so on RWC and not on SMC.
 SMC's usable rate is 3%, seven recordings, so the rule asked a lot of it, but
-beat F falls slightly on both corpora. It stays off, and the question is closed.
+beat F falls slightly on both corpora. It stays off, and this implementation, a
+63-tap Kaiser low-pass at 10 kHz, is closed. That does not show anti-aliasing is
+unnecessary in general: no other filter, cut-off or resampler was tried.
 It also costs wall time: 19 minutes for RWC against 14.
 
 **Reproduction.** G0 reproduces the batch-one quickfix baseline (`4554162`,
@@ -260,11 +300,12 @@ Only `--live-rng-seed` varies; RWC, five seeds each:
 
 The default seed against seed 2 — the same code — gives episode-free
 **+0.026 [+0.007, +0.048]**. A paired bootstrap over recordings treats one draw
-as the truth, so on this tracker it is anti-conservative: a difference in
-usable or episode-free is a finding only once it clears the across-seed SD, and
-earlier RWC differences of 0.02-0.03 on those endpoints (debounce, the total
-ban, the ensemble's cost gates) should be re-read with that in mind. Beat F and
-correct time are ten times steadier.
+as the truth, so on this tracker it is anti-conservative. A difference in
+usable or episode-free is a finding only once it clears the across-seed noise.
+For a large effect the SD may be enough; a small one needs paired arms on
+several identical seeds. Earlier RWC differences of 0.02-0.03 on those
+endpoints (debounce, the total ban, the ensemble's cost gates) should be re-read
+with that in mind. Beat F and correct time are ten times steadier.
 
 *Registered decision:* 2048 particles beat 512 on usable by more than the SD on
 two seeds of five, not four, so the default stays. Two things the rule did not
