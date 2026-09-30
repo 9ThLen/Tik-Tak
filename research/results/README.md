@@ -31,6 +31,69 @@ the 2,760 annotated recordings here as evaluation ground, leaving Harmonix,
 RWC and SMC. That is a cost of the ensemble, not merely of testing it, and it is
 the strongest argument for recording new material.
 
+## The learned file path, measured through the product's own analyser
+
+`learned_file_path_gtzan.json` (records beside it), answering
+`eval/PREREGISTERED_learned_file_path.md`. Commit `9157a09`, clean tree, one
+binary, 998 of the 1000 GTZAN recordings — the corpus `small0` never trained
+on. `jazz.00054` is a broken file for every arm; `disco.00049` failed once on
+the learned arm with an empty error while eleven model processes shared the
+machine, ran cleanly when repeated, and is not in the numbers.
+
+| arm | beat F | CMLt | AMLt | downbeat F | rendered |
+|---|---:|---:|---:|---:|---:|
+| `onsets` (ships today) | 0.782 | 0.648 | 0.847 | 0.417 | 0.417 |
+| `seam` (`--beat-this`) | 0.884 | 0.788 | 0.891 | 0.771 | 0.686 |
+| `learned` (`--learned`, `tt_offline`) | 0.884 | 0.788 | 0.891 | 0.751 | 0.751 |
+
+"Rendered" is what a player given one bar offset and a metre actually plays:
+the phase that holds the most bar lines, extended over the grid. For `seam` that
+is the model head's picks forced onto the onset path's metre.
+
+### What it settles
+
+**The port is the measured model, to the bit.** `seam` and `learned` produced
+identical beats on all 998 recordings, and `learned - onsets` is **+0.102
+[+0.087, +0.117]** beat F, +0.140 CMLt, +0.044 AMLt, 555 recordings better
+against 165 worse. The gain the research seam measured is now reachable
+through `tt_offline_set_model`, which is the registered replication condition.
+
+**The registered bar condition fails, narrowly.** The resolver fed the model's
+downbeat probability scores 0.751 against the head's own picks' 0.771:
+**-0.021 [-0.030, -0.012]**, 198 better and 207 worse. The registration asked
+for a lower bound above -0.01, so by its rule the next step is handing the
+player every bar line and keeping the head's picks, not tuning the resolver.
+
+**Post hoc, and labelled as such: the difference lives where no accent is
+played.** Split by the learned path's own accent gate (the provisional
+thresholds), the 65.7% it would accent score 0.903 with the resolver's bar lines
+and 0.899 with the head's, with the same 7.2% of them mostly wrong; the 34.3% it
+withholds score 0.459 and 0.527. The head's advantage is almost entirely on
+recordings the product would not accent. And what a one-offset player can play
+from the head today is 0.686, below the resolver's 0.751. Both facts argue that
+the per-beat player is worth building for the movable phase on full-length
+songs rather than for this 0.02.
+
+**The accent is where the product changes most** — descriptive, provisional
+thresholds, and the onset comparison was not registered:
+
+| path | accents | of which mostly wrong | correct accent, share of all |
+|---|---:|---:|---:|
+| onsets | 35.2% | **39.8%** | 21.2% |
+| learned | 65.7% | **7.2%** | **61.0%** |
+
+Metre, descriptively: learned 89.5%, onsets 76.5%, "always four" 93.6% of the
+992 recordings with annotated bar lines. GTZAN is four-four almost throughout
+and cannot rank metre decisions (`tiktak-metre-corpora-cannot-answer`).
+
+### What it does not settle
+
+Thirty-second excerpts cannot show a phase slip, so nothing here speaks to the
+movable phase or to full-length songs, where `small0` is train-on-test and the
+fold-matched full checkpoints are needed. The accent thresholds on this path
+are the cue backend's, carried over by argument; calibrating them needs a split
+and its own registration.
+
 ## Session 3: a slate aligns what correlation lost, and the room loss replicates
 
 `room_session3.json`. Three captures, clean tree at `6a13279`, twelve hashed
