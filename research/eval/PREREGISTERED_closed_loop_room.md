@@ -198,3 +198,78 @@ phone clicking through its own speaker, a hand's width from its own
 microphone, while the music comes from across a room, may hear its click well
 above the music. That geometry is the `--external` variant and is a session of
 its own.
+
+## Amendment 2 (2026-10-01, before any room pass): what the first dry run of `l6` found
+
+**What it found.** The dry run Amendment 1 asks for was made at `b64a9d6` and
+is kept as `results/closed_loop/first_dry_run_seven_arms.json`. Straight back,
+`l6` reached the final silence at 219 BPM. A beat there is 274 ms and the
+empty-room gate was 350 ms, so the tracker was handed no frames at all. A
+tracker that hears nothing keeps the confidence it had: 0.09, under the 0.25
+that counts as locked and over the 0.02 at which it lets go. It handed out 109
+beats in 30 s, the last of them 0.2 s before the end, and the measure
+registered above passed it.
+
+**The build, changed.**
+
+* The empty-room gate now ends 130 ms before the next click is due, when that
+  comes sooner than 350 ms after this one. That leaves three of BeatNet's
+  frames in every beat, and they are the last three, where the click's own
+  reverberation has had longest to die away.
+* Each pass records which clicks were gated for having the room to themselves.
+  The score counts them under the takes, in the gaps and in the final silence.
+  Under a take, the rule has taken music for an empty room.
+
+**The session, changed.** Every pass ends in 60 s of silence, not 30, which
+makes about 110 minutes. In the digital loop a silent click went on for some
+22 s after the music and the subtracting arms for up to 42. Half a minute
+cannot tell a metronome that is slow to stop from one that never does.
+
+**The decision, changed, for all seven arms.** The confidence is still read
+from 25 to 30 s after the music, as registered. One measure is added to "keeps
+itself going": the arm hands out a beat between 55 and 60 s after the music,
+and `l0` in the same session does not. Such an arm cannot support "propose
+removing the gate" in the decision above, nor "proceed" in Amendment 1,
+whatever its confidence. It is one silence a pass, so one observation, and it
+is reported as that.
+
+**Disclosure.** All of this was chosen in the digital loop, before any room
+pass. The programme for these checks was synthetic: a drum pattern over a
+steady bed for 40 s, then a minute of nothing, at six tempos from 110 to
+205 BPM, straight back and through the made-up room. One run a cell unless
+stated.
+
+* *The gate held for 350 ms whatever the tempo* was still clicking a minute
+  after the music in 3 of the 12 cells, and went on for 47 and 48 s in two
+  more.
+* *Ending it 130 ms before the next click:* the last click came 19 to 30 s
+  after the music in all 12, against 21 to 23 s for a silent click.
+* *130 ms over 190 and 250,* on six seeds of that programme at 125 and
+  160 BPM, both ways back. At 130 ms the last click came 18 to 30 s after the
+  music in all 24 runs. At 190 ms it came up to 35 s after. At 250 ms one of
+  the 24 was still clicking a minute on, and with the gate held for 350 ms
+  whatever the tempo 7 were, all six at 160 BPM straight back among them.
+* *130 ms over half a beat.* Half the beat was built first. Through the
+  made-up room, on the registered programme, it left `l6` clicking at 30 s in
+  both runs made, coasting at 0.08 to 0.11.
+* *Subtraction with no gate at all,* `l5`, let go in all 12 cells, 19 to 42 s
+  after the music. The ungated arm was still locked a minute on in 11.
+* An extension of the empty-room rule, counting what subtraction leaves under
+  the click as well, was built and taken out again. On the registered
+  programme it fired on three quarters of the clicks in the gaps and on one or
+  two in a hundred under the takes, the same as without it.
+
+**What the empty-room rule cannot see.** It compares the room just before a
+click with what the room usually is there.
+
+* A programme that is silent before its beats, a dry drum machine, leaves it
+  nothing to compare, and the rule never fires. Through the made-up room both
+  subtracting arms were then still locked 30 s after such a programme stopped,
+  at 0.46 to 0.61. In a room the music's own reverberation is in that gap.
+  Whether that is enough is for the room passes to say.
+* At 185 BPM through the made-up room the rule did not fire either: the next
+  click comes before the last one's reverberation has died away. `l6` was
+  then `l5`, and stopped when `l5` did.
+
+**Dry run.** As Amendment 1 has it, repeated at the commit that carries this
+amendment and with the minute of silence. The first one is kept beside it.

@@ -138,3 +138,22 @@ difference is noise at twenty takes.
 * In silence a tracker hears a click 50 dB down. Subtraction alone therefore
   cannot stop a metronome sustaining itself in an empty room, and the
   empty-room gate is what does.
+
+## Amendment 2 (2026-10-01, before any room pass): the empty-room gate, corrected
+
+The first dry run of the subtracting arms found the empty-room gate leaving
+the tracker with nothing to hear at fast tempos, and a metronome that then
+never stopped. The gate, the length of the final silence and the decision rule
+were changed for it: see Amendment 2 of `PREREGISTERED_closed_loop_room.md`.
+
+Two things in Amendment 1 above are superseded.
+
+* The table of what the digital loop showed came from builds made while the
+  canceller was being written. The dry runs of what is taken to the room are
+  in `results/README.md`.
+* "Subtraction alone cannot stop a metronome sustaining itself in an empty
+  room" was true of an earlier build, and is still true of a dry drum machine
+  through the made-up room. On a programme with sound between its beats,
+  subtraction alone now lets go in every cell tried, 19 to 42 s after the
+  music, where a silent click takes 21 to 23. The empty-room gate brings that
+  to 19 to 30 s.
