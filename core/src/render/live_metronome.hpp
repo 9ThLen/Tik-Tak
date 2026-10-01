@@ -1,8 +1,10 @@
 #pragma once
 
 #include <cstddef>
+#include <vector>
 
 #include "render/click.hpp"
+#include "render/click_canceller.hpp"
 #include "tracking/live.hpp"
 
 namespace tiktak::render {
@@ -34,6 +36,29 @@ struct LiveMetronomeConfig {
     // predicted — about a quarter of all frames at 120 BPM with the learned
     // front end. The shell knows which it is; this class cannot.
     bool gate_own_clicks = true;
+
+    // Take each click out of what the tracker hears, instead of withholding the
+    // frames around it. The gate costs the music's own beat; this keeps it. See
+    // render::ClickCanceller. Off: so far it has only been run in a digital
+    // loop, never through a speaker and a room. Independent of the gate, and
+    // meant to be used without it.
+    //
+    // It needs a round trip longer than one buffer plus `canceller.before_sec`,
+    // because a click is predicted from what was already played, and it needs
+    // capture and click at one sample rate.
+    bool subtract_own_clicks = false;
+    // Its sample rate and round trip are taken from the fields above.
+    ClickCancellerConfig canceller;
+
+    // With subtraction on: still gate a click that has the room to itself.
+    // Subtraction leaves a little of every click, and once the music stops that
+    // little is all there is to hear; in a digital loop a tracker went on
+    // confirming its own beat off a click 50 dB down. An empty room has no beat
+    // to lose, so gating there is free, and the gate is held for
+    // `alone_gate_sec` after the click, long enough for its reverberation to
+    // die away as well. See ClickCanceller::alone().
+    bool gate_when_alone = true;
+    double alone_gate_sec = 0.35;
 
     bool valid() const;
 };
@@ -97,6 +122,16 @@ public:
         observer_context_ = context;
     }
 
+    // What the tracker was handed for each captured block: the room as heard,
+    // or with our own click taken out of it when subtraction is on. For a
+    // harness that records it; the same rules as the beat observer.
+    using HeardObserver = void (*)(void* context, double stream_time_sec, const float* samples,
+                                   std::size_t n);
+    void setHeardObserver(HeardObserver observer, void* context) {
+        heard_observer_ = observer;
+        heard_context_ = context;
+    }
+
     // Hands the tracker a tempo to start from: an offline analysis of the same
     // song, or one the user typed.
     void seedTempo(double bpm, double spread_octaves = 0.05) {
@@ -125,11 +160,15 @@ public:
         std::size_t discontinuities = 0;    // output buffers out of sequence
         std::size_t capture_discontinuities = 0;
         std::size_t gated = 0;              // frames withheld, our own click
+        std::size_t clicks_alone = 0;       // clicks gated only because the room was empty
 
         bool clean() const;
     };
 
     Stats stats() const;
+
+    // The click canceller's own account, all zeros when it is off.
+    ClickCanceller::Stats subtraction() const { return canceller_.stats(); }
 
 private:
     LiveMetronomeConfig config_;
@@ -138,8 +177,14 @@ private:
 
     bool running_ = false;
     std::size_t beats_ = 0;
+    std::size_t clicks_alone_ = 0;
     BeatObserver observer_ = nullptr;
     void* observer_context_ = nullptr;
+    HeardObserver heard_observer_ = nullptr;
+    void* heard_context_ = nullptr;
+
+    ClickCanceller canceller_;
+    std::vector<float> scratch_;    // one chunk of click, or of cleaned capture
 };
 
 }  // namespace tiktak::render

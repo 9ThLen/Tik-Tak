@@ -44,6 +44,7 @@ add_library(tiktak_core STATIC
     src/render/metronome.cpp
     src/render/player.cpp
     src/render/live_metronome.cpp
+    src/render/click_canceller.cpp
 )
 
 target_include_directories(tiktak_core

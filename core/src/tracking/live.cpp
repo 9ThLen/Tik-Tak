@@ -98,8 +98,12 @@ LiveTracker::LiveTracker(const LiveConfig& config,
 }
 
 void LiveTracker::gateClick(double heard_time_sec) {
-    gate_start_[gate_next_] = heard_time_sec - config_.gate_before_sec;
-    gate_end_[gate_next_] = heard_time_sec + config_.gate_after_sec;
+    gateSpan(heard_time_sec - config_.gate_before_sec, heard_time_sec + config_.gate_after_sec);
+}
+
+void LiveTracker::gateSpan(double from_sec, double to_sec) {
+    gate_start_[gate_next_] = from_sec;
+    gate_end_[gate_next_] = to_sec;
     gate_next_ = (gate_next_ + 1) % kGates;
 }
 

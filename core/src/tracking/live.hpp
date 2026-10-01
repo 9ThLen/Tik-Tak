@@ -919,6 +919,11 @@ public:
     // what the round trip measured.
     void gateClick(double heard_time_sec);
 
+    // The same, for a stretch the caller names outright. A click left alone in
+    // a room is followed by its own reverberation, which outlasts the click's
+    // gate, and with nothing else sounding there is no reason to stop at it.
+    void gateSpan(double from_sec, double to_sec);
+
     BeatEstimate estimate(double now_sec) const {
         BeatEstimate out = filter_.estimate(now_sec);
         // The abstain arm, and the only place it acts. Silence is expressed as
