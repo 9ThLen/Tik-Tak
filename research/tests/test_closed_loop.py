@@ -1,7 +1,8 @@
 import numpy as np
 
-from eval.closed_loop import (CLICK_ENERGY, alone_clicks, click_to_music_db, lag_between, paired,
-                              removed_db, sustain, synthetic_path, tail_measures, take_windows)
+from eval.closed_loop import (CLICK_ENERGY, alone_clicks, check_findings, click_to_music_db,
+                              lag_between, paired, removed_db, sustain, synthetic_path,
+                              tail_measures, take_windows)
 
 
 def layout():
@@ -119,3 +120,21 @@ def test_the_final_silence_is_read_where_the_rules_read_it():
 
     # A pass that listened for half a minute cannot say.
     assert tail_measures(beats, times, coasting, 100.0, 130.0)["still_clicking"] is None
+
+
+def test_the_check_before_a_session_names_what_would_spoil_it():
+    # A laptop in a quiet room: six probes within a fraction of a millisecond,
+    # music well above the floor, and the programme where the probes say.
+    assert check_findings(6, 0.0003, 0.4, -24.0, 0.0612, 0.0605) == []
+
+    clipped = check_findings(6, 0.0003, 1.0, -6.0, 0.0612, 0.0605)
+    assert len(clipped) == 1 and "clips" in clipped[0]
+
+    # The speaker cancelled out of the microphone: probes lost, music gone, and
+    # nothing to line the programme up with.
+    processed = check_findings(4, 0.012, 0.01, -62.0, float("nan"), 0.0605)
+    assert len(processed) == 4
+
+    # The registered limit: past 25 ms the gated arms did not gate their click.
+    apart = check_findings(6, 0.0003, 0.4, -24.0, 0.0900, 0.0605)
+    assert len(apart) == 1 and "should agree" in apart[0]

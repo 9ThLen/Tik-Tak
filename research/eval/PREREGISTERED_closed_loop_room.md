@@ -225,6 +225,14 @@ makes about 110 minutes. In the digital loop a silent click went on for some
 22 s after the music and the subtracting arms for up to 42. Half a minute
 cannot tell a metronome that is slow to stop from one that never does.
 
+**A check before the passes.** `eval.closed_loop check` plays the first take
+with a silent click, about a minute in all. It looks only at what would keep a
+session from being scored: whether the probe clicks come back and how far
+apart, whether the microphone clips or hardly hears the music, and whether the
+programme's lag agrees with the round trip to the registered 25 ms. With a
+silent click there is nothing to gate or subtract, so it says nothing about
+any arm, and nothing is chosen on it.
+
 **The decision, changed, for all seven arms.** The confidence is still read
 from 25 to 30 s after the music, as registered. One measure is added to "keeps
 itself going": the arm hands out a beat between 55 and 60 s after the music,

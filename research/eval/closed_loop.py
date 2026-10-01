@@ -11,6 +11,8 @@ tracker's clock. This module:
   programme's music, so that "-8 dB" means -8 dB against the music;
 * ``path``   — a made-up room for the dry run: an impulse response the
   simulated click returns through, longer than anything that models it;
+* ``check``  — before a session: one take with a silent click, and whether a
+  session recorded like it could be scored at all;
 * ``run``    — every registered arm through `tiktak loop`, one after another;
 * ``score``  — aligns each pass to the programme by cross-correlation, cuts it
   per take, scores each take exactly as the bench does, and measures whether
@@ -18,6 +20,7 @@ tracker's clock. This module:
 
     cd research
     .venv/Scripts/python -m eval.closed_loop levels --programme <programme.wav> --layout <layout.json> ...
+    .venv/Scripts/python -m eval.closed_loop check --tiktak <tiktak.exe> --model <beatnet.ttw> ...
     .venv/Scripts/python -m eval.closed_loop run --tiktak <tiktak.exe> --model <beatnet.ttw> ...
     .venv/Scripts/python -m eval.closed_loop score --session <dir> --layout <layout.json> ...
 """
@@ -69,6 +72,15 @@ TAIL_SEC = 60.0
 # clicking at the end, which Amendment 2 added.
 CONFIDENCE_AT = (25.0, 30.0)
 CLICKING_AT = (55.0, 60.0)
+# The registered validity limit: past this the gated arms did not gate their
+# own click.
+MISALIGNED_SEC = 0.025
+# What the check before a session plays, and what it will not accept: probe
+# clicks further apart than the gate has to spare, a microphone at full scale,
+# and one that hardly hears the music.
+CHECK_SEC, CHECK_LEAD_SEC = 40.0, 3.0
+CHECK_PROBE_SPREAD_SEC = 0.005
+CHECK_CLIPPED, CHECK_QUIET_DB = 0.99, -50.0
 DRAWS = 10_000
 BOOTSTRAP_SEED = 20260930
 
@@ -445,6 +457,87 @@ def command_path(args) -> int:
     return 0
 
 
+def check_findings(probes: int, probe_spread_sec: float, peak: float, music_db: float,
+                   lag_sec: float, round_trip_sec: float) -> list[str]:
+    """What would keep a session recorded like this from being scored."""
+    found = []
+    if probes < 6:
+        found.append(f"only {probes} of 6 probe clicks came back: something else is playing, "
+                     "or the microphone is being processed")
+    if probe_spread_sec > CHECK_PROBE_SPREAD_SEC:
+        found.append(f"the probe clicks came back {probe_spread_sec * 1000.0:.1f} ms apart: the "
+                     "round trip is not steady enough to gate or subtract by")
+    if peak >= CHECK_CLIPPED:
+        found.append("the microphone clips: turn the volume down")
+    if music_db < CHECK_QUIET_DB:
+        found.append(f"the microphone hears the music at {music_db:.0f} dB: turn the volume up, "
+                     "and check that it is not muted or having the speaker cancelled out of it")
+    if not math.isfinite(lag_sec):
+        found.append("the programme could not be found in what the microphone heard")
+    elif abs(lag_sec - round_trip_sec) > MISALIGNED_SEC:
+        found.append(f"the programme comes back after {lag_sec * 1000.0:.1f} ms and the probe "
+                     f"clicks after {round_trip_sec * 1000.0:.1f}: the two should agree")
+    return found
+
+
+def command_check(args) -> int:
+    """One take with a silent click: can a session recorded like this be scored?
+
+    Nothing about any arm is learned from it. The click is silent, so there is
+    none to gate or subtract; what is checked is the registered validity, ahead
+    of two hours of passes and not after them.
+    """
+    import soundfile
+
+    programme, rate = read_mono(args.programme)
+    windows = take_windows(json.loads(args.layout.read_text(encoding="utf-8")))
+    start = max(0.0, windows[0]["start"] - CHECK_LEAD_SEC)
+    excerpt = programme[int(start * rate):int((start + CHECK_SEC) * rate)]
+    args.out.mkdir(parents=True, exist_ok=True)
+    played = args.out / "check_programme.wav"
+    soundfile.write(str(played), excerpt, int(rate), subtype="FLOAT")
+
+    flags = ["loop", str(played), "--model", str(args.model), "--tail", "3.0", "-o",
+             str(args.out / "check"), "--no-click"]
+    if args.device:
+        flags += ["--device", args.device]
+    if args.simulate_ms is not None:
+        flags += ["--simulate-ms", repr(float(args.simulate_ms))]
+    done = subprocess.run([str(args.tiktak), *flags], check=False)
+    log_path = args.out / "check.json"
+    if done.returncode not in (0, 1) or not log_path.is_file():
+        print("not ready: the pass did not run")
+        return 1
+    log = json.loads(log_path.read_text(encoding="utf-8"))
+    capture, _ = read_mono(log_path.with_suffix(".wav"))
+    music = capture[int(CHECK_LEAD_SEC * rate):int((CHECK_SEC - 1.0) * rate)].astype(np.float64)
+    peak = float(np.max(np.abs(capture))) if len(capture) else 0.0
+    level = float(np.sqrt(np.mean(music ** 2))) if len(music) else 0.0
+    music_db = 20.0 * math.log10(level) if level > 0.0 else -200.0
+    lag, clarity = lag_between(excerpt, capture, rate, CHECK_LEAD_SEC, span_sec=30.0)
+    round_trip = float(log.get("round_trip_sec") or 0.0)
+    probe = log.get("probe") or {}
+    found = check_findings(int(probe.get("clicks") or 0), float(probe.get("spread_sec") or 0.0),
+                           peak, music_db, lag, round_trip)
+    report = {"round_trip_ms": round_trip * 1000.0,
+              "probe_clicks": int(probe.get("clicks") or 0),
+              "probe_spread_ms": float(probe.get("spread_sec") or 0.0) * 1000.0,
+              "programme_lag_ms": lag * 1000.0 if math.isfinite(lag) else None,
+              "programme_found_at": clarity, "microphone_peak": peak, "music_db": music_db,
+              "device": log.get("device"), "findings": found}
+    (args.out / "check_report.json").write_text(json.dumps(report, indent=1) + "\n",
+                                                 encoding="utf-8")
+    print(json.dumps(report, indent=1))
+    if found:
+        print("not ready:")
+        for line in found:
+            print("  " + line)
+        return 1
+    print("ready: the round trip is steady, the microphone hears the music without clipping, and "
+          "the programme lines up with the probe clicks")
+    return 0
+
+
 def command_run(args) -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     gains = json.loads(args.gains.read_text(encoding="utf-8"))
@@ -541,6 +634,15 @@ def main(argv: list[str] | None = None) -> int:
     made.add_argument("--output", type=pathlib.Path, required=True)
     made.add_argument("--rate", type=float, default=48000.0)
     made.add_argument("--direct-to-reverb-db", type=float, default=10.0)
+    check = commands.add_parser("check")
+    check.add_argument("--tiktak", type=pathlib.Path, required=True)
+    check.add_argument("--model", type=pathlib.Path, required=True)
+    check.add_argument("--programme", type=pathlib.Path, required=True)
+    check.add_argument("--layout", type=pathlib.Path, required=True)
+    check.add_argument("--out", type=pathlib.Path, required=True)
+    check.add_argument("--device", default="")
+    check.add_argument("--simulate-ms", type=float, default=None,
+                       help="no device: the digital loop with this delay")
     run = commands.add_parser("run")
     run.add_argument("--tiktak", type=pathlib.Path, required=True)
     run.add_argument("--model", type=pathlib.Path, required=True)
@@ -563,8 +665,8 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--subtract-span-ms", type=float, default=None,
                      help="development only: how much of the path the canceller models")
     args = parser.parse_args(argv)
-    return {"levels": command_levels, "path": command_path, "run": command_run,
-            "score": command_score}[args.command](args)
+    return {"levels": command_levels, "path": command_path, "check": command_check,
+            "run": command_run, "score": command_score}[args.command](args)
 
 
 if __name__ == "__main__":
