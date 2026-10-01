@@ -31,6 +31,131 @@ the 2,760 annotated recordings here as evaluation ground, leaving Harmonix,
 RWC and SMC. That is a cost of the ensemble, not merely of testing it, and it is
 the strongest argument for recording new material.
 
+## Subtracting the click, in the digital loop: most of the way back to no click, and it stops
+
+`closed_loop/dry_run_seven_arms.json` and `closed_loop/dry_run_made_up_room.json`
+are the dry runs that Amendments 1 and 2 of
+`eval/PREREGISTERED_closed_loop_room.md` ask for.
+
+**No room has heard this yet.** The canceller's settings were chosen in this
+loop, on this programme. These runs check that what was built works, and test
+nothing.
+
+* **Build:** clean tree at `3098a55`. Every pass measured its own round trip
+  and ends in a minute of silence.
+* **Straight:** the click comes back 40 ms later, otherwise untouched.
+* **Made-up room:** the click comes back through `eval.closed_loop path`. That
+  is the direct sound, five early reflections, and a 0.4 s diffuse tail 10 dB
+  under the direct sound, which is longer than the 150 ms the canceller
+  models. The music comes straight back in both, so `l0` is one pass.
+
+| own click | F, straight | F, made-up room | removed in the gaps | last click after the music |
+|---|---:|---:|---|---|
+| not played (`l0`) | 0.764 | — | — | 13 s |
+| gated (`l1`), as ships | 0.502 | 0.513 | — | none straight; **never** in the room |
+| nothing (`l2`) | 0.616 | 0.622 | — | **never**, either way |
+| subtracted (`l5`) | **0.744** | **0.689** | 41 and 34 dB | 27 s and 19 s |
+| subtracted, gated when alone (`l6`) | **0.731** | **0.750** | 45 and 32 dB | 17 s and 13 s |
+
+"Never" is still clicking between 55 and 60 s after the music. Those three
+passes were locked at 25 to 30 s as well: 0.78 and 0.74 for `l2`, 0.51 for
+`l1` in the made-up room. The quiet click, `l3` and `l4`, ran straight only:
+0.542 gated and 0.716 ungated, and the ungated one never stops either.
+
+Paired over the 20 takes, `l5` then `l6`:
+
+| against | straight | made-up room |
+|---|---|---|
+| nothing (`l2`) | +0.127 [+0.047, +0.219], +0.114 [+0.046, +0.184] | +0.067 [+0.003, +0.133], +0.128 [+0.055, +0.210] |
+| gated (`l1`) | +0.241 [+0.153, +0.330], +0.228 [+0.148, +0.308] | +0.175 [+0.078, +0.268], +0.237 [+0.149, +0.322] |
+| no click (`l0`) | -0.020 [-0.082, +0.041], -0.033 [-0.075, +0.002] | -0.076 [-0.152, -0.014], -0.014 [-0.070, +0.049] |
+
+* **Against no click at all,** three of the four intervals reach zero. The
+  fourth is `l5` through the made-up room.
+* **Self-sustain in the gaps.** The subtracting arms' locked share is +0.09 to
+  +0.14 over the silent click's, with every interval through zero. The
+  ungated arm's is +0.24 and +0.28, with neither.
+* **The two subtracting arms** differ by -0.013 [-0.060, +0.035] and +0.061
+  [-0.017, +0.174], so twenty takes cannot tell them apart on F. In the final
+  silence the gated one stops 11 and 6 s sooner.
+* **The empty-room rule** fired on 75% and 71% of the clicks in the gaps and
+  on every click of the final silence. Under the takes it fired on 15 of 1,087
+  clicks and 35 of 1,040. All but five and six of those were in one take,
+  `classical.00075`, where the click is 8 dB above the music. After a louder
+  take, music that quiet is 20 dB down, and it reads as an empty room until
+  forty clicks have said otherwise.
+
+**Validity.** Each pass measured its round trip from six probe clicks: 40.00 ms
+straight, and 40.13 ms through the made-up room, where the matched filter
+lands a little late on a reverberant click. The scorer recovered the 40 ms lag
+exactly at the first take and at the last. The path model was never moved, and
+the estimate ended at full trust.
+
+By the amended rule both ways back read "proceed": more than 20 dB removed,
+`l6` no worse than `l2`, and `l6` not keeping itself going by any of the three
+measures. For a dry run that says the build is fit to take to a room, and
+nothing more. The five arms without subtraction reproduce the first dry run to
+the digit, and with it the "keep the gate" branch for the ungated arms.
+
+### What the first dry run of these two arms found
+
+`closed_loop/first_dry_run_seven_arms.json` and
+`first_dry_run_made_up_room.json`, clean tree at `b64a9d6`. They are kept
+because they changed the build and the rules.
+
+Straight back, `l6` reached the final silence at 219 BPM. A beat there is
+274 ms, the empty-room gate was 350 ms, and the tracker was handed no frames
+at all. A tracker that hears nothing keeps the confidence it had. Here that
+was 0.09, and it handed out 109 beats in 30 s, the last of them 0.2 s before
+the end. The registered measure, a confidence under 0.25, passed it.
+
+* **The gate** now ends 130 ms before the next click is due.
+* **The silence** is a minute, and "keeps itself going" has a third measure:
+  a beat between 55 and 60 s after the music when `l0` has none.
+* **Each pass** records which clicks were gated as alone.
+
+The 130 ms was chosen on a synthetic programme: a drum pattern over a steady
+bed for 40 s, then a minute of nothing. Six seeds at each of 125 and 160 BPM,
+both ways back:
+
+| the gate ends | last click after the music | still clicking a minute on |
+|---|---|---:|
+| 350 ms after the click, whatever the tempo | 19 to 60 s | 7 of 24 |
+| **130 ms before the next click** | 18 to 30 s | 0 of 24 |
+| 190 ms before | 18 to 35 s | 0 of 24 |
+| 250 ms before | 16 to 60 s | 1 of 24 |
+
+On the same programme at six tempos, a silent click's last beat came 21 to
+23 s after the music, and `l5`'s 19 to 42 s after.
+
+### Seen on the way
+
+* **The shipped gate does not stop a metronome through the made-up room.**
+  The click's tail outlasts the 55 ms gate. `l1` is locked at 0.51 half a
+  minute after the music and still clicking at a minute. Straight back it
+  stops at once.
+* **The empty-room rule has two blind spots.** It compares the room just
+  before a click with what the room usually is there.
+  * A programme that is silent before its beats, a dry drum machine, gives it
+    nothing to compare. Through the made-up room both subtracting arms were
+    then still locked 30 s after such a programme stopped, at 0.46 to 0.61.
+  * At 185 BPM through the made-up room it did not fire either: the next
+    click comes before the last one's reverberation has died away.
+* **A quiet take after a loud one** is gated as an empty room, as
+  `classical.00075` was. On that take both subtracting arms score 0.12 to
+  0.17, against 0.38 with no click, gated or not: the click is louder than
+  the music there, and the gate is not what costs it.
+
+### What a digital loop leaves out
+
+* A speaker that distorts, a microphone with a noise floor, and a room that
+  reverberates the music as well as the click. After the music here there is
+  digital silence, in which whatever subtraction leaves is the only sound.
+* The click's level. It is the one set digitally, 8 dB under the music. A
+  phone clicking beside its own microphone, with the music across the room,
+  may hear its click well above the music. That is the `--external` session,
+  which is not registered yet.
+
 ## 2048 particles off RWC: a real gain everywhere, below the bar on Harmonix
 
 `particles_2048/*.json`, per-track records in `per_track/particles_2048/`,
