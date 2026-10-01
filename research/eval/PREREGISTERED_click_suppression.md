@@ -89,3 +89,48 @@ the one before.
 * The spectral-flux front end, which has its own gate path and was never
   measured.
 * Downbeat and subdivision clicks, until the beat click works.
+
+## Amendment 1 (2026-10-01, before any room pass): subtraction built first
+
+At the owner's request a third design was built ahead of the two above, and
+ahead of the room test: **path-tracked subtraction**, `render::ClickCanceller`.
+It sits between A and B.
+
+* Like B, it subtracts the click from the microphone signal, before any front
+  end, so it serves BeatNet, spectral flux and Beat This! alike.
+* Unlike B, it does not adapt continuously. The path is solved by least squares
+  once per click, from correlations averaged across clicks.
+* Its answer to permanent double-talk is that averaging, plus a weight on each
+  click by how quiet the room was just before it. The music enters each click's
+  correlation with a different phase and cancels; the path does not.
+
+The order of candidates is now subtraction as built, then the band-limited
+gate (A), then a full adaptive canceller (B).
+
+**Staging.** Stage 1 and the first look at a room are merged into the first
+room session: see Amendment 1 of `PREREGISTERED_closed_loop_room.md`, which
+carries the decision rule. Stage 2, the bench, follows only if that rule says
+proceed.
+
+**What the digital loop showed before the room.** These are mechanics, not
+evidence about a room.
+
+| the click's way back | removed in silence | subtracting arms, F | no click at all, F |
+|---|---:|---:|---:|
+| straight back | 48 dB | 0.68-0.74 | 0.764 |
+| a made-up room, 0.4 s reverberation | 32 dB | 0.73-0.77 | 0.764 |
+
+On the same programme the gated arm scores 0.50 and 0.44, and the ungated arm
+0.62. The two subtracting arms swap places between the two rows, so their
+difference is noise at twenty takes.
+
+**Known limits, each to be read off the room captures.**
+
+* Reverberation later than the 150 ms modelled is left in.
+* The first click after a start is not predicted at all.
+* A changed path, such as a phone picked up, is forgotten at 5% a click unless
+  a pause intervenes.
+* The round trip has to exceed one buffer plus 2 ms.
+* In silence a tracker hears a click 50 dB down. Subtraction alone therefore
+  cannot stop a metronome sustaining itself in an empty room, and the
+  empty-room gate is what does.

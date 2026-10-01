@@ -1,6 +1,7 @@
 import numpy as np
 
-from eval.closed_loop import CLICK_ENERGY, click_to_music_db, lag_between, paired, sustain, take_windows
+from eval.closed_loop import (CLICK_ENERGY, click_to_music_db, lag_between, paired, removed_db,
+                              sustain, synthetic_path, take_windows)
 
 
 def layout():
@@ -59,3 +60,26 @@ def test_the_lag_is_found_to_the_sample():
     lag, clarity = lag_between(programme, capture, rate, 10.0, span_sec=20.0)
     assert abs(lag * rate - delay) < 0.5
     assert clarity > 0.99
+
+
+def test_removed_is_what_was_heard_against_what_was_left_at_the_clicks():
+    rate = 8000.0
+    raw = np.zeros(int(4 * rate), dtype=np.float32)
+    clean = np.zeros_like(raw)
+    beats = np.array([1.0, 2.0, 3.0])
+    for beat in beats:
+        a = int(beat * rate)
+        raw[a:a + 200] = 0.1
+        clean[a:a + 200] = 0.001   # 40 dB down
+    assert abs(removed_db(raw, clean, rate, 0.0, beats, (0.5, 3.5)) - 40.0) < 1e-3
+    # Only the clicks inside the window count, and none means no figure.
+    assert removed_db(raw, clean, rate, 0.0, beats, (3.6, 3.9)) is None
+
+
+def test_the_made_up_room_is_the_same_every_time_and_mostly_direct():
+    first, second = synthetic_path(48000.0), synthetic_path(48000.0)
+    assert np.array_equal(first, second)
+    assert first[0] == 1.0
+    # Its diffuse tail carries a tenth of the direct sound's energy by default.
+    tail = float(np.sum(first[int(0.020 * 48000):] ** 2))
+    assert abs(10.0 * np.log10(tail) + 10.0) < 0.2

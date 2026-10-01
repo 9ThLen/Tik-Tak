@@ -100,3 +100,85 @@ left. That is the same for every arm.
 
 Headphone mode is not under test here. It is already decided: no gate, since
 there is no click to hear.
+
+## Amendment 1 (2026-10-01, before any room pass): two arms that subtract the click
+
+**Why.** The dry run of the five arms above found that an ungated metronome
+never stops once the music does. The project's owner asked for the click to be
+subtracted instead of gated, and building that before the session saves a
+second session.
+
+**What was built.** `render::ClickCanceller` estimates the path from speaker to
+microphone by least squares from the clicks already played, and subtracts the
+click that path predicts before the tracker hears it.
+
+* The path is modelled with a tap on every sample around the expected return,
+  then a tap every quarter millisecond out to 150 ms.
+* The estimate is averaged across clicks, each weighed by how quiet the room
+  was just before it.
+* With `gate_when_alone`, a click and 350 ms of its tail are also gated when
+  the room has emptied. "Emptied" means the level just before the click is
+  20 dB under what it has usually been there, and nothing like music on the
+  beat was left under the last click.
+
+**Arms added,** at the same click level as `l1` and `l2`:
+
+| arm | click | own click |
+|---|---|---|
+| `l5_loud_subtracted` | -8 dB | subtracted, never gated |
+| `l6_loud_guarded` | -8 dB | subtracted, and gated when alone in the room |
+
+That makes seven passes, about 105 minutes. Each subtracting pass also records
+what the tracker was handed (`<arm>.clean.wav`).
+
+**Disclosure.** The canceller's settings were chosen in the digital loop, on
+this same programme, before any room pass:
+
+* an update of 0.05 over 0.15;
+* 150 ms of path over 28 and 80 ms, against a made-up room;
+* the form of the empty-room rule.
+
+The dry run of `l5` and `l6` is therefore a check that what was built works,
+and not a test of it. Only the room passes test it.
+
+**Endpoints added.**
+
+* **Removed:** at each click in the silent gaps and in the final 30 s, what the
+  microphone heard against what subtraction left, in dB, as the median over
+  clicks. In a room it is a lower bound, because the room's own noise is in
+  both.
+* The same F, usable and self-sustain measures as the other arms, against
+  `l0`, `l1` and `l2`.
+
+**Decision for the two new arms.** Nothing here changes a default. It replaces
+stage 1 of `PREREGISTERED_click_suppression.md` and its first look at a room.
+
+* **Proceed** to the bench stage and a confirming session when all of these
+  hold:
+  * the median removed over the gaps is at least 20 dB;
+  * `l6` is not more than 0.05 F worse than `l2`: the lower bound of `l6` minus
+    `l2` is above -0.05;
+  * `l6` does not keep itself going, by the two measures registered above,
+    against `l0`.
+* **Rework** when removed is under 20 dB. The path model is then not good
+  enough for this room, and the captures say what it missed (later
+  reverberation, a non-linear speaker, a wrong round trip) before anything
+  else is tried.
+* **Stop** when removed is at least 20 dB and `l6` still keeps itself going, or
+  loses more than 0.05 F to `l2` with the interval excluding zero. Subtraction
+  does not solve it, and the band-limited gate or the shipped gate is next.
+
+`l5` is reported beside `l6`: the difference between them is what the
+empty-room gate does. The decision for the original five arms is unchanged.
+
+**Dry run.** All seven arms run through `--simulate-ms 40`. The four loud arms
+(`l1`, `l2`, `l5`, `l6`) also run with the click returned through
+`eval.closed_loop path`, a made-up room. That checks the mechanics against a
+path longer than the model, and it is no stand-in for a room.
+
+**What this session cannot show.** One device plays both the music and the
+click, so the click's level against the music is the one set digitally. A
+phone clicking through its own speaker, a hand's width from its own
+microphone, while the music comes from across a room, may hear its click well
+above the music. That geometry is the `--external` variant and is a session of
+its own.

@@ -9,6 +9,8 @@ tracker's clock. This module:
 
 * ``levels`` — the click gains that put the click at a given ratio to this
   programme's music, so that "-8 dB" means -8 dB against the music;
+* ``path``   — a made-up room for the dry run: an impulse response the
+  simulated click returns through, longer than anything that models it;
 * ``run``    — every registered arm through `tiktak loop`, one after another;
 * ``score``  — aligns each pass to the programme by cross-correlation, cuts it
   per take, scores each take exactly as the bench does, and measures whether
@@ -52,7 +54,12 @@ ARMS = {
     "l2_loud_ungated": {"ratio": -8.0, "gated": False},
     "l3_quiet_gated": {"ratio": -20.0, "gated": True},
     "l4_quiet_ungated": {"ratio": -20.0, "gated": False},
+    # Amendment 1 to the registration: the click taken out of what the tracker
+    # hears instead of gated, without and with the gate kept for an empty room.
+    "l5_loud_subtracted": {"ratio": -8.0, "gated": False, "subtract": "only"},
+    "l6_loud_guarded": {"ratio": -8.0, "gated": False, "subtract": "guarded"},
 }
+CLICK_WINDOW_SEC = (-0.002, 0.100)
 LOCK_CONFIDENCE = 0.25
 SILENCE_MARGIN_SEC = 0.5
 TREND_SEC = 3.0
@@ -107,6 +114,29 @@ def gain_for_ratio(programme: np.ndarray, rate: float, windows: list[dict],
     """The click gain whose median click-to-music ratio over takes is `ratio_db`."""
     at_zero = [click_to_music_db(programme, rate, w, period_of[w["track"]], 0.0) for w in windows]
     return float(ratio_db - np.median(at_zero))
+
+
+def synthetic_path(rate: float, direct_to_reverb_db: float = 10.0, rt60_sec: float = 0.4,
+                   length_sec: float = 0.35, seed: int = 5) -> np.ndarray:
+    """A click's way back through a made-up room.
+
+    The direct sound, five early reflections inside 20 ms, and from there a
+    diffuse tail decaying 60 dB in `rt60_sec`, whose whole energy is
+    `direct_to_reverb_db` under the direct sound's. It is not a room: a
+    measured response got levels wrong here before
+    (`tiktak-room-cannot-be-convolved`). It is a path longer than any model of
+    it, which is the one thing the straight-back dry run cannot be.
+    """
+    count = int(length_sec * rate)
+    path = np.zeros(count)
+    path[0] = 1.0
+    for ms, gain in ((1.3, 0.45), (3.7, -0.30), (7.1, 0.22), (12.9, 0.18), (19.0, -0.12)):
+        path[int(round(ms / 1000.0 * rate))] += gain
+    time = np.arange(count) / rate
+    tail = np.random.default_rng(seed).standard_normal(count) * np.exp(-6.908 * time / rt60_sec)
+    tail[:int(0.020 * rate)] = 0.0
+    tail *= math.sqrt(10.0 ** (-direct_to_reverb_db / 10.0) / float(np.sum(tail ** 2)))
+    return (path + tail).astype(np.float32)
 
 
 def lag_between(programme: np.ndarray, capture: np.ndarray, rate: float, at_sec: float,
@@ -174,12 +204,36 @@ def sustain(beats: np.ndarray, times: np.ndarray, confidences: np.ndarray,
                                  if len(head) and len(tail) else 0.0)}
 
 
+def removed_db(raw: np.ndarray, clean: np.ndarray, rate: float, t0: float, beats: np.ndarray,
+               window: tuple[float, float]) -> float | None:
+    """What was heard against what subtraction left, at the clicks in `window`.
+
+    Only meaningful where the click is all there is to hear: in a silence it is
+    how far the click went down, and with a room's own noise under it, a lower
+    bound on that.
+    """
+    ratios = []
+    for beat in beats[(beats >= window[0]) & (beats < window[1])]:
+        a = int((beat + CLICK_WINDOW_SEC[0] - t0) * rate)
+        b = int((beat + CLICK_WINDOW_SEC[1] - t0) * rate)
+        if a < 0 or b > len(raw) or b > len(clean):
+            continue
+        heard = float(np.sum(np.square(raw[a:b], dtype=np.float64)))
+        left = float(np.sum(np.square(clean[a:b], dtype=np.float64)))
+        if heard > 0.0 and left > 0.0:
+            ratios.append(10.0 * math.log10(heard / left))
+    return float(np.median(ratios)) if ratios else None
+
+
 def score_pass(pass_json: pathlib.Path, programme: np.ndarray, rate: float, windows: list[dict],
                items: dict[str, dict], period_of: dict[str, float]) -> dict:
     log = json.loads(pass_json.read_text(encoding="utf-8"))
     capture, capture_rate = read_mono(pass_json.with_suffix(".wav"))
     if abs(capture_rate - rate) > 0.5:
         raise ValueError(f"{pass_json.name}: captured at {capture_rate} Hz, programme {rate} Hz")
+    clean = None
+    if log.get("subtracted"):
+        clean, _ = read_mono(pass_json.with_name(pass_json.stem + ".clean.wav"))
     t0 = float(log["first_stream_sec"])
     beats = np.asarray(log["beats"], dtype=np.float64)
     times = np.asarray(log["live_times"], dtype=np.float64)
@@ -222,6 +276,8 @@ def score_pass(pass_json: pathlib.Path, programme: np.ndarray, rate: float, wind
                         "episode_free": (scored.get("worst_wrong_octave_sec") or 0.0) <= 4.0,
                         "correct_share_of_eligible": scored.get("correct_share_of_eligible"),
                         "click_to_music_db": ratio,
+                        "removed_db": (removed_db(capture, clean, rate, t0, beats, quiet)
+                                       if clean is not None else None),
                         "sustain": sustain(beats, times, confidences, quiet, period_of[track])})
     # The long silence after the programme: the direct look at whether the
     # metronome stops once nothing is playing.
@@ -236,10 +292,13 @@ def score_pass(pass_json: pathlib.Path, programme: np.ndarray, rate: float, wind
             "final_confidence": float(confidences[last_seconds].mean())
             if last_seconds.any() else None,
             "locked_share": float(np.mean(confidences[in_tail] >= LOCK_CONFIDENCE))
-            if in_tail.any() else None}
+            if in_tail.any() else None,
+            "removed_db": (removed_db(capture, clean, rate, t0, beats, (after + 5.0, tail_end))
+                           if clean is not None else None)}
     return {"pass": pass_json.stem, "tail": tail, "settings": {key: log.get(key) for key in (
-                "click_db", "click_silent", "gated", "round_trip_sec", "front_end", "model",
-                "simulated_ms", "device", "stats")},
+                "click_db", "click_silent", "gated", "subtracted", "gate_when_alone",
+                "subtraction", "round_trip_sec", "front_end", "model",
+                "simulated_ms", "simulated_path_taps", "device", "stats")},
             "lag_sec": {"first": lag_first, "last": lag_last, "drift_per_hour": slope * 3600.0},
             "clarity": {"first": clarity_first, "last": clarity_last},
             "gate_misalignment_sec": (lag_first - float(log.get("round_trip_sec") or 0.0))
@@ -282,6 +341,9 @@ def summarise(passes: dict[str, dict]) -> dict:
             "gap_locked_share": float(np.mean([r["sustain"]["locked_share"] for r in rows])),
             "gap_confidence_trend": float(np.mean([r["sustain"]["confidence_trend"] for r in rows])),
             "gap_click_ratio": float(np.mean([r["sustain"]["ratio"] for r in rows])),
+            "gap_removed_db_median": (float(np.median(
+                [r["removed_db"] for r in rows if r.get("removed_db") is not None]))
+                if any(r.get("removed_db") is not None for r in rows) else None),
             "tail": scored["tail"],
             "click_to_music_db_median": (float(np.median([r["click_to_music_db"] for r in rows]))
                                          if rows[0]["click_to_music_db"] is not None else None),
@@ -294,7 +356,14 @@ def summarise(passes: dict[str, dict]) -> dict:
             comparisons[f"{ungated}_minus_{gated}"] = {
                 key: paired(passes[ungated], passes[gated], key)
                 for key in ("f_measure", "usable", "locked_share", "confidence_trend")}
-    for arm in ("l1_loud_gated", "l2_loud_ungated", "l3_quiet_gated", "l4_quiet_ungated"):
+    for taken in ("l5_loud_subtracted", "l6_loud_guarded"):
+        for against in ("l2_loud_ungated", "l1_loud_gated"):
+            if taken in passes and against in passes:
+                comparisons[f"{taken}_minus_{against}"] = {
+                    key: paired(passes[taken], passes[against], key)
+                    for key in ("f_measure", "usable", "locked_share", "confidence_trend")}
+    for arm in ("l1_loud_gated", "l2_loud_ungated", "l3_quiet_gated", "l4_quiet_ungated",
+                "l5_loud_subtracted", "l6_loud_guarded"):
         if arm in passes and "l0_silent" in passes:
             comparisons[f"{arm}_minus_l0_silent"] = {
                 key: paired(passes[arm], passes["l0_silent"], key)
@@ -315,6 +384,19 @@ def command_levels(args) -> int:
     return 0
 
 
+def command_path(args) -> int:
+    import soundfile
+
+    path = synthetic_path(args.rate, args.direct_to_reverb_db)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    soundfile.write(str(args.output), path, int(args.rate), subtype="FLOAT")
+    late = float(np.sum(path[int(0.150 * args.rate):] ** 2))
+    print(json.dumps({"taps": len(path), "energy": float(np.sum(path ** 2)),
+                      "beyond_150ms_db": 10.0 * math.log10(late / float(np.sum(path ** 2)))},
+                     indent=1))
+    return 0
+
+
 def command_run(args) -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     gains = json.loads(args.gains.read_text(encoding="utf-8"))
@@ -328,12 +410,22 @@ def command_run(args) -> int:
             flags.append("--no-click")
         else:
             flags += ["--click-db", repr(float(gains[name]))]
-            if not arm["gated"]:
+            if arm.get("subtract"):
+                flags.append("--subtract")
+                if arm["subtract"] == "only":
+                    flags.append("--no-alone-gate")
+                if args.subtract_update is not None:
+                    flags += ["--subtract-update", repr(float(args.subtract_update))]
+                if args.subtract_span_ms is not None:
+                    flags += ["--subtract-span-ms", repr(float(args.subtract_span_ms))]
+            elif not arm["gated"]:
                 flags.append("--no-gate")
         if args.device:
             flags += ["--device", args.device]
         if args.simulate_ms is not None:
             flags += ["--simulate-ms", repr(float(args.simulate_ms))]
+            if args.simulate_ir is not None:
+                flags += ["--simulate-ir", str(args.simulate_ir)]
         print(f"[{index + 1}/{len(names)}] {name}: {' '.join(flags[2:])}", flush=True)
         done = subprocess.run([str(args.tiktak), *flags], check=False)
         if done.returncode not in (0, 1):
@@ -352,9 +444,11 @@ def command_score(args) -> int:
     period_of = periods(windows, items)
     passes = {}
     for name in ARMS:
-        path = args.session / f"{name}.json"
-        if path.is_file():
-            passes[name] = score_pass(path, programme, rate, windows, items, period_of)
+        for folder in (args.session, *args.also):
+            path = folder / f"{name}.json"
+            if path.is_file():
+                passes[name] = score_pass(path, programme, rate, windows, items, period_of)
+                break
     result: dict[str, Any] = {"schema": "tiktak.closed_loop_result/v1",
                               "session": str(args.session.name),
                               "passes": passes, **summarise(passes)}
@@ -364,8 +458,11 @@ def command_score(args) -> int:
         repository = pathlib.Path(__file__).resolve().parents[2]
         files = {"programme": args.programme, "layout": args.layout, "manifest": args.manifest}
         for name in passes:
-            files[f"{name}.json"] = args.session / f"{name}.json"
-            files[f"{name}.wav"] = args.session / f"{name}.wav"
+            for folder in (args.session, *args.also):
+                if (folder / f"{name}.json").is_file():
+                    files[f"{name}.json"] = folder / f"{name}.json"
+                    files[f"{name}.wav"] = folder / f"{name}.wav"
+                    break
         result["provenance"] = experiment_provenance(repository, files, experiment="closed_loop")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=1, default=str) + "\n", encoding="utf-8")
@@ -387,8 +484,14 @@ def main(argv: list[str] | None = None) -> int:
         if name == "score":
             sub.add_argument("--session", type=pathlib.Path, required=True)
             sub.add_argument("--output", type=pathlib.Path, required=True)
+            sub.add_argument("--also", type=pathlib.Path, nargs="*", default=[],
+                             help="further folders to take arms from that --session lacks")
             sub.add_argument("--provenance", action="store_true",
                              help="stamp the result as an experiment; needs a clean tree")
+    made = commands.add_parser("path")
+    made.add_argument("--output", type=pathlib.Path, required=True)
+    made.add_argument("--rate", type=float, default=48000.0)
+    made.add_argument("--direct-to-reverb-db", type=float, default=10.0)
     run = commands.add_parser("run")
     run.add_argument("--tiktak", type=pathlib.Path, required=True)
     run.add_argument("--model", type=pathlib.Path, required=True)
@@ -404,8 +507,15 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--only", nargs="*", default=[])
     run.add_argument("--simulate-ms", type=float, default=None,
                      help="no device: the digital loop with this delay, for a dry run")
+    run.add_argument("--simulate-ir", type=pathlib.Path, default=None,
+                     help="with --simulate-ms: the click's way back, as an impulse response")
+    run.add_argument("--subtract-update", type=float, default=None,
+                     help="development only: the canceller's update, in the subtracting arms")
+    run.add_argument("--subtract-span-ms", type=float, default=None,
+                     help="development only: how much of the path the canceller models")
     args = parser.parse_args(argv)
-    return {"levels": command_levels, "run": command_run, "score": command_score}[args.command](args)
+    return {"levels": command_levels, "path": command_path, "run": command_run,
+            "score": command_score}[args.command](args)
 
 
 if __name__ == "__main__":
