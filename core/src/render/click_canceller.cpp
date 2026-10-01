@@ -83,7 +83,7 @@ ClickCanceller::ClickCanceller(const ClickCancellerConfig& config, const ClickCo
     // predicted from what has already left, so half the round trip is as far
     // ahead of its return as the model looks.
     const std::int64_t round_trip = std::llround(config.round_trip_sec * rate);
-    before_ = std::min(std::llround(config.lead_sec * rate), round_trip / 2);
+    before_ = std::min<std::int64_t>(std::llround(config.lead_sec * rate), round_trip / 2);
     const std::int64_t first_dense =
         std::max<std::int64_t>(0, before_ - std::llround(config.before_sec * rate));
     const std::int64_t dense = before_ + std::llround(config.dense_sec * rate);
