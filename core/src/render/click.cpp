@@ -55,7 +55,7 @@ const ClickTone& ClickRenderer::toneFor(schedule::BeatKind kind) const {
     return config_.beat;
 }
 
-bool ClickRenderer::schedule(double time_sec, schedule::BeatKind kind) {
+bool ClickRenderer::schedule(double time_sec, schedule::BeatKind kind, bool inverted) {
     // A NaN time compares false against everything, so it would never be placed
     // and never expire — it would sit in the queue forever, one slot smaller
     // every time until the metronome stopped sounding.
@@ -66,11 +66,12 @@ bool ClickRenderer::schedule(double time_sec, schedule::BeatKind kind) {
     }
     pending_[pending_count_].time_sec = time_sec;
     pending_[pending_count_].kind = kind;
+    pending_[pending_count_].inverted = inverted;
     ++pending_count_;
     return true;
 }
 
-void ClickRenderer::startVoice(const ClickTone& tone) {
+void ClickRenderer::startVoice(const ClickTone& tone, bool inverted) {
     std::size_t chosen = voices_.size();
     double quietest = 0.0;
 
@@ -82,7 +83,7 @@ void ClickRenderer::startVoice(const ClickTone& tone) {
         // Steal the quietest rather than the oldest: with three tone lengths in
         // play the oldest voice is not reliably the least audible one, and the
         // whole point of stealing is to cut what will be missed least.
-        const double level = voices_[i].envelope * voices_[i].gain;
+        const double level = voices_[i].envelope * std::fabs(voices_[i].gain);
         if (chosen == voices_.size() || level < quietest) {
             chosen = i;
             quietest = level;
@@ -110,7 +111,7 @@ void ClickRenderer::startVoice(const ClickTone& tone) {
     voice.sin_w = std::sin(w);
     voice.envelope = 1.0;
     voice.decay = std::pow(kEndAmplitude, 1.0 / static_cast<double>(samples));
-    voice.gain = tone.gain;
+    voice.gain = inverted ? -tone.gain : tone.gain;
 }
 
 void ClickRenderer::renderVoice(Voice& voice, float* out, std::size_t frames) {
@@ -205,7 +206,7 @@ void ClickRenderer::mix(double start_time_sec, float* out, std::size_t frames) {
         }
         cursor = offset;
 
-        startVoice(toneFor(pending_[next].kind));
+        startVoice(toneFor(pending_[next].kind), pending_[next].inverted);
         pending_[next] = pending_[pending_count_ - 1];
         --pending_count_;
     }

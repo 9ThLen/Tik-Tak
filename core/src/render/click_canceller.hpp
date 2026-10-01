@@ -13,8 +13,12 @@ struct ClickCancellerConfig {
     double sample_rate = 48000.0;
 
     // Where a played click is expected back in the capture stream: the round
-    // trip the metronome was given.
+    // trip the metronome was given. It does not have to be right. A round trip
+    // measured in a room is late by an amount the room decides (see
+    // dsp/matched.hpp), so the path is searched from `lead_sec` ahead of it,
+    // and once the direct sound has been found the model is moved onto it.
     double round_trip_sec = 0.0;
+    double lead_sec = 0.020;
 
     // The path from speaker to microphone, as it is modelled. Around the
     // expected return there is a tap on every sample, from `before_sec` ahead
@@ -24,7 +28,8 @@ struct ClickCancellerConfig {
     // desk, the walls and the start of the room's reverberation, a tap every
     // `tap_spacing_sec` out to `after_sec`. Those are weaker and wanted less
     // exactly, and a tap per sample there would cost twelve times the unknowns
-    // for nothing.
+    // for nothing. The lead-in before the expected return is spaced the same
+    // way.
     //
     // How far out is what a room decides. With the click sent back through a
     // synthetic room (0.4 s reverberation, 10 dB under the direct sound),
@@ -106,7 +111,12 @@ struct ClickCancellerConfig {
 //
 // Real-time safe once constructed: nothing allocates, and both calls belong on
 // the audio thread. It adds no latency: a click is predicted from the clicks
-// before it, so the first one is heard whole.
+// before it, so the first few are heard whole.
+//
+// Play the clicks upright and inverted at random (ClickRenderer::schedule).
+// The path is found by averaging, and music that repeats itself on every beat
+// averages in with the click unless the click's sign is something it cannot
+// share. LiveMetronome does this whenever the canceller is on.
 //
 // It is not cheap. At 48 kHz the path is some 870 taps, each visited for every
 // sample a click can reach: about nine million steps a click, and a pair of
@@ -146,9 +156,16 @@ public:
         // music under the click they mostly measure the music.
         double predicted_db = 0.0;  // the predicted click against what was heard
         double removed_db = 0.0;    // what was heard against what was left
-        // Where the path is strongest, against the round trip given: how far
-        // out the round trip is, as far as the canceller can tell.
+        // Where the direct sound arrives, against where the model currently
+        // expects it, and how far the model has been moved from the round trip
+        // it was given to put it there. Their sum is how far out the round
+        // trip was, as far as the canceller can tell.
         double arrival_sec = 0.0;
+        double moved_sec = 0.0;
+        std::size_t moves = 0;
+        // How much of the estimate was path and not music after the last
+        // click, 0 to 1. The predicted click is scaled by this.
+        double trust = 0.0;
     };
     Stats stats() const { return stats_; }
 
@@ -167,12 +184,16 @@ private:
 
     std::vector<std::int64_t> lags_;   // each tap's delay, in samples after the first
     std::int64_t before_ = 0;          // the expected return, as a lag
+    std::int64_t pending_move_ = 0;    // where the direct sound keeps turning up instead
+    std::size_t pending_moves_ = 0;    // and for how many clicks running
+    std::size_t since_move_ = 0;       // clicks learned from since the model last moved
     std::int64_t offset_ = 0;          // capture index minus the first tap's reference index
     std::int64_t window_ = 0;          // samples one click can reach in the capture stream
 
     std::vector<double> factor_;    // Cholesky factor of the click's own normal matrix
     std::vector<double> span_;      // this click's correlation with what was heard
     std::vector<double> mean_;      // the same, averaged over clicks
+    std::vector<double> kept_;      // scratch: one click's difference from the average
     std::vector<double> theta_;     // the path
 
     double click_energy_ = 0.0;     // one click, as played
@@ -181,6 +202,9 @@ private:
     std::size_t level_seen_ = 0;    // samples it has been followed over, capped
     double under_click_ = 0.0;      // the same, as this click's window opened
     double weight_sum_ = 0.0;
+    double weight_squares_ = 0.0;
+    double scatter_ = 0.0;          // how far clicks differ from their average, as energy
+    double trust_ = 0.0;            // how much of the estimate is path and not music
     double returned_energy_ = 0.0;  // what a click comes back with, as predicted
     double last_left_ = 0.0;        // what the last click's window held once it was taken out
     double usual_level_ = 0.0;      // the room just before a click, as it usually is

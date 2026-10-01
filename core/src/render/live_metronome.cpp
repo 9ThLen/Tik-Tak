@@ -104,7 +104,21 @@ void LiveMetronome::process(double stream_time_sec, float* out, std::size_t fram
 
         double beat = 0.0;
         while (tracker_.takeBeat(now, horizon, &beat)) {
-            if (click_.schedule(beat - config_.round_trip_sec, schedule::BeatKind::Beat)) {
+            // With the canceller on, each click goes out upright or inverted at
+            // random. The path is found by averaging what comes back with the
+            // click, and music that repeats itself on every beat (a drum
+            // machine does, to the sample) would otherwise average in with it
+            // and be taken for the click's own echo. The echo turns over with
+            // the click; the music does not.
+            bool inverted = false;
+            if (canceller_.enabled()) {
+                polarity_ ^= polarity_ << 13;
+                polarity_ ^= polarity_ >> 17;
+                polarity_ ^= polarity_ << 5;
+                inverted = (polarity_ & 0x10000u) != 0;
+            }
+            if (click_.schedule(beat - config_.round_trip_sec, schedule::BeatKind::Beat,
+                                inverted)) {
                 ++beats_;
             }
             // The click we just committed to will be heard by the microphone at

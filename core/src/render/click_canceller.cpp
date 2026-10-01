@@ -26,6 +26,24 @@ constexpr std::size_t kUsualClicks = 3;
 // quieter room, and its level becomes the usual one.
 constexpr std::size_t kAloneRun = 40;
 
+// Clicks learned from, after a start or a move, before any is predicted.
+constexpr std::size_t kWarmUp = 4;
+
+// The model is moved onto the direct sound once it has turned up more than
+// `kMoveEarlySec` before where it is expected or `kMoveLateSec` after, within
+// `kMoveAgreeSec` of the same place, on
+// `kMoveClicks` clicks running, and not before `kMoveAfter` clicks have gone
+// into the estimate. Moving throws the estimate away, so it has to be right:
+// under loud music one click can put the largest tap anywhere, and music that
+// lands on every beat looks like a path of its own until enough clicks, each
+// one upright or inverted, have averaged it out.
+constexpr double kMoveEarlySec = 0.001;
+constexpr double kMoveLateSec = 0.002;
+constexpr double kMoveAgreeSec = 0.0005;
+constexpr double kMoveTrust = 0.5;
+constexpr std::size_t kMoveClicks = 4;
+constexpr std::size_t kMoveAfter = 12;
+
 std::int64_t nextPowerOfTwo(std::int64_t value) {
     std::int64_t out = 1;
     while (out < value) out <<= 1;
@@ -42,6 +60,7 @@ double decibels(double numerator, double denominator) {
 bool ClickCancellerConfig::valid() const {
     if (!(sample_rate > 0.0) || !(round_trip_sec >= 0.0)) return false;
     if (!(before_sec >= 0.0) || !(dense_sec >= 0.0) || !(after_sec >= dense_sec)) return false;
+    if (!(lead_sec >= before_sec)) return false;
     if (!(tap_spacing_sec > 0.0)) return false;
     if (!(update > 0.0) || !(update <= 1.0) || !(ridge > 0.0)) return false;
     if (!(quietest > 0.0) || !(level_sec > 0.0)) return false;
@@ -50,7 +69,7 @@ bool ClickCancellerConfig::valid() const {
     // The normal matrix is factored once, densely; this keeps that to a few
     // megabytes and well under a second.
     const double taps = (before_sec + dense_sec) * sample_rate +
-                        (after_sec - dense_sec) / tap_spacing_sec;
+                        (lead_sec - before_sec + after_sec - dense_sec) / tap_spacing_sec;
     return taps <= 2048.0;
 }
 
@@ -60,15 +79,22 @@ ClickCanceller::ClickCanceller(const ClickCancellerConfig& config, const ClickCo
     if (std::fabs(click.sample_rate - config.sample_rate) > 1e-6) return;
 
     const double rate = config.sample_rate;
-    before_ = std::llround(config.before_sec * rate);
+    // The lead-in cannot reach back past the click being played: a click is
+    // predicted from what has already left, so half the round trip is as far
+    // ahead of its return as the model looks.
+    const std::int64_t round_trip = std::llround(config.round_trip_sec * rate);
+    before_ = std::min(std::llround(config.lead_sec * rate), round_trip / 2);
+    const std::int64_t first_dense =
+        std::max<std::int64_t>(0, before_ - std::llround(config.before_sec * rate));
     const std::int64_t dense = before_ + std::llround(config.dense_sec * rate);
     const std::int64_t last = before_ + std::llround(config.after_sec * rate);
     const std::int64_t spacing =
         std::max<std::int64_t>(1, std::llround(config.tap_spacing_sec * rate));
-    for (std::int64_t lag = 0; lag <= dense; ++lag) lags_.push_back(lag);
+    for (std::int64_t lag = 0; lag < first_dense; lag += spacing) lags_.push_back(lag);
+    for (std::int64_t lag = first_dense; lag <= dense; ++lag) lags_.push_back(lag);
     for (std::int64_t lag = dense + spacing; lag <= last; lag += spacing) lags_.push_back(lag);
     const std::size_t taps = lags_.size();
-    offset_ = std::llround(config.round_trip_sec * rate) - before_;
+    offset_ = round_trip - before_;
 
     // The click, from the renderer that will play it, so that nothing here has
     // to agree with its formula by hand.
@@ -116,9 +142,11 @@ ClickCanceller::ClickCanceller(const ClickCancellerConfig& config, const ClickCo
     level_step_ = 1.0 / std::max(1.0, config.level_sec * rate);
     span_.assign(taps, 0.0);
     mean_.assign(taps, 0.0);
+    kept_.assign(taps, 0.0);
     theta_.assign(taps, 0.0);
 
-    const std::int64_t reach = std::max<std::int64_t>(0, offset_) + lags_.back();
+    // Room for the model to be moved as far as its own length either way.
+    const std::int64_t reach = std::max<std::int64_t>(0, offset_) + 2 * lags_.back();
     const std::int64_t size = nextPowerOfTwo(reach + 2 * kLargestBlock);
     ring_.assign(static_cast<std::size_t>(size), 0.0f);
     mask_ = size - 1;
@@ -143,11 +171,18 @@ void ClickCanceller::reset() {
     level_seen_ = 0;
     under_click_ = 0.0;
     weight_sum_ = 0.0;
+    weight_squares_ = 0.0;
+    scatter_ = 0.0;
+    trust_ = 0.0;
     returned_energy_ = 0.0;
     last_left_ = 0.0;
     usual_level_ = 0.0;
     usual_seen_ = 0;
     alone_run_ = 0;
+    offset_ -= std::llround(stats_.moved_sec * config_.sample_rate);
+    pending_move_ = 0;
+    pending_moves_ = 0;
+    since_move_ = 0;
     stats_ = Stats{};
 }
 
@@ -320,28 +355,54 @@ void ClickCanceller::finish() {
     }
 
     // Averaging the correlation, not the path, is what lets the music cancel:
-    // it enters each click's correlation with a different phase. Each click is
-    // weighed by how quiet the room was under it, and the weights already
-    // gathered fade by `update` a click. In a steady room that is a plain
-    // exponential average and the first click is the whole estimate, while a
-    // click in a pause takes the estimate over at once and keeps it when the
-    // music returns.
+    // it enters each click's correlation with a different phase, and a
+    // different sign when the click was inverted. Each click is weighed by how
+    // quiet the room was under it, and the weights already gathered fade by
+    // `update` a click. In a steady room that is a plain exponential average,
+    // while a click in a pause takes the estimate over at once and keeps it
+    // when the music returns.
     ++stats_.clicks;
+    ++since_move_;
     const double noise =
         under_click_ >= 0.0 ? under_click_ * static_cast<double>(window_) : heard_energy_;
     const double weight = 1.0 / (noise + config_.quietest * click_energy_);
-    weight_sum_ = (1.0 - config_.update) * weight_sum_ + weight;
+    const double fade = 1.0 - config_.update;
+    weight_sum_ = fade * weight_sum_ + weight;
+    weight_squares_ = fade * fade * weight_squares_ + weight * weight;
     const double gain = weight / weight_sum_;
-    const std::size_t taps = lags_.size();
-    for (std::size_t j = 0; j < taps; ++j) {
-        mean_[j] += gain * (span_[j] - mean_[j]);
-    }
+    // How many clicks' worth of evidence the average holds.
+    const double clicks = weight_sum_ * weight_sum_ / weight_squares_;
 
-    // Two triangular solves against the factor made in the constructor.
+    // How far this click's correlation is from the average, measured as the
+    // click itself would return it: one triangular solve turns the difference
+    // into uncorrelated parts of equal weight, and their squares add up to an
+    // energy. Averaged over clicks, that is how much of the estimate is music.
+    const std::size_t taps = lags_.size();
+    std::size_t peak = 0;
+    for (std::size_t j = 0; j < taps; ++j) {
+        const double delta = span_[j] - mean_[j];
+        mean_[j] += gain * delta;
+        kept_[j] = delta;
+        if (std::fabs(mean_[j]) > std::fabs(mean_[peak])) peak = j;
+    }
+    double scatter = 0.0;
+    for (std::size_t i = 0; i < taps; ++i) {
+        double value = kept_[i];
+        for (std::size_t k = 0; k < i; ++k) value -= factor_[i * taps + k] * kept_[k];
+        kept_[i] = value / factor_[i * taps + i];
+        scatter += kept_[i] * kept_[i];
+    }
+    scatter_ = (1.0 - gain) * (scatter_ + gain * scatter);
+
+    // The path: two triangular solves against the same factor. The first one's
+    // result is the estimate in those same uncorrelated parts, so its energy
+    // is on hand to weigh against the scatter.
+    double estimated = 0.0;
     for (std::size_t i = 0; i < taps; ++i) {
         double value = mean_[i];
         for (std::size_t k = 0; k < i; ++k) value -= factor_[i * taps + k] * theta_[k];
         theta_[i] = value / factor_[i * taps + i];
+        estimated += theta_[i] * theta_[i];
     }
     for (std::size_t i = taps; i-- > 0;) {
         double value = theta_[i];
@@ -349,20 +410,64 @@ void ClickCanceller::finish() {
         theta_[i] = value / factor_[i * taps + i];
     }
 
-    // What the click comes back with, by the new path: the normal equations
-    // give it without another pass over the click.
+    // The estimate is used only as far as it can be trusted. What it holds is
+    // the path plus whatever music the clicks so far have not averaged out,
+    // and the scatter says how much that is. Where the estimate is no bigger
+    // than its own uncertainty nothing is subtracted, where it is far bigger
+    // all of it is, and nothing at all before `kWarmUp` clicks, because scatter
+    // cannot be told from two. Without this the first clicks under loud music
+    // hand the tracker a prediction made of that music, and what is subtracted
+    // is a click-shaped piece of the beat it is trying to hear.
+    const double music = scatter_ / clicks;
+    trust_ = since_move_ >= kWarmUp && estimated > music ? 1.0 - music / estimated : 0.0;
+    for (std::size_t j = 0; j < taps; ++j) theta_[j] *= trust_;
+    stats_.trust = trust_;
+
+    // What the click comes back with, by the path as it will be used: the
+    // normal equations give it without another pass over the click.
     double returned = 0.0;
-    std::size_t strongest = 0;
-    for (std::size_t j = 0; j < taps; ++j) {
-        returned += theta_[j] * mean_[j];
-        if (std::fabs(theta_[j]) > std::fabs(theta_[strongest])) strongest = j;
+    for (std::size_t j = 0; j < taps; ++j) returned += theta_[j] * mean_[j];
+    returned = std::max(0.0, returned * trust_);
+    returned_energy_ = returned_energy_ > 0.0
+                           ? returned_energy_ + kReturnedUpdate * (returned - returned_energy_)
+                           : returned;
+
+    // Where the click arrives: its correlation with what was heard is largest
+    // at the lag it comes back with. Good to a period of the click's tone, a
+    // millisecond, which is all the move below needs; and only believed while
+    // the estimate is mostly path.
+    const bool found = trust_ > kMoveTrust;
+    const std::int64_t away = found ? lags_[peak] - before_ : 0;
+    const double rate = config_.sample_rate;
+    if (found) stats_.arrival_sec = static_cast<double>(away) / rate;
+
+    // Found outside where the taps are dense, or too near their end for the
+    // device's own response to fit after it, and in the same place click after
+    // click: the round trip was out. Move the model onto it and start the
+    // estimate again there, where the delay can be got exactly.
+    const auto agree = static_cast<std::int64_t>(kMoveAgreeSec * rate);
+    const bool misplaced = away < -static_cast<std::int64_t>(kMoveEarlySec * rate) ||
+                           away > static_cast<std::int64_t>(kMoveLateSec * rate);
+    if (found && since_move_ >= kMoveAfter && misplaced) {
+        pending_moves_ = std::llabs(away - pending_move_) <= agree ? pending_moves_ + 1 : 1;
+        pending_move_ = away;
+        if (pending_moves_ >= kMoveClicks && offset_ + away >= 0) {
+            offset_ += away;
+            stats_.moved_sec += static_cast<double>(away) / rate;
+            ++stats_.moves;
+            stats_.arrival_sec = 0.0;
+            std::fill(mean_.begin(), mean_.end(), 0.0);
+            std::fill(theta_.begin(), theta_.end(), 0.0);
+            weight_sum_ = 0.0;
+            weight_squares_ = 0.0;
+            scatter_ = 0.0;
+            trust_ = 0.0;
+            pending_moves_ = 0;
+            since_move_ = 0;
+        }
+    } else {
+        pending_moves_ = 0;
     }
-    returned = std::max(0.0, returned);
-    returned_energy_ = stats_.clicks == 1
-                           ? returned
-                           : returned_energy_ + kReturnedUpdate * (returned - returned_energy_);
-    stats_.arrival_sec =
-        static_cast<double>(lags_[strongest] - before_) / config_.sample_rate;
 }
 
 }  // namespace tiktak::render

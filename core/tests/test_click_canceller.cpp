@@ -48,22 +48,26 @@ struct Room {
 };
 
 // Clicks every half second from 0.5 s, played and brought back `delay` samples
-// later through `path`. From `change_at` on, `later` is the path instead.
+// later through `path`. From `change_at` on, `later` is the path instead. With
+// `dither`, each click goes out upright or inverted at random, as
+// LiveMetronome plays them.
 Room play(double seconds, std::int64_t delay, const Path& path, double change_at = 1e9,
-          const Path& later = {}) {
+          const Path& later = {}, bool dither = false) {
     const auto total = static_cast<std::size_t>(seconds * kRate);
     Room room;
     room.played.assign(total, 0.0f);
     room.echo.assign(total, 0.0f);
 
     ClickRenderer renderer(click());
+    std::mt19937 coin(29);
     for (std::size_t at = 0; at < total; at += kBlock) {
         const double time = static_cast<double>(at) / kRate;
         // Scheduled a little ahead, as a metronome does, and never more than
         // the renderer's queue can hold.
         for (double beat = 0.5; beat < seconds - 0.3; beat += kPeriod) {
             if (beat >= time && beat < time + static_cast<double>(kBlock) / kRate) {
-                renderer.schedule(beat, tiktak::schedule::BeatKind::Beat);
+                renderer.schedule(beat, tiktak::schedule::BeatKind::Beat,
+                                  dither && (coin() & 1u) != 0);
                 room.starts.push_back(static_cast<std::size_t>(std::llround(beat * kRate)));
             }
         }
@@ -166,6 +170,81 @@ TEST(ClickCanceller, RemovesAClickThroughADeviceADeskAndAWrongRoundTrip) {
     EXPECT_GT(suppressionDb(room, left, {}, 5.5, 9.5), 30.0);
 }
 
+TEST(ClickCanceller, MovesOntoTheDirectSoundWhenTheRoundTripWasOut) {
+    // A round trip measured in a room is late by what the room adds, so the
+    // click comes back earlier than it was told to expect; and one measured on
+    // another day can be out the other way. Either way the first clicks are
+    // caught by the sparse taps, the model is moved onto the direct sound, and
+    // from there it is as exact as if the round trip had been right.
+    for (const std::int64_t delay : {std::int64_t{1488}, std::int64_t{2496}}) {   // 31 ms, 52 ms
+        const Room room = play(20.0, delay, {{0, 0.6}, {75, -0.2}});
+        ClickCanceller canceller(cancellerAt(0.040), click());
+
+        const std::vector<float> left = run(canceller, room.played, room.echo);
+        const ClickCanceller::Stats stats = canceller.stats();
+        EXPECT_EQ(stats.moves, 1u) << delay;
+        EXPECT_NEAR(stats.moved_sec, static_cast<double>(delay) / kRate - 0.040, 0.0003) << delay;
+        // Before the move the sparse taps already take most of it out ...
+        EXPECT_GT(suppressionDb(room, left, {}, 3.0, 6.0), 15.0) << delay;
+        // ... and after it, the dense ones take the rest.
+        EXPECT_GT(suppressionDb(room, left, {}, 15.5, 19.5), 40.0) << delay;
+    }
+}
+
+TEST(ClickRenderer, AnInvertedClickIsTheSameClickUpsideDown) {
+    std::vector<float> upright(4000, 0.0f);
+    std::vector<float> inverted(4000, 0.0f);
+    ClickRenderer one(click());
+    ClickRenderer other(click());
+    one.schedule(0.01, tiktak::schedule::BeatKind::Beat);
+    other.schedule(0.01, tiktak::schedule::BeatKind::Beat, true);
+    one.mix(0.0, upright.data(), upright.size());
+    other.mix(0.0, inverted.data(), inverted.size());
+
+    double energy_sum = 0.0;
+    for (std::size_t n = 0; n < upright.size(); ++n) {
+        ASSERT_EQ(inverted[n], -upright[n]) << n;
+        energy_sum += static_cast<double>(upright[n]) * upright[n];
+    }
+    EXPECT_GT(energy_sum, 1.0);
+}
+
+TEST(ClickCanceller, MusicThatRepeatsOnEveryBeatIsNotTakenForTheClick) {
+    constexpr std::int64_t kDelay = 1920;
+    // A drum machine: the same hit, to the sample, exactly where every click
+    // comes back, and close enough to the click's pitch to pass for it.
+    const auto hits = [&](const Room& room) {
+        std::vector<float> music(room.echo.size(), 0.0f);
+        for (const std::size_t start : room.starts) {
+            const std::size_t at = start + kDelay;
+            for (std::size_t n = 0; n < 1440 && at + n < music.size(); ++n) {
+                const double time = static_cast<double>(n) / kRate;
+                music[at + n] = static_cast<float>(
+                    0.5 * std::exp(-time / 0.01) * std::sin(6.283185307179586 * 900.0 * time));
+            }
+        }
+        return music;
+    };
+
+    double removed[2] = {0.0, 0.0};
+    for (const bool dither : {false, true}) {
+        const Room room = play(40.0, kDelay, {{0, 0.5}}, 1e9, {}, dither);
+        const std::vector<float> music = hits(room);
+        ClickCanceller canceller(cancellerAt(0.040), click());
+        const std::vector<float> left = run(canceller, room.played, add(music, room.echo));
+        // What is left once the music is taken away again: the click that was
+        // not removed, and any of the music that was.
+        removed[dither ? 1 : 0] = suppressionDb(room, left, music, 30.0, 39.5);
+    }
+
+    // Always upright, the hit and the click cannot be told apart, and what is
+    // subtracted fits their sum: the click goes, and a good part of the hit
+    // goes with it. Inverted at random, the hit averages out, as slowly as
+    // anything this loud under a click does, and only the click is removed.
+    EXPECT_GT(removed[1], 9.0);
+    EXPECT_GT(removed[1], removed[0] + 6.0);
+}
+
 TEST(ClickCanceller, FindsTheClickUnderMusicLouderThanItIs) {
     constexpr std::int64_t kDelay = 1920;
     const Room room = play(30.0, kDelay, {{0, 0.3}, {120, 0.1}});
@@ -185,11 +264,15 @@ TEST(ClickCanceller, FindsTheClickUnderMusicLouderThanItIs) {
     // The click goes down by a useful amount with the music on top of it ...
     EXPECT_GT(suppressionDb(room, left, music, 24.5, 29.5), 10.0);
 
+    // ... the music never moves the model off the round trip it was given ...
+    EXPECT_EQ(canceller.stats().moves, 0u);
+
     // ... and between clicks the music is not touched at all.
     const std::size_t window = static_cast<std::size_t>(0.25 * kRate);
+    const std::size_t lead = static_cast<std::size_t>(0.025 * kRate);
     for (std::size_t k = 4; k + 1 < room.starts.size(); ++k) {
         const std::size_t from = room.starts[k] + kDelay + window;
-        const std::size_t to = room.starts[k + 1] + kDelay - 300;
+        const std::size_t to = room.starts[k + 1] + kDelay - lead;
         for (std::size_t n = from; n < to; ++n) ASSERT_EQ(left[n], heard[n]) << n;
     }
 }
@@ -268,10 +351,11 @@ TEST(ClickCanceller, KnowsWhenTheClickHasTheRoomToItself) {
             if (time >= 8.0 && first_alone < 0.0) first_alone = time;
         }
     }
-    // Never while the music plays, and within a beat of its stopping.
+    // Never while the music plays, and once one click has been heard without
+    // it: that click is what shows there is nothing under the click any more.
     EXPECT_LT(last_under_music, 0.0);
     ASSERT_GT(first_alone, 8.0);
-    EXPECT_LT(first_alone, 8.6);
+    EXPECT_LT(first_alone, 9.0);
 }
 
 TEST(ClickCanceller, ASilentClickLeavesItOff) {

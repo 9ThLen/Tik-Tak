@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
 #include "render/click.hpp"
@@ -185,6 +186,7 @@ private:
 
     ClickCanceller canceller_;
     std::vector<float> scratch_;    // one chunk of click, or of cleaned capture
+    std::uint32_t polarity_ = 0x9E3779B9u;   // which way up the next click goes
 };
 
 }  // namespace tiktak::render
