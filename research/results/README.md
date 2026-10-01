@@ -2157,7 +2157,7 @@ each carries a provenance block that a summary would strip.
 | M0d — decoder path-state reacquisition | `phase_hysteresis_bottleneck` | [`M0D_REVIEW_20260812.md`](M0D_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
 | M0e — paired non-oracle decoder regression | `non_oracle_candidate_regression` | [`M0E_REVIEW_20260812.md`](M0E_REVIEW_20260812.md) | **outside the repository** — path and SHA-256 in the review |
 | S1 — stateful block-training ablation | `stateful_training_negative` | [`S1_REVIEW_20260814.md`](S1_REVIEW_20260814.md) | **outside the repository** — path and SHA-256 in the review |
-| C1 — training-data scaling curve | `inconclusive` | [`C1_REVIEW_20260816.md`](C1_REVIEW_20260816.md) | [`C1_RECORDS_20260816.json`](C1_RECORDS_20260816.json) — per-work records, in the tree |
+| C1 — training-data scaling curve | `inconclusive` | [`C1_REVIEW_20260816.md`](C1_REVIEW_20260816.md); [`independent review`](C1_INDEPENDENT_REVIEW_20260820.md) | [`C1_RECORDS_20260816.json`](C1_RECORDS_20260816.json) — per-work records, in the tree |
 
 **C1 is the first of these whose records are in the repository.** The others
 give an out-of-repository path and a digest, which lets a reviewer audit a claim
@@ -2166,11 +2166,29 @@ arithmetic for exactly that reason. The bundle carries every per-work metric
 verbatim plus the SHA-256 of each file it was copied from, and no interval,
 class or verdict.
 
-**C1 is independently verified.** Two external reviews, both recorded in the
-review file. The first found the `selection_sensitive` justification wrong and a
-registered endpoint missing, and could not recompute anything because the runs
-were off-machine. The second recomputed the deciding endpoints from the
-committed bundle with its own code and reproduced them exactly.
+The implementer's C1 review records two prior review passes, including the
+correction of the `selection_sensitive` justification and addition of the
+missing registered endpoint. Because the resulting review was still authored
+by the party that implemented C1, those passes were not used as independent
+acceptance evidence here.
+
+**C1 was independently accepted on 2026-08-20.** That audit authenticated all
+nine raw run files and all eighteen selected/common evaluations, reimplemented the
+registered bootstrap without importing the project summariser, and compared 155
+numeric outputs only afterwards. It confirmed the verdict with no discrepancy
+above `1e-12` and recorded four non-invalidating wording/metadata findings in
+[`C1_INDEPENDENT_REVIEW_20260820.md`](C1_INDEPENDENT_REVIEW_20260820.md).
+
+**The next curve is registered as a stop.** Power was simulated from C1's own
+seed-by-work matrix, through the registered resample rather than a normal
+approximation, and validated against C1's measured width (0.0626 against
+0.0628). It says the binding constraint is the development population, not the
+seed count: forty seeds on the present 77 works -- sixty runs, of order three
+hundred GPU-hours -- still returns `inconclusive`, and every contrast available
+in C1 is undecided at +0.03, including the wider `F1_100 - F1_25` span. See
+[`PREREGISTERED_C2.md`](../eval/PREREGISTERED_C2.md), which registers entry
+conditions rather than a run, so that a later underpowered repeat cannot be
+reported as a result.
 
 ### What auditing the older runs turned up
 
@@ -2294,3 +2312,117 @@ switching is unsafe: the zero-cost control causes 3,829 path/held-output changes
 and loses 0.072 [-0.133, -0.018] stable accuracy. The formal result is
 `phase_hysteresis_bottleneck`; the next gate is a paired non-oracle decoder
 regression for the frozen cost-2 candidate, not S2 or a product-default change.
+
+## P1-B0 replay session: GTZAN through a room, 2026-09-29
+
+Preregistered in `research/eval/PREREGISTERED_P1B0.md` (revision 2026-09-25),
+scored by `research/eval/replay_programme.py score`, and kept per take in
+`P1B0_RECORDS_20260929.json` (scored at commit `e92e843`). Twenty GTZAN
+excerpts, two per genre and chosen by position, were played through the speaker
+from room sessions 1–3 and captured on an iPhone at 1 m and 3 m. The
+programmes were at two levels 12 dB apart, set in the file. The tracker is
+frozen BeatNet `model_1`. GTZAN is held out from it, so no training-set bias
+applies.
+
+The clean arm is each programme's own digital loopback, not the source excerpt.
+The tracker is not smooth enough for anything else (see *controls* below).
+
+| cell | aligned | F clean | F room | room − clean [95% CI] | usable room |
+|---|---:|---:|---:|---|---:|
+| near, normal | 19/20 | 0.789 | 0.473 | −0.316 [−0.433, −0.203] | 0.16 |
+| near, quiet | 20/20 | 0.704 | 0.342 | −0.362 [−0.495, −0.235] | 0.10 |
+| far, normal | 20/20 | 0.765 | 0.345 | −0.420 [−0.543, −0.303] | 0.05 |
+| far, quiet | 20/20 | 0.704 | 0.247 | −0.457 [−0.603, −0.306] | 0.10 |
+
+Clean `usable` is 0.60 at the normal level and 0.50 at the quiet one.
+
+**The room loss replicates on a held-out corpus.** Five Harmonix captures lost
+0.390 of mean F. Here every cell loses 0.32 to 0.46 on GTZAN, and every interval
+lies far outside the digital-path control. The room takes the usable rate from
+about half of excerpts to between one in twenty and one in six.
+
+**Distance and level are real but smaller, and not yet resolved.** Paired on the
+same excerpts, 3 m costs 0.114 [−0.256, +0.020] more room F than 1 m at the
+normal level and 0.095 [−0.220, +0.015] at the quiet one. Both intervals touch
+zero. The −12 dB level costs about 0.1 of room F at either distance. Part of
+that is the tracker's own level sensitivity, which the table removes by pairing
+each level with its own loopback: within-level losses grow from 0.316 to 0.362
+near and from 0.420 to 0.457 far.
+
+**Controls, with no room in either.** `digital_path`: float excerpt against its
+24-bit loopback, −0.005 [−0.035, +0.017], with 7 of 20 excerpts changed.
+`tracker_level`: quiet loopback against normal, −0.061 [−0.132, +0.001], with
+17 of 20 changed. The live tracker is deterministic but not smooth. `rock.00025`
+scores 0.622, 0.434 and 0.203 as float, 24-bit and 16-bit versions of the same
+music.
+
+**Gates.**
+
+- **A1 met:** 79 of 80 takes aligned at first attempt on two agreeing slates.
+  The one loss is `blues.00025` on near/normal: the phone started recording
+  about 1.4 s after playback, so that take's head slate was never captured. The
+  in-session `check` read that pass as 0/20, because it anchored on the first
+  slate only. It now takes a stated programme offset that places the windows and
+  nothing else.
+- **A2: finite, and narrowed.** The per-excerpt SD of the paired difference
+  is 0.27–0.35. For a ±0.03 half-width, the worst cell (far, quiet) needs 511
+  [296, 1089] excerpts. The contract was narrowed to ±0.05 in a dated revision
+  written after the session. At ±0.05 the worst cell needs **184 [107, 392]**
+  for BeatNet and **152 [88, 323]** for Beat This!. A ±0.05 interval resolves the
+  room loss but not the ~0.1 contrasts between cells.
+- **A3 not decidable:** person-minutes were not logged.
+- **A4 met:** GTZAN is withheld from `model_1`.
+
+**Deviations from the registration, recorded rather than absorbed.**
+
+- The USB microphone was not recorded, so every cell is the phone and the
+  device factor is unmeasured.
+- Speaker model, playback chain and room dimensions were not recorded beyond
+  "the same as sessions 1–3".
+- The near/normal pass was not re-recorded after its in-session failure.
+- The phone's OS processing is recorded as the iPhone's standard processing,
+  left unchanged, with its contents unknown.
+
+By genre, averaged over cells (clean → room): disco 1.00 → 0.43, metal
+0.98 → 0.36 and country 0.73 → 0.20 lose the most. Blues 0.69 → 0.53 and rock
+0.65 → 0.43 lose the least. Twenty excerpts is two per genre, so this is
+description, not a finding.
+
+### Beat This! on the same takes: the room loss is mostly the front end's
+
+Scored with `--beat-this models/beat_this.onnx` (`final0`, also held out from
+GTZAN) and kept in `P1B0_BEAT_THIS_RECORDS_20260929.json` (commit `277a70c`).
+Its activation goes into the same `LiveTracker` and is paired with the same
+loopback clean arm. Beat This! is bidirectional over the whole excerpt, so this
+is a bound on what a better observation could give in this room, not a causal
+model's number.
+
+| cell | BeatNet clean → room | Beat This! clean → room | Beat This! room − clean [95% CI] | usable room, BeatNet / Beat This! |
+|---|---|---|---|---:|
+| near, normal | 0.789 → 0.473 | 0.846 → 0.794 | −0.052 [−0.121, +0.017] | 0.16 / 0.68 |
+| far, normal | 0.765 → 0.345 | 0.832 → 0.766 | −0.066 [−0.167, +0.036] | 0.05 / 0.55 |
+| near, quiet | 0.704 → 0.342 | 0.835 → 0.612 | −0.224 [−0.334, −0.121] | 0.10 / 0.30 |
+| far, quiet | 0.704 → 0.247 | 0.835 → 0.649 | −0.187 [−0.327, −0.057] | 0.10 / 0.60 |
+
+Beat This! clean `usable` is 0.65 at both levels.
+
+**At a normal level the room costs Beat This! almost nothing.** The loss is
+−0.05 to −0.07 and both intervals include zero. Its usable rate in the room,
+0.55–0.68, matches its clean rate of 0.65. The same takes cost BeatNet 0.32–0.42.
+Paired on the same room takes, Beat This! leads BeatNet by +0.27 to +0.42 of F,
+and every interval excludes zero. On clean audio it leads by only +0.06 to +0.13.
+This repeats, larger and on a held-out corpus, the Harmonix finding that the
+front end is worth most in a room (+0.212 room against +0.138 clean).
+
+**What does cost Beat This! is level, not distance.** Going from 1 m to 3 m moves
+its room F by −0.014 [−0.100, +0.073] at the normal level and +0.037
+[−0.111, +0.172] at the quiet one. Dropping 12 dB moves it by −0.150
+[−0.243, −0.071] at 1 m and −0.118 [−0.232, −0.022] at 3 m. Its own digital
+level control is +0.003 [−0.014, +0.020], so this is acoustic: the music sinking
+toward the room's noise floor and the phone's processing, not a model that
+dislikes quiet input. BeatNet's `tracker_level` control is −0.061, and its room
+loss is large at both levels. Its failure in a room does not depend on level
+the way Beat This!'s does.
+
+**Controls.** For Beat This!, `digital_path` is −0.008 [−0.046, +0.022] (7/20
+changed) and `tracker_level` is +0.003 [−0.014, +0.020] (9/20 changed).

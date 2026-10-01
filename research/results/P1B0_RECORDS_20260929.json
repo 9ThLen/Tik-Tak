@@ -1,0 +1,1640 @@
+{
+ "a1": {
+  "aligned": 79,
+  "fraction": 0.9875,
+  "gate": 0.9,
+  "met": true,
+  "takes": 80
+ },
+ "a2": {
+  "ci95": [
+   296.0,
+   1089.0
+  ],
+  "estimate": 511.0,
+  "half_width": 0.03,
+  "worst_cell": "quiet/far/phone"
+ },
+ "cells": {
+  "normal/far/phone": {
+   "a2_captures_needed": {
+    "ci95": [
+     195.0,
+     719.0
+    ],
+    "estimate": 337.0,
+    "half_width": 0.03
+   },
+   "aligned": 20,
+   "delta_ci95": [
+    -0.5429000764476639,
+    -0.3028548896466128
+   ],
+   "delta_sd": 0.28097149115676545,
+   "mean_delta": -0.41996952332199056,
+   "mean_f_clean": 0.7651832347179203,
+   "mean_f_room": 0.34521371139592966,
+   "takes": 20,
+   "usable_room": 0.05
+  },
+  "normal/near/phone": {
+   "a2_captures_needed": {
+    "ci95": [
+     173.0,
+     663.0
+    ],
+    "estimate": 303.0,
+    "half_width": 0.03
+   },
+   "aligned": 19,
+   "delta_ci95": [
+    -0.43292962542560054,
+    -0.20337813744257938
+   ],
+   "delta_sd": 0.26631432799737514,
+   "mean_delta": -0.31620853246726127,
+   "mean_f_clean": 0.7894785929361566,
+   "mean_f_room": 0.47327006046889536,
+   "takes": 20,
+   "usable_room": 0.15789473684210525
+  },
+  "quiet/far/phone": {
+   "a2_captures_needed": {
+    "ci95": [
+     296.0,
+     1089.0
+    ],
+    "estimate": 511.0,
+    "half_width": 0.03
+   },
+   "aligned": 20,
+   "delta_ci95": [
+    -0.6025827180813862,
+    -0.30569923561052365
+   ],
+   "delta_sd": 0.3457628447097996,
+   "mean_delta": -0.45691497176285545,
+   "mean_f_clean": 0.7040085205959381,
+   "mean_f_room": 0.24709354883308263,
+   "takes": 20,
+   "usable_room": 0.1
+  },
+  "quiet/near/phone": {
+   "a2_captures_needed": {
+    "ci95": [
+     229.0,
+     842.0
+    ],
+    "estimate": 395.0,
+    "half_width": 0.03
+   },
+   "aligned": 20,
+   "delta_ci95": [
+    -0.4948815889202249,
+    -0.23532060049431838
+   ],
+   "delta_sd": 0.30404236862658446,
+   "mean_delta": -0.36211338305981755,
+   "mean_f_clean": 0.7040085205959381,
+   "mean_f_room": 0.3418951375361205,
+   "takes": 20,
+   "usable_room": 0.1
+  }
+ },
+ "clean": {
+  "normal": {
+   "blues.00025": {
+    "f": 0.30357142857142855,
+    "usable": false
+   },
+   "blues.00075": {
+    "f": 0.9591836734693877,
+    "usable": true
+   },
+   "classical.00025": {
+    "f": 0.693069306930693,
+    "usable": false
+   },
+   "classical.00075": {
+    "f": 0.3174603174603175,
+    "usable": false
+   },
+   "country.00025": {
+    "f": 0.6363636363636365,
+    "usable": false
+   },
+   "country.00075": {
+    "f": 0.8395061728395061,
+    "usable": true
+   },
+   "disco.00025": {
+    "f": 1.0,
+    "usable": true
+   },
+   "disco.00075": {
+    "f": 0.9909909909909909,
+    "usable": true
+   },
+   "hiphop.00025": {
+    "f": 0.9318181818181818,
+    "usable": true
+   },
+   "hiphop.00075": {
+    "f": 0.9473684210526315,
+    "usable": true
+   },
+   "jazz.00024": {
+    "f": 0.4897959183673469,
+    "usable": false
+   },
+   "jazz.00075": {
+    "f": 0.40650406504065034,
+    "usable": false
+   },
+   "metal.00025": {
+    "f": 0.9649122807017544,
+    "usable": true
+   },
+   "metal.00075": {
+    "f": 0.9894736842105264,
+    "usable": true
+   },
+   "pop.00025": {
+    "f": 1.0,
+    "usable": true
+   },
+   "pop.00075": {
+    "f": 1.0,
+    "usable": true
+   },
+   "reggae.00024": {
+    "f": 0.9824561403508771,
+    "usable": true
+   },
+   "reggae.00074": {
+    "f": 0.47619047619047616,
+    "usable": false
+   },
+   "rock.00025": {
+    "f": 0.375,
+    "usable": false
+   },
+   "rock.00075": {
+    "f": 1.0,
+    "usable": true
+   }
+  },
+  "quiet": {
+   "blues.00025": {
+    "f": 0.40776699029126207,
+    "usable": false
+   },
+   "blues.00075": {
+    "f": 0.8865979381443299,
+    "usable": true
+   },
+   "classical.00025": {
+    "f": 0.26865671641791045,
+    "usable": false
+   },
+   "classical.00075": {
+    "f": 0.0,
+    "usable": false
+   },
+   "country.00025": {
+    "f": 0.5405405405405405,
+    "usable": false
+   },
+   "country.00075": {
+    "f": 0.9,
+    "usable": true
+   },
+   "disco.00025": {
+    "f": 1.0,
+    "usable": true
+   },
+   "disco.00075": {
+    "f": 1.0,
+    "usable": true
+   },
+   "hiphop.00025": {
+    "f": 0.9545454545454546,
+    "usable": true
+   },
+   "hiphop.00075": {
+    "f": 0.5714285714285714,
+    "usable": false
+   },
+   "jazz.00024": {
+    "f": 0.5853658536585367,
+    "usable": false
+   },
+   "jazz.00075": {
+    "f": 0.5076923076923077,
+    "usable": false
+   },
+   "metal.00025": {
+    "f": 1.0,
+    "usable": true
+   },
+   "metal.00075": {
+    "f": 0.9787234042553191,
+    "usable": true
+   },
+   "pop.00025": {
+    "f": 0.78125,
+    "usable": false
+   },
+   "pop.00075": {
+    "f": 0.975,
+    "usable": true
+   },
+   "reggae.00024": {
+    "f": 0.9824561403508771,
+    "usable": true
+   },
+   "reggae.00074": {
+    "f": 0.5106382978723405,
+    "usable": false
+   },
+   "rock.00025": {
+    "f": 0.2295081967213115,
+    "usable": false
+   },
+   "rock.00075": {
+    "f": 1.0,
+    "usable": true
+   }
+  }
+ },
+ "controls": {
+  "digital_path": {
+   "changed": 7,
+   "delta_ci95": [
+    -0.03524851925388173,
+    0.01665307823708261
+   ],
+   "mean_delta": -0.004801825892133685,
+   "n": 20
+  },
+  "tracker_level": {
+   "changed": 17,
+   "delta_ci95": [
+    -0.13239380013782157,
+    0.0013526856745415248
+   ],
+   "mean_delta": -0.06117471412198218,
+   "n": 20
+  }
+ },
+ "provenance": {
+  "alignment": "slate",
+  "binary": {
+   "bytes": 1052160,
+   "name": "dump_analysis.exe",
+   "sha256": "b3a15d1b5acfe6c3caf9b73b5382f109399ed2572953cc7e8673dbc1cd91453c"
+  },
+  "capture_0": {
+   "bytes": 13686771,
+   "name": "near_normal_phone.m4a",
+   "sha256": "26eae7050b50f79ea0ce717f0afa995ab1ee083f19e2410da876701ced0fd3be"
+  },
+  "capture_1": {
+   "bytes": 14536890,
+   "name": "near_quiet_phone.m4a",
+   "sha256": "43fc9085f6f841740ba634d37df9f39fa3a971ea77360cf4a475951a6a613a3d"
+  },
+  "capture_2": {
+   "bytes": 13702132,
+   "name": "far_normal_phone.m4a",
+   "sha256": "23c96173e4ebec6200f1b31e423b2a7fc9ee3be9d4e7f328558fd604729a254f"
+  },
+  "capture_3": {
+   "bytes": 14456380,
+   "name": "far_quiet_phone.m4a",
+   "sha256": "4e06190d67f9496686ec9c2d11dd7cb4d149811df3a7de4e9857f289a2b33e04"
+  },
+  "commit": "e92e8431b4b78e45d519d91ea26e02acce0b75c4",
+  "experiment": "p1b0_replay",
+  "manifest": {
+   "bytes": 608574,
+   "name": "manifest.csv",
+   "sha256": "81eceb2edcc0b9915a5bc60992cb2142ad30c88339427faaf4de38ab50e6e5cd"
+  },
+  "model": {
+   "bytes": 1609332,
+   "name": "beatnet_model_1.ttw",
+   "sha256": "812ed11af745885127cfb967e7db847c9bdef44b8e2c80c79cf875f790b978f1"
+  },
+  "platform": "Windows",
+  "programme_normal": {
+   "bytes": 120987086,
+   "name": "programme_normal.wav",
+   "sha256": "f584031007fa075c829583c77a2838a0f4ebeb1c68111ae61c05f98ebf0aaa9d"
+  },
+  "programme_quiet": {
+   "bytes": 120987086,
+   "name": "programme_quiet.wav",
+   "sha256": "3127720a052b768669638bc2aaae76e487daecf7cefd6007eb7b3b77cedadb3b"
+  },
+  "python": "3.11.15",
+  "rate": 48000,
+  "schema": "tiktak.provenance/v1",
+  "selection": {
+   "bytes": 7631,
+   "name": "selection.json",
+   "sha256": "afbc51ab41d00475609e0e94bda2980e26caedacaa2a3a51c67f16ca9e3e6f84"
+  },
+  "session": {
+   "bytes": 3596,
+   "name": "session.json",
+   "sha256": "6c9648285855dcf2b9235a1031dbc7094af8706bf834cc65fbc90257f7c57514"
+  },
+  "tree_clean": true,
+  "utc": "2026-09-29T19:38:48Z"
+ },
+ "records": [
+  {
+   "aligned": false,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "file": "captures/near_normal_phone.m4a",
+   "level": "normal",
+   "reason": "head slate not found",
+   "track": "blues.00025"
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.0003749999999911324,
+   "f_clean": 0.9591836734693877,
+   "f_room": 0.3617021276595745,
+   "file": "captures/near_normal_phone.m4a",
+   "head_margin_db": 27.931497254983057,
+   "level": "normal",
+   "track": "blues.00075",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.693069306930693,
+   "f_room": 0.2298850574712644,
+   "file": "captures/near_normal_phone.m4a",
+   "head_margin_db": 25.89696777782771,
+   "level": "normal",
+   "track": "classical.00025",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.3174603174603175,
+   "f_room": 0.25,
+   "file": "captures/near_normal_phone.m4a",
+   "head_margin_db": 26.587294103939854,
+   "level": "normal",
+   "track": "classical.00075",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.6363636363636365,
+   "f_room": 0.2040816326530612,
+   "file": "captures/near_normal_phone.m4a",
+   "head_margin_db": 27.029863074808276,
+   "level": "normal",
+   "track": "country.00025",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.8395061728395061,
+   "f_room": 0.6428571428571429,
+   "file": "captures/near_normal_phone.m4a",
+   "head_margin_db": 27.120287603607444,
+   "level": "normal",
+   "track": "country.00075",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 1.0,
+   "f_room": 1.0,
+   "file": "captures/near_normal_phone.m4a",
+   "head_margin_db": 27.142398389933415,
+   "level": "normal",
+   "track": "disco.00025",
+   "usable_clean": true,
+   "usable_room": true
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.9909909909909909,
+   "f_room": 0.9909909909909909,
+   "file": "captures/near_normal_phone.m4a",
+   "head_margin_db": 27.056116660873162,
+   "level": "normal",
+   "track": "disco.00075",
+   "usable_clean": true,
+   "usable_room": true
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.9318181818181818,
+   "f_room": 0.9545454545454546,
+   "file": "captures/near_normal_phone.m4a",
+   "head_margin_db": 27.72593326034789,
+   "level": "normal",
+   "track": "hiphop.00025",
+   "usable_clean": true,
+   "usable_room": true
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.9473684210526315,
+   "f_room": 0.3116883116883117,
+   "file": "captures/near_normal_phone.m4a",
+   "head_margin_db": 28.233204475589957,
+   "level": "normal",
+   "track": "hiphop.00075",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.4897959183673469,
+   "f_room": 0.3333333333333333,
+   "file": "captures/near_normal_phone.m4a",
+   "head_margin_db": 28.095098580534614,
+   "level": "normal",
+   "track": "jazz.00024",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.40650406504065034,
+   "f_room": 0.40310077519379844,
+   "file": "captures/near_normal_phone.m4a",
+   "head_margin_db": 28.126811887103322,
+   "level": "normal",
+   "track": "jazz.00075",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.0004166666666662877,
+   "f_clean": 0.9649122807017544,
+   "f_room": 0.12903225806451613,
+   "file": "captures/near_normal_phone.m4a",
+   "head_margin_db": 28.55673474730719,
+   "level": "normal",
+   "track": "metal.00025",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.0004166666666591823,
+   "f_clean": 0.9894736842105264,
+   "f_room": 0.36585365853658536,
+   "file": "captures/near_normal_phone.m4a",
+   "head_margin_db": 28.289453434647932,
+   "level": "normal",
+   "track": "metal.00075",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 1.0,
+   "f_room": 0.6666666666666667,
+   "file": "captures/near_normal_phone.m4a",
+   "head_margin_db": 28.13781304833602,
+   "level": "normal",
+   "track": "pop.00025",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 1.0,
+   "f_room": 0.6782608695652175,
+   "file": "captures/near_normal_phone.m4a",
+   "head_margin_db": 29.20589499774374,
+   "level": "normal",
+   "track": "pop.00075",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.0004166666666662877,
+   "f_clean": 0.9824561403508771,
+   "f_room": 0.3695652173913044,
+   "file": "captures/near_normal_phone.m4a",
+   "head_margin_db": 28.949585487573664,
+   "level": "normal",
+   "track": "reggae.00024",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.0004166666666591823,
+   "f_clean": 0.47619047619047616,
+   "f_room": 0.1515151515151515,
+   "file": "captures/near_normal_phone.m4a",
+   "head_margin_db": 27.259552268081855,
+   "level": "normal",
+   "track": "reggae.00074",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.0004166666666591823,
+   "f_clean": 0.375,
+   "f_room": 0.3513513513513513,
+   "file": "captures/near_normal_phone.m4a",
+   "head_margin_db": 26.842212873438154,
+   "level": "normal",
+   "track": "rock.00025",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 1.0,
+   "f_room": 0.5977011494252874,
+   "file": "captures/near_normal_phone.m4a",
+   "head_margin_db": 27.602681536804454,
+   "level": "normal",
+   "track": "rock.00075",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00037499999999823785,
+   "f_clean": 0.40776699029126207,
+   "f_room": 0.16129032258064516,
+   "file": "captures/near_quiet_phone.m4a",
+   "head_margin_db": 29.002641763005414,
+   "level": "quiet",
+   "track": "blues.00025",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.8865979381443299,
+   "f_room": 1.0,
+   "file": "captures/near_quiet_phone.m4a",
+   "head_margin_db": 27.427829693227835,
+   "level": "quiet",
+   "track": "blues.00075",
+   "usable_clean": true,
+   "usable_room": true
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.26865671641791045,
+   "f_room": 0.19753086419753085,
+   "file": "captures/near_quiet_phone.m4a",
+   "head_margin_db": 28.502071276783553,
+   "level": "quiet",
+   "track": "classical.00025",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.0,
+   "f_room": 0.0,
+   "file": "captures/near_quiet_phone.m4a",
+   "head_margin_db": 27.76605760734373,
+   "level": "quiet",
+   "track": "classical.00075",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.5405405405405405,
+   "f_room": 0.2,
+   "file": "captures/near_quiet_phone.m4a",
+   "head_margin_db": 27.586616625597177,
+   "level": "quiet",
+   "track": "country.00025",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.9,
+   "f_room": 0.14925373134328357,
+   "file": "captures/near_quiet_phone.m4a",
+   "head_margin_db": 28.373183026572278,
+   "level": "quiet",
+   "track": "country.00075",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 1.0,
+   "f_room": 0.3157894736842105,
+   "file": "captures/near_quiet_phone.m4a",
+   "head_margin_db": 28.437650657589128,
+   "level": "quiet",
+   "track": "disco.00025",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 1.0,
+   "f_room": 0.09876543209876543,
+   "file": "captures/near_quiet_phone.m4a",
+   "head_margin_db": 29.157603474366628,
+   "level": "quiet",
+   "track": "disco.00075",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.0003749999999911324,
+   "f_clean": 0.9545454545454546,
+   "f_room": 0.9772727272727273,
+   "file": "captures/near_quiet_phone.m4a",
+   "head_margin_db": 28.62135365577171,
+   "level": "quiet",
+   "track": "hiphop.00025",
+   "usable_clean": true,
+   "usable_room": true
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.5714285714285714,
+   "f_room": 0.14285714285714285,
+   "file": "captures/near_quiet_phone.m4a",
+   "head_margin_db": 28.549065678420853,
+   "level": "quiet",
+   "track": "hiphop.00075",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.0003749999999911324,
+   "f_clean": 0.5853658536585367,
+   "f_room": 0.05797101449275363,
+   "file": "captures/near_quiet_phone.m4a",
+   "head_margin_db": 28.41170056225537,
+   "level": "quiet",
+   "track": "jazz.00024",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.5076923076923077,
+   "f_room": 0.19672131147540983,
+   "file": "captures/near_quiet_phone.m4a",
+   "head_margin_db": 28.43785778630677,
+   "level": "quiet",
+   "track": "jazz.00075",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.0003749999999911324,
+   "f_clean": 1.0,
+   "f_room": 0.07692307692307693,
+   "file": "captures/near_quiet_phone.m4a",
+   "head_margin_db": 28.41265708617847,
+   "level": "quiet",
+   "track": "metal.00025",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.9787234042553191,
+   "f_room": 0.7912087912087913,
+   "file": "captures/near_quiet_phone.m4a",
+   "head_margin_db": 28.497128089911598,
+   "level": "quiet",
+   "track": "metal.00075",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.78125,
+   "f_room": 0.6046511627906976,
+   "file": "captures/near_quiet_phone.m4a",
+   "head_margin_db": 29.183627208436054,
+   "level": "quiet",
+   "track": "pop.00025",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.975,
+   "f_room": 0.5945945945945945,
+   "file": "captures/near_quiet_phone.m4a",
+   "head_margin_db": 27.832859324130066,
+   "level": "quiet",
+   "track": "pop.00075",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.9824561403508771,
+   "f_room": 0.2469135802469136,
+   "file": "captures/near_quiet_phone.m4a",
+   "head_margin_db": 28.511506481167007,
+   "level": "quiet",
+   "track": "reggae.00024",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.5106382978723405,
+   "f_room": 0.20895522388059704,
+   "file": "captures/near_quiet_phone.m4a",
+   "head_margin_db": 29.11759037391996,
+   "level": "quiet",
+   "track": "reggae.00074",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.2295081967213115,
+   "f_room": 0.0,
+   "file": "captures/near_quiet_phone.m4a",
+   "head_margin_db": 27.627821321666342,
+   "level": "quiet",
+   "track": "rock.00025",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "near",
+   "drift_sec": 0.0003541666666606602,
+   "f_clean": 1.0,
+   "f_room": 0.8172043010752689,
+   "file": "captures/near_quiet_phone.m4a",
+   "head_margin_db": 28.241495872705432,
+   "level": "quiet",
+   "track": "rock.00075",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": -0.0037916666666717447,
+   "f_clean": 0.30357142857142855,
+   "f_room": 0.07547169811320756,
+   "file": "captures/far_normal_phone.m4a",
+   "head_margin_db": 19.207199862729237,
+   "level": "normal",
+   "track": "blues.00025",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.00037499999999823785,
+   "f_clean": 0.9591836734693877,
+   "f_room": 0.9795918367346939,
+   "file": "captures/far_normal_phone.m4a",
+   "head_margin_db": 18.01411763188837,
+   "level": "normal",
+   "track": "blues.00075",
+   "usable_clean": true,
+   "usable_room": true
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.004812499999992781,
+   "f_clean": 0.693069306930693,
+   "f_room": 0.11594202898550722,
+   "file": "captures/far_normal_phone.m4a",
+   "head_margin_db": 17.3018383348869,
+   "level": "normal",
+   "track": "classical.00025",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": -0.004062500000010516,
+   "f_clean": 0.3174603174603175,
+   "f_room": 0.0,
+   "file": "captures/far_normal_phone.m4a",
+   "head_margin_db": 18.52496006969698,
+   "level": "normal",
+   "track": "classical.00075",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": -0.006083333333336327,
+   "f_clean": 0.6363636363636365,
+   "f_room": 0.08333333333333334,
+   "file": "captures/far_normal_phone.m4a",
+   "head_margin_db": 19.62573338089832,
+   "level": "normal",
+   "track": "country.00025",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.0003541666666606602,
+   "f_clean": 0.8395061728395061,
+   "f_room": 0.07692307692307691,
+   "file": "captures/far_normal_phone.m4a",
+   "head_margin_db": 18.42387199255186,
+   "level": "normal",
+   "track": "country.00075",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.004812499999992781,
+   "f_clean": 1.0,
+   "f_room": 0.7032967032967034,
+   "file": "captures/far_normal_phone.m4a",
+   "head_margin_db": 19.91523078685767,
+   "level": "normal",
+   "track": "disco.00025",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": -0.004062500000003411,
+   "f_clean": 0.9909909909909909,
+   "f_room": 0.05063291139240506,
+   "file": "captures/far_normal_phone.m4a",
+   "head_margin_db": 20.867211572153856,
+   "level": "normal",
+   "track": "disco.00075",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.0048333333333303585,
+   "f_clean": 0.9318181818181818,
+   "f_room": 0.7294117647058823,
+   "file": "captures/far_normal_phone.m4a",
+   "head_margin_db": 21.064921309005022,
+   "level": "normal",
+   "track": "hiphop.00025",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.00037499999999823785,
+   "f_clean": 0.9473684210526315,
+   "f_room": 0.2711864406779661,
+   "file": "captures/far_normal_phone.m4a",
+   "head_margin_db": 19.88499266703634,
+   "level": "normal",
+   "track": "hiphop.00075",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": -0.004062500000003411,
+   "f_clean": 0.4897959183673469,
+   "f_room": 0.3888888888888889,
+   "file": "captures/far_normal_phone.m4a",
+   "head_margin_db": 20.699840537944304,
+   "level": "normal",
+   "track": "jazz.00024",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": -0.004083333333333883,
+   "f_clean": 0.40650406504065034,
+   "f_room": 0.4274809160305344,
+   "file": "captures/far_normal_phone.m4a",
+   "head_margin_db": 19.473104265898975,
+   "level": "normal",
+   "track": "jazz.00075",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.0048333333333303585,
+   "f_clean": 0.9649122807017544,
+   "f_room": 0.0625,
+   "file": "captures/far_normal_phone.m4a",
+   "head_margin_db": 20.33230890966783,
+   "level": "normal",
+   "track": "metal.00025",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.004833333333323253,
+   "f_clean": 0.9894736842105264,
+   "f_room": 0.56,
+   "file": "captures/far_normal_phone.m4a",
+   "head_margin_db": 19.969427484152174,
+   "level": "normal",
+   "track": "metal.00075",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": -0.004083333333333883,
+   "f_clean": 1.0,
+   "f_room": 0.547945205479452,
+   "file": "captures/far_normal_phone.m4a",
+   "head_margin_db": 19.690979829180286,
+   "level": "normal",
+   "track": "pop.00025",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.004854166666660831,
+   "f_clean": 1.0,
+   "f_room": 0.6666666666666666,
+   "file": "captures/far_normal_phone.m4a",
+   "head_margin_db": 20.370269799166472,
+   "level": "normal",
+   "track": "pop.00075",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.0048333333333303585,
+   "f_clean": 0.9824561403508771,
+   "f_room": 0.5052631578947369,
+   "file": "captures/far_normal_phone.m4a",
+   "head_margin_db": 21.24360127446845,
+   "level": "normal",
+   "track": "reggae.00024",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": -0.004083333333333883,
+   "f_clean": 0.47619047619047616,
+   "f_room": 0.1643835616438356,
+   "file": "captures/far_normal_phone.m4a",
+   "head_margin_db": 19.554877087100436,
+   "level": "normal",
+   "track": "reggae.00074",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.00037499999999823785,
+   "f_clean": 0.375,
+   "f_room": 0.2058823529411765,
+   "file": "captures/far_normal_phone.m4a",
+   "head_margin_db": 20.663838123274488,
+   "level": "normal",
+   "track": "rock.00025",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.00037499999999823785,
+   "f_clean": 1.0,
+   "f_room": 0.28947368421052627,
+   "file": "captures/far_normal_phone.m4a",
+   "head_margin_db": 20.500429368582374,
+   "level": "normal",
+   "track": "rock.00075",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.007499999999993179,
+   "f_clean": 0.40776699029126207,
+   "f_room": 0.1694915254237288,
+   "file": "captures/far_quiet_phone.m4a",
+   "head_margin_db": 18.780097429235735,
+   "level": "quiet",
+   "track": "blues.00025",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.0003749999999911324,
+   "f_clean": 0.8865979381443299,
+   "f_room": 0.9690721649484536,
+   "file": "captures/far_quiet_phone.m4a",
+   "head_margin_db": 18.692536412171716,
+   "level": "quiet",
+   "track": "blues.00075",
+   "usable_clean": true,
+   "usable_room": true
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.00037499999999823785,
+   "f_clean": 0.26865671641791045,
+   "f_room": 0.0,
+   "file": "captures/far_quiet_phone.m4a",
+   "head_margin_db": 19.649859820474877,
+   "level": "quiet",
+   "track": "classical.00025",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.0003749999999911324,
+   "f_clean": 0.0,
+   "f_room": 0.22580645161290325,
+   "file": "captures/far_quiet_phone.m4a",
+   "head_margin_db": 19.756623688425833,
+   "level": "quiet",
+   "track": "classical.00075",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.00037499999999823785,
+   "f_clean": 0.5405405405405405,
+   "f_room": 0.04761904761904761,
+   "file": "captures/far_quiet_phone.m4a",
+   "head_margin_db": 19.05564192438645,
+   "level": "quiet",
+   "track": "country.00025",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": -0.007041666666673052,
+   "f_clean": 0.9,
+   "f_room": 0.15625,
+   "file": "captures/far_quiet_phone.m4a",
+   "head_margin_db": 19.595463447953755,
+   "level": "quiet",
+   "track": "country.00075",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": -0.002937500000008697,
+   "f_clean": 1.0,
+   "f_room": 0.10638297872340424,
+   "file": "captures/far_quiet_phone.m4a",
+   "head_margin_db": 18.848693955342213,
+   "level": "quiet",
+   "track": "disco.00025",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 1.0,
+   "f_room": 0.1875,
+   "file": "captures/far_quiet_phone.m4a",
+   "head_margin_db": 18.102295940326552,
+   "level": "quiet",
+   "track": "disco.00075",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.0078125,
+   "f_clean": 0.9545454545454546,
+   "f_room": 0.10810810810810811,
+   "file": "captures/far_quiet_phone.m4a",
+   "head_margin_db": 17.74559025190556,
+   "level": "quiet",
+   "track": "hiphop.00025",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.0003749999999911324,
+   "f_clean": 0.5714285714285714,
+   "f_room": 0.1694915254237288,
+   "file": "captures/far_quiet_phone.m4a",
+   "head_margin_db": 18.6407777695129,
+   "level": "quiet",
+   "track": "hiphop.00075",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.007791666666662422,
+   "f_clean": 0.5853658536585367,
+   "f_room": 0.10666666666666669,
+   "file": "captures/far_quiet_phone.m4a",
+   "head_margin_db": 19.454293550969453,
+   "level": "quiet",
+   "track": "jazz.00024",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.5076923076923077,
+   "f_room": 0.16666666666666663,
+   "file": "captures/far_quiet_phone.m4a",
+   "head_margin_db": 18.257086368865014,
+   "level": "quiet",
+   "track": "jazz.00075",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.0003749999999911324,
+   "f_clean": 1.0,
+   "f_room": 0.27722772277227725,
+   "file": "captures/far_quiet_phone.m4a",
+   "head_margin_db": 17.332877985714084,
+   "level": "quiet",
+   "track": "metal.00025",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.00039583333332160464,
+   "f_clean": 0.9787234042553191,
+   "f_room": 0.6041666666666666,
+   "file": "captures/far_quiet_phone.m4a",
+   "head_margin_db": 19.360011404490965,
+   "level": "quiet",
+   "track": "metal.00075",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.007812499999992895,
+   "f_clean": 0.78125,
+   "f_room": 0.11320754716981132,
+   "file": "captures/far_quiet_phone.m4a",
+   "head_margin_db": 18.04510126244078,
+   "level": "quiet",
+   "track": "pop.00025",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.0003749999999911324,
+   "f_clean": 0.975,
+   "f_room": 0.10526315789473684,
+   "file": "captures/far_quiet_phone.m4a",
+   "head_margin_db": 19.147482742764335,
+   "level": "quiet",
+   "track": "pop.00075",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.9824561403508771,
+   "f_room": 0.09375,
+   "file": "captures/far_quiet_phone.m4a",
+   "head_margin_db": 19.844041011260945,
+   "level": "quiet",
+   "track": "reggae.00024",
+   "usable_clean": true,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.0078125,
+   "f_clean": 0.5106382978723405,
+   "f_room": 0.15873015873015875,
+   "file": "captures/far_quiet_phone.m4a",
+   "head_margin_db": 18.649668998239164,
+   "level": "quiet",
+   "track": "reggae.00074",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": 0.00039583333332871007,
+   "f_clean": 0.2295081967213115,
+   "f_room": 0.17647058823529407,
+   "file": "captures/far_quiet_phone.m4a",
+   "head_margin_db": 19.150404256109567,
+   "level": "quiet",
+   "track": "rock.00025",
+   "usable_clean": false,
+   "usable_room": false
+  },
+  {
+   "aligned": true,
+   "device": "phone",
+   "device_rate": 48000.0,
+   "distance": "far",
+   "drift_sec": -0.00702083333334258,
+   "f_clean": 1.0,
+   "f_room": 1.0,
+   "file": "captures/far_quiet_phone.m4a",
+   "head_margin_db": 19.993316704713614,
+   "level": "quiet",
+   "track": "rock.00075",
+   "usable_clean": true,
+   "usable_room": true
+  }
+ ],
+ "research_only": true,
+ "schema": "tiktak.replay_result/v1",
+ "session": {
+  "background_noise": "not recorded",
+  "captures": [
+   {
+    "app": "not recorded; AAC .m4a, 48 kHz, 2 channels",
+    "channels": 2,
+    "device": "phone",
+    "device_model": "iPhone (model not recorded)",
+    "distance": "near",
+    "file": "captures/near_normal_phone.m4a",
+    "level": "normal",
+    "notes": "",
+    "original_file": "\u0437\u0430\u043f\u0438\u0441\u0438 \u0437 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0443/29.09/Programme_normal near phone 1.m4a",
+    "os_processing": "no processing added; the iPhone's standard capture processing left as it is, its exact contents not known",
+    "programme_offset_sec": -1.385,
+    "programme_offset_why": "The phone started recording about 1.4 s after playback, so the programme's first head slate is not in the capture. The first slate present is blues.00025's tail at 32.125 s, then blues.00075's head 8.500 s later and its tail 33.513 s after that -- the programme's own spacing -- which puts the programme start at 32.125 - 33.510 = -1.385 s. The hint only places the search windows; every take is still accepted on its own two slates, and blues.00025, having one, is refused."
+   },
+   {
+    "app": "not recorded; AAC .m4a, 48 kHz, 2 channels",
+    "channels": 2,
+    "device": "phone",
+    "device_model": "iPhone (model not recorded)",
+    "distance": "near",
+    "file": "captures/near_quiet_phone.m4a",
+    "level": "quiet",
+    "notes": "",
+    "original_file": "\u0437\u0430\u043f\u0438\u0441\u0438 \u0437 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0443/29.09/Programme_quite near phone 1.m4a",
+    "os_processing": "no processing added; the iPhone's standard capture processing left as it is, its exact contents not known"
+   },
+   {
+    "app": "not recorded; AAC .m4a, 48 kHz, 2 channels",
+    "channels": 2,
+    "device": "phone",
+    "device_model": "iPhone (model not recorded)",
+    "distance": "far",
+    "file": "captures/far_normal_phone.m4a",
+    "level": "normal",
+    "notes": "",
+    "original_file": "\u0437\u0430\u043f\u0438\u0441\u0438 \u0437 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0443/29.09/Pogramme_normal far 3 m.m4a",
+    "os_processing": "no processing added; the iPhone's standard capture processing left as it is, its exact contents not known"
+   },
+   {
+    "app": "not recorded; AAC .m4a, 48 kHz, 2 channels",
+    "channels": 2,
+    "device": "phone",
+    "device_model": "iPhone (model not recorded)",
+    "distance": "far",
+    "file": "captures/far_quiet_phone.m4a",
+    "level": "quiet",
+    "notes": "",
+    "original_file": "\u0437\u0430\u043f\u0438\u0441\u0438 \u0437 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0443/29.09/Programme_quiet far 3m.m4a",
+    "os_processing": "no processing added; the iPhone's standard capture processing left as it is, its exact contents not known"
+   }
+  ],
+  "date": "2026-09-29",
+  "deviations": [
+   "The USB microphone was not recorded: the device factor is unmeasured, and every cell is phone.",
+   "Person-minutes were not logged, so A3 cannot be decided.",
+   "near/normal was not re-recorded. Its in-session check reads 0/20 because the recorder started after play; with the programme offset it reads 19/20."
+  ],
+  "distances_m": {
+   "far": 3.0,
+   "near": 1.0
+  },
+  "mic_placement": "phone only",
+  "person_minutes": {
+   "capture": null,
+   "rework": null,
+   "setup": null,
+   "verification": null
+  },
+  "playback_chain": {
+   "connection": "not recorded",
+   "eq_or_enhancements": "not recorded",
+   "player": "not recorded"
+  },
+  "room": {
+   "description": "the same room as room sessions 1-3",
+   "dimensions_m": "not recorded",
+   "surfaces": "not recorded"
+  },
+  "schema": "tiktak.replay_session/v1",
+  "speaker": "the same speaker as room sessions 1-3; model not recorded",
+  "speaker_volume": "set once and not changed (as instructed); position not recorded"
+ }
+}

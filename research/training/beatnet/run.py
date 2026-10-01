@@ -58,6 +58,20 @@ def _eligible_key(evaluation: dict, baseline: dict) -> tuple | None:
 
 
 
+def experiment_label(subset_identity: dict | None) -> str:
+    """Which experiment a run should say it is.
+
+    Every C1 artifact shipped with `provenance.experiment: "S1"`, because C1
+    reuses this runner unchanged and the label was a literal. Identity, digests
+    and the `c1` block were all correct, so nothing was ambiguous and the run
+    stood -- but an artifact that names the wrong experiment is a provenance
+    claim that happened to be harmless once. A subset is present exactly when
+    the run is C1, which is the same condition that adds the `c1` identity
+    block, so the label follows it rather than being stated twice.
+    """
+    return "S1" if subset_identity is None else "C1"
+
+
 def run_training(*, arm: str, seed: int, config: dict,
                  config_path: pathlib.Path,
                  source: pathlib.Path, cache_manifest_path: pathlib.Path,
@@ -125,7 +139,7 @@ def run_training(*, arm: str, seed: int, config: dict,
                            "config": config_path,
                            "baseline": baseline_path, "binary": binary,
                            "manifest": source_manifest, "m0e": m0e},
-        experiment="S1", arm=arm, seed=seed)
+        experiment=experiment_label(subset_identity), arm=arm, seed=seed)
     if (subset_identity is not None
             and subset_identity.get("subset_commit") != provenance["commit"]):
         raise ValueError(
