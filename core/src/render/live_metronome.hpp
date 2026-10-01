@@ -58,8 +58,25 @@ struct LiveMetronomeConfig {
     // to lose, so gating there is free, and the gate is held for
     // `alone_gate_sec` after the click, long enough for its reverberation to
     // die away as well. See ClickCanceller::alone().
+    //
+    // But it always ends `alone_listen_sec` before the next click is due. What
+    // tells a tracker that the room has emptied is hearing it, and the gate
+    // withholds exactly that. Held for 350 ms whatever the tempo, it covered
+    // every one of BeatNet's 64 ms frames from about 140 BPM up: the tracker
+    // then heard nothing, kept the confidence it had, which was above the one
+    // it lets go at, and clicked on. 130 ms leaves three of those frames, the
+    // last of the beat, where the click's own reverberation has had longest to
+    // die away.
+    //
+    // Measured in a digital loop, on a drum pattern that stops, six seeds at
+    // each of 125 and 160 BPM, straight back and through a synthetic room. At
+    // 130 ms the last click came 18 to 30 s after the music in all 24 runs,
+    // where a silent click's comes at about 22. With no listening time 7 of
+    // the 24 were still clicking a minute on. At 190 ms the last click came up
+    // to 35 s after, and at 250 ms one of the 24 was still clicking.
     bool gate_when_alone = true;
     double alone_gate_sec = 0.35;
+    double alone_listen_sec = 0.13;
 
     bool valid() const;
 };
@@ -176,9 +193,15 @@ private:
     tracking::LiveTracker tracker_;
     ClickRenderer click_;
 
+    // How long after a click that has the room to itself the tracker is kept
+    // from listening.
+    double aloneGateSec(double beat_sec, double now_sec) const;
+
     bool running_ = false;
     std::size_t beats_ = 0;
     std::size_t clicks_alone_ = 0;
+    bool has_last_beat_ = false;
+    double last_beat_sec_ = 0.0;
     BeatObserver observer_ = nullptr;
     void* observer_context_ = nullptr;
     HeardObserver heard_observer_ = nullptr;

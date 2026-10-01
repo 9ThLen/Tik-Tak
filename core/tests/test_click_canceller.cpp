@@ -474,6 +474,70 @@ TEST(LiveMetronome, GatesAClickLeftAloneInTheRoomAndNotOneUnderMusic) {
     EXPECT_GT(metronome.stats().gated, 0u);
 }
 
+TEST(LiveMetronome, TheEmptyRoomGateLeavesTheTrackerSomethingToHear) {
+    // 200 BPM: a beat is 300 ms, shorter than the gate a click alone in the room
+    // is given. Held for all of it, the gate covers every frame, and a tracker
+    // that hears nothing never finds out that the room is empty.
+    constexpr double kRoundTrip = 0.040;
+    constexpr double kBpm = 200.0;
+    constexpr double kMusicSec = 12.0;
+    constexpr double kEmptySec = 20.0;
+    const auto delay = static_cast<std::size_t>(kRoundTrip * kRate);
+
+    LiveMetronomeConfig cfg;
+    cfg.tracker = tiktak::tracking::liveConfigFor(kRate);
+    cfg.click.sample_rate = kRate;
+    cfg.round_trip_sec = kRoundTrip;
+    cfg.gate_own_clicks = false;
+    cfg.subtract_own_clicks = true;
+    ASSERT_TRUE(cfg.valid());
+    LiveMetronome metronome{cfg};
+    // The tempo is held by hand, so that the clicks come 300 ms apart whatever
+    // the tracker would have made of this room by itself.
+    metronome.setManualTempo(kBpm);
+    metronome.start();
+
+    auto room = tiktak::test::clickTrack(kBpm, kMusicSec, kRate, 1.0);
+    std::mt19937 rng(3);
+    std::normal_distribution<float> hum(0.0f, 0.02f);
+    for (float& v : room) v += hum(rng);
+    room.resize(static_cast<std::size_t>((kMusicSec + kEmptySec) * kRate), 0.0f);
+    std::vector<float> played(room.size(), 0.0f);
+    std::vector<float> heard(kBlock);
+    std::size_t gated_before = 0;
+    std::size_t alone_before = 0;
+    for (std::size_t at = 0; at + kBlock <= room.size(); at += kBlock) {
+        const double time = static_cast<double>(at) / kRate;
+        for (std::size_t i = 0; i < kBlock; ++i) {
+            const std::size_t n = at + i;
+            heard[i] = room[n] + (n >= delay ? 0.8f * played[n - delay] : 0.0f);
+        }
+        metronome.capture(time, heard.data(), kBlock);
+        metronome.process(time, played.data() + at, kBlock);
+        if (time < kMusicSec) {
+            gated_before = metronome.stats().gated;
+            alone_before = metronome.stats().clicks_alone;
+        }
+    }
+
+    // The gate did act, on nearly every click of the empty stretch ...
+    const std::size_t alone = metronome.stats().clicks_alone - alone_before;
+    ASSERT_GT(alone, 50u);
+    // ... up to the listening time before the next click, and on the frames
+    // that reach into it. Held for the full 350 ms it would have taken every
+    // frame there is.
+    const double frames_a_sec = kRate / static_cast<double>(cfg.tracker.odf.hopSize);
+    const double frame_sec = static_cast<double>(cfg.tracker.odf.frameSize) / kRate;
+    const double beat_sec = 60.0 / kBpm;
+    const double gated_a_beat =
+        static_cast<double>(metronome.stats().gated - gated_before) / static_cast<double>(alone);
+    EXPECT_NEAR(gated_a_beat,
+                (cfg.tracker.gate_before_sec + beat_sec - cfg.alone_listen_sec + frame_sec) *
+                    frames_a_sec,
+                2.0);
+    EXPECT_LT(gated_a_beat, 0.8 * beat_sec * frames_a_sec);
+}
+
 TEST(LiveMetronomeConfig, SubtractionNeedsCaptureAndClickAtOneRate) {
     LiveMetronomeConfig cfg;
     cfg.tracker = tiktak::tracking::liveConfigFor(44100.0);

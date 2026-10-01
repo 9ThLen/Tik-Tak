@@ -78,6 +78,12 @@ struct ClickCancellerConfig {
     // falls silent between its beats is silent there every time and does not
     // look like a room emptying. `alone_memory` is how far one click moves
     // what is usual. See alone().
+    //
+    // Two things this cannot see, both met in a digital loop. Music that is
+    // silent before its beats, a dry drum machine, is as silent there once it
+    // has stopped, so its stopping is never noticed. And at a fast tempo in a
+    // reverberant room the next click comes before the last one has died
+    // away, so the room never looks emptier than it did.
     double alone_drop = 0.01;
     double alone_memory = 0.1;
 
@@ -118,8 +124,8 @@ struct ClickCancellerConfig {
 // averages in with the click unless the click's sign is something it cannot
 // share. LiveMetronome does this whenever the canceller is on.
 //
-// It is not cheap. At 48 kHz the path is some 870 taps, each visited for every
-// sample a click can reach: about nine million steps a click, and a pair of
+// It is not cheap. At 48 kHz the path is some 940 taps, each visited for every
+// sample a click can reach: about ten million steps a click, and a pair of
 // triangular solves when it ends. A few per cent of a desktop core; on a phone
 // it has not been measured.
 class ClickCanceller {

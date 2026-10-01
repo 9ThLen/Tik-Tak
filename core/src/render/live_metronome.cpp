@@ -30,7 +30,7 @@ bool LiveMetronomeConfig::valid() const {
         return false;
     }
     if (!subtract_own_clicks) return true;
-    if (!(alone_gate_sec >= 0.0)) return false;
+    if (!(alone_gate_sec >= 0.0 && alone_listen_sec >= 0.0)) return false;
     // One clock and one rate, or what was played cannot be laid over what was
     // heard.
     return cancellerFor(*this).valid() &&
@@ -132,9 +132,11 @@ void LiveMetronome::process(double stream_time_sec, float* out, std::size_t fram
                 // leaves of it must not be heard, nor its tail, and there is no
                 // music here for the gate to cost.
                 tracker_.gateSpan(beat - config_.tracker.gate_before_sec,
-                                  beat + config_.alone_gate_sec);
+                                  beat + aloneGateSec(beat, now));
                 ++clicks_alone_;
             }
+            has_last_beat_ = true;
+            last_beat_sec_ = beat;
             if (observer_ != nullptr) observer_(observer_context_, beat);
         }
     }
@@ -158,6 +160,22 @@ void LiveMetronome::process(double stream_time_sec, float* out, std::size_t fram
         for (std::size_t i = 0; i < count; ++i) out[done + i] += scratch_[i];
         done += count;
     }
+}
+
+double LiveMetronome::aloneGateSec(double beat_sec, double now_sec) const {
+    // The length of this beat. While the tracker coasts the clicks do not come
+    // at the tempo it reports, so their own spacing counts as well, and the
+    // shorter of the two is taken: a beat skipped for being late must not pass
+    // for a slow one.
+    double period = 60.0 / config_.tracker.filter.min_bpm;
+    const double bpm = tracker_.estimate(now_sec).bpm;
+    if (bpm > 0.0) period = std::min(period, 60.0 / bpm);
+    if (has_last_beat_ && beat_sec > last_beat_sec_) {
+        period = std::min(period, beat_sec - last_beat_sec_);
+    }
+    // Never less than a click heard under music is gated for.
+    return std::max(config_.tracker.gate_after_sec,
+                    std::min(config_.alone_gate_sec, period - config_.alone_listen_sec));
 }
 
 LiveMetronome::Stats LiveMetronome::stats() const {

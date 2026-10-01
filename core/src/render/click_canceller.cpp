@@ -31,12 +31,12 @@ constexpr std::size_t kWarmUp = 4;
 
 // The model is moved onto the direct sound once it has turned up more than
 // `kMoveEarlySec` before where it is expected or `kMoveLateSec` after, within
-// `kMoveAgreeSec` of the same place, on
-// `kMoveClicks` clicks running, and not before `kMoveAfter` clicks have gone
-// into the estimate. Moving throws the estimate away, so it has to be right:
-// under loud music one click can put the largest tap anywhere, and music that
-// lands on every beat looks like a path of its own until enough clicks, each
-// one upright or inverted, have averaged it out.
+// `kMoveAgreeSec` of the same place on `kMoveClicks` clicks running, and not
+// before `kMoveAfter` clicks have gone into the estimate. Moving throws the
+// estimate away, so it has to be right: under loud music one click can put the
+// largest tap anywhere, and music that lands on every beat looks like a path
+// of its own until enough clicks, each one upright or inverted, have averaged
+// it out.
 constexpr double kMoveEarlySec = 0.001;
 constexpr double kMoveLateSec = 0.002;
 constexpr double kMoveAgreeSec = 0.0005;
