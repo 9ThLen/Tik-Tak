@@ -52,6 +52,42 @@ struct Options {
     // no bench, because its verdicts would be believed about the wrong thing.
     bool tap_mic = false;
     std::string model_path;          // BeatNet weights; empty = spectral flux
+
+    // `listen`: the click cannot reach the microphone, so it is not gated out
+    // of what the tracker hears. Gating without a click to keep out only
+    // blinds the tracker around the beats it predicted.
+    bool headphones = false;
+
+    // `loop`: the closed loop in a real room. The programme plays through the
+    // speaker with the click on top, unless it is played from another device.
+    double click_db = 0.0;           // on the click's nominal gain
+    bool no_gate = false;            // on a loudspeaker, and still not gated
+    bool external = false;           // the programme comes from elsewhere
+    double tail_sec = 10.0;          // listening on after the programme ends
+    // No device: what leaves the speaker comes back this many milliseconds
+    // later, untouched. The digital loop, through the same code as the room,
+    // for checking the pass and its scorer before anyone sets up a room.
+    double simulate_ms = -1.0;
+    // With --simulate-ms: the click comes back through this impulse response
+    // instead of untouched, so the simulated path is longer than any model of
+    // it. The programme still comes straight back.
+    std::string simulate_ir_path;
+
+    // `listen` and `loop`: take the click out of what the tracker hears
+    // instead of gating the frames around it.
+    bool subtract = false;
+    // With --subtract: do not fall back on the gate when the click has the
+    // room to itself.
+    bool no_alone_gate = false;
+    // With --subtract: how far one click moves the path estimate; 0 keeps the
+    // core's own figure.
+    double subtract_update = 0.0;
+    // With --subtract: how much of the path after the first arrival is
+    // modelled, in milliseconds; 0 keeps the core's own figure.
+    double subtract_span_ms = 0.0;
+    // With --subtract: how long before the next click the empty-room gate
+    // ends, in milliseconds; negative keeps the core's own figure.
+    double alone_listen_ms = -1.0;
 };
 
 // Returns false and fills `error` on a bad argument, rather than guessing.
@@ -65,6 +101,7 @@ int cmdMeasure(const Options& options);
 int cmdTrack(const Options& options);
 int cmdListen(const Options& options);
 int cmdTap(const Options& options);
+int cmdLoop(const Options& options);
 
 void printUsage();
 

@@ -1,0 +1,105 @@
+{
+ "provenance": {
+  "schema": "tiktak.provenance/v1",
+  "utc": "2026-09-30T08:37:45Z",
+  "commit": "79ec95556b59ab986ca3bf81f2fa1ed09865ec0c",
+  "tree_clean": true,
+  "python": "3.11.15",
+  "platform": "Windows",
+  "binary": {
+   "name": "dump_analysis.exe",
+   "bytes": 1088000,
+   "sha256": "f06a6cbacefffd869ac592f443c29397a95a0997a5abe032a8f3932524112131"
+  },
+  "model": {
+   "name": "small0.onnx",
+   "bytes": 11544482,
+   "sha256": "027bd18a03d82e98bf11af9e93a016705d00a6505216afcbe5de4f7b84848983"
+  },
+  "limit": 0,
+  "smoke": false
+ },
+ "failures": [
+  "jazz.00054: jazz.00054: D:\\Programs\\D\\Tik-tak\\music\\ground-truth\\audio\\gtzan-ready\\jazz\\jazz.00054.wav is not a WAV, FLAC or MP3 file"
+ ],
+ "not_learned": 0,
+ "n": {
+  "validation": 488,
+  "held_out": 511
+ },
+ "budgets": {
+  "max_wrong_rate": 0.05,
+  "max_conditional_error": 0.1,
+  "bound": "upper 95% Wilson"
+ },
+ "provisional": {
+  "validation": {
+   "min_phase_margin": 0.25,
+   "min_meter_margin": 0.4,
+   "n": 486,
+   "shown": 316,
+   "correct": 290,
+   "wrong_meter": 5,
+   "wrong_phase": 21,
+   "withheld": 170,
+   "no_answer": 0,
+   "coverage": 0.6502057613168725,
+   "wrong_rate": 0.053497942386831275,
+   "conditional_error": 0.08227848101265822,
+   "wrong_rate_upper": 0.0772326899948538,
+   "conditional_error_upper": 0.11782608749778248
+  },
+  "held_out": {
+   "min_phase_margin": 0.25,
+   "min_meter_margin": 0.4,
+   "n": 507,
+   "shown": 337,
+   "correct": 307,
+   "wrong_meter": 3,
+   "wrong_phase": 27,
+   "withheld": 170,
+   "no_answer": 0,
+   "coverage": 0.6646942800788954,
+   "wrong_rate": 0.05917159763313609,
+   "conditional_error": 0.08902077151335312,
+   "wrong_rate_upper": 0.08321440891175,
+   "conditional_error_upper": 0.12423857423626034
+  }
+ },
+ "chosen": {
+  "min_phase_margin": 1.036340871549629,
+  "min_meter_margin": 0.4198441599112903,
+  "validation": {
+   "min_phase_margin": 1.036340871549629,
+   "min_meter_margin": 0.4198441599112903,
+   "n": 486,
+   "shown": 289,
+   "correct": 275,
+   "wrong_meter": 3,
+   "wrong_phase": 11,
+   "withheld": 197,
+   "no_answer": 0,
+   "coverage": 0.5946502057613169,
+   "wrong_rate": 0.02880658436213992,
+   "conditional_error": 0.04844290657439446,
+   "wrong_rate_upper": 0.047768381664553765,
+   "conditional_error_upper": 0.07966078671447879
+  },
+  "held_out": {
+   "min_phase_margin": 1.036340871549629,
+   "min_meter_margin": 0.4198441599112903,
+   "n": 507,
+   "shown": 292,
+   "correct": 270,
+   "wrong_meter": 1,
+   "wrong_phase": 21,
+   "withheld": 215,
+   "no_answer": 0,
+   "coverage": 0.5759368836291914,
+   "wrong_rate": 0.04339250493096647,
+   "conditional_error": 0.07534246575342465,
+   "wrong_rate_upper": 0.06482482888586003,
+   "conditional_error_upper": 0.11143525932488932
+  }
+ }
+}

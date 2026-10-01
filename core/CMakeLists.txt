@@ -36,6 +36,7 @@ add_library(tiktak_core STATIC
     src/analysis/grid_cache.cpp
     src/tracking/particle.cpp
     src/tracking/activation_tempo.cpp
+    src/tracking/octave_hold.cpp
     src/tracking/live.cpp
     src/tracking/bar.cpp
     src/tracking/sync.cpp
@@ -43,6 +44,7 @@ add_library(tiktak_core STATIC
     src/render/metronome.cpp
     src/render/player.cpp
     src/render/live_metronome.cpp
+    src/render/click_canceller.cpp
 )
 
 target_include_directories(tiktak_core

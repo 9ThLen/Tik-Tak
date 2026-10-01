@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <utility>
 
 namespace tiktak::ml {
 namespace {
@@ -145,6 +146,75 @@ BeatGrid pickBeats(const float* beat_logits, const float* downbeat_logits,
     grid.downbeats.erase(std::unique(grid.downbeats.begin(), grid.downbeats.end()),
                          grid.downbeats.end());
     return grid;
+}
+
+bool runChunked(const float* spectrogram, std::size_t frames, std::size_t mels,
+                ChunkRunner runner, void* context, Activations& out) {
+    out.beat.clear();
+    out.downbeat.clear();
+    if (spectrogram == nullptr || runner == nullptr || frames == 0 || mels == 0) return false;
+
+    // -1000 is the reference's "no chunk has spoken for this frame yet". It
+    // survives into the result only if the aggregation below has a hole, which
+    // the choice of starts is arranged to prevent — so a -1000 in the output is
+    // a bug rather than a value, and is worth being able to see.
+    std::vector<float> beat(frames, -1000.0f);
+    std::vector<float> downbeat(frames, -1000.0f);
+
+    // Starts run from -border, so the first real frame is never at a chunk
+    // edge, and the last start is pulled back to cover the tail exactly once.
+    // That is what makes keep-first aggregation total rather than merely
+    // usually total.
+    const std::size_t step = kChunkFrames - 2 * kBorderFrames;
+    std::vector<long long> starts;
+    for (long long s = -static_cast<long long>(kBorderFrames);
+         s < static_cast<long long>(frames) - static_cast<long long>(kBorderFrames);
+         s += static_cast<long long>(step)) {
+        starts.push_back(s);
+    }
+    if (starts.empty()) starts.push_back(-static_cast<long long>(kBorderFrames));
+    if (frames > step) {
+        starts.back() = static_cast<long long>(frames) -
+                        static_cast<long long>(kChunkFrames - kBorderFrames);
+    }
+
+    std::vector<float> chunk(kChunkFrames * mels);
+    std::vector<std::vector<float>> beat_chunks(starts.size());
+    std::vector<std::vector<float>> downbeat_chunks(starts.size());
+
+    for (std::size_t c = 0; c < starts.size(); ++c) {
+        std::fill(chunk.begin(), chunk.end(), 0.0f);
+        for (std::size_t j = 0; j < kChunkFrames; ++j) {
+            const long long source = starts[c] + static_cast<long long>(j);
+            if (source < 0 || source >= static_cast<long long>(frames)) continue;
+            std::copy(spectrogram + static_cast<std::size_t>(source) * mels,
+                      spectrogram + static_cast<std::size_t>(source + 1) * mels,
+                      chunk.begin() + static_cast<std::ptrdiff_t>(j * mels));
+        }
+        beat_chunks[c].assign(kChunkFrames, 0.0f);
+        downbeat_chunks[c].assign(kChunkFrames, 0.0f);
+        if (!runner(context, chunk.data(), kChunkFrames, mels, beat_chunks[c].data(),
+                    downbeat_chunks[c].data())) {
+            return false;
+        }
+    }
+
+    // Backwards, so an earlier chunk overwrites a later one where they overlap.
+    // The reference calls this keep_first, and the direction is the whole of
+    // it: written forwards, every overlap would keep the *worse* answer, the
+    // one computed nearer a chunk edge.
+    for (std::size_t i = starts.size(); i-- > 0;) {
+        for (std::size_t j = kBorderFrames; j < kChunkFrames - kBorderFrames; ++j) {
+            const long long target = starts[i] + static_cast<long long>(j);
+            if (target < 0 || target >= static_cast<long long>(frames)) continue;
+            beat[static_cast<std::size_t>(target)] = beat_chunks[i][j];
+            downbeat[static_cast<std::size_t>(target)] = downbeat_chunks[i][j];
+        }
+    }
+
+    out.beat = std::move(beat);
+    out.downbeat = std::move(downbeat);
+    return true;
 }
 
 }  // namespace tiktak::ml

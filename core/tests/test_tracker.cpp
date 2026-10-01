@@ -197,6 +197,41 @@ TEST(Tracker, TrimmingRemovesBeatsInventedOverLeadingSilence) {
     EXPECT_LE(before(trimmed), 1);
 }
 
+TEST(Tracker, TheObjectiveIsReadOffTheBeatsThatWereKept) {
+    // objective_per_beat ranks the offline tempo hypotheses against each
+    // other, so it has to describe the sequence that is returned. Trimming the
+    // start used to leave the dropped beats' score in the numerator while the
+    // denominator counted only the beats kept, which flattered any grid grown
+    // into a quiet intro. Found by an outside review and reproduced here: the
+    // intro at a fifth of the level, every gap exactly one period so that no
+    // transition costs anything, and the objective must then be the mean local
+    // score of the beats kept, to rounding.
+    constexpr std::size_t kFrames = 2000;
+    constexpr double kRate = 100.0;
+    std::vector<double> odf(kFrames, 0.0);
+    std::vector<double> times(kFrames);
+    for (std::size_t i = 0; i < kFrames; ++i) {
+        times[i] = static_cast<double>(i) / kRate;
+        if (i % 50 == 0) odf[i] = i < 300 ? 0.2 : 1.0;
+    }
+
+    BeatTracker tracker = makeTracker(100.0, true);
+    const BeatResult result = tracker.track(odf.data(), times.data(), kFrames, kRate, 120.0);
+    ASSERT_FALSE(result.frames.empty());
+    ASSERT_GE(result.frames.front(), 300u)
+        << "the quiet intro was not trimmed, so this tests nothing";
+    for (std::size_t j = 1; j < result.frames.size(); ++j) {
+        ASSERT_EQ(result.frames[j] - result.frames[j - 1], 50u)
+            << "a gap off the period costs something, and the expectation below "
+               "no longer holds exactly";
+    }
+
+    double kept = 0.0;
+    for (std::size_t frame : result.frames) kept += tracker.localScore()[frame];
+    kept /= static_cast<double>(result.frames.size());
+    EXPECT_NEAR(result.objective_per_beat, kept, 1e-9);
+}
+
 TEST(Tracker, ProducesMonotonicNonRepeatingBeats) {
     constexpr std::size_t kFrames = 2000;
     const std::vector<double> odf = impulseTrain(kFrames, spacingForBpm(140.0));

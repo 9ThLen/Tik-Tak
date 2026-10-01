@@ -13,6 +13,7 @@
 #define TIKTAK_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -215,7 +216,11 @@ TT_API double tt_offline_bpm(const tt_offline* offline);
 TT_API double tt_offline_estimated_bpm(const tt_offline* offline);
 
 /* 0..1: how strongly the onset function repeats at that tempo. 0 means no
-   periodicity was found, which is not the same as a slow tempo. */
+   periodicity was found, which is not the same as a slow tempo.
+   When the learned front end answered (tt_offline_grid_learned), it is how
+   regular the grid is instead — the share of beat gaps within 15% of the
+   median one — because that path's failure is irregular peaks, and there the
+   tempo is only the grid's median gap and this number is what says so. */
 TT_API double tt_offline_confidence(const tt_offline* offline);
 
 TT_API size_t tt_offline_beat_count(const tt_offline* offline);
@@ -238,6 +243,59 @@ TT_API size_t tt_offline_beats(const tt_offline* offline, double* out, size_t ca
 TT_API int tt_offline_beats_per_bar(const tt_offline* offline);
 TT_API size_t tt_offline_downbeat_count(const tt_offline* offline);
 TT_API size_t tt_offline_downbeats(const tt_offline* offline, double* out, size_t capacity);
+
+/*
+ * The grid index to hand tt_player_config.downbeat_offset: the bar phase that
+ * holds the most of the bar lines above, below tt_offline_beats_per_bar. -1
+ * when there are none.
+ *
+ * Use this, not the first bar line. The analysis may move where the bar
+ * starts partway through a song, and a player given one offset carries it
+ * across the whole of it; the first bar line is the intro's phase, which can
+ * be a beat or two from the body's.
+ */
+TT_API int tt_offline_downbeat_offset(const tt_offline* offline);
+
+/*
+ * The learned front end for file analysis: Beat This!, whose network the shell
+ * runs and whose everything else the core does. The core computes the model's
+ * log-mel input from the audio fed, cuts it into chunks exactly as the
+ * reference does, stitches the answers, picks the beats, measures the tempo
+ * off them and decides the bar lines from the model's downbeat probability.
+ * The shell supplies one function: run the network on one chunk. That is the
+ * only part that differs between ONNX Runtime on a desktop and Core ML on a
+ * phone, and so the only part that can.
+ *
+ * `run` receives TT_LEARNED_CHUNK_FRAMES rows of TT_LEARNED_MELS values
+ * (row-major, zero past the end of the song) and must write as many beat and
+ * downbeat *logits*, returning 1, or return 0 on any failure.
+ *
+ * Call before the first tt_offline_feed; the audio is kept from then on,
+ * because the network wants the whole song. `model_id` identifies the network
+ * for the grid cache — derive it from the weights, since a grid from one model
+ * is not another's answer — and must be non-zero. NULL `run` removes the
+ * model.
+ *
+ * If the network fails, finds fewer than two beats, or a tempo hint was given,
+ * the analysis falls back to the onset path; tt_offline_grid_learned says
+ * which one answered. Measured on GTZAN, which the published checkpoints
+ * never saw, this front end gains 0.10 of beat F and 0.14 of CMLt over the
+ * onset path. Its bar lines' confidence thresholds are not yet calibrated for
+ * probabilities; treat tt_offline_downbeat_confident on this path as
+ * provisional.
+ */
+#define TT_LEARNED_CHUNK_FRAMES 1500
+#define TT_LEARNED_MELS 128
+#define TT_LEARNED_FRAME_RATE 50.0
+
+typedef int (*tt_learned_chunk_fn)(void* context, const float* spectrogram, size_t frames,
+                                   size_t mels, float* beat_logits, float* downbeat_logits);
+
+TT_API tt_status tt_offline_set_model(tt_offline* offline, tt_learned_chunk_fn run,
+                                      void* context, uint64_t model_id);
+
+/* 1 when the finished grid came from the learned front end, 0 otherwise. */
+TT_API int tt_offline_grid_learned(const tt_offline* offline);
 
 /*
  * How far to trust those bar lines. All three are in the active salience
@@ -567,9 +625,10 @@ typedef struct tt_player_config {
 
     /* Grid beat `downbeat_offset` is a bar's first beat, and every
        beats_per_bar-th after it. Both come from the offline analysis —
-       tt_offline_beats_per_bar and the first of tt_offline_downbeats — with
-       the offset left settable so the user can shift which beat is "the one"
-       when the analysis is unsure or simply wrong. */
+       tt_offline_beats_per_bar and tt_offline_downbeat_offset, not the first
+       of tt_offline_downbeats — with the offset left settable so the user can
+       shift which beat is "the one" when the analysis is unsure or simply
+       wrong. */
     int beats_per_bar;          /* 0 -> 4                                      */
     int downbeat_offset;        /* 0-based grid index; negative rejected       */
     /* Whether bar starts are distinguished at all. Read literally:
@@ -682,10 +741,21 @@ TT_API void tt_player_stats_get(const tt_player* player, tt_player_stats* out);
  *   calls it, the number passed to tt_live_process and tt_live_take_beat has to
  *   come from one timeline, or the beats come out shifted by the difference.
  *
- * - Declare its own click through tt_live_gate_click. A metronome listening
- *   through a microphone hears itself, and a click is the most onset-like
- *   sound there is; ungated, the tracker locks onto its own output, reports
- *   full confidence and stops following the room.
+ * - Know whether its own click can reach the microphone.
+ *
+ *   Through headphones it cannot, so never call tt_live_gate_click. A gate with
+ *   nothing to hide blinds the tracker around exactly the beats it predicted.
+ *   On the bench that alone took BeatNet's usable rate from 0.46 to 0.09 on
+ *   GTZAN.
+ *
+ *   On a loudspeaker, declare each click through tt_live_gate_click. A
+ *   metronome listening through a microphone hears itself, and ungated, its
+ *   own click inflates the confidence reported and can pull the tracker onto
+ *   its own output. On the bench, with the click mixed in digitally and no
+ *   room, the gate cost more than the click it hid, at both levels tried.
+ *   Whether that holds through a real speaker and microphone has not been
+ *   measured, and until it has, the shipped behaviour stands. The numbers are
+ *   in research/results/README.md, under the click gate.
  *
  * tt_live_process, tt_live_take_beat, tt_live_estimate and tt_live_gate_click
  * are real-time safe. Create, seed and reset are not.
@@ -711,7 +781,7 @@ typedef struct tt_live_config {
 
     /* Confidence to start handing out beats at, and to stop at. Between them
        the tracker coasts at the last tempo it was sure of, which is what a
-       musician does when the band drops out for a bar. 0 -> 0.35 / 0.15.      */
+       musician does when the band drops out for a bar. 0 -> 0.25 / 0.02.      */
     double lock_confidence;
     double release_confidence;
     /* Decide the bar length and bar line from the model's downbeat channel.
@@ -726,6 +796,35 @@ typedef struct tt_live_config {
 TT_API void tt_live_config_defaults(tt_live_config* cfg, double sample_rate);
 
 TT_API tt_live* tt_live_create(const tt_live_config* cfg, tt_status* status);
+
+/*
+ * The same tracker on the learned front end: BeatNet, from the weight files
+ * models/export_beatnet.py writes (`.ttw`), handed over as bytes because the
+ * core owns no files. The bytes are copied, so the caller may free them as
+ * soon as this returns. One file runs one network; several are averaged over
+ * a single front end, which is the ensemble measured in research/results.
+ *
+ * Every live number the research quotes for BeatNet was measured on this
+ * front end, and tt_live_create cannot reach it: on GTZAN, held out from the
+ * published checkpoint, the learned front end is usable on 42.6% of recordings
+ * against 13.4% for spectral flux (research/results, the live usable rate).
+ * It is not the default because it costs 1.6 MB and tens of MFLOP a second
+ * per network against flux's few hundred kFLOP, and which of those a device
+ * should spend is the shell's decision.
+ *
+ * All or none. If any file fails to load — wrong size, wrong shapes, a null
+ * entry — nothing is created and the status is TT_ERR_INVALID_ARG. A tracker
+ * that quietly fell back to spectral flux would be the less accurate path
+ * running under the belief that it is the other one.
+ */
+TT_API tt_live* tt_live_create_with_models(const tt_live_config* cfg,
+                                           const void* const* weights,
+                                           const size_t* sizes, size_t count,
+                                           tt_status* status);
+
+/* Networks the tracker runs: 0 on spectral flux. */
+TT_API size_t tt_live_model_count(const tt_live* live);
+
 TT_API void tt_live_destroy(tt_live* live);
 
 /*
@@ -740,6 +839,12 @@ TT_API void tt_live_process(tt_live* live, double stream_time_sec,
  * When our own click will reach the microphone: the moment it is *heard*,
  * output latency and room delay already added by the caller. The core cannot
  * work it out — only the shell knows what the round trip measured.
+ *
+ * Only when it *can* reach the microphone. Through headphones, or any output
+ * the microphone cannot hear, do not call this: there is no click to keep out,
+ * and the gate would only blind the tracker to the music around exactly the
+ * beats it predicted — about a quarter of all frames at 120 BPM with the
+ * learned front end.
  */
 TT_API void tt_live_gate_click(tt_live* live, double heard_time_sec);
 
@@ -785,9 +890,13 @@ TT_API void tt_live_seed_tempo(tt_live* live, double bpm, double spread_octaves)
  *
  * Refused, changing nothing, in three cases: in manual mode, where the tempo is
  * already the user's and tt_live_set_manual_tempo is the way to change it;
- * before the tracker has an estimate to move; and when doubling or halving
- * would leave the configured BPM range. The last is refused rather than clamped
- * so that a press either means what it says or visibly does nothing.
+ * before the tracker has an estimate to move; and when the result would put two
+ * beats inside one observation window, faster than any front end here can
+ * separate — about 470 BPM with the learned one. The configured BPM range is
+ * *not* a reason: it says what tempo music is likely to be, and a press is the
+ * user's statement about this music, so the range moves with it the way it
+ * would for a typed tempo. Refused rather than clamped, so that a press either
+ * means what it says or visibly does nothing.
  *
  * Survives tt_live_reset, which forgets audio and not the user.
  */

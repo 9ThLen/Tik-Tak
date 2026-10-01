@@ -28,8 +28,10 @@ add_executable(tiktak_core_tests
     test_metronome.cpp
     test_player.cpp
     test_live_metronome.cpp
+    test_click_canceller.cpp
     test_particle.cpp
     test_activation_tempo.cpp
+    test_octave_hold.cpp
     test_live.cpp
     test_octave_freeze.cpp
     test_octave_offset.cpp

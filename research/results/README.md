@@ -31,6 +31,695 @@ the 2,760 annotated recordings here as evaluation ground, leaving Harmonix,
 RWC and SMC. That is a cost of the ensemble, not merely of testing it, and it is
 the strongest argument for recording new material.
 
+## Subtracting the click, in the digital loop: most of the way back to no click, and it stops
+
+`closed_loop/dry_run_seven_arms.json` and `closed_loop/dry_run_made_up_room.json`
+are the dry runs that Amendments 1 and 2 of
+`eval/PREREGISTERED_closed_loop_room.md` ask for.
+
+**No room has heard this yet.** The canceller's settings were chosen in this
+loop, on this programme. These runs check that what was built works, and test
+nothing.
+
+* **Build:** clean tree at `3098a55`. Every pass measured its own round trip
+  and ends in a minute of silence.
+* **Straight:** the click comes back 40 ms later, otherwise untouched.
+* **Made-up room:** the click comes back through `eval.closed_loop path`. That
+  is the direct sound, five early reflections, and a 0.4 s diffuse tail 10 dB
+  under the direct sound, which is longer than the 150 ms the canceller
+  models. The music comes straight back in both, so `l0` is one pass.
+
+| own click | F, straight | F, made-up room | removed in the gaps | last click after the music |
+|---|---:|---:|---|---|
+| not played (`l0`) | 0.764 | — | — | 13 s |
+| gated (`l1`), as ships | 0.502 | 0.513 | — | none straight; **never** in the room |
+| nothing (`l2`) | 0.616 | 0.622 | — | **never**, either way |
+| subtracted (`l5`) | **0.744** | **0.689** | 41 and 34 dB | 27 s and 19 s |
+| subtracted, gated when alone (`l6`) | **0.731** | **0.750** | 45 and 32 dB | 17 s and 13 s |
+
+"Never" is still clicking between 55 and 60 s after the music. Those three
+passes were locked at 25 to 30 s as well: 0.78 and 0.74 for `l2`, 0.51 for
+`l1` in the made-up room. The quiet click, `l3` and `l4`, ran straight only:
+0.542 gated and 0.716 ungated, and the ungated one never stops either.
+
+Paired over the 20 takes, `l5` then `l6`:
+
+| against | straight | made-up room |
+|---|---|---|
+| nothing (`l2`) | +0.127 [+0.047, +0.219], +0.114 [+0.046, +0.184] | +0.067 [+0.003, +0.133], +0.128 [+0.055, +0.210] |
+| gated (`l1`) | +0.241 [+0.153, +0.330], +0.228 [+0.148, +0.308] | +0.175 [+0.078, +0.268], +0.237 [+0.149, +0.322] |
+| no click (`l0`) | -0.020 [-0.082, +0.041], -0.033 [-0.075, +0.002] | -0.076 [-0.152, -0.014], -0.014 [-0.070, +0.049] |
+
+* **Against no click at all,** three of the four intervals reach zero. The
+  fourth is `l5` through the made-up room.
+* **Self-sustain in the gaps.** The subtracting arms' locked share is +0.09 to
+  +0.14 over the silent click's, with every interval through zero. The
+  ungated arm's is +0.24 and +0.28, with neither.
+* **The two subtracting arms** differ by -0.013 [-0.060, +0.035] and +0.061
+  [-0.017, +0.174], so twenty takes cannot tell them apart on F. In the final
+  silence the gated one stops 11 and 6 s sooner.
+* **The empty-room rule** fired on 75% and 71% of the clicks in the gaps and
+  on every click of the final silence. Under the takes it fired on 15 of 1,087
+  clicks and 35 of 1,040. All but five and six of those were in one take,
+  `classical.00075`, where the click is 8 dB above the music. After a louder
+  take, music that quiet is 20 dB down, and it reads as an empty room until
+  forty clicks have said otherwise.
+
+**Validity.** Each pass measured its round trip from six probe clicks: 40.00 ms
+straight, and 40.13 ms through the made-up room, where the matched filter
+lands a little late on a reverberant click. The scorer recovered the 40 ms lag
+exactly at the first take and at the last. The path model was never moved, and
+the estimate ended at full trust.
+
+By the amended rule both ways back read "proceed": more than 20 dB removed,
+`l6` no worse than `l2`, and `l6` not keeping itself going by any of the three
+measures. For a dry run that says the build is fit to take to a room, and
+nothing more. The five arms without subtraction reproduce the five-arm dry run
+below to the digit, and with it the "keep the gate" branch for the ungated
+arms.
+
+### What the first dry run of these two arms found
+
+`closed_loop/first_dry_run_seven_arms.json` and
+`first_dry_run_made_up_room.json`, clean tree at `b64a9d6`. They are kept
+because they changed the build and the rules.
+
+Straight back, `l6` reached the final silence at 219 BPM. A beat there is
+274 ms, the empty-room gate was 350 ms, and the tracker was handed no frames
+at all. A tracker that hears nothing keeps the confidence it had. Here that
+was 0.09, and it handed out 109 beats in 30 s, the last of them 0.2 s before
+the end. The registered measure, a confidence under 0.25, passed it.
+
+* **The gate** now ends 130 ms before the next click is due.
+* **The silence** is a minute, and "keeps itself going" has a third measure:
+  a beat between 55 and 60 s after the music when `l0` has none.
+* **Each pass** records which clicks were gated as alone.
+
+The 130 ms was chosen on a synthetic programme: a drum pattern over a steady
+bed for 40 s, then a minute of nothing. Six seeds at each of 125 and 160 BPM,
+both ways back:
+
+| the gate ends | last click after the music | still clicking a minute on |
+|---|---|---:|
+| 350 ms after the click, whatever the tempo | 19 to 60 s | 7 of 24 |
+| **130 ms before the next click** | 18 to 30 s | 0 of 24 |
+| 190 ms before | 18 to 35 s | 0 of 24 |
+| 250 ms before | 16 to 60 s | 1 of 24 |
+
+On the same programme at six tempos, a silent click's last beat came 21 to
+23 s after the music, and `l5`'s 19 to 42 s after.
+
+### Seen on the way
+
+* **The shipped gate does not stop a metronome through the made-up room.**
+  The click's tail outlasts the 55 ms gate. `l1` is locked at 0.51 half a
+  minute after the music and still clicking at a minute. Straight back it
+  stops at once.
+* **The empty-room rule has two blind spots.** It compares the room just
+  before a click with what the room usually is there.
+  * A programme that is silent before its beats, a dry drum machine, gives it
+    nothing to compare. Through the made-up room both subtracting arms were
+    then still locked 30 s after such a programme stopped, at 0.46 to 0.61.
+  * At 185 BPM through the made-up room it did not fire either: the next
+    click comes before the last one's reverberation has died away.
+* **A quiet take after a loud one** is gated as an empty room, as
+  `classical.00075` was. On that take the subtracting arms score 0.12 to 0.17
+  with the gate and without it, against 0.38 with no click. The click is
+  louder than the music there, and the gate is not what costs it.
+
+### What a digital loop leaves out
+
+* A speaker that distorts, a microphone with a noise floor, and a room that
+  reverberates the music as well as the click. After the music here there is
+  digital silence, in which whatever subtraction leaves is the only sound.
+* The click's level. It is the one set digitally, 8 dB under the music. A
+  phone clicking beside its own microphone, with the music across the room,
+  may hear its click well above the music. That is the `--external` session,
+  which is not registered yet.
+
+## 2048 particles off RWC: a real gain everywhere, below the bar on Harmonix
+
+`particles_2048/*.json`, per-track records in `per_track/particles_2048/`,
+answering `eval/PREREGISTERED_particles_2048.md`.
+
+* **Build:** one binary (SHA-256 `8494fd25622e…`), clean tree at `3e139eb`.
+* **Model:** BeatNet `model_1`.
+* **Design:** three seeds, paired seed by seed. The 512 arms on Harmonix and
+  GTZAN's default seed are batch three's runs of the same binary with the same
+  flags. Unchanged paths reproduce exactly, so these are reused as registered.
+
+| corpus | beat F, 512 → 2048 | per seed | usable | episode-free |
+|---|---|---|---:|---:|
+| GTZAN (held out) | 0.690 → 0.705 | +0.014 +0.017 +0.016 | **+0.019** | -0.002 |
+| Harmonix | 0.804 → 0.812 | +0.007 +0.009 +0.007 | +0.005 | -0.007 |
+
+**Cost.** Run single-process and interleaved on ten recordings, 2048 particles
+take **1.53 times** the wall time per second of audio: 0.032 s against 0.049 s
+on this desktop. The whole live path gets slower, BeatNet included.
+
+*Registered decision:* 2048 had to raise beat F by at least 0.010 on both
+corpora, with every seed positive and no loss in usable or episode-free beyond
+twice the across-seed SD.
+
+* **GTZAN** meets all of it.
+* **Harmonix** has every seed positive and passes the guard, but its mean,
+  +0.008, is under 0.010.
+
+**512 stays.** The rule's fallback wording, "reported as RWC-only", does not
+fit the data, so it is corrected here. The beat-F gain has the same sign on all
+three corpora and every seed: RWC +0.020, GTZAN +0.016, Harmonix +0.008. It
+also cuts the across-seed SD of beat F by two thirds or more. What it does not
+do is clear the materiality bar on Harmonix, and it costs half as much compute
+again.
+
+Whether that trade is worth it is a product question. On a phone it needs the
+phone's own cost measurement, which this desktop timing does not stand in for.
+
+## The closed loop, dry run: without the gate the metronome never stops
+
+`closed_loop/dry_run.json` is the dry run that
+`eval/PREREGISTERED_closed_loop_room.md` requires before any room pass.
+
+* **What ran:** the five registered passes through `tiktak loop --simulate-ms
+  40`. This is the digital loop through the same code as the room session,
+  with no speaker, room or microphone.
+* **Build:** clean tree at `117234f`.
+* **Programme:** P1-B0's 20 held-out GTZAN excerpts. The tracker runs straight
+  through them.
+* **Click:** -8 and -20 dB against the music, measured rather than nominal.
+
+| arm | F | usable | gap locked share | gap confidence trend | after 30 s of silence |
+|---|---:|---:|---:|---:|---|
+| silent click | 0.764 | 0.60 | 0.69 | -0.17 | stopped after 13 s |
+| -8 dB, gated | 0.502 | 0.15 | 0.61 | -0.12 | stopped at once |
+| -8 dB, ungated | 0.616 | 0.45 | **0.93** | +0.08 | **still clicking, confidence 0.78** |
+| -20 dB, gated | 0.542 | 0.20 | 0.71 | -0.07 | stopped at once |
+| -20 dB, ungated | 0.716 | 0.55 | **0.96** | +0.11 | **still clicking, confidence 0.81** |
+
+Read against the registered rule, as the no-room control and not the decision:
+
+* **F.** The ungated arms beat the gated ones by +0.114 [+0.04, +0.19] and
+  +0.174 [+0.07, +0.28]. The bench's finding reproduces through the desktop
+  metronome.
+* **Self-sustain.** The ungated arms also keep themselves going. Their gap
+  locked share exceeds the silent click's by +0.24 [+0.13, +0.37] and +0.27
+  [+0.16, +0.40], and 30 s into silence they are still clicking at 0.78-0.81
+  confidence. The gated arms stop at once; the silent click coasts for 13 s,
+  then stops.
+* **What the rule says here.** In a digital loop the rule's "keep the gate"
+  branch fires, and it fires on self-sustain, not on F. The bench (G3, G7)
+  never looked at silence, because a recording ends when its music does, and
+  this is what the independent review asked about. Whether a real speaker,
+  room and microphone feed the click back as faithfully is what the room
+  session will answer.
+* **A separate question.** With no click at all, the tracker still coasts
+  about 13 s past the end of the music. A metronome that keeps clicking that
+  long after the music stops is a product question of its own, apart from the
+  gate.
+
+**Validity.** The scorer recovered the simulated 40 ms lag exactly, at both the
+first and the last take. The click ratios came out at -8.05 and -20.05 dB.
+
+## The level floor in a real room: a gain in every cell, too few excerpts to decide
+
+`p1b0_level_floor/p1b0_level_floor.json`, answering
+`eval/PREREGISTERED_p1b0_level_floor.md`.
+
+* **Material:** the 119 aligned P1-B0 takes, 79 phone room takes and 40
+  loopback.
+* **Run:** one binary, clean tree at `97f7ca1`, BeatNet `model_1`.
+* **Design:** three paired seeds per arm, with the excerpt as the unit.
+
+A three-take smoke run checked the script after the registration was written
+and before it was committed. The registration did not change.
+
+| cell | F, floor off | F, floor on | difference [95% CI] |
+|---|---:|---:|---:|
+| near, normal (19 excerpts) | 0.502 | 0.547 | +0.045 [-0.083, +0.176] |
+| far, normal | 0.372 | 0.397 | +0.025 [-0.124, +0.166] |
+| near, quiet | 0.365 | 0.455 | +0.090 [-0.065, +0.249] |
+| far, quiet | 0.283 | 0.371 | +0.088 [-0.060, +0.221] |
+| loopback, normal | 0.735 | 0.746 | +0.010 [-0.031, +0.049] |
+| loopback, quiet | 0.703 | 0.726 | +0.024 [-0.031, +0.080] |
+
+*Registered decision:* the primary is the two quiet cells, averaged per
+excerpt. It gains **+0.089 [-0.033, +0.209]**, which clears +0.05, but its
+interval reaches zero. The result is therefore **underpowered**, and the floor
+stays off. To reach ±0.05, the quiet cells need 126 [73, 269] captures and the
+normal cells 107 [62, 228]. The harm check, +0.042 [-0.070, +0.152], shows no
+loss.
+
+What the run does say, with that uncertainty attached:
+
+* **Direction.** The sign agrees with the bench in all six cells, and the gain
+  is largest where the captures are quietest.
+* **The level is a minority of the room's loss.** Against each arm's own
+  loopback, the quiet cells lose 0.34 and 0.42 without the floor, and 0.27 and
+  0.36 with it. That is a fifth recovered at best; the rest is the room itself,
+  as the earlier repairs found.
+* **Usable is too sparse to read in a room.** Each cell has 0-4 usable excerpts
+  of 20. The far cells drop from 2-3 to 0-1, and the near cells do not move.
+* **Episode-free moves both ways.** Far/normal goes from 0.58 to 0.42, and
+  near/quiet from 0.43 to 0.68. Twenty excerpts cannot separate that from noise.
+
+The seed SDs of each cell's mean F run 0.005-0.048. That is well under the
+between-excerpt spread, which is what sets these intervals.
+
+## The octave hold does not carry to Harmonix; the level floor earns a phone test
+
+`octave_hold_and_level_floor/*.json`, per-track records in
+`per_track/octave_hold_and_level_floor/`, answering
+`eval/PREREGISTERED_octave_hold_and_level_floor.md`. Fourteen arms, one binary,
+clean tree at `badfe76`. BeatNet `model_1`, `--live-sample-hz 50`, macro over
+corpora with n >= 30, differences from `eval/compare_live_runs.py`. Every arm
+whose code path is unchanged reproduces its earlier counterpart exactly, on
+every recording:
+
+* RWC at -24 dB, against batch one;
+* GTZAN at 0 dB, against the click-gate run;
+* Harmonix hold-off at the default seed, against batch one.
+
+### C — the hold, on the corpus it was not tuned on
+
+Harmonix, 581 aligned recordings, three seeds each (the default, 1 and 2):
+
+| configuration | episode-free per seed | mean (SD) | usable mean (SD) | beat F | correct time |
+|---|---|---:|---:|---:|---:|
+| hold off | 0.461 0.456 0.451 | 0.456 (0.005) | 0.376 (0.008) | 0.804 | 0.777 |
+| hold 20 s | 0.441 0.453 0.441 | 0.445 (0.007) | 0.372 (0.001) | 0.799 | 0.762 |
+| hold minus off | | **-0.012** | -0.004 | -0.005 | -0.015 |
+
+Seed by seed, beat F falls 0.004-0.005 and correct time 0.014-0.016, every
+paired interval clear of zero.
+
+*Registered decision:* the hold needed an episode-free gain above twice the
+larger SD (0.014), no fall in usable, and correct time not down by 0.03. It
+loses on episode-free, usable falls slightly, and only the guard holds. **The
+hold stays off**, and RWC's +0.047 is reported as RWC-only.
+
+That reading assumes the core's `OctaveHold` behaves as the research seam did
+on RWC, and an unregistered implementation check confirms it
+(`check_core_hold20_rwc.json`, same binary, default seed). Against batch one's
+`q2_debounce20_rwc`, every usable, strict and episode-free verdict is
+identical. 304 of 328 recordings are identical in every respect, and beat F
+differs by 0.0004 [-0.0013, +0.0002]. The core hold reproduces the seam's
++0.028 usable and +0.047 episode-free on RWC exactly, so Harmonix's loss
+belongs to the corpus, not to the port.
+
+### L — the level floor
+
+`--live-level-floor -20` against the matching unfloored arm:
+
+| corpus, input | beat F unfloored → floored | usable unfloored → floored |
+|---|---|---|
+| RWC, -24 dB | 0.455 → **0.559** | 0.132 → 0.152 |
+| RWC, -12 dB | 0.541 → 0.554 | 0.139 → 0.157 |
+| RWC, 0 dB | 0.572 → 0.565 | 0.164 → 0.174 |
+| GTZAN, 0 dB (held out) | 0.691 → 0.687 | 0.459 → 0.459 |
+| SMC, -24 dB | 0.136 → 0.222 | 0.018 → 0.037 |
+| SMC, 0 dB | 0.235 → 0.232 | 0.032 → 0.028 |
+
+*Registered decision:* at -24 dB on RWC the floor had to recover at least half
+of the loss in both beat F and usable. It recovers 0.104 of the 0.117 beat F
+lost (89%) and 0.020 of the 0.032 usable (62%). GTZAN at 0 dB loses nothing on
+usable, which is within the noise floor. Both conditions hold, so **the next
+step is the P1-B0 phone captures**, registered separately before they are
+scored. Until then the floor stays off.
+
+Two things the rule did not ask about, reported so that the phone test is read
+with them in mind:
+
+* **GTZAN beat F.** At 0 dB it falls 0.004 [-0.008, +0.000]. That is about 2.5
+  times RWC's across-seed beat-F SD, from lifting its quieter excerpts.
+* **SMC wrong-level episodes.** At SMC's own level the floor lowers
+  episode-free by **0.083** [-0.143, -0.023]. Lifting quiet recordings makes the
+  tracker more active (0.54 to 0.58 of the time) and more confident (median
+  0.15 to 0.19), and more of that activity is at a wrong level. Correct time
+  moves -0.008.
+  * The same effect runs the other way at -24 dB unfloored. There SMC's
+    episode-free reads 0.465, against 0.309 at 0 dB, only because a starved
+    tracker is active 34% of the time. The floor restores both the activity and
+    the 0.309.
+  * An episode-free rate is only comparable between arms that are active for a
+    similar share of the time.
+
+## On the bench, the click gate costs far more than the click it hides
+
+`click_gate_and_antialias/*.json`, per-track records in
+`per_track/click_gate_and_antialias/`, answering
+`eval/PREREGISTERED_click_gate_and_antialias.md`. Seventeen arms, one binary,
+clean tree at `5bc76b7`. BeatNet `model_1`, `--live-sample-hz 50`, macro over
+corpora with n >= 30, differences from `eval/compare_live_runs.py`. The closed
+loop mixes the core's own click (a 1046.5 Hz tone burst, nominal peak 0.75)
+into the input at every beat the tracker hands out, with a zero round trip.
+`--live-click-gate` calls `gateClick` exactly where `LiveMetronome` does: every
+beat, unconditionally, at the predicted beat. The noise floor is Q1's
+across-seed SD below — 0.005 usable, 0.016 episode-free, 0.0015 beat F —
+measured on RWC and applied to GTZAN as registered. One SD is a weak bar. It can
+carry the gate's effects, which are thirty to seventy SDs with paired intervals
+far from zero. The small differences here cannot rest on it: G3 against G0 on
+RWC, A1's +0.020 and the G4/G5 comparisons would need paired arms on several
+identical seeds before they could decide anything.
+
+**What this bench is, and is not.** The click is mixed in digitally, with no
+acoustic delay, no echo, and no colouring by a speaker or microphone. Only
+BeatNet was measured; the spectral-flux path was not.
+
+The gains scale the click's nominal amplitude, not its level against the music.
+Measured afterwards, against each recording's own level:
+
+* At "0 dB", the click's power averaged over one annotated beat is a median
+  6.8 dB under the music's on RWC (IQR 2.4-11.7 dB under) and 8.4 dB under on
+  GTZAN. Its loudest 50 ms sits 3-4 dB under the music's loud moments.
+* At "-12 dB", the beat-averaged power is 19-20 dB under.
+
+Every conclusion below is about this digital loop. Whether it holds through a
+real speaker and microphone is for a closed-loop room test (see the fourth
+cell). The levels come from `eval/click_music_ratio.py`
+(`click_gate_and_antialias/click_music_ratio.json`).
+
+| arm, difference against G0 | RWC usable | RWC beat F | GTZAN usable | GTZAN beat F |
+|---|---:|---:|---:|---:|
+| G0 baseline (level) | 0.164 | 0.572 | 0.459 | 0.691 |
+| G1 gate only, nothing to hear | **-0.157** | **-0.144** | **-0.369** | **-0.186** |
+| G2 click -12 dB, gated: speaker mode as `main` ships it | -0.159 | -0.146 | -0.367 | -0.184 |
+| G3 click -12 dB, not gated | -0.012 | -0.041 | -0.023 | -0.024 |
+| G6 click 0 dB, gated | -0.157 | -0.171 | -0.358 | -0.195 |
+
+On usable, G1 has no recording better and 59 worse on RWC; none better and 369
+worse on GTZAN.
+
+*Registered decisions:*
+
+* **G1 against G0.** The gate by itself loses thirty to seventy times the noise
+  floor. Headphone mode is a product feature: a shell that gates a click the
+  microphone cannot hear throws away most of what the tracker can do.
+* **G2 against G0.** A loudspeaker, as shipped, costs nearly everything.
+* **G3 against G2.** G3 is far better, not merely no worse. On RWC usable it
+  gains +0.147 [+0.114, +0.182], with 55 recordings better and none worse. On
+  GTZAN it gains +0.344 [+0.314, +0.374], 348 better and 4 worse. On this
+  bench, at -12 dB nominal, the gate buys nothing. On usable it costs more
+  than ten times what the click does, and on beat F three to seven times.
+* **G4 against G1, G5 against G2.** Zeros are no worse than the mask on usable
+  or episode-free: all eight differences lie within ±0.023, every interval
+  through zero. The mask's argument was right in principle and immaterial in
+  practice. It keeps a small beat-F edge in all four comparisons (0.000 to
+  0.008). The mask is bit-identical when there are no gaps, so it stays.
+
+**Why the gate is so expensive.** `gateClick` drops every frame whose window
+overlaps the span from 5 ms before the tracker's own beat to 50 ms after it.
+That is about a quarter of all frames at 120 BPM. When the metronome is right,
+those frames are exactly where the music's beats are, so the filter is starved
+of the evidence it concentrates on.
+
+* Median final confidence falls from 0.28 to 0.06 on RWC, below the 0.25 lock,
+  and from 0.86 to 0.39 on GTZAN.
+* Octave switches, reacquisitions included, rise from 87 to 148 an hour on RWC.
+* AMLt falls with CMLt (0.58 to 0.41 on RWC), so this is not a clean off-beat
+  lock: the tracker keeps losing and retaking the beat.
+
+**What the ungated click does.** On the bench, the C API's old warning ("Declare
+its own click") is half right. Ungated at -12 dB, the tracker hears itself:
+
+* Its confidence is inflated: median 0.84, against 0.28 on RWC.
+* 22% of RWC recordings emit more than 1.5 times the annotated beats, against
+  8% at baseline. That is the signature of a lock onto its own output.
+
+"Stops following the room" is not what the endpoints show, though: correct
+time moves -0.022 on RWC and -0.003 on GTZAN. So, on the bench, the confidence
+reported with an audible, ungated click is inflated, which is a finding of its
+own.
+
+G6 shows that a louder click also leaks through the gate: -0.025 beat F against
+G2 on RWC. The LSTM has already heard the click by the time its frame is
+dropped, as `live.cpp` says.
+
+The registered arms leave one cell empty: a loud click without the gate. It
+decides whether the gate is removed or redesigned, and it is registered on its
+own, before running, as `PREREGISTERED_click_gate_loud_ungated.md` on the
+harness branch.
+
+### The fourth cell: a loud click without the gate
+
+`click_gate_and_antialias/g7_loud_nogate_*.json`, answering
+`eval/PREREGISTERED_click_gate_loud_ungated.md`. Same binary (SHA-256
+`9cb7961c4d02…`), clean tree at `bf085dd`, default seed.
+
+| usable, difference | RWC | GTZAN |
+|---|---:|---:|
+| G7 against G6: what the gate does at 0 dB | **+0.120** [+0.090, +0.152] | **+0.261** [+0.232, +0.290] |
+| G7 against G0: a loud click, ungated | -0.037 [-0.064, -0.012] | -0.097 [-0.120, -0.076] |
+| G3 against G0: a -12 dB click, ungated (for scale) | -0.012 | -0.023 |
+
+In the first row, 45 RWC recordings are better and none worse; on GTZAN, 270
+are better and 9 worse. Against G0, G7 loses beat F 0.097 on RWC and 0.082 on
+GTZAN, where a -12 dB click lost 0.041 and 0.024.
+
+*Registered decision:* G7 beats G6 by far more than the noise floor on both
+corpora, so on this bench the gate buys nothing at either gain measured. As the
+rule itself says, that is not yet a product change.
+
+* **Loudspeaker.** Removing the gate is a candidate for a real closed-loop
+  test, in which each arm plays its own clicks and hears them through a real
+  speaker and microphone. A replay of recorded music, such as P1-B0, cannot
+  answer it. The test should also check whether an ungated metronome keeps
+  itself going once the music stops.
+* **Headphones.** No acoustic test is needed. G1 has no click in the input at
+  all, so the gate there is pure loss, and `tiktak.h` now says not to call it.
+
+The registration's own phrase, "when the click is as loud as the music", was
+wrong for the reason given above: at 0 dB the click's beat-averaged power sits
+7-8 dB under the music's.
+
+**What the rule does not say, and the numbers do:** without the gate a loud
+click is not free either. At 0 dB the self-lock the C API warns about is real:
+
+* median confidence is 0.80, against 0.28 on RWC;
+* 30% of RWC recordings emit more than 1.5 times the annotated beats, against
+  8% at baseline and 22% at -12 dB;
+* GTZAN's usable rate falls from 0.459 to 0.361.
+
+At that gain, on the bench, dropping the gate is the better of two bad options.
+Two directions could keep the music's beat and lose the click. Neither is built
+or measured:
+
+* **Suppression that knows the click.** The microphone hears a delayed copy,
+  coloured by the speaker, the room and the microphone. This therefore means
+  estimating at least the delay, the gain and the acoustic path, as an adaptive
+  echo canceller does. Subtracting the rendered waveform is not enough. It is
+  a research direction, not a cheap replacement for the gate.
+* **A quieter click.** Post hoc, in all four arm-corpus pairs, the click's cost
+  grows with its level against the music (Spearman -0.08 to -0.19,
+  `eval/click_cost_by_level.py`, `click_gate_and_antialias/click_cost_by_level.json`). Quiet
+  recordings differ in other ways too, so this is a direction, not a threshold.
+  What ratio is safe in a room is for the closed-loop test; the bench's gains
+  cannot say.
+
+### Anti-aliasing BeatNet's resampler: this implementation is closed
+
+| A1 against G0 | usable | episode-free | beat F |
+|---|---:|---:|---:|
+| RWC | +0.020 [-0.000, +0.042] | +0.028 | -0.005 |
+| SMC | -0.005 (one recording) | +0.032 | -0.004 |
+
+*Registered decision:* the anti-aliased front end had to gain on usable by more
+than the noise floor on both RWC and SMC. It does so on RWC and not on SMC.
+SMC's usable rate is 3%, seven recordings, so the rule asked a lot of it, but
+beat F falls slightly on both corpora. It stays off, and this implementation, a
+63-tap Kaiser low-pass at 10 kHz, is closed. That does not show anti-aliasing is
+unnecessary in general: no other filter, cut-off or resampler was tried.
+It also costs wall time: 19 minutes for RWC against 14.
+
+**Reproduction.** G0 reproduces the batch-one quickfix baseline (`4554162`,
+default seed) on 327 of 328 recordings exactly. The exception is RWC_P077,
+beat F 0.452 against 0.384. The cause of that one divergence is not traced.
+
+## Four diagnostics after the activation-tempo fix, and the noise floor under all of them
+
+`quickfix_diagnostics/*.json`, per-track records in
+`per_track/quickfix_diagnostics/`, answering
+`eval/PREREGISTERED_quickfix_diagnostics.md`. Thirty-one arms, all clean
+trees: base at `75fcde7` (main), quickfix at `4554162`. BeatNet `model_1`,
+`--live-sample-hz 50`, macro over corpora with n >= 30. Differences below come
+from `eval/compare_live_runs.py`, and the first thing to read is Q1, because it
+changes how every other row can be read.
+
+### Q1 — the particle draw is as large as the effects being measured
+
+Only `--live-rng-seed` varies; RWC, five seeds each:
+
+| cloud | usable (SD) | episode-free (SD) | beat F (SD) | verdict flips, usable / episode-free |
+|---|---|---|---|---|
+| 512 (ships) | 0.168 (0.005) | 0.226 (**0.016**) | 0.572 (0.0015) | 5.1% / 9.3% |
+| 2048 | 0.171 (0.004) | 0.219 (0.006) | **0.592** (0.0007) | 3.5% / 5.4% |
+
+The default seed against seed 2 — the same code — gives episode-free
+**+0.026 [+0.007, +0.048]**. A paired bootstrap over recordings treats one draw
+as the truth, so on this tracker it is anti-conservative. A difference in
+usable or episode-free is a finding only once it clears the across-seed noise.
+For a large effect the SD may be enough; a small one needs paired arms on
+several identical seeds. Earlier RWC differences of 0.02-0.03 on those
+endpoints (debounce, the total ban, the ensemble's cost gates) should be re-read
+with that in mind. Beat F and correct time are ten times steadier.
+
+*Registered decision:* 2048 particles beat 512 on usable by more than the SD on
+two seeds of five, not four, so the default stays. Two things the rule did not
+ask about stand out: 2048 gains **+0.020 beat F** at a seed SD of 0.001, and
+halves-to-thirds the seed noise. Both are worth a registered run with the phone
+cost measured.
+
+### Q0 — the activation-tempo fix, on the bench
+
+| corpus | usable | episode-free | beat F | correct time |
+|---|---:|---:|---:|---:|
+| RWC | -0.005 | -0.029 | +0.004 | +0.008 |
+| Harmonix | +0.016 | +0.005 | **+0.009** [+0.007, +0.012] | +0.005 |
+| GTZAN (held out) | +0.010 | -0.008 | **+0.006** [+0.001, +0.010] | +0.005 |
+
+Usable and episode-free move inside the seed noise, in both directions — the
+RWC episode-free row is the default seed landing lowest of five, not the fix.
+Beat F and correct time rise on all three corpora. At stream origin 0 the
+binning defect touched 1-2% of frames; the fix exists for the device, where it
+touched a quarter to a third, and on the bench it costs nothing and gains a
+little.
+
+### Q2 — holding the octave for longer than six seconds
+
+RWC, the research seam `--live-octave-debounce`, against the quickfix baseline:
+
+| arm | usable | episode-free | strict | correct time |
+|---|---:|---:|---:|---:|
+| debounce 10 s | +0.013 | +0.027 | +0.010 | +0.002 |
+| **debounce 20 s** | **+0.028** | **+0.047** | +0.020 | **-0.001** |
+| debounce 30 s | +0.030 | +0.050 | +0.023 | -0.005 |
+| debounce 60 s | +0.033 | +0.055 | +0.023 | -0.012 |
+| total ban | +0.038 | +0.060 | +0.023 | **-0.034** |
+
+Monotone in the hold, one-sided in which recordings move (9 better and none
+worse on usable at 20 s), and 20 s clears the noise floor by more than five
+SDs on usable and about three on episode-free while costing no correct time.
+The total ban fails the guard at -0.034, exactly what it cost in the veto
+experiment. *Registered decision:* 10-60 s are candidates, and the hold earns a
+confirmatory run on Harmonix — now registered as
+`PREREGISTERED_octave_hold_and_level_floor.md`, through a core implementation
+(`tracking::OctaveHold`), averaged over three seeds.
+
+### Q3 — how much the level alone costs BeatNet
+
+Digital gain on the live input only, against 0 dB:
+
+| gain | -24 dB | -12 dB | -6 dB | +6 dB | +12 dB |
+|---|---:|---:|---:|---:|---:|
+| RWC usable | -0.032 | -0.025 | -0.005 | +0.002 | -0.040 |
+| RWC beat F | **-0.117** | -0.032 | -0.012 | -0.011 | **-0.068** |
+| SMC beat F | **-0.099** | -0.041 | -0.018 | -0.006 | -0.012 |
+
+The recording's own level is the optimum, and BeatNet loses on both sides of
+it — the features are `log10(1 + |X|)` with nothing in front, so a level is a
+position on that curve. *Registered decision:* -12 and -24 dB lose more than
+twice the noise floor on RWC usable, so a boost-only level floor is worth
+building; it now exists (`ml::BeatNetInput::level_floor_dbfs`, off) and its
+first test is registered. The loss at +12 dB says a two-sided level window may
+be worth asking about later; nothing here registered that.
+
+## The learned path's accent gate: better with a stricter phase, but not demonstrably
+
+`learned_accent_calibration_gtzan.json`, answering
+`eval/PREREGISTERED_learned_accent_calibration.md`. Commit `79ec955`, clean
+tree, 999 GTZAN recordings through `dump_analysis --learned`, split by name
+hash into 488 validation and 511 held-out (`jazz.00054` is a broken file).
+"Wrong" here is the README's own verdict — wrong metre, or right metre and the
+annotated bar lines under-recalled — which is stricter than the "rendered F
+below 0.5" of the section below, so its conditional error reads higher.
+
+| thresholds (phase, meter) | half | coverage | wrong | conditional error |
+|---|---|---:|---:|---:|
+| provisional (0.25, 0.40) | validation | 65.0% | 5.3% (<= 7.7%) | 8.2% (<= 11.8%) |
+| provisional (0.25, 0.40) | held-out | 66.5% | 5.9% (<= 8.3%) | 8.9% (<= 12.4%) |
+| chosen (1.036, 0.420) | validation | 59.5% | 2.9% (<= 4.8%) | 4.8% (<= 8.0%) |
+| chosen (1.036, 0.420) | held-out | 57.6% | 4.3% (<= 6.5%) | 7.5% (<= 11.1%) |
+
+Bounds are the upper 95% Wilson ends, which is what the budgets (5% wrong, 10%
+conditional) are applied to.
+
+**The registered condition fails, and the provisional pair stays.** On the
+validation half a much stricter phase margin (1.036) carries both budgets; on
+the held-out half its point estimates stay inside them (4.3%, 7.5%) but the
+upper bounds do not (6.5%, 11.1%). `evidence_gap`: that needs at least 660
+independent groups and 327 shown ones with no further errors, against 507 and
+292 here; the provisional pair would need 849 and 421. GTZAN alone cannot
+certify this budget for either pair, and each excerpt was counted as its own
+group although GTZAN repeats some artists — so the true bounds are, if
+anything, wider.
+
+What the table does say: the stricter phase margin buys about 1.4 points of
+conditional error for about 9 points of coverage on held-out material. Whether
+that trade is worth making is a product judgement the budget cannot make until
+there is more independent material to bound it with.
+
+## The learned file path, measured through the product's own analyser
+
+`learned_file_path_gtzan.json` (records beside it), answering
+`eval/PREREGISTERED_learned_file_path.md`. Commit `9157a09`, clean tree, one
+binary, 998 of the 1000 GTZAN recordings — the corpus `small0` never trained
+on. `jazz.00054` is a broken file for every arm; `disco.00049` failed once on
+the learned arm with an empty error while eleven model processes shared the
+machine, ran cleanly when repeated, and is not in the numbers.
+
+| arm | beat F | CMLt | AMLt | downbeat F | rendered |
+|---|---:|---:|---:|---:|---:|
+| `onsets` (ships today) | 0.782 | 0.648 | 0.847 | 0.417 | 0.417 |
+| `seam` (`--beat-this`) | 0.884 | 0.788 | 0.891 | 0.771 | 0.686 |
+| `learned` (`--learned`, `tt_offline`) | 0.884 | 0.788 | 0.891 | 0.751 | 0.751 |
+
+"Rendered" is what a player given one bar offset and a metre actually plays:
+the phase that holds the most bar lines, extended over the grid. For `seam` that
+is the model head's picks forced onto the onset path's metre.
+
+### What it settles
+
+**The port is the measured model, to the bit.** `seam` and `learned` produced
+identical beats on all 998 recordings, and `learned - onsets` is **+0.102
+[+0.087, +0.117]** beat F, +0.140 CMLt, +0.044 AMLt, 555 recordings better
+against 165 worse. The gain the research seam measured is now reachable
+through `tt_offline_set_model`, which is the registered replication condition.
+
+**The registered bar condition fails, narrowly.** The resolver fed the model's
+downbeat probability scores 0.751 against the head's own picks' 0.771:
+**-0.021 [-0.030, -0.012]**, 198 better and 207 worse. The registration asked
+for a lower bound above -0.01, so by its rule the next step is handing the
+player every bar line and keeping the head's picks, not tuning the resolver.
+
+**Post hoc, and labelled as such: the difference lives where no accent is
+played.** Split by the learned path's own accent gate (the provisional
+thresholds), the 65.7% it would accent score 0.903 with the resolver's bar lines
+and 0.899 with the head's, with the same 7.2% of them mostly wrong; the 34.3% it
+withholds score 0.459 and 0.527. The head's advantage is almost entirely on
+recordings the product would not accent. And what a one-offset player can play
+from the head today is 0.686, below the resolver's 0.751. Both facts argue that
+the per-beat player is worth building for the movable phase on full-length
+songs rather than for this 0.02.
+
+**The accent is where the product changes most** — descriptive, provisional
+thresholds, and the onset comparison was not registered:
+
+| path | accents | of which mostly wrong | correct accent, share of all |
+|---|---:|---:|---:|
+| onsets | 35.2% | **39.8%** | 21.2% |
+| learned | 65.7% | **7.2%** | **61.0%** |
+
+Metre, descriptively: learned 89.5%, onsets 76.5%, "always four" 93.6% of the
+992 recordings with annotated bar lines. GTZAN is four-four almost throughout
+and cannot rank metre decisions (`tiktak-metre-corpora-cannot-answer`).
+
+### What it does not settle
+
+Thirty-second excerpts cannot show a phase slip, so nothing here speaks to the
+movable phase or to full-length songs, where `small0` is train-on-test and the
+fold-matched full checkpoints are needed. The accent thresholds on this path
+are the cue backend's, carried over by argument; calibrating them needs a split
+and its own registration.
+
 ## Session 3: a slate aligns what correlation lost, and the room loss replicates
 
 `room_session3.json`. Three captures, clean tree at `6a13279`, twelve hashed

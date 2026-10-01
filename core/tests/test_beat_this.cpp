@@ -229,3 +229,71 @@ TEST(PickBeats, NothingInNothingOut) {
     EXPECT_TRUE(grid.beats.empty());
     EXPECT_TRUE(grid.downbeats.empty());
 }
+
+namespace {
+
+// A stand-in network that reports, for every row, which frame of the song it
+// was: the spectrogram below carries frame + 1 in its first band, zero rows are
+// padding, and the logits echo it back along with where in the chunk the row
+// sat. That is enough to check the arrangement: every frame answered, each by
+// the chunk the reference would have trusted.
+struct Echo {
+    int calls = 0;
+    int fail_on = -1;
+};
+
+bool echoChunk(void* context, const float* spectrogram, std::size_t frames, std::size_t mels,
+               float* beat, float* downbeat) {
+    auto* echo = static_cast<Echo*>(context);
+    if (echo->calls++ == echo->fail_on) return false;
+    for (std::size_t j = 0; j < frames; ++j) {
+        beat[j] = spectrogram[j * mels] - 1.0f;         // the song's frame, -1 on padding
+        downbeat[j] = static_cast<float>(j);             // the row within the chunk
+    }
+    return true;
+}
+
+std::vector<float> numberedSpectrogram(std::size_t frames, std::size_t mels) {
+    std::vector<float> out(frames * mels, 0.0f);
+    for (std::size_t f = 0; f < frames; ++f) out[f * mels] = static_cast<float>(f + 1);
+    return out;
+}
+
+}  // namespace
+
+TEST(RunChunked, EveryFrameIsAnsweredByAChunkThatSawItAwayFromAnEdge) {
+    using tiktak::ml::kBorderFrames;
+    using tiktak::ml::kChunkFrames;
+    for (const std::size_t frames : {std::size_t{40}, kChunkFrames - 2 * kBorderFrames,
+                                     kChunkFrames, std::size_t{4321}, std::size_t{12000}}) {
+        const auto mel = numberedSpectrogram(frames, kMels);
+        Echo echo;
+        tiktak::ml::Activations out;
+        ASSERT_TRUE(tiktak::ml::runChunked(mel.data(), frames, kMels, &echoChunk, &echo, out))
+            << frames;
+        ASSERT_EQ(out.beat.size(), frames);
+        for (std::size_t f = 0; f < frames; ++f) {
+            // The right frame came back to the right place, and none was left at
+            // the "nobody spoke" marker.
+            ASSERT_EQ(out.beat[f], static_cast<float>(f)) << "frame " << f << " of " << frames;
+            // Read from inside its chunk, never from the discarded border.
+            ASSERT_GE(out.downbeat[f], static_cast<float>(kBorderFrames)) << f;
+            ASSERT_LT(out.downbeat[f], static_cast<float>(kChunkFrames - kBorderFrames)) << f;
+        }
+    }
+}
+
+TEST(RunChunked, OneFailedChunkIsNoAnswerRatherThanHalfOfOne) {
+    const std::size_t frames = 5000;
+    const auto mel = numberedSpectrogram(frames, kMels);
+    Echo echo;
+    echo.fail_on = 2;
+    tiktak::ml::Activations out;
+    EXPECT_FALSE(tiktak::ml::runChunked(mel.data(), frames, kMels, &echoChunk, &echo, out));
+    EXPECT_TRUE(out.beat.empty());
+    EXPECT_TRUE(out.downbeat.empty());
+
+    EXPECT_FALSE(tiktak::ml::runChunked(mel.data(), frames, kMels, nullptr, &echo, out));
+    EXPECT_FALSE(tiktak::ml::runChunked(nullptr, frames, kMels, &echoChunk, &echo, out));
+    EXPECT_FALSE(tiktak::ml::runChunked(mel.data(), 0, kMels, &echoChunk, &echo, out));
+}

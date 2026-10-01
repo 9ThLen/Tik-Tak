@@ -220,8 +220,16 @@ def _track_at(
     # Read the objective off the sequence that was kept, not off the whole
     # array: trim() may have dropped beats from either end, and the cumulative
     # score at the last surviving frame still includes everything the backtrace
-    # passed through.
-    objective = float(cumulative[found[-1]] / len(found)) if len(found) else 0.0
+    # passed through. That handles the end; the start needs what had
+    # accumulated before the first kept beat taken back out, keeping the
+    # transition into it — the core's BeatTracker::track, line for line.
+    objective = 0.0
+    if len(found):
+        kept = float(cumulative[found[-1]])
+        before = int(backlink[found[0]])
+        if before >= 0:
+            kept -= float(cumulative[before])
+        objective = kept / len(found)
 
     return BeatResult(
         beats=times[found],

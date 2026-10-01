@@ -201,7 +201,24 @@ struct tt_offline {
     tiktak::analysis::OfflineAnalyzer impl;
     tiktak::analysis::OfflineResult result;
     bool finished = false;
+    bool fed = false;
+    // The shell's network, called through learnedChunk below.
+    tt_learned_chunk_fn run = nullptr;
+    void* run_context = nullptr;
 };
+
+namespace {
+
+// The C function the shell gave, in the shape the core asks for.
+bool learnedChunk(void* context, const float* spectrogram, std::size_t frames,
+                  std::size_t mels, float* beat_logits, float* downbeat_logits) {
+    const auto* offline = static_cast<const tt_offline*>(context);
+    return offline != nullptr && offline->run != nullptr &&
+           offline->run(offline->run_context, spectrogram, frames, mels, beat_logits,
+                        downbeat_logits) != 0;
+}
+
+}  // namespace
 
 void tt_offline_config_defaults(tt_offline_config* cfg, double sample_rate) {
     if (!cfg) return;
@@ -244,11 +261,33 @@ void tt_offline_destroy(tt_offline* offline) { delete offline; }
 tt_status tt_offline_feed(tt_offline* offline, const float* samples, size_t n) {
     if (!offline || (n > 0 && !samples)) return TT_ERR_INVALID_ARG;
     offline->impl.feed(samples, n);
+    if (n > 0) offline->fed = true;
     // More audio invalidates the previous answer rather than extending it, so
     // a caller that forgets to finish again reads nothing instead of stale
     // beats.
     offline->finished = false;
     return TT_OK;
+}
+
+tt_status tt_offline_set_model(tt_offline* offline, tt_learned_chunk_fn run, void* context,
+                               uint64_t model_id) {
+    if (!offline) return TT_ERR_INVALID_ARG;
+    // Too late once audio has gone past unkept: the model would be handed the
+    // end of a song and asked about all of it.
+    if (offline->fed) return TT_ERR_INVALID_ARG;
+    if (run != nullptr && model_id == 0) return TT_ERR_INVALID_ARG;
+    offline->run = run;
+    offline->run_context = run != nullptr ? context : nullptr;
+    offline->impl.setModel(run != nullptr ? &learnedChunk : nullptr, offline, model_id);
+    offline->finished = false;
+    return TT_OK;
+}
+
+int tt_offline_grid_learned(const tt_offline* offline) {
+    return offline && offline->finished &&
+                   offline->result.source == tiktak::analysis::GridSource::Learned
+               ? 1
+               : 0;
 }
 
 tt_status tt_offline_finish(tt_offline* offline) {
@@ -263,6 +302,7 @@ void tt_offline_reset(tt_offline* offline) {
     offline->impl.reset();
     offline->result = tiktak::analysis::OfflineResult{};
     offline->finished = false;
+    offline->fed = false;
 }
 
 double tt_offline_bpm(const tt_offline* offline) {
@@ -305,6 +345,11 @@ size_t tt_offline_downbeats(const tt_offline* offline, double* out, size_t capac
     std::copy(offline->result.downbeats.begin(),
               offline->result.downbeats.begin() + static_cast<std::ptrdiff_t>(count), out);
     return count;
+}
+
+int tt_offline_downbeat_offset(const tt_offline* offline) {
+    if (!offline || !offline->finished) return -1;
+    return tiktak::analysis::playbackDownbeatOffset(offline->result);
 }
 
 double tt_offline_downbeat_strength(const tt_offline* offline) {
@@ -743,8 +788,31 @@ void tt_player_stats_get(const tt_player* player, tt_player_stats* out) {
 
 /* ------------------------------------------------------------ live input -- */
 
+namespace {
+
+std::vector<const tiktak::ml::BeatNetWeights*> pointersTo(
+    const std::vector<tiktak::ml::BeatNetWeights>& weights) {
+    std::vector<const tiktak::ml::BeatNetWeights*> out;
+    out.reserve(weights.size());
+    for (const auto& w : weights) out.push_back(&w);
+    return out;
+}
+
+}  // namespace
+
 struct tt_live {
     explicit tt_live(const tiktak::tracking::LiveConfig& cfg) : impl(cfg) {}
+    tt_live(const tiktak::tracking::LiveConfig& cfg,
+            std::vector<tiktak::ml::BeatNetWeights>&& loaded)
+        : weights(std::move(loaded)),
+          refs(pointersTo(weights)),
+          impl(cfg, refs.data(), refs.size()) {}
+
+    // Declared, and so built, before the tracker and destroyed after it: the
+    // tracker keeps pointers into these. Moving the vector in above hands over
+    // its buffer, so the elements — and the pointers — do not move.
+    std::vector<tiktak::ml::BeatNetWeights> weights;
+    std::vector<const tiktak::ml::BeatNetWeights*> refs;
     tiktak::tracking::LiveTracker impl;
 };
 
@@ -801,6 +869,44 @@ tt_live* tt_live_create(const tt_live_config* cfg, tt_status* status) {
 
     if (status) *status = TT_OK;
     return handle;
+}
+
+tt_live* tt_live_create_with_models(const tt_live_config* cfg, const void* const* weights,
+                                    const size_t* sizes, size_t count, tt_status* status) {
+    const auto fail = [status](tt_status code) -> tt_live* {
+        if (status) *status = code;
+        return nullptr;
+    };
+
+    if (!cfg || !weights || !sizes || count == 0) return fail(TT_ERR_INVALID_ARG);
+
+    const tiktak::tracking::LiveConfig resolved = resolve(*cfg);
+    if (!resolved.valid()) return fail(TT_ERR_INVALID_ARG);
+
+    // Loaded in place, never copied: BeatNetWeights points into its own
+    // storage, and a copy would carry pointers into the original's.
+    std::vector<tiktak::ml::BeatNetWeights> loaded(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        if (!weights[i] || !loaded[i].load(weights[i], sizes[i])) {
+            return fail(TT_ERR_INVALID_ARG);
+        }
+    }
+
+    tt_live* handle = new (std::nothrow) tt_live(resolved, std::move(loaded));
+    if (!handle) return fail(TT_ERR_OUT_OF_MEMORY);
+    // The tracker makes the same all-or-none check; asked for a model, a
+    // handle that ended up on spectral flux is a failure, not a fallback.
+    if (handle->impl.models() != count) {
+        delete handle;
+        return fail(TT_ERR_INVALID_ARG);
+    }
+
+    if (status) *status = TT_OK;
+    return handle;
+}
+
+size_t tt_live_model_count(const tt_live* live) {
+    return live ? live->impl.models() : 0;
 }
 
 void tt_live_destroy(tt_live* live) { delete live; }

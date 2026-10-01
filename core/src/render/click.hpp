@@ -75,7 +75,11 @@ public:
 
     // Queues a click at host time `time_sec`, in the same clock domain as the
     // times mix() is given. False if the queue is full, which is counted.
-    bool schedule(double time_sec, schedule::BeatKind kind);
+    //
+    // `inverted` plays it upside down. Nobody can hear the difference, and that
+    // is the point: see render::ClickCanceller, which needs its clicks to share
+    // nothing with the music under them, not even a sign.
+    bool schedule(double time_sec, schedule::BeatKind kind, bool inverted = false);
 
     // Adds into `out` — it does not clear it. Mixing rather than filling is the
     // contract because Phase 4 plays the click over a track, and a fill would
@@ -124,10 +128,11 @@ private:
     struct Pending {
         double time_sec = 0.0;
         schedule::BeatKind kind = schedule::BeatKind::Beat;
+        bool inverted = false;
     };
 
     const ClickTone& toneFor(schedule::BeatKind kind) const;
-    void startVoice(const ClickTone& tone);
+    void startVoice(const ClickTone& tone, bool inverted);
     void renderVoice(Voice& voice, float* out, std::size_t frames);
 
     ClickConfig config_;

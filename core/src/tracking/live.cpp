@@ -13,7 +13,8 @@ bool LiveConfig::valid() const {
            release_confidence < lock_confidence && discontinuity_tolerance_sec > 0.0 &&
            activation_tempo.valid() && anchor_width_octaves > 0.0 &&
            anchor_octave_margin >= 0.0 && anchor_octave_margin <= 1.0 &&
-           anchor_freeze_timeout_sec > 0.0 && (!bar_tracking || bar.valid());
+           anchor_freeze_timeout_sec > 0.0 && anchor_octave_hold_sec >= 0.0 &&
+           (!bar_tracking || bar.valid());
 }
 
 double octaveNearest(double bpm, double held_bpm) {
@@ -62,6 +63,7 @@ LiveTracker::LiveTracker(const LiveConfig& config)
     // does not, which is why it reached CI rather than a local build.
     : config_(config), odf_(config.odf), filter_(resolveFilter(config)), sync_(config.sync),
       activation_tempo_(config.activation_tempo),
+      octave_hold_(config.anchor_octave_hold_sec),
       evidence_half_sec_(0.5 * static_cast<double>(config.odf.frameSize) /
                          config.odf.sampleRate),
       bar_(config.bar) {
@@ -72,7 +74,7 @@ LiveTracker::LiveTracker(const LiveConfig& config)
 LiveTracker::LiveTracker(const LiveConfig& config, const ml::BeatNetWeights& weights)
     : LiveTracker(config) {
     if (!weights.valid()) return;
-    model_.emplace(config.odf.sampleRate, weights);
+    model_.emplace(config.odf.sampleRate, weights, config.beatnet_input);
     evidence_half_sec_ = 0.5 * static_cast<double>(ml::BeatNetFeatures::kFrameSize) /
                          ml::BeatNetFeatures::kModelRate;
 }
@@ -90,14 +92,18 @@ LiveTracker::LiveTracker(const LiveConfig& config,
     for (std::size_t i = 0; i < count; ++i) {
         if (weights[i] == nullptr || !weights[i]->valid()) return;
     }
-    model_.emplace(config.odf.sampleRate, weights, count);
+    model_.emplace(config.odf.sampleRate, weights, count, config.beatnet_input);
     evidence_half_sec_ = 0.5 * static_cast<double>(ml::BeatNetFeatures::kFrameSize) /
                          ml::BeatNetFeatures::kModelRate;
 }
 
 void LiveTracker::gateClick(double heard_time_sec) {
-    gate_start_[gate_next_] = heard_time_sec - config_.gate_before_sec;
-    gate_end_[gate_next_] = heard_time_sec + config_.gate_after_sec;
+    gateSpan(heard_time_sec - config_.gate_before_sec, heard_time_sec + config_.gate_after_sec);
+}
+
+void LiveTracker::gateSpan(double from_sec, double to_sec) {
+    gate_start_[gate_next_] = from_sec;
+    gate_end_[gate_next_] = to_sec;
     gate_next_ = (gate_next_ + 1) % kGates;
 }
 
@@ -263,6 +269,10 @@ void LiveTracker::submit(double time_sec, double normalised) {
 
             // After the resolver and not before: that seam carries automatic
             // octave policies, and a person's decision outranks one.
+            // The hold acts on the estimator's level and the person's press on
+            // top of it: a press is a claim about the multiple, and holding the
+            // level underneath is what keeps that claim meaning the same thing.
+            if (octave_hold_.enabled()) anchor_bpm = octave_hold_.resolve(time_sec, anchor_bpm);
             anchor_bpm = withUserOctave(anchor_bpm);
 
             // One width, unconditionally. Making it depend on whether the
@@ -621,6 +631,7 @@ void LiveTracker::reset() {
     // The anchor is dropped with it, by the same rule read the other way: the
     // activation history is audio, and this is what was concluded from it.
     activation_tempo_.reset();
+    octave_hold_.reset();
     sync_.reset();
     // The scored window and the bar it decided are conclusions about audio, so
     // they go with it. The beat numbering restarts with them, which is why the

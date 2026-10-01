@@ -4,8 +4,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <vector>
 
+#include "analysis/grid_cache.hpp"
 #include "support.hpp"
 
 using tiktak::analysis::OfflineAnalyzer;
@@ -344,4 +346,205 @@ TEST(Offline, TheObjectiveIsReportedAndIsPositiveWhenBeatsWereFound) {
     const OfflineResult none = analyseOffline(silence.data(), silence.size(), testConfig());
     EXPECT_TRUE(none.beats.empty());
     EXPECT_DOUBLE_EQ(none.beat_objective_per_beat, 0.0);
+}
+
+namespace {
+
+// A result as the movable phase can produce it: an intro whose bars start on
+// grid beat `intro_phase` for `intro_bars`, then the body on `body_phase`.
+OfflineResult movedPhase(int intro_phase, int intro_bars, int body_phase, int body_bars) {
+    OfflineResult result;
+    result.beats_per_bar = 4;
+    for (int i = 0; i < 4 * (intro_bars + body_bars + 1); ++i) {
+        result.beats.push_back(0.5 * static_cast<double>(i));
+    }
+    for (int bar = 0; bar < intro_bars; ++bar) {
+        result.downbeats.push_back(result.beats[static_cast<std::size_t>(4 * bar + intro_phase)]);
+    }
+    for (int bar = intro_bars; bar < intro_bars + body_bars; ++bar) {
+        result.downbeats.push_back(result.beats[static_cast<std::size_t>(4 * bar + body_phase)]);
+    }
+    return result;
+}
+
+}  // namespace
+
+TEST(Offline, APlayerIsHandedTheBodysBarPhaseNotTheIntros) {
+    // The player knows one offset and extends it across the song. Handing it
+    // the first bar line accented two bars of intro right and twenty bars of
+    // song a beat off; the phase covering most bar lines gets the song right.
+    EXPECT_EQ(tiktak::analysis::playbackDownbeatOffset(movedPhase(1, 2, 2, 20)), 2);
+    EXPECT_EQ(tiktak::analysis::playbackDownbeatOffset(movedPhase(3, 20, 0, 2)), 3);
+}
+
+TEST(Offline, WhereThePhaseNeverMovedTheOffsetIsTheFirstBarLine) {
+    // Nearly every recording, and the answer callers were given before: kept
+    // exactly, including on a tie, which goes to the first bar line's phase.
+    const OfflineResult steady = movedPhase(3, 0, 3, 12);
+    EXPECT_EQ(tiktak::analysis::playbackDownbeatOffset(steady), 3);
+    EXPECT_EQ(tiktak::analysis::playbackDownbeatOffset(movedPhase(1, 4, 2, 4)), 1);
+}
+
+TEST(Offline, NoBarLinesMeansNoOffsetRatherThanZero) {
+    OfflineResult none = movedPhase(0, 0, 0, 8);
+    none.downbeats.clear();
+    EXPECT_EQ(tiktak::analysis::playbackDownbeatOffset(none), -1);
+
+    OfflineResult no_meter = movedPhase(0, 0, 0, 8);
+    no_meter.beats_per_bar = 0;
+    EXPECT_EQ(tiktak::analysis::playbackDownbeatOffset(no_meter), -1);
+}
+
+// ------------------------------------------------- the learned front end, wired
+//
+// No network here: a stand-in reads two bands of the model's own log-mel input
+// and answers "beat" where one is loud and "downbeat" where the other is. The
+// track puts a 4 kHz burst on every beat and a 1 kHz one on each bar line, so
+// the stand-in is a perfect model of it, and what is tested is everything the
+// core does around a network — features, chunking, picking, tempo, bar lines,
+// fallback, cache — which a real one would exercise identically.
+namespace {
+
+struct ToneModel {
+    std::size_t beat_band = 0;
+    std::size_t downbeat_band = 0;
+    int calls = 0;
+    bool fail = false;
+    bool silent = false;
+};
+
+// The band a steady tone lands in, found through the real feature extractor
+// rather than recomputed from the mel formula, so the stand-in reads exactly
+// the rows the network would.
+std::size_t bandOf(double hz) {
+    tiktak::ml::BeatThisFeatures features;
+    const auto tone = tiktak::test::sine(22050, hz, tiktak::ml::BeatThisFeatures::kModelRate, 0.5f);
+    const auto mel = features.compute(tone.data(), tone.size());
+    const std::size_t mels = tiktak::ml::BeatThisFeatures::kMels;
+    std::vector<double> mean(mels, 0.0);
+    for (std::size_t i = 0; i < mel.size(); ++i) mean[i % mels] += mel[i];
+    return static_cast<std::size_t>(std::max_element(mean.begin(), mean.end()) - mean.begin());
+}
+
+bool toneChunk(void* context, const float* spectrogram, std::size_t frames, std::size_t mels,
+               float* beat, float* downbeat) {
+    auto* model = static_cast<ToneModel*>(context);
+    ++model->calls;
+    if (model->fail) return false;
+    // Graded, not a step: a real network's logit rises and falls through a
+    // beat, and a flat plateau several frames wide is something no network
+    // produces and the reference picker was never asked to handle.
+    for (std::size_t j = 0; j < frames; ++j) {
+        const float* row = spectrogram + j * mels;
+        beat[j] = model->silent ? -8.0f : 4.0f * (row[model->beat_band] - 1.0f);
+        downbeat[j] = model->silent ? -8.0f : 4.0f * (row[model->downbeat_band] - 1.0f);
+    }
+    return true;
+}
+
+// 120 BPM from one second in, bar lines on the second beat and every fourth
+// after — a pickup, so a bar line at the start would be a wrong answer.
+std::vector<float> toneTrack(double seconds) {
+    std::vector<float> out(static_cast<std::size_t>(seconds * kSampleRate), 0.0f);
+    const auto burst = static_cast<std::size_t>(0.06 * kSampleRate);
+    int index = 0;
+    for (double t = 1.0; t + 0.1 < seconds; t += 0.5, ++index) {
+        // Centred on the beat, so the loudest frame is the beat's own.
+        const auto at = static_cast<std::size_t>(t * kSampleRate) - burst / 2;
+        tiktak::test::addSmoothTone(out, at, burst, 4000.0, kSampleRate);
+        if (index % 4 == 1) tiktak::test::addSmoothTone(out, at, burst, 1000.0, kSampleRate);
+    }
+    return out;
+}
+
+OfflineResult analyseWith(ToneModel& model, const std::vector<float>& audio,
+                          OfflineConfig config = testConfig()) {
+    OfflineAnalyzer analyzer(config);
+    analyzer.setModel(&toneChunk, &model, 42);
+    analyzer.feed(audio.data(), audio.size());
+    return analyzer.finish();
+}
+
+}  // namespace
+
+TEST(OfflineLearned, TakesTheBeatsAndBarsFromTheModel) {
+    ToneModel model;
+    model.beat_band = bandOf(4000.0);
+    model.downbeat_band = bandOf(1000.0);
+    ASSERT_NE(model.beat_band, model.downbeat_band);
+
+    const auto audio = toneTrack(30.0);
+    const OfflineResult result = analyseWith(model, audio);
+
+    ASSERT_EQ(result.source, tiktak::analysis::GridSource::Learned);
+    EXPECT_GT(model.calls, 0);
+    ASSERT_GT(result.beats.size(), 50u);
+    for (double beat : result.beats) {
+        const double n = (beat - 1.0) / 0.5;
+        EXPECT_LT(std::fabs(n - std::round(n)) * 0.5, 0.025) << "beat at " << beat;
+    }
+    EXPECT_NEAR(result.bpm, 120.0, 1.0) << "the tempo is the grid's own";
+
+    EXPECT_EQ(result.beats_per_bar, 4);
+    ASSERT_GT(result.downbeats.size(), 10u);
+    for (double bar : result.downbeats) {
+        const double n = (bar - 1.5) / 2.0;
+        EXPECT_LT(std::fabs(n - std::round(n)) * 2.0, 0.025) << "bar line at " << bar;
+    }
+    EXPECT_TRUE(result.downbeat_confident);
+    EXPECT_FALSE(result.model_downbeats.empty()) << "the head's own picks are kept to compare";
+}
+
+TEST(OfflineLearned, FallsBackToTheOnsetsWhenTheModelCannotAnswer) {
+    const auto audio = toneTrack(20.0);
+
+    ToneModel broken;
+    broken.fail = true;
+    const OfflineResult failed = analyseWith(broken, audio);
+    EXPECT_EQ(failed.source, tiktak::analysis::GridSource::Onsets);
+    EXPECT_FALSE(failed.beats.empty()) << "a failed model must not cost the user a grid";
+
+    ToneModel deaf;
+    deaf.silent = true;
+    const OfflineResult nothing = analyseWith(deaf, audio);
+    EXPECT_EQ(nothing.source, tiktak::analysis::GridSource::Onsets);
+    EXPECT_FALSE(nothing.beats.empty());
+}
+
+TEST(OfflineLearned, AHintGoesToThePathThatCanFollowIt) {
+    ToneModel model;
+    model.beat_band = bandOf(4000.0);
+    model.downbeat_band = bandOf(1000.0);
+    OfflineConfig config = testConfig();
+    config.bpm_hint = 120.0;
+    const OfflineResult result = analyseWith(model, toneTrack(20.0), config);
+    EXPECT_EQ(result.source, tiktak::analysis::GridSource::Onsets);
+    EXPECT_EQ(model.calls, 0) << "the network was run for an answer that could not be used";
+}
+
+TEST(OfflineLearned, TheCacheKnowsWhichFrontEndAndWhichModel) {
+    ToneModel model;
+    model.beat_band = bandOf(4000.0);
+    model.downbeat_band = bandOf(1000.0);
+    OfflineConfig config = testConfig();
+    OfflineAnalyzer analyzer(config);
+    analyzer.setModel(&toneChunk, &model, 42);
+    const auto audio = toneTrack(20.0);
+    analyzer.feed(audio.data(), audio.size());
+    const OfflineResult result = analyzer.finish();
+    ASSERT_EQ(result.source, tiktak::analysis::GridSource::Learned);
+
+    const auto blob = tiktak::analysis::serializeGrid(result, analyzer.config());
+    OfflineResult restored;
+    ASSERT_TRUE(tiktak::analysis::deserializeGrid(blob.data(), blob.size(), analyzer.config(),
+                                                  &restored));
+    EXPECT_EQ(restored.source, tiktak::analysis::GridSource::Learned);
+    EXPECT_EQ(restored.beats, result.beats);
+
+    // Another model, or none, is a different question with a different answer.
+    OfflineConfig other = analyzer.config();
+    other.learned_model_id = 43;
+    EXPECT_FALSE(tiktak::analysis::deserializeGrid(blob.data(), blob.size(), other, &restored));
+    other.learned_model_id = 0;
+    EXPECT_FALSE(tiktak::analysis::deserializeGrid(blob.data(), blob.size(), other, &restored));
 }

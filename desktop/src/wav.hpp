@@ -15,4 +15,9 @@ namespace tiktak::desktop {
 bool writeWav(const std::string& path, const std::vector<float>& samples,
               double sample_rate);
 
+// 32-bit float mono, unclipped. For what a microphone heard, when the recording
+// is data to be replayed later and must not be re-quantised on the way.
+bool writeWavFloat(const std::string& path, const std::vector<float>& samples,
+                   double sample_rate);
+
 }  // namespace tiktak::desktop

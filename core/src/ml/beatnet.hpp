@@ -146,6 +146,33 @@ private:
 // delay in its own streaming mode.
 //
 // Real-time safe: process() allocates nothing.
+// What happens to the capture before BeatNet's features are taken. Both are
+// off by default, because every published number was measured without them.
+struct BeatNetInput {
+    // Low-pass before the resampler decimates; see BeatNetFeatures::resample.
+    bool antialias = false;
+
+    // Lift anything quieter than this, in dBFS of the capture's own RMS, up to
+    // it; never cut. 0 is off.
+    //
+    // The features are log10(1 + |X|) with nothing in front, so a quieter
+    // input slides them toward the linear regime and the network sees shapes
+    // it was never trained on: on RWC a digital 24 dB cut alone costs beat F
+    // 0.117 and usable 0.032, and 12 dB costs 0.032 and 0.025
+    // (PREREGISTERED_quickfix_diagnostics.md, Q3). Phone captures arrive 15
+    // to 27 dB below their sources. Released music sits at -17.9 dBFS median
+    // active RMS as GTZAN measures it (199 files, IQR -21.0 to -14.6), so a
+    // floor near -20 lifts captures back into that range while leaving most
+    // clean files untouched.
+    //
+    // The level is a slow, symmetric average of frame power (5 s), updated only
+    // above -60 dBFS so silence does not drag it down, and the gain is at most
+    // +30 dB. Symmetric on purpose: a fast attack would dip the gain after
+    // every kick drum, which is a modulation at exactly the beat rate this
+    // front end exists to find.
+    double level_floor_dbfs = 0.0;
+};
+
 class BeatNetFeatures {
 public:
     static constexpr std::size_t kFeatures = BeatNetWeights::kFeatures;
@@ -159,7 +186,7 @@ public:
     // being fed; 8 covers everything down to 3 kHz.
     static constexpr std::size_t kMaxPerSample = 8;
 
-    explicit BeatNetFeatures(double sampleRate);
+    explicit BeatNetFeatures(double sampleRate, const BeatNetInput& input = {});
 
     void reset();
 
@@ -171,7 +198,19 @@ public:
     void process(const float* samples, std::size_t n, Fn&& onFrame) {
         float staged[kMaxPerSample];
         for (std::size_t i = 0; i < n; ++i) {
-            const std::size_t produced = resample(samples[i], staged);
+            float sample = samples[i];
+            if (antialias_) {
+                sample = lowpass(sample);
+                // The filter's first delay-worth of output belongs to before
+                // the stream began; dropping exactly that keeps every filtered
+                // sample at the time of the input it stands for, so frame
+                // times do not move.
+                if (skip_ > 0) {
+                    --skip_;
+                    continue;
+                }
+            }
+            const std::size_t produced = resample(sample, staged);
             for (std::size_t j = 0; j < produced; ++j) {
                 if (accept(staged[j])) {
                     onFrame(features_.data(), features_.size(), frameTimeSec());
@@ -191,7 +230,15 @@ private:
     // reads. Whether a proper polyphase decimator moves the numbers is an open
     // question and a measurable one; it is not something to change quietly
     // underneath results that were obtained without it.
+    //
+    // Hence `antialias`, off unless asked for: a 63-tap windowed-sinc low-pass
+    // at 10 kHz ahead of the interpolator, only when decimating. About 3 MMAC/s
+    // at 48 kHz against the network's twenty, and a delay of 31 input samples
+    // that process() takes back out, so the timestamps are unchanged.
     std::size_t resample(float sample, float* out);
+    float lowpass(float sample);
+    // The floor's gain for the frame in buffer_, updating the level estimate.
+    float levelGain();
 
     // One model-rate sample in; true when a frame is complete in features_.
     bool accept(float sample);
@@ -219,6 +266,23 @@ private:
     std::size_t input_index_ = 0;
     std::size_t output_index_ = 0;
     float previous_sample_ = 0.0f;
+
+    // The optional anti-alias filter: taps, a ring of recent input, and how
+    // many filtered samples are still owed to the time before the stream.
+    bool antialias_ = false;
+    std::vector<float> taps_;
+    std::vector<float> history_;
+    std::size_t history_head_ = 0;
+    std::size_t skip_ = 0;
+
+    // The optional level floor: the target power, and the running estimate of
+    // the capture's, first as a plain mean over a warm-up and then averaged.
+    bool level_active_ = false;
+    double floor_power_ = 0.0;
+    double level_alpha_ = 0.0;
+    double level_power_ = 0.0;
+    double warmup_power_ = 0.0;
+    std::size_t warmup_frames_ = 0;
 };
 
 // Audio in, beat activation out: the features and the network wired together.
@@ -250,7 +314,8 @@ private:
 // the usable rate. What the mean suppresses is the failure the corpora contain.
 class BeatNetActivation {
 public:
-    BeatNetActivation(double sampleRate, const BeatNetWeights& weights);
+    BeatNetActivation(double sampleRate, const BeatNetWeights& weights,
+                      const BeatNetInput& input = {});
 
     // `weights` is `count` pointers, each to a valid() set that must outlive
     // this object; the core does no I/O and does not own them. A count of zero
@@ -259,7 +324,8 @@ public:
     // produce a working tracker that is not the one being measured, and the
     // difference between those two is several points of the headline.
     BeatNetActivation(double sampleRate,
-                      const BeatNetWeights* const* weights, std::size_t count);
+                      const BeatNetWeights* const* weights, std::size_t count,
+                      const BeatNetInput& input = {});
 
     // How many networks are being averaged. One, for the single-weight form.
     std::size_t networks() const { return models_.size(); }

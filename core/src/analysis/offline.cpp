@@ -4,6 +4,8 @@
 #include <cmath>
 #include <utility>
 
+#include "dsp/resample.hpp"
+
 namespace tiktak::analysis {
 
 // Bar lines need harmony, and harmony needs the front end to produce it. Rather
@@ -20,8 +22,21 @@ OfflineAnalyzer::OfflineAnalyzer(const OfflineConfig& config)
       tempo_(config_.tempo),
       tracker_(config_.tracker, config_.tempo) {}
 
+void OfflineAnalyzer::setModel(ml::ChunkRunner runner, void* context, std::uint64_t model_id) {
+    runner_ = runner;
+    runner_context_ = runner != nullptr ? context : nullptr;
+    config_.learned_model_id = runner != nullptr ? model_id : 0;
+    if (runner == nullptr) audio_.clear();
+}
+
 void OfflineAnalyzer::feed(const float* samples, std::size_t n) {
     if (samples == nullptr || n == 0) return;
+
+    // The network wants the whole song resampled to its own rate, and resampling
+    // once over everything is both simpler and exactly what the research path
+    // measured; the onset front end below still runs, because it is the
+    // fallback if the model cannot answer.
+    if (runner_ != nullptr) audio_.insert(audio_.end(), samples, samples + n);
 
     odf_.process(samples, n, [this](const dsp::OdfFrame& frame) {
         // The full band drives tempo and phase. The low band and the pitch
@@ -87,7 +102,113 @@ BeatResult OfflineAnalyzer::trackBestHypothesis(double fps, double fallback_bpm)
                           odf_values_.size(), fps, fallback_bpm);
 }
 
+namespace {
+
+double sigmoid(float logit) { return 1.0 / (1.0 + std::exp(-static_cast<double>(logit))); }
+
+}  // namespace
+
+bool OfflineAnalyzer::finishLearned(OfflineResult& result) {
+    if (audio_.empty()) return false;
+
+    // Resampled, featurised, chunked and picked exactly as the research path
+    // that measured this front end did — the same resampler, features and peak
+    // picker — so its numbers describe what this returns.
+    const dsp::Resampler resampler(config_.odf.sampleRate, ml::BeatThisFeatures::kModelRate);
+    const std::vector<float> model_audio = resampler.apply(audio_.data(), audio_.size());
+    ml::BeatThisFeatures features;
+    const std::vector<float> mel = features.compute(model_audio.data(), model_audio.size());
+    const std::size_t mels = ml::BeatThisFeatures::kMels;
+    const std::size_t frames = mel.size() / mels;
+    if (frames == 0) return false;
+
+    ml::Activations activations;
+    if (!ml::runChunked(mel.data(), frames, mels, runner_, runner_context_, activations)) {
+        return false;
+    }
+    const ml::BeatGrid grid =
+        ml::pickBeats(activations.beat.data(), activations.downbeat.data(), frames);
+    if (grid.beats.size() < 2) return false;
+
+    result.source = GridSource::Learned;
+    result.frame_count = odf_values_.size();
+    result.beats = grid.beats;
+    result.model_downbeats = grid.downbeats;
+
+    // The tempo the grid actually has: the median gap between the beats that
+    // will be played. A tempo read from somewhere else could disagree with the
+    // clicks by an octave.
+    std::vector<double> gaps;
+    gaps.reserve(result.beats.size() - 1);
+    for (std::size_t i = 1; i < result.beats.size(); ++i) {
+        gaps.push_back(result.beats[i] - result.beats[i - 1]);
+    }
+    std::nth_element(gaps.begin(), gaps.begin() + static_cast<std::ptrdiff_t>(gaps.size() / 2),
+                     gaps.end());
+    const double median_gap = gaps[gaps.size() / 2];
+    result.bpm = median_gap > 0.0 ? 60.0 / median_gap : 0.0;
+    result.estimated_bpm = result.bpm;
+
+    // The alternative readings the half/double control offers: the same
+    // estimator the onset path uses, run over the activation instead of the
+    // onset function.
+    std::vector<double> beatness(frames);
+    for (std::size_t f = 0; f < frames; ++f) beatness[f] = sigmoid(activations.beat[f]);
+    tempo_.estimate(beatness.data(), frames, ml::BeatThisFeatures::kFrameRate);
+
+    // Confidence is how regular the grid is: the share of gaps within 15% of
+    // the median one. Not the activation's periodicity, which is what the onset
+    // path reports, because the failure this path has is different — the peaks
+    // themselves going irregular, a fill or a swung passage picked as a burst
+    // of beats. There the median gap stops meaning anything and the tempo above
+    // is the grid's and nothing more; this number is what says so. On a GTZAN
+    // jazz excerpt whose picks did exactly that it is where the 333 BPM such a
+    // grid reports gets its warning.
+    std::size_t regular = 0;
+    for (std::size_t i = 1; i < result.beats.size(); ++i) {
+        const double gap = result.beats[i] - result.beats[i - 1];
+        if (std::fabs(gap - median_gap) <= 0.15 * median_gap) ++regular;
+    }
+    result.tempo_confidence =
+        static_cast<double>(regular) / static_cast<double>(result.beats.size() - 1);
+
+    if (config_.find_downbeats) {
+        // The downbeat probability at each beat: its peak within 70 ms, the
+        // reduction the live bar tracker and the research seam both use, since
+        // the two heads are independent and can disagree by a frame.
+        const double rate = ml::BeatThisFeatures::kFrameRate;
+        std::vector<double> salience(result.beats.size(), 0.0);
+        for (std::size_t i = 0; i < result.beats.size(); ++i) {
+            const double at = result.beats[i] * rate;
+            const auto lo = static_cast<long long>(std::ceil(at - 0.07 * rate));
+            const auto hi = static_cast<long long>(std::floor(at + 0.07 * rate));
+            double peak = 0.0;
+            for (long long f = std::max(0LL, lo);
+                 f <= std::min(hi, static_cast<long long>(frames) - 1); ++f) {
+                peak = std::max(peak, sigmoid(activations.downbeat[static_cast<std::size_t>(f)]));
+            }
+            salience[i] = peak;
+        }
+        const DownbeatResult bars = resolveMeter(salience, result.beats, config_.learned_downbeat);
+        result.downbeats = bars.downbeats;
+        result.beats_per_bar = bars.beats_per_bar;
+        result.downbeat_strength = bars.strength;
+        result.downbeat_phase_margin = bars.phase_margin;
+        result.downbeat_meter_margin = bars.meter_margin;
+        result.downbeat_confident = bars.confident(config_.learned_downbeat.min_phase_margin,
+                                                   config_.learned_downbeat.min_meter_margin);
+    }
+    return true;
+}
+
 OfflineResult OfflineAnalyzer::finish() {
+    // A hint is an instruction the model's own peaks cannot follow, so it goes
+    // to the path that can.
+    if (runner_ != nullptr && config_.bpm_hint <= 0.0) {
+        OfflineResult learned;
+        if (finishLearned(learned)) return learned;
+    }
+
     OfflineResult result;
     result.frame_count = odf_values_.size();
 
@@ -146,12 +267,42 @@ void OfflineAnalyzer::reset() {
     frame_times_.clear();
     odf_low_.clear();
     chroma_.clear();
+    audio_.clear();
 }
 
 OfflineResult analyseOffline(const float* samples, std::size_t n, const OfflineConfig& config) {
     OfflineAnalyzer analyzer(config);
     analyzer.feed(samples, n);
     return analyzer.finish();
+}
+
+int playbackDownbeatOffset(const OfflineResult& result) {
+    const int per_bar = result.beats_per_bar;
+    if (per_bar <= 0 || result.downbeats.empty() || result.beats.empty()) return -1;
+
+    std::vector<std::size_t> votes(static_cast<std::size_t>(per_bar), 0);
+    int first_phase = -1;
+    std::size_t at = 0;
+    for (const double downbeat : result.downbeats) {
+        // Bar lines are beats by construction, so one forward walk finds each.
+        // The slack is for a grid that came back through the cache, where both
+        // lists went through the same conversion but not the same arithmetic.
+        while (at < result.beats.size() && result.beats[at] < downbeat - 1e-9) ++at;
+        if (at == result.beats.size()) break;
+        if (std::abs(result.beats[at] - downbeat) > 1e-6) continue;
+        const auto phase = static_cast<int>(at % static_cast<std::size_t>(per_bar));
+        if (first_phase < 0) first_phase = phase;
+        ++votes[static_cast<std::size_t>(phase)];
+    }
+    if (first_phase < 0) return -1;
+
+    int best = first_phase;
+    for (int phase = 0; phase < per_bar; ++phase) {
+        if (votes[static_cast<std::size_t>(phase)] > votes[static_cast<std::size_t>(best)]) {
+            best = phase;
+        }
+    }
+    return best;
 }
 
 }  // namespace tiktak::analysis

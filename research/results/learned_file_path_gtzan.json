@@ -1,0 +1,129 @@
+{
+ "provenance": {
+  "schema": "tiktak.provenance/v1",
+  "utc": "2026-09-30T05:02:08Z",
+  "commit": "9157a0949c0f1a57dc489bc125ca3ee8e02aed34",
+  "tree_clean": true,
+  "python": "3.11.15",
+  "platform": "Windows",
+  "binary": {
+   "name": "dump_analysis.exe",
+   "bytes": 1064960,
+   "sha256": "73f02f6d16e4e5d2b16504fe7a0d951cb5b37b210b66d49121b0486a7c5dc10e"
+  },
+  "model": {
+   "name": "small0.onnx",
+   "bytes": 11544482,
+   "sha256": "027bd18a03d82e98bf11af9e93a016705d00a6505216afcbe5de4f7b84848983"
+  },
+  "corpora": [
+   "gtzan"
+  ],
+  "limit": 0,
+  "smoke": false
+ },
+ "failures": [
+  "disco.00049: disco.00049.wav ['--learned', 'D:\\\\Programs\\\\D\\\\Tik-tak\\\\models\\\\small0.onnx']: ",
+  "jazz.00054: jazz.00054.wav []: D:\\Programs\\D\\Tik-tak\\music\\ground-truth\\audio\\gtzan-ready\\jazz\\jazz.00054.wav is not a WAV, FLAC or MP3 file"
+ ],
+ "summary": {
+  "n": 998,
+  "seam_learned_beats_identical": 998,
+  "learned_answered": 998,
+  "onsets": {
+   "f_measure": 0.7815986857189543,
+   "cmlt": 0.6483022125292084,
+   "amlt": 0.8466047658108671,
+   "downbeat_f": 0.41713077010742566,
+   "rendered_downbeat_f": 0.41713077010742566
+  },
+  "seam": {
+   "f_measure": 0.8838202881063544,
+   "cmlt": 0.7879816110682292,
+   "amlt": 0.8910438348437926,
+   "downbeat_f": 0.7711871874133551,
+   "rendered_downbeat_f": 0.685483433543605
+  },
+  "learned": {
+   "f_measure": 0.8838202881063544,
+   "cmlt": 0.7879816110682292,
+   "amlt": 0.8910438348437926,
+   "downbeat_f": 0.7506377521123762,
+   "rendered_downbeat_f": 0.7506377521123762
+  },
+  "replication_learned_vs_onsets": {
+   "f_measure": {
+    "n": 998,
+    "arm": 0.8838202881063544,
+    "against": 0.7815986857189543,
+    "delta": 0.10222160238740022,
+    "interval": [
+     0.08720428035613417,
+     0.11726796988181454
+    ],
+    "better": 555,
+    "worse": 165
+   },
+   "cmlt": {
+    "n": 998,
+    "arm": 0.7879816110682292,
+    "against": 0.6483022125292084,
+    "delta": 0.1396793985390208,
+    "interval": [
+     0.11170561860730101,
+     0.16748852219406377
+    ],
+    "better": 502,
+    "worse": 149
+   },
+   "amlt": {
+    "n": 998,
+    "arm": 0.8910438348437926,
+    "against": 0.8466047658108671,
+    "delta": 0.044439069032925486,
+    "interval": [
+     0.030265297589724797,
+     0.05868132534973079
+    ],
+    "better": 487,
+    "worse": 169
+   }
+  },
+  "bar_decision_learned_vs_seam": {
+   "n": 992,
+   "arm": 0.7506377521123762,
+   "against": 0.7711871874133551,
+   "delta": -0.02054943530097887,
+   "interval": [
+    -0.029477878207597005,
+    -0.011766974786094049
+   ],
+   "better": 198,
+   "worse": 207
+  },
+  "rendered_learned_vs_listed": {
+   "n": 992,
+   "arm": 0.7506377521123762,
+   "against": 0.7506377521123762,
+   "delta": 0.0,
+   "interval": [
+    0.0,
+    0.0
+   ],
+   "better": 0,
+   "worse": 0
+  },
+  "metre": {
+   "n": 992,
+   "always_4": 0.936491935483871,
+   "onsets": 0.7651209677419355,
+   "learned": 0.8951612903225806
+  },
+  "accent_gate_learned": {
+   "n": 992,
+   "coverage": 0.657258064516129,
+   "conditional_error": 0.07208588957055215,
+   "definition": "wrong = rendered downbeat F below 0.5 among recordings the provisional gate would accent"
+  }
+ }
+}

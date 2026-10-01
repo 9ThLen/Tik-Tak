@@ -69,6 +69,7 @@
 #include "ml/beat_this_session.hpp"
 #endif
 #include "analysis/offline.hpp"
+#include "render/click.hpp"
 #include "tracking/bar.hpp"
 #include "tracking/live.hpp"
 #include "tracking/particle.hpp"
@@ -726,6 +727,11 @@ int main(int argc, char** argv) {
     // resamples to the model's rate, runs the network and picks the peaks —
     // the same code an app would run, not a research approximation of it.
     std::string beat_this_path;
+    // The product's learned file path: the analyser itself runs Beat This!
+    // through the seam a phone would use, so bpm, metre, bar lines and margins
+    // all come from one decision. --beat-this, the research seam, only swaps
+    // the beats and the bar lines in after the onset analysis has run.
+    std::string learned_path;
     // The tempo posterior's shape, so the octave choice can be swept over a real
     // annotated corpus without a rebuild per point. Zero means "leave the
     // shipped default alone", the same convention --live-lock already uses.
@@ -769,6 +775,39 @@ int main(int argc, char** argv) {
     double live_roughening = 0.0;
     double live_regeneration = -1.0;  // 0 is a meaningful value here
 
+    // The filter's own sampling, which no run had varied: one fixed seed and a
+    // cloud of 512. The tracker turns differences far below audibility into
+    // different verdicts on some recordings, so how much of a per-recording
+    // result is the draw, rather than the music, is a number every paired
+    // comparison needs and nobody had measured. 0 leaves the core's values.
+    double live_rng_seed = 0.0;
+    double live_particles = 0.0;
+
+    // A digital gain, in dB, on what the live tracker hears and on nothing
+    // else. BeatNet's features are log10(1 + |X|) with no scale in front, so
+    // what it sees depends on the level: 12 dB down alone changed 17 of 20
+    // excerpts. This is the dose-response arm for that — the look, with no core
+    // change, at whether normalising the level is worth building. 0 is the
+    // ungained path exactly.
+    double live_input_gain_db = 0.0;
+
+    // A listening metronome on a loudspeaker, closed around the tracker: our own
+    // click mixed into what it hears at every beat it hands out, and each of
+    // those beats gated out of its input as LiveMetronome gates them. No
+    // published live number had either — the tracker was always scored deaf to
+    // its own output — so these are the arms that price speaker mode. The gain
+    // is on the click's nominal sound; NaN mixes nothing.
+    bool live_click_gate = false;
+    double live_click_db = std::numeric_limits<double>::quiet_NaN();
+    // ActivationTempoConfig::mask_gaps off: gaps heard as silence, the old
+    // behaviour, for the arm that compares it with the mask under gating.
+    bool live_anchor_gap_zeros = false;
+    // BeatNetInput::antialias: low-pass the capture before BeatNet's
+    // resampler decimates it. Inert on 22.05 kHz audio, where it never does.
+    bool live_antialias = false;
+    // BeatNetInput::level_floor_dbfs: lift quieter captures to this; 0 is off.
+    double live_level_floor = 0.0;
+
     // Soft octave holding: the filter's tempo prior is re-centred on what an
     // autocorrelation over the activation history makes of the tempo, instead
     // of on a fixed belief about musical tempo. Off in the core by default,
@@ -782,6 +821,9 @@ int main(int argc, char** argv) {
     double live_anchor_margin = -1.0;
     double live_anchor_window = 0.0;
     double live_anchor_min_window = 0.0;
+    // LiveConfig::anchor_octave_hold_sec: the core's own octave hold, as
+    // against --live-octave-debounce, the research seam it was measured on.
+    double live_anchor_hold = 0.0;
 
     // How often the per-second series below are sampled. One a second is what
     // every experiment before this one was measured at and stays the default,
@@ -835,10 +877,13 @@ int main(int argc, char** argv) {
         {"--live-beat-gain", &live_beat_gain},
         {"--live-roughening", &live_roughening},
         {"--live-regeneration", &live_regeneration},
+        {"--live-rng-seed", &live_rng_seed},
+        {"--live-particles", &live_particles},
         {"--live-anchor-width", &live_anchor_width},
         {"--live-anchor-margin", &live_anchor_margin},
         {"--live-anchor-window", &live_anchor_window},
         {"--live-anchor-min-window", &live_anchor_min_window},
+        {"--live-anchor-hold", &live_anchor_hold},
         {"--live-freeze-timeout", &live_freeze_timeout},
         {"--live-sample-hz", &live_sample_hz},
         {"--odf-whitening-strength", &odf_whitening_strength},
@@ -992,6 +1037,11 @@ int main(int argc, char** argv) {
             beat_this_path = argv[++i];
             continue;
         }
+        if (std::strcmp(argv[i], "--learned") == 0) {
+            if (i + 1 >= argc) { std::fprintf(stderr, "--learned needs a model\n"); return 2; }
+            learned_path = argv[++i];
+            continue;
+        }
         if (std::strcmp(argv[i], "--live-model") == 0) {
             if (i + 1 >= argc) { std::fprintf(stderr, "--live-model needs a file\n"); return 2; }
             model_paths.emplace_back(argv[++i]);
@@ -1072,6 +1122,59 @@ int main(int argc, char** argv) {
                 return 2;
             }
             beats_path = argv[++i];
+            continue;
+        }
+
+        if (std::strcmp(argv[i], "--live-click-gate") == 0) {
+            live_click_gate = true;
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-anchor-gap-zeros") == 0) {
+            live_anchor_gap_zeros = true;
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-antialias") == 0) {
+            live_antialias = true;
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-level-floor") == 0) {
+            if (i + 1 >= argc) {
+                std::fprintf(stderr, "--live-level-floor needs dBFS\n");
+                return 2;
+            }
+            char* end = nullptr;
+            live_level_floor = std::strtod(argv[++i], &end);
+            if (end == argv[i] || *end != 0 || !(live_level_floor < 0.0)) {
+                std::fprintf(stderr, "--live-level-floor must be a negative dBFS\n");
+                return 2;
+            }
+            continue;
+        }
+        if (std::strcmp(argv[i], "--live-click-db") == 0) {
+            if (i + 1 >= argc) {
+                std::fprintf(stderr, "--live-click-db needs a value\n");
+                return 2;
+            }
+            char* end = nullptr;
+            live_click_db = std::strtod(argv[++i], &end);
+            if (end == argv[i] || *end != '\0' || !std::isfinite(live_click_db)) {
+                std::fprintf(stderr, "--live-click-db must be a finite number\n");
+                return 2;
+            }
+            continue;
+        }
+        // Signed, unlike every knob in the table below: a gain is as often a cut.
+        if (std::strcmp(argv[i], "--live-input-gain-db") == 0) {
+            if (i + 1 >= argc) {
+                std::fprintf(stderr, "--live-input-gain-db needs a value\n");
+                return 2;
+            }
+            char* end = nullptr;
+            live_input_gain_db = std::strtod(argv[++i], &end);
+            if (end == argv[i] || *end != '\0' || !std::isfinite(live_input_gain_db)) {
+                std::fprintf(stderr, "--live-input-gain-db must be a finite number\n");
+                return 2;
+            }
             continue;
         }
 
@@ -1292,6 +1395,41 @@ int main(int argc, char** argv) {
         config.downbeat.phase_switch_cost = phase_switch_cost;
     }
     tiktak::analysis::OfflineAnalyzer analyzer(config);
+
+#if TIKTAK_HAVE_ML
+    // Declared here so it outlives finish(), which is where it runs.
+    tiktak::ml::BeatThisSession learned_session;
+    if (!learned_path.empty()) {
+        if (!beat_this_path.empty()) {
+            std::fprintf(stderr, "--learned and --beat-this ask the same model two ways; "
+                                 "pick one\n");
+            return 2;
+        }
+        std::vector<unsigned char> model_bytes;
+        if (!readBytes(learned_path.c_str(), model_bytes)) {
+            std::fprintf(stderr, "cannot read %s\n", learned_path.c_str());
+            return 1;
+        }
+        if (!learned_session.open(learned_path)) {
+            std::fprintf(stderr, "%s\n", learned_session.reason().c_str());
+            return 1;
+        }
+        // The model's identity for the grid cache, from its bytes. This tool
+        // never caches, but the analyser is given what a shell would give it.
+        std::uint64_t model_id = 0xcbf29ce484222325ull;
+        for (const unsigned char byte : model_bytes) {
+            model_id ^= byte;
+            model_id *= 0x100000001b3ull;
+        }
+        analyzer.setModel(&tiktak::ml::BeatThisSession::runChunk, &learned_session,
+                          model_id != 0 ? model_id : 1);
+    }
+#else
+    if (!learned_path.empty()) {
+        std::fprintf(stderr, "--learned needs a build with TIKTAK_BUILD_ML=ON\n");
+        return 2;
+    }
+#endif
 
     // Fed in blocks that are not a multiple of the hop, for the same reason
     // dump_beats does it: a decoder hands over whatever size it likes and the
@@ -1518,6 +1656,12 @@ int main(int argc, char** argv) {
         if (live_regeneration >= 0.0) {
             live_config.filter.regeneration = live_regeneration;
         }
+        if (live_rng_seed > 0.0) {
+            live_config.filter.seed = static_cast<std::uint64_t>(live_rng_seed);
+        }
+        if (live_particles > 0.0) {
+            live_config.filter.particles = static_cast<std::size_t>(live_particles);
+        }
         live_config.anchor_tempo = live_anchor;
         if (!live_anchor_veto_path.empty()) {
             live_config.anchor_bpm_resolver = &AnchorVetoSchedule::callback;
@@ -1554,6 +1698,10 @@ int main(int argc, char** argv) {
         if (live_anchor_min_window > 0.0) {
             live_config.activation_tempo.min_window_sec = live_anchor_min_window;
         }
+        if (live_anchor_hold > 0.0) live_config.anchor_octave_hold_sec = live_anchor_hold;
+        if (live_anchor_gap_zeros) live_config.activation_tempo.mask_gaps = false;
+        live_config.beatnet_input.antialias = live_antialias;
+        live_config.beatnet_input.level_floor_dbfs = live_level_floor;
         tiktak::tracking::LiveTracker tracker =
             model_refs.empty()
                 ? tiktak::tracking::LiveTracker(live_config)
@@ -1580,6 +1728,19 @@ int main(int argc, char** argv) {
         const double sample_period =
             live_sample_hz > 0.0 ? 1.0 / live_sample_hz : 1.0;
         double next_sample = sample_period;
+        // Our own click, when the run mixes it back in: rendered at the file's
+        // rate into the blocks the tracker has yet to hear, exactly where
+        // LiveMetronome would have put it with a zero round trip.
+        const bool mix_click = !std::isnan(live_click_db);
+        tiktak::render::ClickConfig click_config;
+        click_config.sample_rate = rate;
+        if (mix_click) {
+            const double gain = std::pow(10.0, live_click_db / 20.0);
+            click_config.downbeat.gain *= gain;
+            click_config.beat.gain *= gain;
+            click_config.subdivision.gain *= gain;
+        }
+        tiktak::render::ClickRenderer own_click(click_config);
         const auto poll = [&]() {
             // Before the beats are taken, so a press decided at this instant
             // reaches the grid this instant rather than one block late.
@@ -1591,6 +1752,8 @@ int main(int argc, char** argv) {
             // beat list at 50 Hz has to equal the beat list at 1 Hz.
             while (tracker.takeBeat(now, kLookahead, &beat)) {
                 live_beats.push_back(beat);
+                if (mix_click) own_click.schedule(beat, tiktak::schedule::BeatKind::Beat);
+                if (live_click_gate) tracker.gateClick(beat);
                 live_beat_emit.push_back(
                     static_cast<double>(beat_audit.block_index));
                 // One per beat, in the same order, so the two columns can be
@@ -1765,13 +1928,33 @@ int main(int argc, char** argv) {
                 }
             }
         } else {
+            // Scaled a block at a time into a scratch buffer, so the gain touches
+            // the tracker's input and nothing the offline analysis above read.
+            const bool gained = live_input_gain_db != 0.0;
+            const auto live_gain =
+                static_cast<float>(std::pow(10.0, live_input_gain_db / 20.0));
+            std::vector<float> gained_block(gained || mix_click ? kLiveBlock : 0);
             for (std::size_t pos = 0; pos < samples.size(); pos += kLiveBlock) {
                 const std::size_t take = std::min(kLiveBlock, samples.size() - pos);
                 anchor_veto_schedule.decision_time_sec =
                     now + static_cast<double>(take) / rate;
                 online_policy.decision_time_sec =
                     now + static_cast<double>(take) / rate;
-                tracker.process(now, samples.data() + pos, take);
+                const float* block = samples.data() + pos;
+                if (gained) {
+                    for (std::size_t k = 0; k < take; ++k) {
+                        gained_block[k] = block[k] * live_gain;
+                    }
+                    block = gained_block.data();
+                }
+                if (mix_click) {
+                    if (block != gained_block.data()) {
+                        std::copy(block, block + take, gained_block.begin());
+                    }
+                    own_click.mix(now, gained_block.data(), take);
+                    block = gained_block.data();
+                }
+                tracker.process(now, block, take);
                 now += static_cast<double>(take) / rate;
                 ++beat_audit.block_index;
                 poll();
@@ -1906,6 +2089,8 @@ int main(int argc, char** argv) {
                 salience_path.empty() ? "cues" : "file");
     std::printf("  \"beats_source\": \"%s\",\n",
                 beats_source);
+    std::printf("  \"grid_source\": \"%s\",\n",
+                analysis.source == tiktak::analysis::GridSource::Learned ? "learned" : "onsets");
     std::printf("  \"sample_rate\": %.17g,\n", rate);
     std::printf("  \"duration_sec\": %.17g,\n", static_cast<double>(samples.size()) / rate);
     std::printf("  \"bpm\": %.17g,\n", finiteOrZero(analysis.bpm));
@@ -2128,6 +2313,10 @@ int main(int argc, char** argv) {
     std::printf("],\n");
 
     printTimes("beats", beats, false);
+    // On the learned path, the bar lines the model's head picked on its own,
+    // beside the resolver's: what the research seam used to report, kept so the
+    // two can be scored against each other.
+    printTimes("model_downbeats", analysis.model_downbeats, false);
     printTimes("downbeats", downbeats, true);
     std::printf("}\n");
 
