@@ -94,8 +94,9 @@ the estimate ended at full trust.
 By the amended rule both ways back read "proceed": more than 20 dB removed,
 `l6` no worse than `l2`, and `l6` not keeping itself going by any of the three
 measures. For a dry run that says the build is fit to take to a room, and
-nothing more. The five arms without subtraction reproduce the first dry run to
-the digit, and with it the "keep the gate" branch for the ungated arms.
+nothing more. The five arms without subtraction reproduce the five-arm dry run
+below to the digit, and with it the "keep the gate" branch for the ungated
+arms.
 
 ### What the first dry run of these two arms found
 
@@ -142,9 +143,9 @@ On the same programme at six tempos, a silent click's last beat came 21 to
   * At 185 BPM through the made-up room it did not fire either: the next
     click comes before the last one's reverberation has died away.
 * **A quiet take after a loud one** is gated as an empty room, as
-  `classical.00075` was. On that take both subtracting arms score 0.12 to
-  0.17, against 0.38 with no click, gated or not: the click is louder than
-  the music there, and the gate is not what costs it.
+  `classical.00075` was. On that take the subtracting arms score 0.12 to 0.17
+  with the gate and without it, against 0.38 with no click. The click is
+  louder than the music there, and the gate is not what costs it.
 
 ### What a digital loop leaves out
 
