@@ -297,7 +297,8 @@ def score_pass(pass_json: pathlib.Path, programme: np.ndarray, rate: float, wind
                            if clean is not None else None)}
     return {"pass": pass_json.stem, "tail": tail, "settings": {key: log.get(key) for key in (
                 "click_db", "click_silent", "gated", "subtracted", "gate_when_alone",
-                "subtraction", "round_trip_sec", "front_end", "model",
+                "subtraction", "round_trip_sec", "round_trip_measured", "probe", "front_end",
+                "model",
                 "simulated_ms", "simulated_path_taps", "device", "stats")},
             "lag_sec": {"first": lag_first, "last": lag_last, "drift_per_hour": slope * 3600.0},
             "clarity": {"first": clarity_first, "last": clarity_last},
@@ -404,8 +405,9 @@ def command_run(args) -> int:
     for index, name in enumerate(names):
         arm = ARMS[name]
         flags = ["loop", str(args.programme), "--model", str(args.model),
-                 "--latency-ms", repr(float(args.latency_ms)), "--tail", repr(float(args.tail)),
-                 "-o", str(args.out / name)]
+                 "--tail", repr(float(args.tail)), "-o", str(args.out / name)]
+        if args.latency_ms is not None:
+            flags += ["--latency-ms", repr(float(args.latency_ms))]
         if arm["ratio"] is None:
             flags.append("--no-click")
         else:
@@ -498,8 +500,8 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--programme", type=pathlib.Path, required=True)
     run.add_argument("--gains", type=pathlib.Path, required=True,
                      help="the JSON `levels` printed, saved to a file")
-    run.add_argument("--latency-ms", type=float, required=True,
-                     help="the round trip `tiktak measure` reported")
+    run.add_argument("--latency-ms", type=float, default=None,
+                     help="the round trip; left out, every pass measures its own")
     run.add_argument("--out", type=pathlib.Path, required=True)
     run.add_argument("--tail", type=float, default=TAIL_SEC)
     run.add_argument("--pause", type=float, default=5.0)

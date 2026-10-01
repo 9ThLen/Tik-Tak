@@ -113,13 +113,27 @@ microphone by least squares from the clicks already played, and subtracts the
 click that path predicts before the tracker hears it.
 
 * The path is modelled with a tap on every sample around the expected return,
-  then a tap every quarter millisecond out to 150 ms.
+  then a tap every quarter millisecond out to 150 ms, and the same spacing for
+  20 ms ahead of it. If the direct sound keeps turning up away from where it
+  was expected, the model is moved onto it.
 * The estimate is averaged across clicks, each weighed by how quiet the room
   was just before it.
+* The clicks go out upright or inverted at random, so that music repeating on
+  every beat cannot average in with them.
+* The predicted click is scaled by how much of the estimate is path and how
+  much is music not yet averaged out, and nothing is predicted from fewer than
+  four clicks.
 * With `gate_when_alone`, a click and 350 ms of its tail are also gated when
   the room has emptied. "Emptied" means the level just before the click is
   20 dB under what it has usually been there, and nothing like music on the
   beat was left under the last click.
+
+**The round trip, for all seven arms.** Every pass now measures its own, from
+six probe clicks played before the programme in the same stream, by the
+matched filter `tiktak measure` uses. A figure from a separate run of the
+device is out by however its two streams happened to start, and the gate has
+only 5 ms to spare ahead of a click. `tiktak measure` is no longer a step of
+the session. The validity check on the gated arms stands.
 
 **Arms added,** at the same click level as `l1` and `l2`:
 
@@ -136,7 +150,9 @@ this same programme, before any room pass:
 
 * an update of 0.05 over 0.15;
 * 150 ms of path over 28 and 80 ms, against a made-up room;
-* the form of the empty-room rule.
+* the form of the empty-room rule;
+* the inverted clicks, the trust factor and the move, each added after a unit
+  test showed the failure it answers.
 
 The dry run of `l5` and `l6` is therefore a check that what was built works,
 and not a test of it. Only the room passes test it.

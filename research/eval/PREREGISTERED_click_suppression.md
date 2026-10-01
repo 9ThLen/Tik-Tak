@@ -127,10 +127,14 @@ difference is noise at twenty takes.
 **Known limits, each to be read off the room captures.**
 
 * Reverberation later than the 150 ms modelled is left in.
-* The first click after a start is not predicted at all.
+* The first four clicks after a start, or after the model is moved, are not
+  predicted at all.
 * A changed path, such as a phone picked up, is forgotten at 5% a click unless
   a pause intervenes.
-* The round trip has to exceed one buffer plus 2 ms.
+* The round trip has to exceed one buffer plus the model's lead-in, which is
+  20 ms or half the round trip, whichever is less.
+* Music much louder than the click in the click's own band is averaged out
+  only slowly. Until it is, less of the click is subtracted, by design.
 * In silence a tracker hears a click 50 dB down. Subtraction alone therefore
   cannot stop a metronome sustaining itself in an empty room, and the
   empty-room gate is what does.
