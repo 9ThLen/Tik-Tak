@@ -529,6 +529,22 @@ bool parseOptions(const std::vector<std::string>& args, Options& options, std::s
         } else if (arg == "--simulate-ms") {
             if (!need(value)) return false;
             options.simulate_ms = value;
+        } else if (arg == "--simulate-ir") {
+            if (!has_value) {
+                error = arg + " needs a path";
+                return false;
+            }
+            options.simulate_ir_path = args[++i];
+        } else if (arg == "--subtract") {
+            options.subtract = true;
+        } else if (arg == "--no-alone-gate") {
+            options.no_alone_gate = true;
+        } else if (arg == "--subtract-update") {
+            if (!need(value)) return false;
+            options.subtract_update = value;
+        } else if (arg == "--subtract-span-ms") {
+            if (!need(value)) return false;
+            options.subtract_span_ms = value;
         } else if (arg == "--model") {
             if (!has_value) {
                 error = arg + " needs a path";
@@ -665,6 +681,14 @@ void printUsage() {
         "  --model PATH       BeatNet weights (.ttw)\n"
         "  --click-db N       the click's gain on its nominal level (0)\n"
         "  --no-gate          on a loudspeaker, and still not gated\n"
+        "  --subtract         take the click out of what the tracker hears instead of\n"
+        "                     gating it; also writes PREFIX.clean.wav, what was left\n"
+        "  --no-alone-gate    with --subtract: never fall back on the gate, even when\n"
+        "                     the click has the room to itself\n"
+        "  --subtract-update N  with --subtract: how far one click moves the path\n"
+        "                     estimate; the core's own figure when not given\n"
+        "  --simulate-ir PATH with --simulate-ms: the click returns through this\n"
+        "                     impulse response, not untouched\n"
         "  --no-click         a silent click: every beat taken, nothing played\n"
         "  --external         the programme plays from another device; start it\n"
         "                     just after this does, and give --tail room for that\n"
@@ -988,7 +1012,9 @@ int cmdListen(const Options& options) {
     // clock is the capture stream's, so the click has to leave early by the
     // whole way out and back. That is the number `measure` reports.
     cfg.round_trip_sec = options.output_latency_sec;
-    cfg.gate_own_clicks = !options.headphones;
+    cfg.gate_own_clicks = !options.headphones && !options.subtract;
+    cfg.subtract_own_clicks = options.subtract && !options.headphones;
+    cfg.gate_when_alone = !options.no_alone_gate;
     if (!cfg.valid()) {
         std::fprintf(stderr, "tiktak: those settings do not make a live metronome\n");
         return 2;
@@ -1110,6 +1136,9 @@ struct LoopState {
     double sample_rate = 0.0;
 
     std::vector<float> capture;
+    std::vector<float> clean;        // what the tracker was handed; empty unless asked for
+    std::size_t clean_at = 0;
+    std::vector<float> click_only;   // the last block's click alone; for the simulated room
     std::atomic<std::size_t> position{0};
     double first_stream_sec = -1.0;
 
@@ -1122,6 +1151,17 @@ struct LoopState {
     double next_sample_sec = -1.0;
 };
 
+void loopHeard(void* context, double, const float* samples, std::size_t n) {
+    auto* state = static_cast<LoopState*>(context);
+    const std::size_t room =
+        state->clean.size() > state->clean_at ? state->clean.size() - state->clean_at : 0;
+    if (room > 0) {
+        std::copy(samples, samples + std::min(n, room),
+                  state->clean.begin() + static_cast<std::ptrdiff_t>(state->clean_at));
+    }
+    state->clean_at += n;
+}
+
 void loopBeat(void* context, double beat_sec) {
     auto* state = static_cast<LoopState*>(context);
     const std::size_t k = state->beat_count.load(std::memory_order_relaxed);
@@ -1131,9 +1171,9 @@ void loopBeat(void* context, double beat_sec) {
     }
 }
 
-// The duplex callback. The programme goes out first, then the room comes in
-// and the click is mixed over the programme, so what leaves the speaker is
-// exactly what a phone playing along with the music would add to the room.
+// The duplex callback. The room comes in, the click is rendered, and the
+// programme is laid under it, so what leaves the speaker is exactly what a
+// phone playing along with the music would add to the room.
 void loopCallback(void* user, double stream_time_sec, const float* input, float* output,
                   std::size_t frames) {
     auto* state = static_cast<LoopState*>(user);
@@ -1144,11 +1184,8 @@ void loopCallback(void* user, double stream_time_sec, const float* input, float*
     const std::size_t at = state->position.load(std::memory_order_relaxed);
     const std::vector<float>& programme = *state->programme;
 
-    for (std::size_t i = 0; i < frames; ++i) {
-        const std::size_t k = at + i;
-        output[i] = state->play_programme && k < programme.size() ? programme[k] : 0.0f;
-    }
     if (input != nullptr) {
+        state->clean_at = at;
         state->metronome->capture(stream_time_sec, input, frames);
         const std::size_t room = state->capture.size() > at ? state->capture.size() - at : 0;
         if (room > 0) {
@@ -1156,7 +1193,18 @@ void loopCallback(void* user, double stream_time_sec, const float* input, float*
                       state->capture.begin() + static_cast<std::ptrdiff_t>(at));
         }
     }
+    // The click by itself first: a simulated room sends it back along a path
+    // of its own.
+    std::fill(output, output + frames, 0.0f);
     state->metronome->process(stream_time_sec, output, frames);
+    if (state->click_only.size() >= frames) {
+        std::copy(output, output + frames, state->click_only.begin());
+    }
+    if (state->play_programme) {
+        for (std::size_t i = 0; i < frames && at + i < programme.size(); ++i) {
+            output[i] += programme[at + i];
+        }
+    }
 
     // The estimate on the tracker's own clock, as dump_analysis samples it, so
     // the scorer can judge acquisition and wrong-level episodes the same way.
@@ -1248,7 +1296,8 @@ int cmdLoop(const Options& options) {
     }
 
     const bool silent = options.no_click;
-    const bool gated = !(options.headphones || options.no_gate || silent);
+    const bool subtracted = options.subtract && !silent;
+    const bool gated = !(options.headphones || options.no_gate || silent || subtracted);
     LiveMetronomeConfig cfg;
     cfg.tracker = tiktak::tracking::liveConfigFor(rate);
     cfg.click.sample_rate = rate;
@@ -1260,9 +1309,32 @@ int cmdLoop(const Options& options) {
     cfg.click.subdivision.gain *= gain;
     cfg.round_trip_sec = options.output_latency_sec;
     cfg.gate_own_clicks = gated;
+    cfg.subtract_own_clicks = subtracted;
+    cfg.gate_when_alone = !options.no_alone_gate;
+    if (options.subtract_update > 0.0) cfg.canceller.update = options.subtract_update;
+    if (options.subtract_span_ms > 0.0) cfg.canceller.after_sec = options.subtract_span_ms / 1000.0;
     if (!cfg.valid()) {
         std::fprintf(stderr, "tiktak: those settings do not make a live metronome\n");
         return 2;
+    }
+
+    // The simulated click's way back: straight, unless a path was given.
+    std::vector<float> path = {1.0f};
+    if (simulated && !options.simulate_ir_path.empty()) {
+        auto ir = tiktak::decode::Decoder::open(options.simulate_ir_path.c_str());
+        if (!ir || std::fabs(ir->info().sample_rate - rate) > 0.5) {
+            std::fprintf(stderr, "tiktak: %s is not an impulse response at %.0f Hz\n",
+                         options.simulate_ir_path.c_str(), rate);
+            return 1;
+        }
+        path.clear();
+        float block[4096];
+        for (;;) {
+            const std::size_t got = ir->readMono(block, 4096);
+            if (got == 0) break;
+            path.insert(path.end(), block, block + got);
+        }
+        if (path.empty()) path = {1.0f};
     }
 
     tiktak::ml::BeatNetWeights weights;
@@ -1286,12 +1358,18 @@ int cmdLoop(const Options& options) {
     state.series_confidence.assign(samples, 0.0);
     state.series_spread.assign(samples, 0.0);
     metronome.setBeatObserver(loopBeat, &state);
+    if (subtracted) {
+        state.clean.assign(state.capture.size(), 0.0f);
+        metronome.setHeardObserver(loopHeard, &state);
+    }
     metronome.start();
 
     std::printf("front end: %s; click %s, %+.1f dB; own click %s; round trip %.1f ms\n",
                 metronome.usingModel() ? "BeatNet" : "spectral flux",
                 silent ? "silent" : "audible", options.click_db,
-                gated ? "gated" : "not gated", cfg.round_trip_sec * 1000.0);
+                subtracted ? (cfg.gate_when_alone ? "subtracted, gated when alone" : "subtracted")
+                           : gated ? "gated" : "not gated",
+                cfg.round_trip_sec * 1000.0);
     if (cfg.round_trip_sec <= 0.0 && !silent) {
         std::printf("no round trip given: measure it with `tiktak measure` and pass --latency-ms\n");
     }
@@ -1320,16 +1398,25 @@ int cmdLoop(const Options& options) {
         // Everything that left the speaker, so that each block can hear the one
         // that went out `delay` samples before it.
         const auto delay = static_cast<std::size_t>(std::lround(options.simulate_ms / 1000.0 * rate));
-        std::vector<float> played(total + period, 0.0f);
+        // The programme comes straight back after the delay. The click comes
+        // back through `path`, laid ahead into `echo` as each one is played.
+        std::vector<float> echo(total + delay + path.size() + period, 0.0f);
         std::vector<float> in(period), out(period);
+        state.click_only.assign(period, 0.0f);
         for (std::size_t at = 0; at < total; at += period) {
             const std::size_t n = std::min(period, total - at);
             for (std::size_t i = 0; i < n; ++i) {
-                in[i] = at + i >= delay ? played[at + i - delay] : 0.0f;
+                const std::size_t k = at + i;
+                const bool music = !options.external && k >= delay && k - delay < programme.size();
+                in[i] = (music ? programme[k - delay] : 0.0f) + echo[k];
             }
             loopCallback(&state, static_cast<double>(at) / rate, in.data(), out.data(), n);
-            std::copy(out.begin(), out.begin() + static_cast<std::ptrdiff_t>(n),
-                      played.begin() + static_cast<std::ptrdiff_t>(at));
+            for (std::size_t i = 0; i < n; ++i) {
+                const float click = state.click_only[i];
+                if (click == 0.0f) continue;
+                float* into = echo.data() + at + i + delay;
+                for (std::size_t k = 0; k < path.size(); ++k) into[k] += click * path[k];
+            }
         }
     }
     double next_report = 0.0;
@@ -1361,6 +1448,14 @@ int cmdLoop(const Options& options) {
         std::fprintf(stderr, "tiktak: could not write %s\n", wav_path.c_str());
         return 1;
     }
+    if (subtracted) {
+        state.clean.resize(heard);
+        const std::string clean_path = options.output_path + ".clean.wav";
+        if (!writeWavFloat(clean_path, state.clean, rate)) {
+            std::fprintf(stderr, "tiktak: could not write %s\n", clean_path.c_str());
+            return 1;
+        }
+    }
 
     std::FILE* log = std::fopen(log_path.c_str(), "w");
     if (log == nullptr) {
@@ -1376,6 +1471,17 @@ int cmdLoop(const Options& options) {
     std::fprintf(log, "  \"click_db\": %.3f,\n", options.click_db);
     std::fprintf(log, "  \"click_silent\": %s,\n", silent ? "true" : "false");
     std::fprintf(log, "  \"gated\": %s,\n", gated ? "true" : "false");
+    std::fprintf(log, "  \"subtracted\": %s,\n", subtracted ? "true" : "false");
+    std::fprintf(log, "  \"gate_when_alone\": %s,\n",
+                 subtracted && cfg.gate_when_alone ? "true" : "false");
+    {
+        const auto taken = metronome.subtraction();
+        std::fprintf(log, "  \"subtraction\": {\"clicks\": %zu, \"skipped\": %zu, "
+                          "\"arrival_sec\": %.6f, \"clicks_alone\": %zu},\n",
+                     taken.clicks, taken.skipped, taken.arrival_sec,
+                     metronome.stats().clicks_alone);
+    }
+    std::fprintf(log, "  \"simulated_path_taps\": %zu,\n", simulated ? path.size() : 0);
     std::fprintf(log, "  \"round_trip_sec\": %.6f,\n", cfg.round_trip_sec);
     std::fprintf(log, "  \"front_end\": \"%s\",\n", metronome.usingModel() ? "beatnet" : "flux");
     std::fprintf(log, "  \"model\": \"%s\",\n", baseName(options.model_path).c_str());
