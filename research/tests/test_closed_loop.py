@@ -1,7 +1,7 @@
 import numpy as np
 
-from eval.closed_loop import (CLICK_ENERGY, click_to_music_db, lag_between, paired, removed_db,
-                              sustain, synthetic_path, take_windows)
+from eval.closed_loop import (CLICK_ENERGY, alone_clicks, click_to_music_db, lag_between, paired,
+                              removed_db, sustain, synthetic_path, tail_measures, take_windows)
 
 
 def layout():
@@ -83,3 +83,39 @@ def test_the_made_up_room_is_the_same_every_time_and_mostly_direct():
     # Its diffuse tail carries a tenth of the direct sound's energy by default.
     tail = float(np.sum(first[int(0.020 * 48000):] ** 2))
     assert abs(10.0 * np.log10(tail) + 10.0) < 0.2
+
+
+def test_clicks_gated_as_alone_are_counted_where_they_fell():
+    beats = np.array([1.0, 2.0, 3.0, 11.0, 12.0, 21.0, 22.0])
+    flags = [0, 0, 1, 1, 1, 0, 1]
+    counted = alone_clicks(beats, flags, {"music": [(0.0, 10.0), (20.0, 30.0)],
+                                          "gaps": [(10.0, 20.0)]})
+    # Under the takes it is the rule mistaking music for an empty room.
+    assert counted["music"] == {"alone": 2, "clicks": 5}
+    assert counted["gaps"] == {"alone": 2, "clicks": 2}
+    # A pass recorded before the flags were kept counts none, and does not fail.
+    assert alone_clicks(beats, None, {"gaps": [(10.0, 20.0)]})["gaps"] == {"alone": 0, "clicks": 2}
+
+
+def test_the_final_silence_is_read_where_the_rules_read_it():
+    times = np.arange(0.0, 160.0, 0.02)
+    # Locked while the music plays (to 100 s), then a confidence that has gone by
+    # 20 s on, and a metronome that coasts at 0.09 without ever letting go.
+    stopping = np.where(times < 120.0, 0.8, 0.0)
+    coasting = np.where(times < 110.0, 0.8, 0.09)
+    beats = np.arange(0.5, 160.0, 0.5)
+
+    stopped = tail_measures(beats[beats < 118.0], times, stopping, 100.0, 160.0)
+    assert stopped["final_confidence"] == 0.0
+    assert stopped["still_clicking"] is False
+    assert abs(stopped["last_beat_after_sec"] - 17.5) < 1e-9
+    assert abs(stopped["locked_share"] - 20.0 / 30.0) < 0.01
+
+    # Under the lock threshold from 25 to 30 s, which the first rule passes, and
+    # still handing out beats a minute on, which the second does not.
+    deaf = tail_measures(beats, times, coasting, 100.0, 160.0)
+    assert deaf["final_confidence"] < 0.25
+    assert deaf["still_clicking"] is True
+
+    # A pass that listened for half a minute cannot say.
+    assert tail_measures(beats, times, coasting, 100.0, 130.0)["still_clicking"] is None

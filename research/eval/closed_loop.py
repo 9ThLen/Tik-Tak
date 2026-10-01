@@ -63,7 +63,12 @@ CLICK_WINDOW_SEC = (-0.002, 0.100)
 LOCK_CONFIDENCE = 0.25
 SILENCE_MARGIN_SEC = 0.5
 TREND_SEC = 3.0
-TAIL_SEC = 30.0
+TAIL_SEC = 60.0
+# Where the rules read the silence after the programme, in seconds after the
+# music: the confidence as first registered, and whether the metronome is still
+# clicking at the end, which Amendment 2 added.
+CONFIDENCE_AT = (25.0, 30.0)
+CLICKING_AT = (55.0, 60.0)
 DRAWS = 10_000
 BOOTSTRAP_SEED = 20260930
 
@@ -204,6 +209,48 @@ def sustain(beats: np.ndarray, times: np.ndarray, confidences: np.ndarray,
                                  if len(head) and len(tail) else 0.0)}
 
 
+def tail_measures(beats: np.ndarray, times: np.ndarray, confidences: np.ndarray, after: float,
+                  tail_end: float) -> dict:
+    """The silence after the programme: does the metronome stop?
+
+    The confidence is read where it was first registered, 25 to 30 s after the
+    music, however long the pass went on listening. `still_clicking` is the
+    measure Amendment 2 added, and a pass that did not listen for a minute
+    cannot answer it.
+    """
+    inside = beats[(beats >= after) & (beats < tail_end)] - after
+    elapsed = times - after
+    half_minute = (elapsed >= 0.0) & (elapsed < min(CONFIDENCE_AT[1], tail_end - after))
+    read = (elapsed >= CONFIDENCE_AT[0]) & (elapsed < CONFIDENCE_AT[1])
+    listened = tail_end - after >= CLICKING_AT[1] - 0.5
+    return {"seconds": tail_end - after,
+            "beats": int(len(inside)),
+            "last_beat_after_sec": float(inside[-1]) if len(inside) else 0.0,
+            "final_confidence": float(confidences[read].mean()) if read.any() else None,
+            "locked_share": (float(np.mean(confidences[half_minute] >= LOCK_CONFIDENCE))
+                             if half_minute.any() else None),
+            "still_clicking": (bool(np.any((inside >= CLICKING_AT[0]) & (inside < CLICKING_AT[1])))
+                               if listened else None)}
+
+
+def alone_clicks(beats: np.ndarray, flags, stretches: dict[str, list[tuple[float, float]]]) -> dict:
+    """Where the clicks gated for having the room to themselves fell.
+
+    In the gaps and the tail that is the empty-room rule working. Under a take
+    it is the rule taking music for an empty room, and the tracker losing half
+    of every such beat for nothing.
+    """
+    alone = (np.asarray(flags, dtype=np.float64) > 0.5 if flags is not None and len(flags)
+             else np.zeros(len(beats), dtype=bool))
+    out = {}
+    for name, spans in stretches.items():
+        inside = np.zeros(len(beats), dtype=bool)
+        for start, end in spans:
+            inside |= (beats >= start) & (beats < end)
+        out[name] = {"alone": int(np.sum(alone & inside)), "clicks": int(np.sum(inside))}
+    return out
+
+
 def removed_db(raw: np.ndarray, clean: np.ndarray, rate: float, t0: float, beats: np.ndarray,
                window: tuple[float, float]) -> float | None:
     """What was heard against what subtraction left, at the clicks in `window`.
@@ -252,10 +299,12 @@ def score_pass(pass_json: pathlib.Path, programme: np.ndarray, rate: float, wind
         return t0 + programme_sec + lag_first + slope * (programme_sec - first)
 
     records = []
+    music, gaps = [], []
     for window in windows:
         track = window["track"]
         start, end = to_stream(window["start"]), to_stream(window["end"])
         keep = (times >= start) & (times < end)
+        music.append((start, end))
         payload = {
             "beats": (beats[(beats >= start) & (beats < end)] - start).tolist(),
             "duration_sec": end - start, "sample_rate": rate,
@@ -269,6 +318,7 @@ def score_pass(pass_json: pathlib.Path, programme: np.ndarray, rate: float, wind
         scored = _score_one(dict(items[track]), "model", pathlib.Path("unused"), None,
                             estimate=Estimate.from_json(payload))
         quiet = (to_stream(window["silence"][0]), to_stream(window["silence"][1]))
+        gaps.append(quiet)
         ratio = (None if log.get("click_silent") else
                  click_to_music_db(programme, rate, window, period_of[track], log["click_db"]))
         records.append({"track": track, "f_measure": scored.get("f_measure"),
@@ -283,20 +333,16 @@ def score_pass(pass_json: pathlib.Path, programme: np.ndarray, rate: float, wind
     # metronome stops once nothing is playing.
     after = to_stream(float(len(programme)) / rate)
     tail_end = after + float(log.get("tail_sec") or 0.0)
-    in_tail = (times >= after) & (times < tail_end)
-    last_seconds = (times >= tail_end - 5.0) & (times < tail_end)
-    tail_beats = beats[(beats >= after) & (beats < tail_end)]
-    tail = {"seconds": tail_end - after,
-            "beats": int(len(tail_beats)),
-            "last_beat_after_sec": float(tail_beats[-1] - after) if len(tail_beats) else 0.0,
-            "final_confidence": float(confidences[last_seconds].mean())
-            if last_seconds.any() else None,
-            "locked_share": float(np.mean(confidences[in_tail] >= LOCK_CONFIDENCE))
-            if in_tail.any() else None,
-            "removed_db": (removed_db(capture, clean, rate, t0, beats, (after + 5.0, tail_end))
-                           if clean is not None else None)}
-    return {"pass": pass_json.stem, "tail": tail, "settings": {key: log.get(key) for key in (
+    tail = tail_measures(beats, times, confidences, after, tail_end)
+    tail["removed_db"] = (removed_db(capture, clean, rate, t0, beats,
+                                     (after + 5.0, min(tail_end, after + CONFIDENCE_AT[1])))
+                          if clean is not None else None)
+    alone_in = alone_clicks(beats, log.get("beats_alone"),
+                            {"music": music, "gaps": gaps, "tail": [(after, tail_end)]})
+    return {"pass": pass_json.stem, "tail": tail, "alone": alone_in,
+            "settings": {key: log.get(key) for key in (
                 "click_db", "click_silent", "gated", "subtracted", "gate_when_alone",
+                "alone_gate_sec", "alone_listen_sec",
                 "subtraction", "round_trip_sec", "round_trip_measured", "probe", "front_end",
                 "model",
                 "simulated_ms", "simulated_path_taps", "device", "stats")},
@@ -346,6 +392,7 @@ def summarise(passes: dict[str, dict]) -> dict:
                 [r["removed_db"] for r in rows if r.get("removed_db") is not None]))
                 if any(r.get("removed_db") is not None for r in rows) else None),
             "tail": scored["tail"],
+            "alone": scored.get("alone"),
             "click_to_music_db_median": (float(np.median([r["click_to_music_db"] for r in rows]))
                                          if rows[0]["click_to_music_db"] is not None else None),
             "lag_sec": scored["lag_sec"], "gate_misalignment_sec": scored["gate_misalignment_sec"],

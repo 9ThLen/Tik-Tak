@@ -85,6 +85,9 @@ struct Options {
     // With --subtract: how much of the path after the first arrival is
     // modelled, in milliseconds; 0 keeps the core's own figure.
     double subtract_span_ms = 0.0;
+    // With --subtract: how long before the next click the empty-room gate
+    // ends, in milliseconds; negative keeps the core's own figure.
+    double alone_listen_ms = -1.0;
 };
 
 // Returns false and fills `error` on a bad argument, rather than guessing.

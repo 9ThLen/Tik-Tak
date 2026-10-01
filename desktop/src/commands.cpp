@@ -545,6 +545,9 @@ bool parseOptions(const std::vector<std::string>& args, Options& options, std::s
         } else if (arg == "--subtract-span-ms") {
             if (!need(value)) return false;
             options.subtract_span_ms = value;
+        } else if (arg == "--alone-listen-ms") {
+            if (!need(value)) return false;
+            options.alone_listen_ms = value;
         } else if (arg == "--model") {
             if (!has_value) {
                 error = arg + " needs a path";
@@ -687,6 +690,9 @@ void printUsage() {
         "                     the click has the room to itself\n"
         "  --subtract-update N  with --subtract: how far one click moves the path\n"
         "                     estimate; the core's own figure when not given\n"
+        "  --alone-listen-ms N  with --subtract: the empty-room gate ends this long\n"
+        "                     before the next click; the core's own figure when not\n"
+        "                     given, and 0 is a gate that can cover the whole beat\n"
         "  --simulate-ir PATH with --simulate-ms: the click returns through this\n"
         "                     impulse response, not untouched\n"
         "  --no-click         a silent click: every beat taken, nothing played\n"
@@ -1161,6 +1167,8 @@ struct LoopState {
     double first_stream_sec = -1.0;
 
     std::vector<double> beats;
+    std::vector<double> beats_alone;   // 1 where the click was gated for being alone
+    std::size_t alone_seen = 0;
     std::atomic<std::size_t> beat_count{0};
 
     static constexpr double kSeriesStep = 0.02;  // 50 Hz, as the bench samples
@@ -1183,10 +1191,15 @@ void loopHeard(void* context, double, const float* samples, std::size_t n) {
 void loopBeat(void* context, double beat_sec) {
     auto* state = static_cast<LoopState*>(context);
     const std::size_t k = state->beat_count.load(std::memory_order_relaxed);
+    // The observer is called once the click's gate has been decided, so the
+    // count has already moved if this was one with the room to itself.
+    const std::size_t alone = state->metronome->stats().clicks_alone;
     if (k < state->beats.size()) {
         state->beats[k] = beat_sec;
+        state->beats_alone[k] = alone != state->alone_seen ? 1.0 : 0.0;
         state->beat_count.store(k + 1, std::memory_order_release);
     }
+    state->alone_seen = alone;
 }
 
 // The duplex callback. The room comes in, the click is rendered, and the
@@ -1484,6 +1497,7 @@ int cmdLoop(const Options& options) {
     cfg.gate_when_alone = !options.no_alone_gate;
     if (options.subtract_update > 0.0) cfg.canceller.update = options.subtract_update;
     if (options.subtract_span_ms > 0.0) cfg.canceller.after_sec = options.subtract_span_ms / 1000.0;
+    if (options.alone_listen_ms >= 0.0) cfg.alone_listen_sec = options.alone_listen_ms / 1000.0;
     if (!cfg.valid()) {
         std::fprintf(stderr, "tiktak: those settings do not make a live metronome\n");
         if (!simulated && measured) device.stop();
@@ -1496,6 +1510,7 @@ int cmdLoop(const Options& options) {
     state.metronome = &metronome;
     state.capture.assign(total + static_cast<std::size_t>(rate), 0.0f);
     state.beats.assign(static_cast<std::size_t>(static_cast<double>(total) / rate * 8.0) + 64, 0.0);
+    state.beats_alone.assign(state.beats.size(), 0.0);
     const std::size_t samples =
         static_cast<std::size_t>(static_cast<double>(total) / rate / LoopState::kSeriesStep) + 256;
     state.series_time.assign(samples, 0.0);
@@ -1602,6 +1617,8 @@ int cmdLoop(const Options& options) {
     }
     std::fprintf(log, "  \"simulated_path_taps\": %zu,\n", simulated ? path.size() : 0);
     std::fprintf(log, "  \"round_trip_sec\": %.6f,\n", cfg.round_trip_sec);
+    std::fprintf(log, "  \"alone_gate_sec\": %.6f, \"alone_listen_sec\": %.6f,\n",
+                 cfg.alone_gate_sec, cfg.alone_listen_sec);
     std::fprintf(log, "  \"round_trip_measured\": %s,\n", measured ? "true" : "false");
     std::fprintf(log, "  \"probe\": {\"clicks\": %zu, \"spread_sec\": %.6f},\n", probes_found,
                  probe_spread);
@@ -1623,6 +1640,8 @@ int cmdLoop(const Options& options) {
                  stats.gated);
     writeSeries(log, "beats", state.beats, state.beat_count.load(std::memory_order_acquire),
                 false);
+    writeSeries(log, "beats_alone", state.beats_alone,
+                state.beat_count.load(std::memory_order_acquire), false);
     const std::size_t sampled = state.series_count.load(std::memory_order_acquire);
     writeSeries(log, "live_times", state.series_time, sampled, false);
     writeSeries(log, "live_bpms", state.series_bpm, sampled, false);
