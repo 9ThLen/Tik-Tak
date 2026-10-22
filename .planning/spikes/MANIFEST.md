@@ -20,4 +20,4 @@ without buying the result by suppressing correct locked time.
 
 | # | Name | Type | Validates | Verdict | Tags |
 |---|---|---|---|---|---|
-| 001 | octave-veto-a1-a4 | standard | Given real live octave proposals, when a causal downbeat veto is replayed at matched cost, then A1--A4 and all standing gates hold | PENDING | live, tempo, downbeat, replay |
+| 001 | octave-veto-a1-a4 | standard | Given real live octave proposals, when a causal downbeat veto is replayed at matched cost, then A1--A4 and all standing gates hold | INVALIDATED | live, tempo, downbeat, replay |

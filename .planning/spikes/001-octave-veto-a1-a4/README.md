@@ -3,7 +3,7 @@ spike: 001
 name: octave-veto-a1-a4
 type: standard
 validates: "Given real live octave proposals, when a causal downbeat veto is replayed at matched cost, then A1--A4 and all standing gates hold"
-verdict: PENDING
+verdict: INVALIDATED
 related: []
 tags: [live, tempo, downbeat, replay]
 ---
@@ -87,6 +87,11 @@ arm.
 
 ## Results
 
-PENDING. Synthetic, core and integration verification passes. RWC has not been
-opened yet; its corpus and fold-1 model are supplied explicitly because they
-live outside this worktree.
+INVALIDATED on RWC, 2026-08-07: A2 fails, so Harmonix was never opened.
+Balanced accuracy is below chance at every threshold where the decoder acts,
+and the margin over the shift control is -0.0002 [-0.0060, +0.0050] against a
+registered 15 points. The selected threshold, 1.5, vetoes 7 of 1913 switches
+and leaves every number equal to baseline. The artifact is
+`research/results/octave_veto_rwc.json`; the reading is the section "The octave
+veto: the decoder is below chance wherever it acts" in
+`research/results/README.md`.
